@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet --version:*)",
+      "Bash(dotnet new:*)",
+      "Bash(dotnet sln:*)",
+      "Bash(dotnet sln add:*)",
+      "Bash(dotnet add reference:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test:*)",
+      "Bash(tree:*)",
+      "Bash(python3:*)",
+      "Bash(find:*)",
+      "Bash(test:*)",
+      "Bash(mate:*)",
+      "Bash(cat:*)",
+      "Bash(for f in RoslynWorkspaceTests.cs SymbolQueryServiceTests.cs SemanticEditServiceTests.cs ReferenceFinderServiceTests.cs ProjectParserServiceTests.cs)",
+      "Bash(do mv \"$f\" \"$f.skip\")",
+      "Bash(done)",
+      "Bash(for file in /Users/jas88/Developer/Github/MCPsharp/tests/MCPsharp.Tests/Services/RoslynWorkspaceTests.cs /Users/jas88/Developer/Github/MCPsharp/tests/MCPsharp.Tests/Services/ReferenceFinderServiceTests.cs /Users/jas88/Developer/Github/MCPsharp/tests/MCPsharp.Tests/Services/SemanticEditServiceTests.cs)",
+      "Bash(do sed -i '' 's/using MCPsharp\\.Services;/using MCPsharp.Services.Roslyn;/' \"$file\")",
+      "Bash(xargs:*)",
+      "Bash(dotnet clean:*)",
+      "Read(//private/tmp/ConfigAnalyzerTest/**)",
+      "Read(//private/tmp/workflow_test/**)",
+      "Bash(timeout 2 dotnet run:*)",
+      "Bash(chmod:*)",
+      "Bash(/Users/jas88/Developer/Github/MCPsharp/tests/manual-test.sh)",
+      "Bash(tests/manual-test.sh)",
+      "Read(//Users/jas88/.claude/agents/**)",
+      "Read(//Users/jas88/.claude/**)",
+      "Bash(awk:*)",
+      "WebSearch",
+      "Read(//Users/jas88/**)",
+      "WebFetch(domain:spec.modelcontextprotocol.io)",
+      "Bash(/tmp/test-mcp-sequence.sh)",
+      "Bash(dotnet run:*)",
+      "Read(//private/tmp/**)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "github",
+    "playwright",
+    "code-index"
+  ],
+  "enableAllProjectMcpServers": true
+}

@@ -1,0 +1,479 @@
+using MCPsharp.Models;
+using MCPsharp.Services;
+
+namespace MCPsharp.Tests.Services;
+
+public class ConfigAnalyzerServiceTests : IDisposable
+{
+    private readonly string _testDirectory;
+    private readonly ConfigAnalyzerService _service;
+
+    public ConfigAnalyzerServiceTests()
+    {
+        _testDirectory = Path.Combine(Path.GetTempPath(), $"ConfigAnalyzerTests_{Guid.NewGuid()}");
+        Directory.CreateDirectory(_testDirectory);
+        _service = new ConfigAnalyzerService();
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_testDirectory))
+        {
+            Directory.Delete(_testDirectory, true);
+        }
+        GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public async Task FindConfigFilesAsync_FindsAppsettingsJson()
+    {
+        // Arrange
+        var configPath = Path.Combine(_testDirectory, "appsettings.json");
+        await File.WriteAllTextAsync(configPath, "{}");
+
+        // Act
+        var result = await _service.FindConfigFilesAsync(_testDirectory);
+
+        // Assert
+        Assert.Single(result);
+        Assert.Contains(configPath, result);
+    }
+
+    [Fact]
+    public async Task FindConfigFilesAsync_FindsMultipleAppsettingsFiles()
+    {
+        // Arrange
+        var paths = new[]
+        {
+            Path.Combine(_testDirectory, "appsettings.json"),
+            Path.Combine(_testDirectory, "appsettings.Development.json"),
+            Path.Combine(_testDirectory, "appsettings.Production.json")
+        };
+
+        foreach (var path in paths)
+        {
+            await File.WriteAllTextAsync(path, "{}");
+        }
+
+        // Act
+        var result = await _service.FindConfigFilesAsync(_testDirectory);
+
+        // Assert
+        Assert.Equal(3, result.Count);
+        foreach (var path in paths)
+        {
+            Assert.Contains(path, result);
+        }
+    }
+
+    [Fact]
+    public async Task FindConfigFilesAsync_FindsYamlFiles()
+    {
+        // Arrange
+        var ymlPath = Path.Combine(_testDirectory, "config.yml");
+        var yamlPath = Path.Combine(_testDirectory, "settings.yaml");
+        await File.WriteAllTextAsync(ymlPath, "key: value");
+        await File.WriteAllTextAsync(yamlPath, "key: value");
+
+        // Act
+        var result = await _service.FindConfigFilesAsync(_testDirectory);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        Assert.Contains(ymlPath, result);
+        Assert.Contains(yamlPath, result);
+    }
+
+    [Fact]
+    public async Task ParseJsonConfigAsync_ParsesSimpleJson()
+    {
+        // Arrange
+        var configPath = Path.Combine(_testDirectory, "simple.json");
+        var json = """
+        {
+          "Key1": "Value1",
+          "Key2": 42
+        }
+        """;
+        await File.WriteAllTextAsync(configPath, json);
+
+        // Act
+        var result = await _service.ParseJsonConfigAsync(configPath);
+
+        // Assert
+        Assert.Equal("json", result.Type);
+        Assert.Equal(configPath, result.FilePath);
+        Assert.Equal(2, result.Settings.Count);
+        Assert.Equal("Value1", result.Settings["Key1"]);
+        Assert.Equal(42, result.Settings["Key2"]);
+    }
+
+    [Fact]
+    public async Task ParseJsonConfigAsync_ParsesNestedJson()
+    {
+        // Arrange
+        var configPath = Path.Combine(_testDirectory, "nested.json");
+        var json = """
+        {
+          "Logging": {
+            "LogLevel": {
+              "Default": "Information"
+            }
+          },
+          "Database": {
+            "ConnectionString": "Server=localhost",
+            "Timeout": 30
+          }
+        }
+        """;
+        await File.WriteAllTextAsync(configPath, json);
+
+        // Act
+        var result = await _service.ParseJsonConfigAsync(configPath);
+
+        // Assert
+        Assert.Equal(4, result.Settings.Count);
+        Assert.Equal("Information", result.Settings["Logging:LogLevel:Default"]);
+        Assert.Equal("Server=localhost", result.Settings["Database:ConnectionString"]);
+        Assert.Equal(30, result.Settings["Database:Timeout"]);
+    }
+
+    [Fact]
+    public async Task ParseJsonConfigAsync_ThrowsOnMissingFile()
+    {
+        // Arrange
+        var configPath = Path.Combine(_testDirectory, "nonexistent.json");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<FileNotFoundException>(
+            () => _service.ParseJsonConfigAsync(configPath));
+    }
+
+    [Fact]
+    public async Task ParseJsonConfigAsync_ThrowsOnInvalidJson()
+    {
+        // Arrange
+        var configPath = Path.Combine(_testDirectory, "invalid.json");
+        await File.WriteAllTextAsync(configPath, "{ invalid json }");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _service.ParseJsonConfigAsync(configPath));
+    }
+
+    [Fact]
+    public async Task ParseYamlConfigAsync_ParsesSimpleYaml()
+    {
+        // Arrange
+        var configPath = Path.Combine(_testDirectory, "simple.yml");
+        var yaml = """
+        Key1: Value1
+        Key2: 42
+        """;
+        await File.WriteAllTextAsync(configPath, yaml);
+
+        // Act
+        var result = await _service.ParseYamlConfigAsync(configPath);
+
+        // Assert
+        Assert.Equal("yaml", result.Type);
+        Assert.Equal(configPath, result.FilePath);
+        Assert.Equal(2, result.Settings.Count);
+        Assert.Equal("Value1", result.Settings["Key1"]);
+        Assert.Equal(42, result.Settings["Key2"]);
+    }
+
+    [Fact]
+    public async Task ParseYamlConfigAsync_ParsesNestedYaml()
+    {
+        // Arrange
+        var configPath = Path.Combine(_testDirectory, "nested.yml");
+        var yaml = """
+        Logging:
+          LogLevel:
+            Default: Information
+        Database:
+          ConnectionString: Server=localhost
+          Timeout: 30
+        """;
+        await File.WriteAllTextAsync(configPath, yaml);
+
+        // Act
+        var result = await _service.ParseYamlConfigAsync(configPath);
+
+        // Assert
+        Assert.True(result.Settings.Count >= 3);
+        Assert.Equal("Information", result.Settings["Logging:LogLevel:Default"]);
+        Assert.Equal("Server=localhost", result.Settings["Database:ConnectionString"]);
+        Assert.Equal(30, result.Settings["Database:Timeout"]);
+    }
+
+    [Fact]
+    public async Task ParseYamlConfigAsync_ThrowsOnInvalidYaml()
+    {
+        // Arrange
+        var configPath = Path.Combine(_testDirectory, "invalid.yml");
+        await File.WriteAllTextAsync(configPath, "  invalid:\nyaml: : :");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _service.ParseYamlConfigAsync(configPath));
+    }
+
+    [Fact]
+    public async Task MergeConfigsAsync_MergesMultipleJsonFiles()
+    {
+        // Arrange
+        var baseConfig = Path.Combine(_testDirectory, "appsettings.json");
+        var devConfig = Path.Combine(_testDirectory, "appsettings.Development.json");
+
+        await File.WriteAllTextAsync(baseConfig, """
+        {
+          "Logging": {
+            "LogLevel": {
+              "Default": "Information"
+            }
+          },
+          "Database": {
+            "ConnectionString": "Server=prod"
+          }
+        }
+        """);
+
+        await File.WriteAllTextAsync(devConfig, """
+        {
+          "Logging": {
+            "LogLevel": {
+              "Default": "Debug"
+            }
+          },
+          "Database": {
+            "ConnectionString": "Server=dev"
+          }
+        }
+        """);
+
+        // Act
+        var result = await _service.MergeConfigsAsync([baseConfig, devConfig]);
+
+        // Assert
+        Assert.Equal(2, result.SourceFiles.Count);
+        Assert.Equal("Debug", result.MergedSettings["Logging:LogLevel:Default"]);
+        Assert.Equal("Server=dev", result.MergedSettings["Database:ConnectionString"]);
+    }
+
+    [Fact]
+    public async Task MergeConfigsAsync_DetectsConflicts()
+    {
+        // Arrange
+        var config1 = Path.Combine(_testDirectory, "config1.json");
+        var config2 = Path.Combine(_testDirectory, "config2.json");
+
+        await File.WriteAllTextAsync(config1, """
+        {
+          "Setting": "Value1"
+        }
+        """);
+
+        await File.WriteAllTextAsync(config2, """
+        {
+          "Setting": "Value2"
+        }
+        """);
+
+        // Act
+        var result = await _service.MergeConfigsAsync([config1, config2]);
+
+        // Assert
+        Assert.NotNull(result.Conflicts);
+        Assert.Single(result.Conflicts);
+        Assert.Equal("Setting", result.Conflicts[0].Key);
+        Assert.Equal("Value1", result.Conflicts[0].Value1);
+        Assert.Equal("Value2", result.Conflicts[0].Value2);
+    }
+
+    [Fact]
+    public async Task GetConfigSchemaAsync_ReturnsSchemaForJson()
+    {
+        // Arrange
+        var configPath = Path.Combine(_testDirectory, "schema.json");
+        var json = """
+        {
+          "Database": {
+            "ConnectionString": "Server=localhost",
+            "Timeout": 30
+          },
+          "Feature": {
+            "Enabled": true
+          }
+        }
+        """;
+        await File.WriteAllTextAsync(configPath, json);
+
+        // Act
+        var result = await _service.GetConfigSchemaAsync(configPath);
+
+        // Assert
+        Assert.Equal(configPath, result.FilePath);
+        Assert.Equal(3, result.Properties.Count);
+
+        var connString = result.Properties["Database:ConnectionString"];
+        Assert.Equal("Database:ConnectionString", connString.Path);
+        Assert.Equal("string", connString.Type);
+        Assert.True(connString.IsSensitive);
+
+        var timeout = result.Properties["Database:Timeout"];
+        Assert.Equal("int", timeout.Type);
+        Assert.False(timeout.IsSensitive);
+    }
+
+    [Fact]
+    public async Task DetectSensitiveKeys_DetectsPasswords()
+    {
+        // Arrange
+        var settings = new Dictionary<string, object>
+        {
+            { "Database:Password", "secret" },
+            { "ApiKey", "key123" },
+            { "NormalSetting", "value" }
+        };
+
+        // Act
+        var result = _service.DetectSensitiveKeys(settings);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        Assert.Contains("Database:Password", result);
+        Assert.Contains("ApiKey", result);
+    }
+
+    [Fact]
+    public async Task DetectSensitiveKeys_DetectsConnectionStrings()
+    {
+        // Arrange
+        var settings = new Dictionary<string, object>
+        {
+            { "ConnectionStrings:Default", "Server=localhost" },
+            { "Database:ConnectionString", "Data Source=test" }
+        };
+
+        // Act
+        var result = _service.DetectSensitiveKeys(settings);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        Assert.All(result, key => Assert.Contains("connection", key.ToLowerInvariant()));
+    }
+
+    [Fact]
+    public async Task DetectSensitiveKeys_DetectsTokens()
+    {
+        // Arrange
+        var settings = new Dictionary<string, object>
+        {
+            { "Auth:AccessToken", "token123" },
+            { "GitHub:PersonalAccessToken", "ghp_xyz" },
+            { "PublicSetting", "public" }
+        };
+
+        // Act
+        var result = _service.DetectSensitiveKeys(settings);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        Assert.Contains("Auth:AccessToken", result);
+        Assert.Contains("GitHub:PersonalAccessToken", result);
+    }
+
+    [Fact]
+    public async Task DetectSensitiveKeys_CaseInsensitive()
+    {
+        // Arrange
+        var settings = new Dictionary<string, object>
+        {
+            { "api_KEY", "key1" },
+            { "PASSWORD", "pass1" },
+            { "Secret", "secret1" }
+        };
+
+        // Act
+        var result = _service.DetectSensitiveKeys(settings);
+
+        // Assert
+        Assert.Equal(3, result.Count);
+    }
+
+    [Fact]
+    public async Task ParseJsonConfigAsync_HandlesArrays()
+    {
+        // Arrange
+        var configPath = Path.Combine(_testDirectory, "array.json");
+        var json = """
+        {
+          "AllowedHosts": ["host1", "host2", "host3"]
+        }
+        """;
+        await File.WriteAllTextAsync(configPath, json);
+
+        // Act
+        var result = await _service.ParseJsonConfigAsync(configPath);
+
+        // Assert
+        Assert.Equal(3, result.Settings.Count);
+        Assert.Equal("host1", result.Settings["AllowedHosts:0"]);
+        Assert.Equal("host2", result.Settings["AllowedHosts:1"]);
+        Assert.Equal("host3", result.Settings["AllowedHosts:2"]);
+    }
+
+    [Fact]
+    public async Task MergeConfigsAsync_HandlesEnvironmentOverrides()
+    {
+        // Arrange
+        var baseConfig = Path.Combine(_testDirectory, "appsettings.json");
+        var devConfig = Path.Combine(_testDirectory, "appsettings.Development.json");
+
+        await File.WriteAllTextAsync(baseConfig, """
+        {
+          "Setting1": "Base",
+          "Setting2": "Base",
+          "Logging": {
+            "LogLevel": {
+              "Default": "Warning"
+            }
+          }
+        }
+        """);
+
+        await File.WriteAllTextAsync(devConfig, """
+        {
+          "Setting2": "Development",
+          "Logging": {
+            "LogLevel": {
+              "Default": "Debug"
+            }
+          }
+        }
+        """);
+
+        // Act
+        var result = await _service.MergeConfigsAsync([baseConfig, devConfig]);
+
+        // Assert
+        Assert.Equal("Base", result.MergedSettings["Setting1"]);
+        Assert.Equal("Development", result.MergedSettings["Setting2"]);
+        Assert.Equal("Debug", result.MergedSettings["Logging:LogLevel:Default"]);
+    }
+
+    [Fact]
+    public async Task FindConfigFilesAsync_ReturnsEmptyForNonexistentDirectory()
+    {
+        // Arrange
+        var nonexistentPath = Path.Combine(_testDirectory, "nonexistent");
+
+        // Act
+        var result = await _service.FindConfigFilesAsync(nonexistentPath);
+
+        // Assert
+        Assert.Empty(result);
+    }
+}

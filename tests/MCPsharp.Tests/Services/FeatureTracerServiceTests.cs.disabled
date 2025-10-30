@@ -1,0 +1,455 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using MCPsharp.Models;
+using MCPsharp.Services;
+using Xunit;
+
+namespace MCPsharp.Tests.Services;
+
+public class FeatureTracerServiceTests : IAsyncLifetime
+{
+    private string _testProjectRoot = null!;
+    private RoslynWorkspace _workspace = null!;
+    private FeatureTracerService _service = null!;
+
+    public async Task InitializeAsync()
+    {
+        _testProjectRoot = Path.Combine(Path.GetTempPath(), "MCPsharp_FeatureTracer_" + Guid.NewGuid());
+        Directory.CreateDirectory(_testProjectRoot);
+
+        await CreateTestProjectStructureAsync();
+
+        _workspace = new RoslynWorkspace();
+        await _workspace.InitializeAsync(_testProjectRoot);
+
+        var symbolQuery = new SymbolQueryService(_workspace);
+        var referenceFinder = new ReferenceFinderService(_workspace);
+        var configAnalyzer = new ConfigAnalyzerService(_workspace);
+        var workflowAnalyzer = new WorkflowAnalyzerService(_workspace);
+
+        _service = new FeatureTracerService(
+            _workspace,
+            symbolQuery,
+            referenceFinder,
+            configAnalyzer,
+            workflowAnalyzer);
+    }
+
+    public Task DisposeAsync()
+    {
+        try
+        {
+            if (Directory.Exists(_testProjectRoot))
+            {
+                Directory.Delete(_testProjectRoot, true);
+            }
+        }
+        catch
+        {
+            // Best effort cleanup
+        }
+
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task TraceFeatureAsync_UserAuthentication_MapsCompleteFeature()
+    {
+        // Act
+        var result = await _service.TraceFeatureAsync("user-authentication", _testProjectRoot);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("user-authentication", result.FeatureName);
+        Assert.NotNull(result.Components);
+        Assert.NotNull(result.Components.Controller);
+        Assert.Contains("UserController.Login", result.Components.Controller);
+    }
+
+    [Fact]
+    public async Task TraceFeatureAsync_NonExistentFeature_ReturnsEmptyComponents()
+    {
+        // Act
+        var result = await _service.TraceFeatureAsync("non-existent-feature", _testProjectRoot);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("non-existent-feature", result.FeatureName);
+        Assert.NotNull(result.Components);
+        Assert.Null(result.Components.Controller);
+    }
+
+    [Fact]
+    public async Task DiscoverFeatureComponentsAsync_FromController_TracesCompleteChain()
+    {
+        // Act
+        var result = await _service.DiscoverFeatureComponentsAsync("UserController.Login");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.NotNull(result.Controller);
+        Assert.Contains("UserController.Login", result.Controller);
+
+        Assert.NotNull(result.Service);
+        Assert.Contains("AuthService.Authenticate", result.Service);
+
+        Assert.NotNull(result.Repository);
+        Assert.Contains("UserRepository.FindByEmail", result.Repository);
+
+        Assert.NotNull(result.Models);
+        Assert.Contains(result.Models, m => m.Contains("User"));
+    }
+
+    [Fact]
+    public async Task DiscoverFeatureComponentsAsync_FindsRelatedTests()
+    {
+        // Act
+        var result = await _service.DiscoverFeatureComponentsAsync("UserController.Login");
+
+        // Assert
+        Assert.NotNull(result.Tests);
+        Assert.NotEmpty(result.Tests);
+        Assert.Contains(result.Tests, t => t.Contains("AuthServiceTests.cs"));
+    }
+
+    [Fact]
+    public async Task DiscoverFeatureComponentsAsync_FindsRelatedConfig()
+    {
+        // Act
+        var result = await _service.DiscoverFeatureComponentsAsync("UserController.Login");
+
+        // Assert
+        Assert.NotNull(result.Config);
+        Assert.NotEmpty(result.Config);
+        Assert.Contains(result.Config, c => c.Contains("Authentication"));
+    }
+
+    [Fact]
+    public async Task DiscoverFeatureComponentsAsync_FindsRelatedDocumentation()
+    {
+        // Act
+        var result = await _service.DiscoverFeatureComponentsAsync("UserController.Login");
+
+        // Assert
+        Assert.NotNull(result.Documentation);
+        Assert.Contains("AUTHENTICATION.md", result.Documentation);
+    }
+
+    [Fact]
+    public async Task DiscoverFeatureComponentsAsync_FindsRelatedWorkflows()
+    {
+        // Act
+        var result = await _service.DiscoverFeatureComponentsAsync("UserController.Login");
+
+        // Assert
+        Assert.NotNull(result.Workflows);
+        Assert.NotEmpty(result.Workflows);
+        Assert.Contains(result.Workflows, w => w.Contains("build.yml"));
+    }
+
+    [Fact]
+    public async Task DiscoverFeatureComponentsAsync_InvalidEntryPoint_ReturnsEmpty()
+    {
+        // Act
+        var result = await _service.DiscoverFeatureComponentsAsync("InvalidSymbol");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Null(result.Controller);
+        Assert.Null(result.Service);
+        Assert.Null(result.Repository);
+    }
+
+    [Fact]
+    public async Task BuildDependencyGraphAsync_CreatesCorrectGraph()
+    {
+        // Act
+        var result = await _service.BuildDependencyGraphAsync(_testProjectRoot);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.NotNull(result.Dependencies);
+        Assert.NotEmpty(result.Dependencies);
+
+        Assert.NotNull(result.Layers);
+        Assert.Equal(new[] { "Models", "Data", "Services", "Controllers" }, result.Layers);
+    }
+
+    [Fact]
+    public async Task BuildDependencyGraphAsync_IncludesAllLayers()
+    {
+        // Act
+        var result = await _service.BuildDependencyGraphAsync(_testProjectRoot);
+
+        // Assert
+        var allDeps = result.Dependencies.Values.SelectMany(d => d).ToList();
+
+        Assert.Contains(allDeps, d => d.Contains("Models"));
+        Assert.Contains(allDeps, d => d.Contains("Controllers") || d.Contains("Services"));
+    }
+
+    [Fact]
+    public async Task DetectLayerViolationsAsync_NoViolations_ReturnsEmpty()
+    {
+        // Arrange - Create a clean graph
+        var graph = new DependencyGraph
+        {
+            Dependencies = new()
+            {
+                ["Controllers/UserController.cs::UserController"] = new[] { "Services/AuthService.cs::AuthService" },
+                ["Services/AuthService.cs::AuthService"] = new[] { "Data/UserRepository.cs::UserRepository" },
+                ["Data/UserRepository.cs::UserRepository"] = new[] { "Models/User.cs::User" }
+            },
+            Layers = new[] { "Models", "Data", "Services", "Controllers" }
+        };
+
+        // Act
+        var result = await _service.DetectLayerViolationsAsync(graph);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task DetectLayerViolationsAsync_ModelDependsOnService_DetectsViolation()
+    {
+        // Arrange - Create invalid dependency (Model → Service)
+        var graph = new DependencyGraph
+        {
+            Dependencies = new()
+            {
+                ["Models/User.cs::User"] = new[] { "Services/AuthService.cs::AuthService" }
+            },
+            Layers = new[] { "Models", "Data", "Services", "Controllers" }
+        };
+
+        // Act
+        var result = await _service.DetectLayerViolationsAsync(graph);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+
+        var violation = result.First();
+        Assert.Equal("Models", violation.FromLayer);
+        Assert.Equal("Services", violation.ToLayer);
+        Assert.Contains("should not depend on", violation.Reason);
+    }
+
+    [Fact]
+    public async Task DetectLayerViolationsAsync_DataDependsOnController_DetectsViolation()
+    {
+        // Arrange
+        var graph = new DependencyGraph
+        {
+            Dependencies = new()
+            {
+                ["Data/UserRepository.cs::Repository"] = new[] { "Controllers/UserController.cs::Controller" }
+            },
+            Layers = new[] { "Models", "Data", "Services", "Controllers" }
+        };
+
+        // Act
+        var result = await _service.DetectLayerViolationsAsync(graph);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+
+        var violation = result.First();
+        Assert.Equal("Data", violation.FromLayer);
+        Assert.Equal("Controllers", violation.ToLayer);
+    }
+
+    [Fact]
+    public async Task TraceFeature_MapsDataFlowCorrectly()
+    {
+        // Act
+        var result = await _service.TraceFeatureAsync("user-authentication", _testProjectRoot);
+
+        // Assert
+        Assert.NotNull(result.DataFlow);
+        Assert.NotEmpty(result.DataFlow);
+
+        // Should trace: Controller → Service → Repository → Model
+        Assert.Contains("Controller", result.DataFlow);
+        Assert.Contains("Service", result.DataFlow);
+        Assert.Contains("Repository", result.DataFlow);
+        Assert.Contains("Model", result.DataFlow);
+
+        // Verify order
+        var controllerIndex = result.DataFlow.ToList().IndexOf("Controller");
+        var serviceIndex = result.DataFlow.ToList().IndexOf("Service");
+        var repoIndex = result.DataFlow.ToList().IndexOf("Repository");
+
+        Assert.True(controllerIndex < serviceIndex);
+        Assert.True(serviceIndex < repoIndex);
+    }
+
+    // Helper method to create test project structure
+    private async Task CreateTestProjectStructureAsync()
+    {
+        var srcDir = Path.Combine(_testProjectRoot, "src");
+        var testsDir = Path.Combine(_testProjectRoot, "tests");
+        var docsDir = Path.Combine(_testProjectRoot, "docs");
+        var workflowsDir = Path.Combine(_testProjectRoot, ".github", "workflows");
+
+        Directory.CreateDirectory(Path.Combine(srcDir, "Controllers"));
+        Directory.CreateDirectory(Path.Combine(srcDir, "Services"));
+        Directory.CreateDirectory(Path.Combine(srcDir, "Data"));
+        Directory.CreateDirectory(Path.Combine(srcDir, "Models"));
+        Directory.CreateDirectory(testsDir);
+        Directory.CreateDirectory(docsDir);
+        Directory.CreateDirectory(workflowsDir);
+
+        // Create .csproj
+        await File.WriteAllTextAsync(
+            Path.Combine(_testProjectRoot, "TestProject.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net8.0</TargetFramework>
+                <LangVersion>latest</LangVersion>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        // Create UserController.cs
+        await File.WriteAllTextAsync(
+            Path.Combine(srcDir, "Controllers", "UserController.cs"),
+            """
+            using System.Threading.Tasks;
+
+            namespace TestProject.Controllers;
+
+            public class UserController
+            {
+                private readonly AuthService _authService;
+
+                public UserController(AuthService authService)
+                {
+                    _authService = authService;
+                }
+
+                public async Task<bool> Login(string email, string password)
+                {
+                    return await _authService.Authenticate(email, password);
+                }
+            }
+            """);
+
+        // Create AuthService.cs
+        await File.WriteAllTextAsync(
+            Path.Combine(srcDir, "Services", "AuthService.cs"),
+            """
+            using System.Threading.Tasks;
+
+            namespace TestProject.Services;
+
+            public class AuthService
+            {
+                private readonly UserRepository _repository;
+
+                public AuthService(UserRepository repository)
+                {
+                    _repository = repository;
+                }
+
+                public async Task<bool> Authenticate(string email, string password)
+                {
+                    var user = await _repository.FindByEmail(email);
+                    return user != null;
+                }
+            }
+            """);
+
+        // Create UserRepository.cs
+        await File.WriteAllTextAsync(
+            Path.Combine(srcDir, "Data", "UserRepository.cs"),
+            """
+            using System.Threading.Tasks;
+
+            namespace TestProject.Data;
+
+            public class UserRepository
+            {
+                public async Task<User?> FindByEmail(string email)
+                {
+                    await Task.Delay(1);
+                    return new User { Email = email };
+                }
+            }
+            """);
+
+        // Create User.cs
+        await File.WriteAllTextAsync(
+            Path.Combine(srcDir, "Models", "User.cs"),
+            """
+            namespace TestProject.Models;
+
+            public class User
+            {
+                public string Email { get; set; } = string.Empty;
+            }
+            """);
+
+        // Create AuthServiceTests.cs
+        await File.WriteAllTextAsync(
+            Path.Combine(testsDir, "AuthServiceTests.cs"),
+            """
+            using Xunit;
+            using TestProject.Services;
+
+            namespace TestProject.Tests;
+
+            public class AuthServiceTests
+            {
+                [Fact]
+                public void Authenticate_ValidUser_ReturnsTrue()
+                {
+                    Assert.True(true);
+                }
+            }
+            """);
+
+        // Create appsettings.json
+        await File.WriteAllTextAsync(
+            Path.Combine(_testProjectRoot, "appsettings.json"),
+            """
+            {
+              "Authentication": {
+                "Provider": "JWT",
+                "TokenExpiration": 3600
+              }
+            }
+            """);
+
+        // Create AUTHENTICATION.md
+        await File.WriteAllTextAsync(
+            Path.Combine(docsDir, "AUTHENTICATION.md"),
+            """
+            # Authentication
+
+            This feature implements user authentication using JWT tokens.
+            """);
+
+        // Create build.yml
+        await File.WriteAllTextAsync(
+            Path.Combine(workflowsDir, "build.yml"),
+            """
+            name: Build
+            on: [push]
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v2
+                  - name: Build
+                    run: dotnet build
+            """);
+    }
+}

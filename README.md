@@ -1,0 +1,286 @@
+# MCPsharp
+
+[![Build and Test](https://github.com/jas88/MCPsharp/actions/workflows/build.yml/badge.svg)](https://github.com/jas88/MCPsharp/actions/workflows/build.yml)
+
+A Model Context Protocol (MCP) server for intelligent C# project analysis and semantic code editing. Provides Claude Code with deep understanding of C# projects including cross-file dependencies, project structure, and Roslyn-based semantic operations.
+
+## Features
+
+- **MCP Protocol Server** — JSON-RPC 2.0 over stdio for Claude Code integration
+- **File Operations** — Open projects, list files with glob patterns, read/write/edit files
+- **Roslyn Integration** — Direct Roslyn APIs for C# semantic analysis (no subprocess overhead)
+- **Semantic Editing** — Find classes, add properties/methods with proper indentation
+- **Cross-platform** — macOS, Linux, and Windows support
+
+## Architecture
+
+```
+Claude Code
+    ↓ MCP (stdio, JSON-RPC)
+┌─────────────────────────────────┐
+│ MCPsharp Server                 │
+├─────────────────────────────────┤
+│ • MCP Protocol Handler          │
+│ • Project Context Manager       │
+│ • File Operations Service       │
+│ • Roslyn Workspace (Phase 1)    │
+└─────────────────────────────────┘
+    ↓ (in-process)
+Roslyn APIs
+```
+
+See [docs/CONCEPT.md](docs/CONCEPT.md) for full design and [docs/ARCHITECTURE-DECISION.md](docs/ARCHITECTURE-DECISION.md) for architectural choices.
+
+## Build
+
+### Prerequisites
+
+- .NET 9.0 SDK or later
+- Git
+
+### Build Commands
+
+```bash
+# Restore dependencies
+dotnet restore
+
+# Build
+dotnet build
+
+# Build in Release mode
+dotnet build --configuration Release
+
+# Run tests
+dotnet test
+
+# Run tests with coverage
+dotnet test --collect:"XPlat Code Coverage"
+```
+
+### Publish Self-Contained Binaries
+
+```bash
+# Linux x64
+dotnet publish src/MCPsharp/MCPsharp.csproj -c Release -r linux-x64 --self-contained -o publish/linux-x64
+
+# macOS arm64 (Apple Silicon)
+dotnet publish src/MCPsharp/MCPsharp.csproj -c Release -r osx-arm64 --self-contained -o publish/osx-arm64
+
+# macOS x64 (Intel)
+dotnet publish src/MCPsharp/MCPsharp.csproj -c Release -r osx-x64 --self-contained -o publish/osx-x64
+
+# Windows x64
+dotnet publish src/MCPsharp/MCPsharp.csproj -c Release -r win-x64 --self-contained -o publish/win-x64
+```
+
+## Installation
+
+### Claude Code Configuration
+
+Add to your Claude Code `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "csharp": {
+      "command": "/path/to/mcpsharp",
+      "args": ["/path/to/your/csharp/project"]
+    }
+  }
+}
+```
+
+Or using dotnet run for development:
+
+```json
+{
+  "mcpServers": {
+    "csharp": {
+      "command": "dotnet",
+      "args": ["run", "--project", "/path/to/MCPsharp/src/MCPsharp/MCPsharp.csproj", "/path/to/your/csharp/project"]
+    }
+  }
+}
+```
+
+## Usage
+
+### Running the Server
+
+```bash
+# Run on current directory
+dotnet run --project src/MCPsharp/MCPsharp.csproj
+
+# Run on specific project
+dotnet run --project src/MCPsharp/MCPsharp.csproj /path/to/project
+
+# Or use published binary
+./mcpsharp /path/to/project
+```
+
+### Testing the Server
+
+```bash
+# Test initialize
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | dotnet run --project src/MCPsharp/MCPsharp.csproj
+
+# Test tools/list
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | dotnet run --project src/MCPsharp/MCPsharp.csproj
+
+# Run manual test script
+./tests/manual-test.sh
+```
+
+### Available Tools
+
+The server provides 21 MCP tools:
+
+**File Operations:**
+- `project_open` - Open a project directory
+- `project_info` - Get current project information
+- `file_list` - List files with optional glob patterns
+- `file_read` - Read file contents
+- `file_write` - Write to a file
+- `file_edit` - Apply text edits to a file
+
+**Roslyn/Semantic Analysis:**
+- `find_symbol` - Find symbols by name
+- `get_symbol_info` - Get detailed symbol information
+- `get_class_structure` - Get complete class structure
+- `add_class_property` - Add a property to a class
+- `add_class_method` - Add a method to a class
+- `find_references` - Find all symbol references
+- `find_implementations` - Find interface implementations
+- `parse_project` - Parse .csproj files
+
+**Workflow & Configuration:**
+- `get_workflows` - Get GitHub Actions workflows
+- `parse_workflow` - Parse workflow YAML
+- `validate_workflow_consistency` - Validate workflow vs project
+- `get_config_schema` - Get config file schema
+- `merge_configs` - Merge configuration files
+
+**Advanced Analysis (Phase 2):**
+- `analyze_impact` - Analyze code change impact
+- `trace_feature` - Trace features across files
+
+## Development
+
+### Project Structure
+
+```
+MCPsharp/
+├── src/
+│   └── MCPsharp/           # Main MCP server
+├── tests/
+│   └── MCPsharp.Tests/     # xUnit tests
+├── docs/                   # Documentation
+│   ├── CONCEPT.md          # Design document
+│   ├── MVP-PLAN.md         # Implementation plan
+│   └── ARCHITECTURE-DECISION.md
+├── .github/
+│   └── workflows/
+│       └── build.yml       # CI/CD workflow
+└── MCPsharp.sln            # Solution file
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+dotnet test
+
+# Run tests with detailed output
+dotnet test --verbosity detailed
+
+# Run specific test project
+dotnet test tests/MCPsharp.Tests/MCPsharp.Tests.csproj
+
+# Watch mode (re-run on file changes)
+dotnet watch test
+```
+
+### Debugging
+
+```bash
+# Run with debug output
+dotnet run --project src/MCPsharp/MCPsharp.csproj --configuration Debug
+
+# Attach debugger in VS Code or Rider
+```
+
+## MCP Tools (Planned)
+
+### Phase 0: Basic File Operations
+- `project_open` — Open a C# project directory
+- `project_info` — Get project metadata
+- `file_list` — List files with glob patterns
+- `file_read` — Read file contents
+- `file_write` — Write file contents
+- `file_edit` — Apply text edits
+
+### Phase 1: Semantic C# Operations
+- `language_server_start` — Initialize Roslyn workspace
+- `find_symbol` — Find classes, methods, properties by name
+- `get_symbol_info` — Get detailed symbol information
+- `get_class_structure` — Get class members and structure
+- `add_class_property` — Add property to class with correct indentation
+- `add_class_method` — Add method to class
+- `find_references` — Find all references to a symbol
+
+See [docs/MVP-PLAN.md](docs/MVP-PLAN.md) for detailed tool specifications.
+
+## Dependencies
+
+### Runtime Dependencies
+- **Microsoft.CodeAnalysis.CSharp** (4.11.0) — Roslyn C# compiler APIs
+- **Microsoft.CodeAnalysis.CSharp.Workspaces** (4.11.0) — Roslyn workspace APIs
+- **Microsoft.Extensions.FileSystemGlobbing** (9.0.0) — Glob pattern matching
+- **Microsoft.Extensions.Logging** (9.0.0) — Logging infrastructure
+
+### Test Dependencies
+- **xUnit** (2.9.2) — Test framework
+- **FluentAssertions** (6.12.1) — Fluent assertion library
+- **Moq** (4.20.72) — Mocking framework
+- **coverlet.collector** (6.0.2) — Code coverage
+
+## CI/CD
+
+GitHub Actions workflow runs on every push and PR:
+- Builds on Linux, macOS, and Windows
+- Runs all tests with code coverage
+- Publishes self-contained binaries on main branch
+- Uploads coverage to Codecov
+
+## Roadmap
+
+- ✅ **Phase 0** (Current): Basic MCP server with file operations
+- 🚧 **Phase 1** (Next): Roslyn integration for semantic C# operations
+- 📋 **Phase 2** (Future): Project/solution parsing, multi-project support
+- 📋 **Phase 3** (Future): Configuration analysis, workflow validation
+- 📋 **Phase 4** (Future): Database migrations, refactoring tools
+
+## Contributing
+
+This is a personal project by @jas88. Contributions are welcome!
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Submit a pull request
+
+## License
+
+[To be determined]
+
+## Documentation
+
+- [CONCEPT.md](docs/CONCEPT.md) — Full design specification
+- [MVP-PLAN.md](docs/MVP-PLAN.md) — Implementation plan and timeline
+- [ARCHITECTURE-DECISION.md](docs/ARCHITECTURE-DECISION.md) — Why direct Roslyn vs subprocess
+- [CLAUDE.md](CLAUDE.md) — Instructions for Claude Code instances
+
+## Support
+
+- Issues: https://github.com/jas88/MCPsharp/issues
+- Discussions: https://github.com/jas88/MCPsharp/discussions

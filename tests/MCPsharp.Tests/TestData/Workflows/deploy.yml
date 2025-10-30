@@ -1,0 +1,27 @@
+name: Deploy
+on:
+  push:
+    tags:
+      - 'v*'
+env:
+  NUGET_URL: https://api.nuget.org/v3/index.json
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DEPLOY_ENV: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Build
+        run: dotnet build -c Release
+      - name: Pack
+        run: dotnet pack -c Release
+      - name: Push to NuGet
+        run: dotnet nuget push **/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source ${{ env.NUGET_URL }}
+      - name: Deploy
+        run: echo "Deploying with ${{ secrets.DEPLOY_TOKEN }}"

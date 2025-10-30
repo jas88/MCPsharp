@@ -1,0 +1,14 @@
+name: Build
+on: [push, pull_request]
+env:
+  DOTNET_VERSION: '9.0.x'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - run: dotnet build
+      - run: dotnet test

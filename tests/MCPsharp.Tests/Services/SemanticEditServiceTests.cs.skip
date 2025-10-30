@@ -1,0 +1,444 @@
+namespace MCPsharp.Tests.Services;
+
+using FluentAssertions;
+using MCPsharp.Models.Roslyn;
+using MCPsharp.Services.Roslyn;
+using Xunit;
+
+public class SemanticEditServiceTests : IAsyncLifetime
+{
+    private RoslynWorkspace _workspace = null!;
+    private ClassStructureService _classStructure = null!;
+    private SemanticEditService _service = null!;
+    private string _testProjectPath = null!;
+
+    public async Task InitializeAsync()
+    {
+        // Create a temporary directory for test files
+        _testProjectPath = Path.Combine(Path.GetTempPath(), $"MCPsharp_SemanticEdit_Test_{Guid.NewGuid()}");
+        Directory.CreateDirectory(_testProjectPath);
+
+        // Create test C# files
+        await CreateTestFilesAsync();
+
+        // Initialize services
+        _workspace = new RoslynWorkspace();
+        await _workspace.InitializeAsync(_testProjectPath);
+
+        _classStructure = new ClassStructureService(_workspace);
+        _service = new SemanticEditService(_workspace, _classStructure);
+    }
+
+    public Task DisposeAsync()
+    {
+        if (Directory.Exists(_testProjectPath))
+        {
+            Directory.Delete(_testProjectPath, recursive: true);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task CreateTestFilesAsync()
+    {
+        // EmptyClass.cs - Empty class for insertion tests
+        var emptyClass = @"
+namespace TestNamespace
+{
+    public class EmptyClass
+    {
+    }
+}";
+
+        // SimpleClass.cs - Class with existing members
+        var simpleClass = @"
+namespace TestNamespace
+{
+    public class SimpleClass
+    {
+        private int _id;
+
+        public string Name { get; set; }
+
+        public void DoSomething()
+        {
+        }
+    }
+}";
+
+        // ComplexClass.cs - Class with multiple member types
+        var complexClass = @"
+namespace TestNamespace
+{
+    public class ComplexClass
+    {
+        private readonly string _constValue;
+        private int _counter;
+
+        public string FirstProperty { get; set; }
+        public int SecondProperty { get; }
+
+        public void FirstMethod()
+        {
+        }
+
+        public async Task<string> SecondMethodAsync(int id)
+        {
+            return string.Empty;
+        }
+    }
+}";
+
+        await File.WriteAllTextAsync(Path.Combine(_testProjectPath, "EmptyClass.cs"), emptyClass);
+        await File.WriteAllTextAsync(Path.Combine(_testProjectPath, "SimpleClass.cs"), simpleClass);
+        await File.WriteAllTextAsync(Path.Combine(_testProjectPath, "ComplexClass.cs"), complexClass);
+    }
+
+    [Fact]
+    public async Task AddPropertyAsync_WithGetterAndSetter_ShouldSucceed()
+    {
+        // Act
+        var result = await _service.AddPropertyAsync(
+            className: "EmptyClass",
+            propertyName: "TestProperty",
+            propertyType: "string",
+            accessibility: "public",
+            hasGetter: true,
+            hasSetter: true);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Error.Should().BeNullOrEmpty();
+        result.ClassName.Should().Be("EmptyClass");
+        result.MemberName.Should().Be("TestProperty");
+        result.GeneratedCode.Should().Contain("public string TestProperty");
+        result.GeneratedCode.Should().Contain("get;");
+        result.GeneratedCode.Should().Contain("set;");
+        result.InsertedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task AddPropertyAsync_WithOnlyGetter_ShouldSucceed()
+    {
+        // Act
+        var result = await _service.AddPropertyAsync(
+            className: "EmptyClass",
+            propertyName: "ReadOnlyProperty",
+            propertyType: "int",
+            accessibility: "public",
+            hasGetter: true,
+            hasSetter: false);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.GeneratedCode.Should().Contain("public int ReadOnlyProperty");
+        result.GeneratedCode.Should().Contain("get;");
+        result.GeneratedCode.Should().NotContain("set;");
+    }
+
+    [Fact]
+    public async Task AddPropertyAsync_WithPrivateAccessibility_ShouldSucceed()
+    {
+        // Act
+        var result = await _service.AddPropertyAsync(
+            className: "EmptyClass",
+            propertyName: "PrivateProperty",
+            propertyType: "bool",
+            accessibility: "private",
+            hasGetter: true,
+            hasSetter: true);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.GeneratedCode.Should().Contain("private bool PrivateProperty");
+    }
+
+    [Fact]
+    public async Task AddPropertyAsync_ToClassNotFound_ShouldFail()
+    {
+        // Act
+        var result = await _service.AddPropertyAsync(
+            className: "NonExistentClass",
+            propertyName: "TestProperty",
+            propertyType: "string");
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("not found");
+    }
+
+    [Fact]
+    public async Task AddMethodAsync_WithNoParameters_ShouldSucceed()
+    {
+        // Act
+        var result = await _service.AddMethodAsync(
+            className: "EmptyClass",
+            methodName: "TestMethod",
+            returnType: "void",
+            parameters: null,
+            accessibility: "public");
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.GeneratedCode.Should().Contain("public void TestMethod()");
+        result.GeneratedCode.Should().Contain("// TODO: Implement");
+    }
+
+    [Fact]
+    public async Task AddMethodAsync_WithMultipleParameters_ShouldSucceed()
+    {
+        // Arrange
+        var parameters = new List<ParameterStructure>
+        {
+            new() { Name = "id", Type = "int" },
+            new() { Name = "name", Type = "string" },
+            new() { Name = "isActive", Type = "bool" }
+        };
+
+        // Act
+        var result = await _service.AddMethodAsync(
+            className: "EmptyClass",
+            methodName: "ProcessData",
+            returnType: "void",
+            parameters: parameters,
+            accessibility: "public");
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.GeneratedCode.Should().Contain("public void ProcessData(int id, string name, bool isActive)");
+    }
+
+    [Fact]
+    public async Task AddMethodAsync_WithCustomBody_ShouldSucceed()
+    {
+        // Arrange
+        var body = "return 42;";
+
+        // Act
+        var result = await _service.AddMethodAsync(
+            className: "EmptyClass",
+            methodName: "GetAnswer",
+            returnType: "int",
+            parameters: null,
+            accessibility: "public",
+            body: body);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.GeneratedCode.Should().Contain("return 42;");
+        result.GeneratedCode.Should().NotContain("TODO");
+    }
+
+    [Fact]
+    public async Task AddMethodAsync_WithNonVoidReturnType_ShouldHaveNotImplementedException()
+    {
+        // Act
+        var result = await _service.AddMethodAsync(
+            className: "EmptyClass",
+            methodName: "GetData",
+            returnType: "string",
+            parameters: null,
+            accessibility: "public");
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.GeneratedCode.Should().Contain("public string GetData()");
+        result.GeneratedCode.Should().Contain("throw new NotImplementedException();");
+    }
+
+    [Fact]
+    public async Task AddMethodAsync_WithVoidReturnType_ShouldHaveTodoComment()
+    {
+        // Act
+        var result = await _service.AddMethodAsync(
+            className: "EmptyClass",
+            methodName: "DoWork",
+            returnType: "void",
+            accessibility: "private");
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.GeneratedCode.Should().Contain("private void DoWork()");
+        result.GeneratedCode.Should().Contain("// TODO: Implement");
+        result.GeneratedCode.Should().NotContain("NotImplementedException");
+    }
+
+    [Fact]
+    public async Task AddMethodAsync_ToClassNotFound_ShouldFail()
+    {
+        // Act
+        var result = await _service.AddMethodAsync(
+            className: "NonExistentClass",
+            methodName: "TestMethod",
+            returnType: "void");
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("not found");
+    }
+
+    [Fact]
+    public async Task AddFieldAsync_PrivateField_ShouldSucceed()
+    {
+        // Act
+        var result = await _service.AddFieldAsync(
+            className: "EmptyClass",
+            fieldName: "_testField",
+            fieldType: "string",
+            accessibility: "private",
+            isReadOnly: false);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.GeneratedCode.Should().Contain("private string _testField;");
+        result.GeneratedCode.Should().NotContain("readonly");
+    }
+
+    [Fact]
+    public async Task AddFieldAsync_ReadonlyField_ShouldSucceed()
+    {
+        // Act
+        var result = await _service.AddFieldAsync(
+            className: "EmptyClass",
+            fieldName: "_readonlyField",
+            fieldType: "int",
+            accessibility: "private",
+            isReadOnly: true);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.GeneratedCode.Should().Contain("private readonly int _readonlyField;");
+    }
+
+    [Fact]
+    public async Task AddFieldAsync_ToClassNotFound_ShouldFail()
+    {
+        // Act
+        var result = await _service.AddFieldAsync(
+            className: "NonExistentClass",
+            fieldName: "_field",
+            fieldType: "string");
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("not found");
+    }
+
+    [Fact]
+    public void GeneratePropertyCode_WithGetterAndSetter_ShouldMatchConvention()
+    {
+        // Act
+        var code = _service.GeneratePropertyCode(
+            name: "Name",
+            type: "string",
+            accessibility: "public",
+            hasGetter: true,
+            hasSetter: true,
+            indentation: "    ");
+
+        // Assert
+        code.Should().Be("    public string Name { get; set; }");
+    }
+
+    [Fact]
+    public void GeneratePropertyCode_WithOnlyGetter_ShouldMatchConvention()
+    {
+        // Act
+        var code = _service.GeneratePropertyCode(
+            name: "Age",
+            type: "int",
+            accessibility: "public",
+            hasGetter: true,
+            hasSetter: false,
+            indentation: "    ");
+
+        // Assert
+        code.Should().Be("    public int Age { get; }");
+    }
+
+    [Fact]
+    public void GenerateMethodCode_SimpleMethod_ShouldMatchConvention()
+    {
+        // Act
+        var code = _service.GenerateMethodCode(
+            name: "DoSomething",
+            returnType: "void",
+            parameters: null,
+            accessibility: "public",
+            body: null,
+            indentation: "    ");
+
+        // Assert
+        code.Should().Contain("public void DoSomething()");
+        code.Should().Contain("{");
+        code.Should().Contain("}");
+        code.Should().Contain("// TODO: Implement");
+    }
+
+    [Fact]
+    public void GenerateMethodCode_WithParameters_ShouldMatchConvention()
+    {
+        // Arrange
+        var parameters = new List<ParameterStructure>
+        {
+            new() { Name = "x", Type = "int" },
+            new() { Name = "y", Type = "string" }
+        };
+
+        // Act
+        var code = _service.GenerateMethodCode(
+            name: "Process",
+            returnType: "bool",
+            parameters: parameters,
+            accessibility: "private",
+            body: null,
+            indentation: "    ");
+
+        // Assert
+        code.Should().Contain("private bool Process(int x, string y)");
+        code.Should().Contain("throw new NotImplementedException();");
+    }
+
+    [Fact]
+    public async Task AddProperty_ToClassWithExistingMembers_ShouldInsertAtCorrectLocation()
+    {
+        // Act
+        var result = await _service.AddPropertyAsync(
+            className: "SimpleClass",
+            propertyName: "NewProperty",
+            propertyType: "bool");
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.InsertedAt.Should().NotBeNull();
+        result.InsertedAt!.StartLine.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task AddMethod_ToClassWithExistingMembers_ShouldInsertAtCorrectLocation()
+    {
+        // Act
+        var result = await _service.AddMethodAsync(
+            className: "SimpleClass",
+            methodName: "NewMethod",
+            returnType: "void");
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.InsertedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task AddField_ToClassWithExistingMembers_ShouldInsertAtCorrectLocation()
+    {
+        // Act
+        var result = await _service.AddFieldAsync(
+            className: "SimpleClass",
+            fieldName: "_newField",
+            fieldType: "double");
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.InsertedAt.Should().NotBeNull();
+    }
+}

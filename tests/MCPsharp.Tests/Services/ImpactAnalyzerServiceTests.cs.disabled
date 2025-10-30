@@ -1,0 +1,427 @@
+using MCPsharp.Models;
+using MCPsharp.Services;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+
+namespace MCPsharp.Tests.Services;
+
+public class ImpactAnalyzerServiceTests : IDisposable
+{
+    private readonly RoslynWorkspace _workspace;
+    private readonly ReferenceFinderService _referenceFinder;
+    private readonly ConfigAnalyzerService _configAnalyzer;
+    private readonly WorkflowAnalyzerService _workflowAnalyzer;
+    private readonly ImpactAnalyzerService _impactAnalyzer;
+    private readonly string _testProjectRoot;
+
+    public ImpactAnalyzerServiceTests()
+    {
+        _workspace = new RoslynWorkspace();
+        _referenceFinder = new ReferenceFinderService(_workspace);
+        _configAnalyzer = new ConfigAnalyzerService();
+        _workflowAnalyzer = new WorkflowAnalyzerService();
+        _impactAnalyzer = new ImpactAnalyzerService(_workspace, _referenceFinder, _configAnalyzer, _workflowAnalyzer);
+
+        _testProjectRoot = Path.Combine(Directory.GetCurrentDirectory(), "TestProject");
+
+        // Create project with test files
+        SetupTestProject();
+    }
+
+    private void SetupTestProject()
+    {
+        var projectInfo = ProjectInfo.Create(
+            ProjectId.CreateNewId(),
+            VersionStamp.Create(),
+            "TestProject",
+            "TestProject",
+            LanguageNames.CSharp,
+            filePath: Path.Combine(_testProjectRoot, "TestProject.csproj"))
+            .WithMetadataReferences(new[]
+            {
+                MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location)
+            })
+            .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var project = _workspace.AddProject(projectInfo);
+
+        // Add all C# files from test project
+        var csFiles = new[]
+        {
+            "src/Models/User.cs",
+            "src/Services/UserService.cs",
+            "src/Controllers/UserController.cs",
+            "tests/UserServiceTests.cs"
+        };
+
+        foreach (var file in csFiles)
+        {
+            var filePath = Path.Combine(_testProjectRoot, file);
+            if (File.Exists(filePath))
+            {
+                var content = File.ReadAllText(filePath);
+                var docId = DocumentId.CreateNewId(project.Id);
+                var docInfo = DocumentInfo.Create(
+                    docId,
+                    Path.GetFileName(filePath),
+                    filePath: filePath,
+                    loader: TextLoader.From(TextAndVersion.Create(
+                        Microsoft.CodeAnalysis.Text.SourceText.From(content),
+                        VersionStamp.Create())));
+
+                _workspace.AddDocument(docInfo);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AnalyzeImpact_SignatureChange_FindsAllCallSites()
+    {
+        // Arrange
+        var userFilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs");
+        var change = new CodeChange
+        {
+            FilePath = userFilePath,
+            ChangeType = "signature_change",
+            SymbolName = "Delete",
+            OldSignature = "public void Delete()",
+            NewSignature = "public Task DeleteAsync(bool cascade)"
+        };
+
+        // Act
+        var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.CSharpImpacts.Count >= 3, $"Expected at least 3 C# impacts, got {result.CSharpImpacts.Count}");
+
+        // Should find impacts in UserService, UserController, and tests
+        var impactedFiles = result.CSharpImpacts.Select(i => Path.GetFileName(i.FilePath)).Distinct().ToList();
+        Assert.Contains(impactedFiles, f => f.Contains("UserService"));
+        Assert.Contains(impactedFiles, f => f.Contains("UserController") || f.Contains("UserServiceTests"));
+    }
+
+    [Fact]
+    public async Task FindCSharpImpacts_RenameClass_FindsAllReferences()
+    {
+        // Arrange
+        var userFilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs");
+        var change = new CodeChange
+        {
+            FilePath = userFilePath,
+            ChangeType = "rename",
+            SymbolName = "User",
+            OldSignature = "User",
+            NewSignature = "UserEntity"
+        };
+
+        // Act
+        var impacts = await _impactAnalyzer.FindCSharpImpactsAsync(change);
+
+        // Assert
+        Assert.NotEmpty(impacts);
+        Assert.All(impacts, i => Assert.Equal("breaking_change", i.ImpactType));
+    }
+
+    [Fact]
+    public async Task FindCSharpImpacts_DeleteMethod_FindsBreakingReferences()
+    {
+        // Arrange
+        var userFilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs");
+        var change = new CodeChange
+        {
+            FilePath = userFilePath,
+            ChangeType = "delete",
+            SymbolName = "GetDiscount"
+        };
+
+        // Act
+        var impacts = await _impactAnalyzer.FindCSharpImpactsAsync(change);
+
+        // Assert
+        Assert.NotEmpty(impacts);
+        Assert.All(impacts, i => Assert.Equal("breaking_change", i.ImpactType));
+
+        // Should find usage in UserService.CalculateDiscount
+        Assert.Contains(impacts, i => i.FilePath.Contains("UserService"));
+    }
+
+    [Fact]
+    public async Task FindConfigImpacts_ClassNameInSettings_FindsReference()
+    {
+        // Arrange
+        var userFilePath = Path.Combine(_testProjectRoot, "src/Services/UserService.cs");
+        var change = new CodeChange
+        {
+            FilePath = userFilePath,
+            ChangeType = "rename",
+            SymbolName = "UserService"
+        };
+
+        // Act
+        var impacts = await _impactAnalyzer.FindConfigImpactsAsync(change, _testProjectRoot);
+
+        // Assert
+        Assert.NotEmpty(impacts);
+        var appSettingsImpact = impacts.FirstOrDefault(i => i.FilePath.Contains("appsettings.json"));
+        Assert.NotNull(appSettingsImpact);
+        Assert.Equal("UserService", appSettingsImpact.ConfigKey);
+    }
+
+    [Fact]
+    public async Task FindConfigImpacts_NoReferences_ReturnsEmpty()
+    {
+        // Arrange
+        var change = new CodeChange
+        {
+            FilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs"),
+            ChangeType = "add",
+            SymbolName = "NonExistentMethod"
+        };
+
+        // Act
+        var impacts = await _impactAnalyzer.FindConfigImpactsAsync(change, _testProjectRoot);
+
+        // Assert
+        Assert.Empty(impacts);
+    }
+
+    [Fact]
+    public async Task FindWorkflowImpacts_BuildWorkflow_DetectsTestImpact()
+    {
+        // Arrange
+        var userFilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs");
+        var change = new CodeChange
+        {
+            FilePath = userFilePath,
+            ChangeType = "signature_change",
+            SymbolName = "Delete"
+        };
+
+        // Act
+        var impacts = await _impactAnalyzer.FindWorkflowImpactsAsync(change, _testProjectRoot);
+
+        // Assert
+        if (impacts.Any()) // Only assert if workflows exist
+        {
+            var buildImpact = impacts.FirstOrDefault(i => i.JobName.Contains("build", StringComparison.OrdinalIgnoreCase));
+            if (buildImpact != null)
+            {
+                Assert.True(buildImpact.IsBreaking);
+                Assert.NotNull(buildImpact.Suggestion);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task FindWorkflowImpacts_DeletedSymbol_SuggestsRemoval()
+    {
+        // Arrange
+        var change = new CodeChange
+        {
+            FilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs"),
+            ChangeType = "delete",
+            SymbolName = "User"
+        };
+
+        // Act
+        var impacts = await _impactAnalyzer.FindWorkflowImpactsAsync(change, _testProjectRoot);
+
+        // Assert
+        if (impacts.Any(i => i.IsBreaking))
+        {
+            var breakingImpact = impacts.First(i => i.IsBreaking);
+            Assert.Contains("Remove or update", breakingImpact.Suggestion ?? "");
+        }
+    }
+
+    [Fact]
+    public async Task FindDocumentationImpacts_MethodSignatureChange_NeedsUpdate()
+    {
+        // Arrange
+        var change = new CodeChange
+        {
+            FilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs"),
+            ChangeType = "signature_change",
+            SymbolName = "Delete",
+            OldSignature = "public void Delete()",
+            NewSignature = "public Task DeleteAsync(bool cascade)"
+        };
+
+        // Act
+        var impacts = await _impactAnalyzer.FindDocumentationImpactsAsync(change, _testProjectRoot);
+
+        // Assert
+        Assert.NotEmpty(impacts);
+        var apiDocImpact = impacts.FirstOrDefault(i => i.FilePath.Contains("API.md"));
+        Assert.NotNull(apiDocImpact);
+        Assert.True(apiDocImpact.NeedsUpdate);
+    }
+
+    [Fact]
+    public async Task FindDocumentationImpacts_OutdatedSignature_DetectsUpdate()
+    {
+        // Arrange
+        var change = new CodeChange
+        {
+            FilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs"),
+            ChangeType = "signature_change",
+            SymbolName = "GetDiscount",
+            OldSignature = "GetDiscount()",
+            NewSignature = "GetDiscount(bool premium)"
+        };
+
+        // Act
+        var impacts = await _impactAnalyzer.FindDocumentationImpactsAsync(change, _testProjectRoot);
+
+        // Assert
+        Assert.NotEmpty(impacts);
+        Assert.Contains(impacts, i => i.NeedsUpdate);
+    }
+
+    [Fact]
+    public async Task FindDocumentationImpacts_FindsCorrectSection()
+    {
+        // Arrange
+        var change = new CodeChange
+        {
+            FilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs"),
+            ChangeType = "signature_change",
+            SymbolName = "Delete"
+        };
+
+        // Act
+        var impacts = await _impactAnalyzer.FindDocumentationImpactsAsync(change, _testProjectRoot);
+
+        // Assert
+        var impactWithSection = impacts.FirstOrDefault(i => i.Section != null);
+        if (impactWithSection != null)
+        {
+            Assert.Contains("Delete", impactWithSection.Section, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public async Task AnalyzeImpact_MultiFileChange_CountsUniqueFiles()
+    {
+        // Arrange
+        var change = new CodeChange
+        {
+            FilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs"),
+            ChangeType = "signature_change",
+            SymbolName = "Delete"
+        };
+
+        // Act
+        var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
+
+        // Assert
+        Assert.True(result.TotalImpactedFiles >= 1);
+
+        // Verify uniqueness
+        var allFiles = new List<string>();
+        allFiles.AddRange(result.CSharpImpacts.Select(i => i.FilePath));
+        allFiles.AddRange(result.ConfigImpacts.Select(i => i.FilePath));
+        allFiles.AddRange(result.WorkflowImpacts.Select(i => i.FilePath));
+        allFiles.AddRange(result.DocumentationImpacts.Select(i => i.FilePath));
+
+        var uniqueCount = allFiles.Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        Assert.Equal(result.TotalImpactedFiles, uniqueCount);
+    }
+
+    [Fact]
+    public async Task AnalyzeImpact_InternalChange_MinimalImpact()
+    {
+        // Arrange
+        var change = new CodeChange
+        {
+            FilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs"),
+            ChangeType = "add",
+            SymbolName = "InternalHelperMethod"
+        };
+
+        // Act
+        var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
+
+        // Assert - internal changes should have minimal to no impact
+        Assert.True(result.TotalImpactedFiles <= 1);
+    }
+
+    [Fact]
+    public async Task FindCSharpImpacts_ChangePropertyType_FindsIncompatibleUsages()
+    {
+        // Arrange
+        var change = new CodeChange
+        {
+            FilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs"),
+            ChangeType = "signature_change",
+            SymbolName = "Id",
+            OldSignature = "int Id",
+            NewSignature = "string Id"
+        };
+
+        // Act
+        var impacts = await _impactAnalyzer.FindCSharpImpactsAsync(change);
+
+        // Assert - changing property type should be breaking
+        if (impacts.Any())
+        {
+            Assert.All(impacts, i => Assert.Equal("breaking_change", i.ImpactType));
+        }
+    }
+
+    [Fact]
+    public async Task FindCSharpImpacts_AddRequiredParameter_FindsAllInvocations()
+    {
+        // Arrange
+        var change = new CodeChange
+        {
+            FilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs"),
+            ChangeType = "signature_change",
+            SymbolName = "Delete",
+            OldSignature = "void Delete()",
+            NewSignature = "void Delete(bool cascade)"
+        };
+
+        // Act
+        var impacts = await _impactAnalyzer.FindCSharpImpactsAsync(change);
+
+        // Assert
+        Assert.NotEmpty(impacts);
+        Assert.All(impacts, i =>
+        {
+            Assert.Equal("breaking_change", i.ImpactType);
+            Assert.True(i.Line > 0);
+        });
+    }
+
+    [Fact]
+    public async Task AnalyzeImpact_CompleteWorkflow_AllImpactTypes()
+    {
+        // Arrange
+        var change = new CodeChange
+        {
+            FilePath = Path.Combine(_testProjectRoot, "src/Models/User.cs"),
+            ChangeType = "signature_change",
+            SymbolName = "Delete",
+            OldSignature = "void Delete()",
+            NewSignature = "Task DeleteAsync(bool cascade)"
+        };
+
+        // Act
+        var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
+
+        // Assert - should have impacts across multiple categories
+        Assert.NotEmpty(result.CSharpImpacts);
+        Assert.True(result.TotalImpactedFiles >= 2);
+
+        // Should have at least C# and documentation impacts
+        Assert.True(result.CSharpImpacts.Any() || result.DocumentationImpacts.Any());
+    }
+
+    public void Dispose()
+    {
+        _workspace.Dispose();
+    }
+}

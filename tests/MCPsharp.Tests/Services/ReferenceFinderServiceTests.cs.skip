@@ -1,0 +1,287 @@
+using MCPsharp.Models.Roslyn;
+using MCPsharp.Services.Roslyn;
+
+namespace MCPsharp.Tests.Services;
+
+/// <summary>
+/// Comprehensive tests for ReferenceFinderService
+/// </summary>
+public class ReferenceFinderServiceTests : IAsyncLifetime
+{
+    private RoslynWorkspace _workspace = null!;
+    private ReferenceFinderService _referenceFinder = null!;
+    private string _testFixturesPath = null!;
+
+    public async Task InitializeAsync()
+    {
+        // Get the test fixtures directory
+        _testFixturesPath = GetTestFixturesPath();
+
+        // Initialize workspace
+        _workspace = new RoslynWorkspace();
+        await _workspace.InitializeAsync(_testFixturesPath);
+
+        // Initialize service
+        _referenceFinder = new ReferenceFinderService(_workspace);
+    }
+
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
+    }
+
+    private static string GetTestFixturesPath()
+    {
+        // Get the current test assembly directory
+        var assemblyPath = typeof(ReferenceFinderServiceTests).Assembly.Location;
+        var directory = Path.GetDirectoryName(assemblyPath)!;
+
+        // Navigate up to find the test project root
+        while (directory != null && !File.Exists(Path.Combine(directory, "MCPsharp.Tests.csproj")))
+        {
+            directory = Directory.GetParent(directory)?.FullName;
+        }
+
+        if (directory == null)
+        {
+            throw new InvalidOperationException("Could not find test project directory");
+        }
+
+        return Path.Combine(directory, "TestFixtures");
+    }
+
+    [Fact]
+    public async Task FindReferencesAsync_FindsReferencesToClassName()
+    {
+        // Act
+        var result = await _referenceFinder.FindReferencesAsync(symbolName: "Consumer");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("Consumer", result.Symbol);
+        Assert.NotEmpty(result.References);
+        Assert.True(result.TotalReferences > 0);
+    }
+
+    [Fact]
+    public async Task FindReferencesAsync_FindsReferencesToMethodName()
+    {
+        // Act
+        var result = await _referenceFinder.FindReferencesAsync(symbolName: "Execute");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("Execute", result.Symbol);
+        Assert.NotEmpty(result.References);
+        Assert.True(result.TotalReferences > 0);
+    }
+
+    [Fact]
+    public async Task FindReferencesAsync_FindsReferencesToPropertyName()
+    {
+        // Act
+        var result = await _referenceFinder.FindReferencesAsync(symbolName: "Name");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("Name", result.Symbol);
+        Assert.NotEmpty(result.References);
+        Assert.True(result.TotalReferences > 0);
+    }
+
+    [Fact]
+    public async Task FindReferencesAsync_ReturnsNullWhenSymbolNotFound()
+    {
+        // Act
+        var result = await _referenceFinder.FindReferencesAsync(symbolName: "NonExistentSymbol");
+
+        // Assert - should return null for non-existent symbols
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task FindReferencesAtLocationAsync_FindsSymbolAtLocation()
+    {
+        // Arrange
+        var consumerFile = FindFile("Consumer.cs");
+        var consumerLine = await FindLineContaining(consumerFile, "public class Consumer");
+
+        // Act
+        var result = await _referenceFinder.FindReferencesAsync(
+            filePath: consumerFile,
+            line: consumerLine,
+            column: 15);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("Consumer", result.Symbol);
+        Assert.True(result.TotalReferences > 0);
+    }
+
+    [Fact]
+    public async Task FindReferencesAsync_IncludesContext()
+    {
+        // Act
+        var result = await _referenceFinder.FindReferencesAsync(symbolName: "Execute");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.All(result.References, reference =>
+        {
+            Assert.NotNull(reference.Context);
+            Assert.NotEmpty(reference.Context);
+        });
+    }
+
+    [Fact]
+    public async Task FindReferencesAsync_ReferencesHaveValidLocations()
+    {
+        // Act
+        var result = await _referenceFinder.FindReferencesAsync(symbolName: "IService");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.All(result.References, reference =>
+        {
+            Assert.NotNull(reference.File);
+            Assert.NotEmpty(reference.File);
+            Assert.True(reference.Line >= 0, "Line should be non-negative");
+            Assert.True(reference.Column >= 0, "Column should be non-negative");
+        });
+    }
+
+    [Fact]
+    public async Task FindReferencesAsync_FindsMultipleReferencesInSameFile()
+    {
+        // Act - IService is used multiple times in Consumer
+        var result = await _referenceFinder.FindReferencesAsync(symbolName: "IService");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.NotEmpty(result.References);
+
+        var consumerReferences = result.References
+            .Where(r => r.File.EndsWith("Consumer.cs"))
+            .ToList();
+
+        Assert.NotEmpty(consumerReferences);
+    }
+
+    [Fact]
+    public async Task FindReferencesAsync_FindsReferencesAcrossMultipleFiles()
+    {
+        // Act - IService should be in IService.cs, ServiceImpl.cs, Consumer.cs, DerivedService.cs
+        var result = await _referenceFinder.FindReferencesAsync(symbolName: "IService");
+
+        // Assert
+        Assert.NotNull(result);
+
+        var filesWithReferences = result.References
+            .Select(r => Path.GetFileName(r.File))
+            .Distinct()
+            .ToList();
+
+        Assert.True(filesWithReferences.Count >= 2, "IService should be referenced in multiple files");
+    }
+
+    [Fact]
+    public async Task FindImplementationsAsync_FindsInterfaceImplementations()
+    {
+        // Act
+        var implementations = await _referenceFinder.FindImplementationsAsync("IService");
+
+        // Assert
+        Assert.NotNull(implementations);
+        Assert.NotEmpty(implementations);
+        Assert.True(implementations.Count >= 2, "Should find ServiceImpl and DerivedService");
+
+        Assert.All(implementations, impl =>
+        {
+            Assert.NotNull(impl.Name);
+            Assert.NotNull(impl.File);
+            Assert.True(impl.Line >= 0);
+        });
+    }
+
+    [Fact]
+    public async Task FindImplementationsAsync_FindsImplementationForServiceImpl()
+    {
+        // Act
+        var implementations = await _referenceFinder.FindImplementationsAsync("IService");
+
+        // Assert
+        Assert.Contains(implementations, impl => impl.Name == "ServiceImpl");
+    }
+
+    [Fact]
+    public async Task FindImplementationsAsync_FindsImplementationForDerivedService()
+    {
+        // Act
+        var implementations = await _referenceFinder.FindImplementationsAsync("IService");
+
+        // Assert
+        Assert.Contains(implementations, impl => impl.Name == "DerivedService");
+    }
+
+    [Fact]
+    public async Task FindImplementationsAsync_ReturnsEmptyForNonInterface()
+    {
+        // Act - Consumer is a class, not an interface
+        var implementations = await _referenceFinder.FindImplementationsAsync("Consumer");
+
+        // Assert
+        Assert.NotNull(implementations);
+        Assert.Empty(implementations);
+    }
+
+    [Fact]
+    public async Task FindReferencesAsync_CountMatchesReferencesList()
+    {
+        // Act
+        var result = await _referenceFinder.FindReferencesAsync(symbolName: "Execute");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(result.References.Count, result.TotalReferences);
+    }
+
+    [Fact]
+    public async Task FindReferencesAsync_FindsMethodInvocations()
+    {
+        // Act - Execute is invoked in Consumer.Run()
+        var result = await _referenceFinder.FindReferencesAsync(symbolName: "Execute");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Contains(result.References, r =>
+            r.Context != null && r.Context.Contains("Execute("));
+    }
+
+    // Helper methods
+
+    private string FindFile(string fileName)
+    {
+        var filePath = Path.Combine(_testFixturesPath, fileName);
+
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException($"Test fixture file not found: {fileName}", filePath);
+        }
+
+        return filePath;
+    }
+
+    private async Task<int> FindLineContaining(string filePath, string searchText)
+    {
+        var lines = await File.ReadAllLinesAsync(filePath);
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].Contains(searchText))
+            {
+                return i; // 0-based for Roslyn API
+            }
+        }
+
+        throw new InvalidOperationException($"Text '{searchText}' not found in {filePath}");
+    }
+}

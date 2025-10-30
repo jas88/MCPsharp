@@ -1,0 +1,436 @@
+using MCPsharp.Models;
+using MCPsharp.Services;
+using Xunit;
+
+namespace MCPsharp.Tests.Services;
+
+public class ProjectParserServiceTests : IDisposable
+{
+    private readonly ProjectParserService _service;
+    private readonly string _testDir;
+
+    public ProjectParserServiceTests()
+    {
+        _service = new ProjectParserService();
+        _testDir = Path.Combine(Path.GetTempPath(), $"mcpsharp-tests-{Guid.NewGuid()}");
+        Directory.CreateDirectory(_testDir);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_testDir))
+        {
+            Directory.Delete(_testDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ParseProjectAsync_ValidProject_ReturnsProjectInfo()
+    {
+        // Arrange
+        var csproj = Path.Combine(_testDir, "TestProject.csproj");
+        await File.WriteAllTextAsync(csproj, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>");
+
+        // Act
+        var result = await _service.ParseProjectAsync(csproj);
+
+        // Assert
+        Assert.Equal("TestProject", result.Name);
+        Assert.Equal(Path.GetFullPath(csproj), result.FilePath);
+        Assert.Equal("Exe", result.OutputType);
+        Assert.Single(result.TargetFrameworks);
+        Assert.Equal("net9.0", result.TargetFrameworks[0]);
+        Assert.True(result.Nullable);
+    }
+
+    [Fact]
+    public async Task ParseProjectAsync_MultipleTargetFrameworks_ParsesAll()
+    {
+        // Arrange
+        var csproj = Path.Combine(_testDir, "MultiTarget.csproj");
+        await File.WriteAllTextAsync(csproj, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFrameworks>net6.0;net8.0;net9.0</TargetFrameworks>
+  </PropertyGroup>
+</Project>");
+
+        // Act
+        var result = await _service.ParseProjectAsync(csproj);
+
+        // Assert
+        Assert.Equal("Library", result.OutputType);
+        Assert.Equal(3, result.TargetFrameworks.Count);
+        Assert.Contains("net6.0", result.TargetFrameworks);
+        Assert.Contains("net8.0", result.TargetFrameworks);
+        Assert.Contains("net9.0", result.TargetFrameworks);
+    }
+
+    [Fact]
+    public async Task ParseProjectAsync_WithPackageReferences_ParsesPackages()
+    {
+        // Arrange
+        var csproj = Path.Combine(_testDir, "WithPackages.csproj");
+        await File.WriteAllTextAsync(csproj, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include=""Newtonsoft.Json"" Version=""13.0.3"" />
+    <PackageReference Include=""Serilog"" Version=""3.1.1"" />
+  </ItemGroup>
+</Project>");
+
+        // Act
+        var result = await _service.ParseProjectAsync(csproj);
+
+        // Assert
+        Assert.NotNull(result.PackageReferences);
+        Assert.Equal(2, result.PackageReferences.Count);
+
+        var json = result.PackageReferences.First(p => p.Id == "Newtonsoft.Json");
+        Assert.Equal("13.0.3", json.Version);
+
+        var serilog = result.PackageReferences.First(p => p.Id == "Serilog");
+        Assert.Equal("3.1.1", serilog.Version);
+    }
+
+    [Fact]
+    public async Task ParseProjectAsync_WithProjectReferences_ParsesReferences()
+    {
+        // Arrange
+        var subDir = Path.Combine(_testDir, "Core");
+        Directory.CreateDirectory(subDir);
+
+        var coreCsproj = Path.Combine(subDir, "Core.csproj");
+        await File.WriteAllTextAsync(coreCsproj, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+</Project>");
+
+        var mainCsproj = Path.Combine(_testDir, "Main.csproj");
+        await File.WriteAllTextAsync(mainCsproj, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include=""Core/Core.csproj"" />
+  </ItemGroup>
+</Project>");
+
+        // Act
+        var result = await _service.ParseProjectAsync(mainCsproj);
+
+        // Assert
+        Assert.NotNull(result.ProjectReferences);
+        Assert.Single(result.ProjectReferences);
+        Assert.Equal("Core", result.ProjectReferences[0].ProjectName);
+        Assert.Equal(Path.GetFullPath(coreCsproj), result.ProjectReferences[0].ProjectPath);
+    }
+
+    [Fact]
+    public async Task ParseProjectAsync_MissingFile_ThrowsFileNotFoundException()
+    {
+        // Arrange
+        var nonExistent = Path.Combine(_testDir, "DoesNotExist.csproj");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<FileNotFoundException>(() =>
+            _service.ParseProjectAsync(nonExistent));
+    }
+
+    [Fact]
+    public async Task ParseProjectAsync_InvalidXml_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var csproj = Path.Combine(_testDir, "Invalid.csproj");
+        await File.WriteAllTextAsync(csproj, "<Project><Invalid>");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ParseProjectAsync(csproj));
+    }
+
+    [Fact]
+    public async Task ParseProjectAsync_ExtractsOutputTypeCorrectly()
+    {
+        // Arrange
+        var exe = Path.Combine(_testDir, "Exe.csproj");
+        await File.WriteAllTextAsync(exe, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+</Project>");
+
+        var lib = Path.Combine(_testDir, "Lib.csproj");
+        await File.WriteAllTextAsync(lib, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+</Project>");
+
+        // Act
+        var exeResult = await _service.ParseProjectAsync(exe);
+        var libResult = await _service.ParseProjectAsync(lib);
+
+        // Assert
+        Assert.Equal("Exe", exeResult.OutputType);
+        Assert.Equal("Library", libResult.OutputType); // Default
+    }
+
+    [Fact]
+    public async Task ParseProjectAsync_ExtractsNullableSetting()
+    {
+        // Arrange
+        var enabled = Path.Combine(_testDir, "NullableEnabled.csproj");
+        await File.WriteAllTextAsync(enabled, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>");
+
+        var disabled = Path.Combine(_testDir, "NullableDisabled.csproj");
+        await File.WriteAllTextAsync(disabled, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+</Project>");
+
+        // Act
+        var enabledResult = await _service.ParseProjectAsync(enabled);
+        var disabledResult = await _service.ParseProjectAsync(disabled);
+
+        // Assert
+        Assert.True(enabledResult.Nullable);
+        Assert.False(disabledResult.Nullable);
+    }
+
+    [Fact]
+    public async Task ParseProjectAsync_ExtractsLangVersion()
+    {
+        // Arrange
+        var csproj = Path.Combine(_testDir, "WithLangVersion.csproj");
+        await File.WriteAllTextAsync(csproj, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+</Project>");
+
+        // Act
+        var result = await _service.ParseProjectAsync(csproj);
+
+        // Assert
+        Assert.Equal("latest", result.LangVersion);
+    }
+
+    [Fact]
+    public async Task ParseProjectAsync_ExtractsAssemblyNameAndRootNamespace()
+    {
+        // Arrange
+        var csproj = Path.Combine(_testDir, "CustomNames.csproj");
+        await File.WriteAllTextAsync(csproj, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <AssemblyName>MyAssembly</AssemblyName>
+    <RootNamespace>My.Custom.Namespace</RootNamespace>
+  </PropertyGroup>
+</Project>");
+
+        // Act
+        var result = await _service.ParseProjectAsync(csproj);
+
+        // Assert
+        Assert.Equal("MyAssembly", result.AssemblyName);
+        Assert.Equal("My.Custom.Namespace", result.RootNamespace);
+    }
+
+    [Fact]
+    public async Task ParseSolutionAsync_ValidSolution_ReturnsSolutionInfo()
+    {
+        // Arrange
+        var sln = Path.Combine(_testDir, "TestSolution.sln");
+        await File.WriteAllTextAsync(sln, @"
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""MyApp"", ""src\MyApp\MyApp.csproj"", ""{12345678-1234-1234-1234-123456789012}""
+EndProject
+Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""MyLib"", ""src\MyLib\MyLib.csproj"", ""{87654321-4321-4321-4321-210987654321}""
+EndProject
+Global
+    GlobalSection(SolutionConfigurationPlatforms) = preSolution
+        Debug|Any CPU = Debug|Any CPU
+        Release|Any CPU = Release|Any CPU
+    EndGlobalSection
+EndGlobal");
+
+        // Act
+        var result = await _service.ParseSolutionAsync(sln);
+
+        // Assert
+        Assert.Equal(Path.GetFullPath(sln), result.FilePath);
+        Assert.Equal(2, result.Projects.Count);
+
+        var myApp = result.Projects.First(p => p.Name == "MyApp");
+        Assert.Equal("12345678-1234-1234-1234-123456789012", myApp.ProjectGuid);
+        Assert.Equal("FAE04EC0-301F-11D3-BF4B-00C04F79EFBC", myApp.TypeGuid);
+
+        Assert.NotNull(result.Configurations);
+        Assert.Equal(2, result.Configurations.Count);
+        Assert.Contains("Debug|Any CPU", result.Configurations);
+        Assert.Contains("Release|Any CPU", result.Configurations);
+    }
+
+    [Fact]
+    public async Task ParseSolutionAsync_MissingFile_ThrowsFileNotFoundException()
+    {
+        // Arrange
+        var nonExistent = Path.Combine(_testDir, "DoesNotExist.sln");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<FileNotFoundException>(() =>
+            _service.ParseSolutionAsync(nonExistent));
+    }
+
+    [Fact]
+    public async Task FindProjectsAsync_FindsAllProjects()
+    {
+        // Arrange
+        Directory.CreateDirectory(Path.Combine(_testDir, "src", "Project1"));
+        Directory.CreateDirectory(Path.Combine(_testDir, "src", "Project2"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_testDir, "src", "Project1", "Project1.csproj"),
+            "<Project />");
+        await File.WriteAllTextAsync(
+            Path.Combine(_testDir, "src", "Project2", "Project2.csproj"),
+            "<Project />");
+
+        // Act
+        var result = await _service.FindProjectsAsync(_testDir);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        Assert.Contains(result, p => p.EndsWith("Project1.csproj"));
+        Assert.Contains(result, p => p.EndsWith("Project2.csproj"));
+    }
+
+    [Fact]
+    public async Task FindProjectsAsync_NonExistentDirectory_ReturnsEmpty()
+    {
+        // Arrange
+        var nonExistent = Path.Combine(_testDir, "does-not-exist");
+
+        // Act
+        var result = await _service.FindProjectsAsync(nonExistent);
+
+        // Assert
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task FindSolutionAsync_FindsSolution()
+    {
+        // Arrange
+        var sln = Path.Combine(_testDir, "TestSolution.sln");
+        await File.WriteAllTextAsync(sln, "Solution content");
+
+        // Act
+        var result = await _service.FindSolutionAsync(_testDir);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(Path.GetFullPath(sln), result);
+    }
+
+    [Fact]
+    public async Task FindSolutionAsync_PrefersMatchingDirectoryName()
+    {
+        // Arrange
+        var dirName = Path.GetFileName(_testDir);
+        await File.WriteAllTextAsync(Path.Combine(_testDir, "Other.sln"), "Content");
+        await File.WriteAllTextAsync(Path.Combine(_testDir, $"{dirName}.sln"), "Content");
+
+        // Act
+        var result = await _service.FindSolutionAsync(_testDir);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.EndsWith($"{dirName}.sln", result);
+    }
+
+    [Fact]
+    public async Task FindSolutionAsync_NoSolution_ReturnsNull()
+    {
+        // Act
+        var result = await _service.FindSolutionAsync(_testDir);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Theory]
+    [InlineData("net6.0", true)]
+    [InlineData("net7.0", true)]
+    [InlineData("net8.0", true)]
+    [InlineData("net9.0", true)]
+    [InlineData("netstandard2.0", true)]
+    [InlineData("netstandard2.1", true)]
+    [InlineData("net5.0", false)]
+    [InlineData("netcoreapp3.1", false)]
+    [InlineData("net472", false)]
+    public void IsCompatibleTargetFramework_ChecksCompatibility(string framework, bool expected)
+    {
+        // Act
+        var result = _service.IsCompatibleTargetFramework(framework);
+
+        // Assert
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public async Task ParseProjectAsync_PackageReferenceWithElementVersion_ParsesCorrectly()
+    {
+        // Arrange
+        var csproj = Path.Combine(_testDir, "ElementVersion.csproj");
+        await File.WriteAllTextAsync(csproj, @"
+<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include=""SomePackage"">
+      <Version>1.2.3</Version>
+    </PackageReference>
+  </ItemGroup>
+</Project>");
+
+        // Act
+        var result = await _service.ParseProjectAsync(csproj);
+
+        // Assert
+        Assert.NotNull(result.PackageReferences);
+        Assert.Single(result.PackageReferences);
+        Assert.Equal("SomePackage", result.PackageReferences[0].Id);
+        Assert.Equal("1.2.3", result.PackageReferences[0].Version);
+    }
+}

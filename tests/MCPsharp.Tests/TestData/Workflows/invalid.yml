@@ -1,0 +1,5 @@
+name: Invalid Workflow
+this is not valid yaml
+  - broken indentation
+jobs:
+  [ malformed
