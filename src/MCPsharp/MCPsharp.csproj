@@ -12,6 +12,7 @@
     <!-- Publishing configuration for single-file self-contained deployment -->
     <PublishSingleFile>true</PublishSingleFile>
     <PublishSelfContained>true</PublishSelfContained>
+    <UseAppHost>true</UseAppHost>
     <RuntimeIdentifier>osx-arm64</RuntimeIdentifier>
     <PublishReadyToRun>true</PublishReadyToRun>
     <PublishTrimmed>false</PublishTrimmed>
