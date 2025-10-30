@@ -27,7 +27,7 @@ public class SymbolQueryService
             return new List<SymbolResult>();
         }
 
-        var symbols = compilation.GetSymbolsWithName(name, SymbolFilter.TypeAndMember);
+        var symbols = compilation.GetSymbolsWithName(n => n == name, SymbolFilter.TypeAndMember);
         var results = new List<SymbolResult>();
 
         foreach (var symbol in symbols)
@@ -86,13 +86,20 @@ public class SymbolQueryService
             return null;
         }
 
-        var symbol = semanticModel.GetDeclaredSymbol(node) ?? semanticModel.GetSymbolInfo(node).Symbol;
+        var symbolInfo = semanticModel.GetSymbolInfo(node);
+        var symbol = semanticModel.GetDeclaredSymbol(node) ?? symbolInfo.CandidateSymbols.FirstOrDefault();
         if (symbol == null)
         {
             return null;
         }
 
+        return ConvertToSymbolInfo(symbol, document);
+    }
+
+    private Models.Roslyn.SymbolInfo ConvertToSymbolInfo(ISymbol symbol, Document document)
+    {
         var members = new List<MemberInfo>();
+
         if (symbol is INamedTypeSymbol typeSymbol)
         {
             foreach (var member in typeSymbol.GetMembers())
@@ -127,7 +134,8 @@ public class SymbolQueryService
             Documentation = GetDocumentation(symbol),
             Namespace = symbol.ContainingNamespace?.ToDisplayString(),
             BaseTypes = GetBaseTypes(symbol),
-            Members = members
+            Members = members,
+            Symbol = symbol  // Add the raw Roslyn symbol
         };
     }
 
@@ -270,7 +278,7 @@ public class SymbolQueryService
 
         // Find the namespace symbol
         var namespaceSymbol = compilation.GetSymbolsWithName(
-            name => name == namespaceName.Split('.').Last(),
+            n => n == namespaceName.Split('.').Last(),
             SymbolFilter.Namespace)
             .OfType<INamespaceSymbol>()
             .FirstOrDefault(ns => ns.ToDisplayString() == namespaceName);

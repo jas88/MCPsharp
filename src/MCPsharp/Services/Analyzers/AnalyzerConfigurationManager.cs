@@ -1,4 +1,7 @@
+using System.Collections.Immutable;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Services.Analyzers;
@@ -321,7 +324,11 @@ public class AnalyzerConfigurationManager
                 var configs = JsonSerializer.Deserialize<Dictionary<string, AnalyzerConfiguration>>(globalJson);
                 if (configs != null)
                 {
-                    _globalConfigurations = configs;
+                    _globalConfigurations.Clear();
+                    foreach (var kvp in configs)
+                    {
+                        _globalConfigurations[kvp.Key] = kvp.Value;
+                    }
                 }
             }
 

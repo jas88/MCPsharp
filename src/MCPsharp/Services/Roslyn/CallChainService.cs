@@ -125,7 +125,19 @@ public class CallChainService : ICallChainService
     {
         var compilation = _workspace.GetCompilation();
         if (compilation == null)
-            return new CallGraphAnalysis { Scope = typeName ?? namespaceName ?? "all" };
+            return new CallGraphAnalysis
+            {
+                Scope = typeName ?? namespaceName ?? "all",
+                Methods = new List<MethodSignature>(),
+                Relationships = new List<CallRelationship>(),
+                CallGraph = new Dictionary<string, List<string>>(),
+                ReverseCallGraph = new Dictionary<string, List<string>>(),
+                EntryPoints = new List<string>(),
+                LeafMethods = new List<string>(),
+                CircularDependencies = new List<CircularDependency>(),
+                MaxCallDepth = 0,
+                AverageCallDepth = 0
+            };
 
         var methods = new List<MethodSignature>();
         var relationships = new List<CallRelationship>();
@@ -161,7 +173,7 @@ public class CallChainService : ICallChainService
                     var relationship = new CallRelationship
                     {
                         FromMethod = signature,
-                        ToMethod = call.TargetSignature,
+                        ToMethod = call.Signature,
                         CallType = call.CallType,
                         File = call.File,
                         Line = call.Line,
@@ -173,7 +185,7 @@ public class CallChainService : ICallChainService
 
                     // Update call graphs
                     var fromKey = $"{signature.ContainingType}.{signature.Name}";
-                    var toKey = $"{call.TargetSignature.ContainingType}.{call.TargetSignature.Name}";
+                    var toKey = $"{call.Signature.ContainingType}.{call.Signature.Name}";
 
                     if (!callGraph.ContainsKey(fromKey))
                         callGraph[fromKey] = new List<string>();
@@ -235,7 +247,23 @@ public class CallChainService : ICallChainService
         var startTime = DateTime.UtcNow;
         var startSymbol = await FindMethodSymbol(methodName, containingType, cancellationToken);
         if (startSymbol == null)
-            return new ReachabilityAnalysis { StartMethod = new MethodSignature { Name = methodName, ContainingType = containingType ?? "", ReturnType = "void" } };
+            return new ReachabilityAnalysis
+        {
+            StartMethod = new MethodSignature
+            {
+                Name = methodName,
+                ContainingType = containingType ?? "",
+                ReturnType = "void",
+                Accessibility = "public"
+            },
+            ReachableMethods = new List<MethodSignature>(),
+            MethodsByDepth = new Dictionary<int, List<MethodSignature>>(),
+            UnreachableMethods = new List<MethodSignature>(),
+            MaxDepthReached = 0,
+            TotalMethodsAnalyzed = 0,
+            AnalysisDuration = TimeSpan.Zero,
+            ReachedAnalysisLimit = false
+        };
 
         var startSignature = CreateMethodSignature(startSymbol);
         var reachableMethods = new List<MethodSignature>();
@@ -271,26 +299,26 @@ public class CallChainService : ICallChainService
         if (currentPath.Count >= maxDepth)
         {
             reachedMaxDepth = true;
-            return;
+            return (reachedMaxDepth, filesAnalyzed, methodsAnalyzed);
         }
 
         var key = $"{currentSignature.ContainingType}.{currentSignature.Name}";
         if (visited.Contains(key))
-            return;
+            return (reachedMaxDepth, filesAnalyzed, methodsAnalyzed);
 
         visited.Add(key);
 
         // Find callers of current method
         var callers = await _callerAnalysis.FindCallersAsync(currentSymbol, cancellationToken);
         if (callers == null)
-            return;
+            return (reachedMaxDepth, filesAnalyzed, methodsAnalyzed);
 
         foreach (var caller in callers.Callers)
         {
             methodsAnalyzed++;
             var step = new CallChainStep
             {
-                FromMethod = caller.CallerSignature ?? new MethodSignature { Name = caller.CallerMethod, ContainingType = caller.CallerType, ReturnType = "void" },
+                FromMethod = caller.CallerSignature ?? new MethodSignature { Name = caller.CallerMethod, ContainingType = caller.CallerType, ReturnType = "void", Accessibility = "public" },
                 ToMethod = currentSignature,
                 File = caller.File,
                 Line = caller.Line,
@@ -332,12 +360,12 @@ public class CallChainService : ICallChainService
         if (currentPath.Count >= maxDepth)
         {
             reachedMaxDepth = true;
-            return;
+            return (reachedMaxDepth, filesAnalyzed, methodsAnalyzed);
         }
 
         var key = $"{currentSignature.ContainingType}.{currentSignature.Name}";
         if (visited.Contains(key))
-            return;
+            return (reachedMaxDepth, filesAnalyzed, methodsAnalyzed);
 
         visited.Add(key);
 
@@ -493,12 +521,12 @@ public class CallChainService : ICallChainService
         if (compilation == null)
             return calledMethods;
 
-        var references = await SymbolFinder.FindReferencesAsync(methodSymbol, compilation.Solution, cancellationToken);
+        var references = await SymbolFinder.FindReferencesAsync(methodSymbol, _workspace.Solution, cancellationToken);
         foreach (var reference in references)
         {
             foreach (var location in reference.Locations)
             {
-                if (!location.IsInSource)
+                if (!location.Location.IsInSource)
                     continue;
 
                 var document = location.Document;
@@ -547,7 +575,8 @@ public class CallChainService : ICallChainService
     private async Task<List<MethodCallInfo>> AnalyzeMethodCalls(MethodDeclarationSyntax methodDecl, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var methodCalls = new List<MethodCallInfo>();
-        var document = semanticModel.SyntaxTree.GetDocument();
+        var filePath = semanticModel.SyntaxTree.FilePath;
+        var document = _workspace.GetDocument(filePath);
         if (document == null)
             return methodCalls;
 

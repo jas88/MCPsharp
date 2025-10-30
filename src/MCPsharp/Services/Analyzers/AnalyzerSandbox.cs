@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Threading.Channels;
 using MCPsharp.Models.Analyzers;
@@ -62,7 +64,7 @@ public class AnalyzerSandbox : IAnalyzerSandbox
         var resultTask = operation.TaskCompletionSource.Task;
         await _operationWriter.WriteAsync(operation, cancellationToken);
 
-        return await resultTask;
+        return (AnalysisResult)await resultTask;
     }
 
     public async Task<FixResult> ExecuteFixAsync(IAnalyzer analyzer, ApplyFixRequest request, CancellationToken cancellationToken = default)
@@ -78,7 +80,7 @@ public class AnalyzerSandbox : IAnalyzerSandbox
         var resultTask = operation.TaskCompletionSource.Task;
         await _operationWriter.WriteAsync(operation, cancellationToken);
 
-        return await resultTask;
+        return (FixResult)await resultTask;
     }
 
     public SandboxUsage GetUsage()

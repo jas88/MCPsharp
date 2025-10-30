@@ -1,3 +1,4 @@
+using Microsoft.CodeAnalysis;
 namespace MCPsharp.Models.Roslyn;
 
 /// <summary>
@@ -25,6 +26,7 @@ public class SymbolInfo
     public string? Namespace { get; init; }
     public List<string> BaseTypes { get; init; } = new();
     public List<MemberInfo> Members { get; init; } = new();
+    public ISymbol? Symbol { get; init; }
 }
 
 /// <summary>

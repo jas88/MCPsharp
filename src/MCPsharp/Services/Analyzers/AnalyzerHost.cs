@@ -1,3 +1,6 @@
+using System.Collections.Immutable;
+using System.Runtime.Loader;
+using Microsoft.Extensions.Logging;
 using System.Reflection;
 using MCPsharp.Models.Analyzers;
 
@@ -9,6 +12,7 @@ namespace MCPsharp.Services.Analyzers;
 public class AnalyzerHost : IAnalyzerHost
 {
     private readonly ILogger<AnalyzerHost> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly IAnalyzerRegistry _registry;
     private readonly ISecurityManager _securityManager;
     private readonly IFixEngine _fixEngine;
@@ -17,15 +21,18 @@ public class AnalyzerHost : IAnalyzerHost
 
     public event EventHandler<AnalyzerLoadedEventArgs>? AnalyzerLoaded;
     public event EventHandler<AnalyzerUnloadedEventArgs>? AnalyzerUnloaded;
+    public event EventHandler<AnalyzerUnregisteredEventArgs>? AnalyzerUnregistered;
     public event EventHandler<AnalysisCompletedEventArgs>? AnalysisCompleted;
 
     public AnalyzerHost(
         ILogger<AnalyzerHost> logger,
+        ILoggerFactory loggerFactory,
         IAnalyzerRegistry registry,
         ISecurityManager securityManager,
         IFixEngine fixEngine)
     {
         _logger = logger;
+        _loggerFactory = loggerFactory;
         _registry = registry;
         _securityManager = securityManager;
         _fixEngine = fixEngine;
@@ -104,7 +111,7 @@ public class AnalyzerHost : IAnalyzerHost
 
                             // Create sandbox for the analyzer
                             var sandbox = new AnalyzerSandbox(
-                                _logger.CreateLogger<AnalyzerSandbox>(),
+                                _loggerFactory.CreateLogger<AnalyzerSandbox>(),
                                 _securityManager);
 
                             lock (_lock)
@@ -326,7 +333,7 @@ public class AnalyzerHost : IAnalyzerHost
                 if (!_sandboxes.TryGetValue(request.AnalyzerId, out sandbox!))
                 {
                     sandbox = new AnalyzerSandbox(
-                        _logger.CreateLogger<AnalyzerSandbox>(),
+                        _loggerFactory.CreateLogger<AnalyzerSandbox>(),
                         _securityManager);
                     _sandboxes[request.AnalyzerId] = sandbox;
                 }
@@ -607,7 +614,7 @@ public class AnalyzerHost : IAnalyzerHost
     {
         try
         {
-            using var assemblyContext = new AssemblyLoadContext(assemblyPath, isCollectible: true);
+            var assemblyContext = new AssemblyLoadContext(assemblyPath, isCollectible: true);
             var assembly = assemblyContext.LoadFromAssemblyPath(assemblyPath);
 
             var analyzerTypes = assembly.GetTypes()

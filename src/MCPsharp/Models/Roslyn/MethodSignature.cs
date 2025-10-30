@@ -108,4 +108,5 @@ public class ParameterInfo
     public bool IsParams { get; init; }
     public string? DefaultValue { get; init; }
     public int Position { get; init; }
+    public bool HasDefaultValue => !string.IsNullOrEmpty(DefaultValue);
 }

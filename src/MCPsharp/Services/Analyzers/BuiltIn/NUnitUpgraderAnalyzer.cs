@@ -9,7 +9,7 @@ namespace MCPsharp.Services.Analyzers.BuiltIn;
 /// </summary>
 public class NUnitUpgraderAnalyzer : IAnalyzer
 {
-    private static readonly ImmutableArray<string> SupportedExtensions = ImmutableArray.Create(".cs");
+    private static readonly ImmutableArray<string> _supportedExtensions = ImmutableArray.Create(".cs");
     private static readonly ImmutableArray<AnalyzerRule> Rules = ImmutableArray.Create(
         new AnalyzerRule
         {
@@ -81,7 +81,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
     public string Description => "Analyzes C# code for NUnit v2/v3 patterns and suggests v4 upgrades";
     public Version Version => new(1, 0, 0, 0);
     public string Author => "MCPsharp";
-    public ImmutableArray<string> SupportedExtensionsValue => SupportedExtensions;
+    public ImmutableArray<string> SupportedExtensions => _supportedExtensions;
     public bool IsEnabled { get; set; } = true;
     public AnalyzerConfiguration Configuration { get; set; } = new();
 
@@ -254,7 +254,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
             Confidence = Confidence.High,
             IsInteractive = false,
             IsBatchable = true,
-            Edits = ImmutableArray.Create(new TextEdit
+            Edits = ImmutableArray.Create(new ReplaceEdit
             {
                 StartLine = GetPosition(content, match.Index).line + 1,
                 StartColumn = GetPosition(content, match.Index).column + 1,
@@ -281,7 +281,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
             Confidence = Confidence.High,
             IsInteractive = false,
             IsBatchable = true,
-            Edits = ImmutableArray.Create(new TextEdit
+            Edits = ImmutableArray.Create(new ReplaceEdit
             {
                 StartLine = GetPosition(content, match.Index).line + 1,
                 StartColumn = GetPosition(content, match.Index).column + 1,
@@ -316,7 +316,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
             IsInteractive = true,
             IsBatchable = false,
             RequiredInputs = ImmutableArray.Create("TestMethodName"),
-            Edits = ImmutableArray.Create(new TextEdit
+            Edits = ImmutableArray.Create(new ReplaceEdit
             {
                 StartLine = GetPosition(content, match.Index).line + 1,
                 StartColumn = GetPosition(content, match.Index).column + 1,
@@ -345,7 +345,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
             Confidence = Confidence.High,
             IsInteractive = false,
             IsBatchable = true,
-            Edits = ImmutableArray.Create(new TextEdit
+            Edits = ImmutableArray.Create(new ReplaceEdit
             {
                 StartLine = GetPosition(content, match.Index).line + 1,
                 StartColumn = GetPosition(content, match.Index).column + 1,
@@ -369,7 +369,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
             Confidence = Confidence.High,
             IsInteractive = false,
             IsBatchable = true,
-            Edits = ImmutableArray.Create(new TextEdit
+            Edits = ImmutableArray.Create(new ReplaceEdit
             {
                 StartLine = GetPosition(content, match.Index).line + 1,
                 StartColumn = GetPosition(content, match.Index).column + 1,

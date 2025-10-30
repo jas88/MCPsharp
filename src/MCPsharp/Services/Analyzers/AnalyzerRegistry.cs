@@ -1,3 +1,6 @@
+using System.Collections.Immutable;
+using System.Runtime.Loader;
+using Microsoft.Extensions.Logging;
 using System.Reflection;
 using System.Text.Json;
 using MCPsharp.Models.Analyzers;
@@ -230,7 +233,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
                 };
             }
 
-            using var assemblyContext = new AssemblyLoadContext(assemblyPath, isCollectible: true);
+            var assemblyContext = new AssemblyLoadContext(assemblyPath, isCollectible: true);
             var assembly = assemblyContext.LoadFromAssemblyPath(assemblyPath);
 
             var assemblyVersion = assembly.GetName().Version ?? new Version();
@@ -342,7 +345,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
     {
         var analyzerInfos = new List<AnalyzerInfo>();
 
-        using var assemblyContext = new AssemblyLoadContext(assemblyPath, isCollectible: true);
+        var assemblyContext = new AssemblyLoadContext(assemblyPath, isCollectible: true);
         var assembly = assemblyContext.LoadFromAssemblyPath(assemblyPath);
 
         var analyzerTypes = assembly.GetTypes()

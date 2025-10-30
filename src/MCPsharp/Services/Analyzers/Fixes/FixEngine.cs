@@ -1,5 +1,9 @@
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
+using System.Linq;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using MCPsharp.Models;
 using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Services.Analyzers.Fixes;
@@ -77,7 +81,12 @@ public class FixEngine : IFixEngine
             }
 
             // Detect conflicts
-            conflicts = await DetectFixConflictsAsync(previews, cancellationToken).ToListAsync(cancellationToken);
+            var conflictEnumerable = DetectFixConflictsAsync(previews, cancellationToken);
+            conflicts = new List<FixConflict>();
+            await foreach (var conflict in conflictEnumerable.WithCancellation(cancellationToken))
+            {
+                conflicts.Add(conflict);
+            }
 
             return new FixPreviewResult
             {
@@ -408,13 +417,13 @@ public class FixEngine : IFixEngine
         }
     }
 
-    public async Task<ValidationResult> ValidateFixesAsync(string sessionId, CancellationToken cancellationToken = default)
+    public async Task<Models.Analyzers.ValidationResult> ValidateFixesAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         try
         {
             if (!_sessions.TryGetValue(sessionId, out var session))
             {
-                return new ValidationResult
+                return new Models.Analyzers.ValidationResult
                 {
                     IsValid = false,
                     ErrorMessage = $"Session {sessionId} not found",
@@ -457,14 +466,14 @@ public class FixEngine : IFixEngine
                         FilePath = filePath,
                         Description = $"Error reading file for validation: {ex.Message}",
                         FixId = "Validation",
-                        Severity = ValidationSeverity.Error
+                        Severity = Models.Analyzers.ValidationSeverity.Error
                     });
                 }
             }
 
-            return new ValidationResult
+            return new Models.Analyzers.ValidationResult
             {
-                IsValid = !errors.Any(e => e.Severity >= ValidationSeverity.Error),
+                IsValid = !errors.Any(e => e.Severity >= Models.Analyzers.ValidationSeverity.Error),
                 SessionId = sessionId,
                 Errors = errors.ToImmutableArray(),
                 Warnings = warnings.ToImmutableArray(),
@@ -474,7 +483,7 @@ public class FixEngine : IFixEngine
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error validating fixes for session {SessionId}", sessionId);
-            return new ValidationResult
+            return new Models.Analyzers.ValidationResult
             {
                 IsValid = false,
                 ErrorMessage = ex.Message,
@@ -669,7 +678,9 @@ public class FixEngine : IFixEngine
                 if (File.Exists(filePath))
                 {
                     var backupPath = Path.Combine(_backupDirectory, $"{Guid.NewGuid()}{Path.GetExtension(filePath)}");
-                    await File.CopyAsync(filePath, backupPath, false, cancellationToken);
+                    await using var sourceStream = File.OpenRead(filePath);
+                    await using var destinationStream = File.Create(backupPath);
+                    await sourceStream.CopyToAsync(destinationStream, cancellationToken);
                     backupPaths[filePath] = backupPath;
                 }
             }
@@ -791,7 +802,7 @@ public class FixEngine : IFixEngine
                 FilePath = "unknown",
                 Description = "Mismatched braces detected",
                 FixId = "Validation",
-                Severity = ValidationSeverity.Error
+                Severity = Models.Analyzers.ValidationSeverity.Error
             });
         }
 
@@ -802,7 +813,7 @@ public class FixEngine : IFixEngine
                 FilePath = "unknown",
                 Description = "Mismatched parentheses detected",
                 FixId = "Validation",
-                Severity = ValidationSeverity.Error
+                Severity = Models.Analyzers.ValidationSeverity.Error
             });
         }
 

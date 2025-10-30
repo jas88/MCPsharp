@@ -322,23 +322,23 @@ public class FileOperationsService
 
     private void ApplyInsertEdit(List<string> lines, InsertEdit edit)
     {
-        var line = lines[edit.Line];
-        var before = line[..edit.Column];
-        var after = line[edit.Column..];
+        var line = lines[edit.StartLine];
+        var before = line[..edit.StartColumn];
+        var after = line[edit.StartColumn..];
 
-        var newLines = edit.Text.Split('\n');
+        var newLines = edit.NewText.Split('\n');
         if (newLines.Length == 1)
         {
-            lines[edit.Line] = before + edit.Text + after;
+            lines[edit.StartLine] = before + newLines[0] + after;
         }
         else
         {
-            lines[edit.Line] = before + newLines[0];
+            lines[edit.StartLine] = before + newLines[0];
             for (int i = 1; i < newLines.Length - 1; i++)
             {
-                lines.Insert(edit.Line + i, newLines[i]);
+                lines.Insert(edit.StartLine + i, newLines[i]);
             }
-            lines.Insert(edit.Line + newLines.Length - 1, newLines[^1] + after);
+            lines.Insert(edit.StartLine + newLines.Length - 1, newLines[^1] + after);
         }
     }
 
@@ -363,6 +363,7 @@ public class FileOperationsService
         }
     }
 
+    
     private (int line, int column) GetEditStartPosition(TextEdit edit)
     {
         return edit switch

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Collections.Immutable;
+using System.Linq;
 using MCPsharp.Models;
 using MCPsharp.Models.Analyzers;
 
@@ -20,61 +22,61 @@ public static class AnalyzerTools
             {
                 Name = "analyzer_list",
                 Description = "List all available analyzers, with optional filtering",
-                InputSchema = AnalyzerSchemas.ListAnalyzersSchema
+                InputSchema = JsonSerializer.SerializeToDocument(AnalyzerSchemas.ListAnalyzersSchema)
             },
             new McpTool
             {
                 Name = "analyzer_run",
                 Description = "Run analysis on specified files using an analyzer",
-                InputSchema = AnalyzerSchemas.RunAnalysisSchema
+                InputSchema = JsonSerializer.SerializeToDocument(AnalyzerSchemas.RunAnalysisSchema)
             },
             new McpTool
             {
                 Name = "analyzer_get_fixes",
                 Description = "Get available fixes for specific analyzer issues",
-                InputSchema = AnalyzerSchemas.GetFixesSchema
+                InputSchema = JsonSerializer.SerializeToDocument(AnalyzerSchemas.GetFixesSchema)
             },
             new McpTool
             {
                 Name = "analyzer_apply_fixes",
                 Description = "Apply fixes for analyzer issues with conflict resolution and rollback",
-                InputSchema = AnalyzerSchemas.ApplyFixesSchema
+                InputSchema = JsonSerializer.SerializeToDocument(AnalyzerSchemas.ApplyFixesSchema)
             },
             new McpTool
             {
                 Name = "analyzer_load",
                 Description = "Load an analyzer from an assembly file with security validation",
-                InputSchema = AnalyzerSchemas.LoadAnalyzerSchema
+                InputSchema = JsonSerializer.SerializeToDocument(AnalyzerSchemas.LoadAnalyzerSchema)
             },
             new McpTool
             {
                 Name = "analyzer_unload",
                 Description = "Unload an analyzer and clean up resources",
-                InputSchema = AnalyzerSchemas.UnloadAnalyzerSchema
+                InputSchema = JsonSerializer.SerializeToDocument(AnalyzerSchemas.UnloadAnalyzerSchema)
             },
             new McpTool
             {
                 Name = "analyzer_configure",
                 Description = "Configure analyzer settings and rule preferences",
-                InputSchema = AnalyzerSchemas.ConfigureAnalyzerSchema
+                InputSchema = JsonSerializer.SerializeToDocument(AnalyzerSchemas.ConfigureAnalyzerSchema)
             },
             new McpTool
             {
                 Name = "analyzer_get_health",
                 Description = "Get health status and metrics for analyzers",
-                InputSchema = AnalyzerSchemas.GetAnalyzerHealthSchema
+                InputSchema = JsonSerializer.SerializeToDocument(AnalyzerSchemas.GetAnalyzerHealthSchema)
             },
             new McpTool
             {
                 Name = "analyzer_get_fix_history",
                 Description = "Get history of applied fixes with rollback information",
-                InputSchema = AnalyzerSchemas.GetFixHistorySchema
+                InputSchema = JsonSerializer.SerializeToDocument(AnalyzerSchemas.GetFixHistorySchema)
             },
             new McpTool
             {
                 Name = "analyzer_rollback_fixes",
                 Description = "Rollback previously applied fixes using backups",
-                InputSchema = AnalyzerSchemas.RollbackFixesSchema
+                InputSchema = JsonSerializer.SerializeToDocument(AnalyzerSchemas.RollbackFixesSchema)
             }
         };
     }
@@ -104,7 +106,7 @@ public static class AnalyzerTools
             _ => new ToolCallResult
             {
                 Success = false,
-                ErrorMessage = $"Unknown analyzer tool: {toolName}"
+                Error = $"Unknown analyzer tool: {toolName}"
             }
         };
     }
@@ -164,7 +166,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = false,
-                ErrorMessage = ex.Message
+                Error = ex.Message
             };
         }
     }
@@ -212,7 +214,7 @@ public static class AnalyzerTools
                 session_id = result.SessionId,
                 analyzer_id = result.AnalyzerId,
                 success = result.Success,
-                error_message = result.ErrorMessage,
+                error_message = result.Error,
                 start_time = result.StartTime,
                 end_time = result.EndTime,
                 statistics = result.Statistics,
@@ -220,7 +222,7 @@ public static class AnalyzerTools
                 {
                     file_path = r.FilePath,
                     success = r.Success,
-                    error_message = r.ErrorMessage,
+                    error_message = r.Error,
                     issues = r.Issues.Select(i => new
                     {
                         id = i.Id,
@@ -252,7 +254,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = false,
-                ErrorMessage = ex.Message
+                Error = ex.Message
             };
         }
     }
@@ -307,7 +309,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = false,
-                ErrorMessage = ex.Message
+                Error = ex.Message
             };
         }
     }
@@ -358,7 +360,7 @@ public static class AnalyzerTools
                 session_id = result.SessionId,
                 analyzer_id = result.AnalyzerId,
                 success = result.Success,
-                error_message = result.ErrorMessage,
+                error_message = result.Error,
                 start_time = result.StartTime,
                 end_time = result.EndTime,
                 modified_files = result.ModifiedFiles,
@@ -369,7 +371,7 @@ public static class AnalyzerTools
                     id = r.Id,
                     fix_id = r.FixId,
                     success = r.Success,
-                    error_message = r.ErrorMessage,
+                    error_message = r.Error,
                     modified_files = r.ModifiedFiles,
                     conflicts = r.Conflicts,
                     applied_at = r.AppliedAt,
@@ -388,7 +390,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = false,
-                ErrorMessage = ex.Message
+                Error = ex.Message
             };
         }
     }
@@ -414,7 +416,7 @@ public static class AnalyzerTools
             {
                 success = result.Success,
                 analyzer_id = result.AnalyzerId,
-                error_message = result.ErrorMessage,
+                error_message = result.Error,
                 security_validation = result.SecurityValidation != null ? new
                 {
                     is_valid = result.SecurityValidation.IsValid,
@@ -438,7 +440,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = false,
-                ErrorMessage = ex.Message
+                Error = ex.Message
             };
         }
     }
@@ -471,7 +473,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = false,
-                ErrorMessage = ex.Message
+                Error = ex.Message
             };
         }
     }
@@ -516,7 +518,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = false,
-                ErrorMessage = ex.Message
+                Error = ex.Message
             };
         }
     }
@@ -564,7 +566,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = false,
-                ErrorMessage = ex.Message
+                Error = ex.Message
             };
         }
     }
@@ -606,7 +608,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = false,
-                ErrorMessage = ex.Message
+                Error = ex.Message
             };
         }
     }
@@ -627,7 +629,7 @@ public static class AnalyzerTools
             {
                 session_id = result.SessionId,
                 success = result.Success,
-                error_message = result.ErrorMessage,
+                error_message = result.Error,
                 restored_files = result.RestoredFiles,
                 failed_files = result.FailedFiles,
                 rolled_back_at = result.RolledBackAt,
@@ -645,7 +647,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = false,
-                ErrorMessage = ex.Message
+                Error = ex.Message
             };
         }
     }

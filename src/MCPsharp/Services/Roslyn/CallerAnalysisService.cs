@@ -316,7 +316,8 @@ public class CallerAnalysisService : ICallerAnalysisService
         // If target method is part of an interface, find all implementations and their callers
         if (targetSymbol.ContainingType?.TypeKind == TypeKind.Interface)
         {
-            var implementations = await SymbolFinder.FindImplementationsAsync(targetSymbol.ContainingType, compilation.Solution, cancellationToken);
+            var solution = _workspace.Solution;
+            var implementations = await SymbolFinder.FindImplementationsAsync(targetSymbol.ContainingType, solution, cancellationToken);
             foreach (var impl in implementations)
             {
                 var implMethod = impl.GetMembers(targetSymbol.Name).FirstOrDefault();

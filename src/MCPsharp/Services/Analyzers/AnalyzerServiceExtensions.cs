@@ -1,3 +1,7 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using MCPsharp.Models;
 using MCPsharp.Models.Analyzers;
 using MCPsharp.Services.Analyzers;
 using MCPsharp.Services.Analyzers.BuiltIn;
@@ -29,6 +33,7 @@ public static class AnalyzerServiceExtensions
         services.AddSingleton<IAnalyzerHost>(provider =>
             new AnalyzerHost(
                 provider.GetRequiredService<ILogger<AnalyzerHost>>(),
+                provider.GetRequiredService<ILoggerFactory>(),
                 provider.GetRequiredService<IAnalyzerRegistry>(),
                 provider.GetRequiredService<ISecurityManager>(),
                 provider.GetRequiredService<IFixEngine>()));
@@ -43,7 +48,10 @@ public static class AnalyzerServiceExtensions
 
         // Register built-in analyzers on startup
         services.AddSingleton<IHostedService>(provider =>
-            new AnalyzerInitializationService(provider));
+        {
+            var logger = provider.GetRequiredService<ILogger<AnalyzerInitializationService>>();
+            return new AnalyzerInitializationService(provider, logger);
+        });
 
         return services;
     }
@@ -53,7 +61,7 @@ public static class AnalyzerServiceExtensions
     /// </summary>
     public static IServiceCollection AddAnalyzerMcpTools(this IServiceCollection services)
     {
-        services.AddSingleton<IMcpToolRegistry>(provider =>
+        services.AddSingleton<McpToolRegistry>(provider =>
         {
             var logger = provider.GetRequiredService<ILogger<McpToolRegistry>>();
             var projectContext = provider.GetRequiredService<ProjectContextManager>();
@@ -121,7 +129,7 @@ internal class AnalyzerToolRegistry : McpToolRegistry
         ProjectContextManager projectContext,
         IAnalyzerHost analyzerHost,
         IFixEngine fixEngine)
-        : base(logger, projectContext)
+        : base(projectContext)
     {
         _analyzerHost = analyzerHost;
         _fixEngine = fixEngine;

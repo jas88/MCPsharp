@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace MCPsharp.Models.Analyzers;
 
 /// <summary>
@@ -98,6 +100,7 @@ public record FixApplicationOptions
 {
     public bool CreateBackup { get; init; } = true;
     public bool ResolveConflicts { get; init; } = true;
+    public bool PreviewOnly { get; init; } = false;
     public ConflictResolutionStrategy ConflictStrategy { get; init; } = ConflictResolutionStrategy.PreferNewer;
     public bool ValidateAfterApply { get; init; } = true;
     public bool StopOnFirstError { get; init; } = false;

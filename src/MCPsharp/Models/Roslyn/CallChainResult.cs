@@ -77,7 +77,7 @@ public class CallChainPath
     /// </summary>
     public string GetDescription()
     {
-        if (!PathDescription.IsNullOrEmpty())
+        if (!string.IsNullOrEmpty(PathDescription))
             return PathDescription;
 
         if (Steps.Count == 0)

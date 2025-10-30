@@ -338,4 +338,9 @@ public class BulkEditOptions
     /// Cancellation token for the operation
     /// </summary>
     public CancellationToken CancellationToken { get; init; } = CancellationToken.None;
+
+    /// <summary>
+    /// Files to exclude from the operation
+    /// </summary>
+    public List<string> ExcludedFiles { get; init; } = new();
 }

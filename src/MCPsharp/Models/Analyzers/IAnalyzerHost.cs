@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace MCPsharp.Models.Analyzers;
 
 /// <summary>

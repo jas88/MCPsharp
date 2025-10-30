@@ -1337,7 +1337,7 @@ public class BulkEditService : IBulkEditService
             {
                 try
                 {
-                    var fileInfo = new FileInfo(file);
+                    var fileInfo = new System.IO.FileInfo(file);
                     if (fileInfo.Length <= options.MaxFileSize)
                     {
                         filteredFiles.Add(file);
@@ -1423,7 +1423,7 @@ public class BulkEditService : IBulkEditService
                 File.Copy(filePath, backupPath);
                 var backupChecksum = await ComputeFileChecksum(backupPath, cancellationToken);
 
-                var backupFileInfo = new FileInfo(backupPath);
+                var backupFileInfo = new System.IO.FileInfo(backupPath);
                 rollbackFiles.Add(new RollbackFileInfo
                 {
                     OriginalPath = filePath,
@@ -1893,12 +1893,12 @@ public class BulkEditService : IBulkEditService
             // Get original file size
             if (File.Exists(rollbackFile.OriginalPath))
             {
-                originalSize = new FileInfo(rollbackFile.OriginalPath).Length;
+                originalSize = new System.IO.FileInfo(rollbackFile.OriginalPath).Length;
             }
 
             // Restore from backup
             File.Copy(rollbackFile.BackupPath, rollbackFile.OriginalPath, true);
-            newSize = new FileInfo(rollbackFile.OriginalPath).Length;
+            newSize = new System.IO.FileInfo(rollbackFile.OriginalPath).Length;
 
             return new FileBulkEditResult
             {

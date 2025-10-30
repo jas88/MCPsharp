@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using Microsoft.Extensions.Logging;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -47,8 +49,9 @@ public class SecurityManager : ISecurityManager
             var maliciousPatterns = await ScanForMaliciousPatternsAsync(assemblyPath);
 
             // Check signature
-            var isSigned = await CheckSignatureAsync(assemblyPath, out var signer);
-            var isTrusted = isSigned && await IsSignerTrustedAsync(signer);
+            var signatureResult = await CheckSignatureAsync(assemblyPath);
+            var isSigned = signatureResult.IsValid;
+            var isTrusted = isSigned && await IsSignerTrustedAsync(signatureResult.Signer);
 
             var result = new SecurityValidationResult
             {
@@ -56,7 +59,7 @@ public class SecurityManager : ISecurityManager
                 IsSigned = isSigned,
                 IsTrusted = isTrusted,
                 HasMaliciousPatterns = maliciousPatterns.Any(),
-                Signer = signer,
+                Signer = signatureResult.Signer,
                 Checksum = checksum,
                 Warnings = maliciousPatterns.Any() ? ImmutableArray.Create("Potential malicious patterns detected") : ImmutableArray<string>.Empty,
                 ValidatedAt = DateTime.UtcNow
@@ -73,7 +76,7 @@ public class SecurityManager : ISecurityManager
                 Metadata = new Dictionary<string, object>
                 {
                     ["Checksum"] = checksum ?? string.Empty,
-                    ["Signer"] = signer ?? string.Empty,
+                    ["Signer"] = signatureResult.Signer ?? string.Empty,
                     ["MaliciousPatterns"] = maliciousPatterns.Count
                 }.ToImmutableDictionary()
             });
@@ -281,23 +284,23 @@ public class SecurityManager : ISecurityManager
         }
     }
 
-    private async Task<bool> CheckSignatureAsync(string assemblyPath, out string? signer)
+    private async Task<(bool IsValid, string? Signer)> CheckSignatureAsync(string assemblyPath)
     {
-        signer = null;
+        string? signer = null;
         try
         {
             var certificate = X509Certificate2.CreateFromSignedFile(assemblyPath);
             if (certificate != null)
             {
                 signer = certificate.Subject;
-                return true;
+                return (true, signer);
             }
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Assembly is not signed: {AssemblyPath}", assemblyPath);
         }
-        return false;
+        return (false, signer);
     }
 
     private async Task<bool> IsSignerTrustedAsync(string? signer)

@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using MCPsharp.Models.Roslyn;
 
 namespace MCPsharp.Services.Roslyn;
@@ -53,8 +54,7 @@ public class AdvancedReferenceFinderService
             return result;
 
         // Filter to direct callers only
-        result.Callers = result.DirectCallers;
-        return result;
+        return result with { Callers = result.DirectCallers };
     }
 
     /// <summary>
@@ -62,7 +62,7 @@ public class AdvancedReferenceFinderService
     /// </summary>
     public async Task<CallChainResult?> FindCallChainsAsync(string methodName, string? containingType = null, CallDirection direction = CallDirection.Backward, int maxDepth = 10, CancellationToken cancellationToken = default)
     {
-        return await _callChain.FindCallChainsAsync(methodName, containingType, direction, maxDepth, cancellationToken);
+        return await _callChain.FindCallChainsAsync(methodName, containingType, maxDepth, cancellationToken);
     }
 
     /// <summary>
@@ -198,7 +198,7 @@ public class AdvancedReferenceFinderService
     /// </summary>
     public async Task<MethodComprehensiveAnalysis> AnalyzeMethodComprehensivelyAsync(string methodName, string? containingType = null, CancellationToken cancellationToken = default)
     {
-        var tasks = new[]
+        var tasks = new Task[]
         {
             FindCallersAsync(methodName, containingType, cancellationToken: cancellationToken),
             FindCallChainsAsync(methodName, containingType, CallDirection.Backward, 5, cancellationToken),
@@ -232,7 +232,7 @@ public class AdvancedReferenceFinderService
     /// </summary>
     public async Task<TypeComprehensiveAnalysis> AnalyzeTypeComprehensivelyAsync(string typeName, CancellationToken cancellationToken = default)
     {
-        var tasks = new[]
+        var tasks = new Task[]
         {
             FindTypeUsagesAsync(typeName, cancellationToken),
             AnalyzeInheritanceAsync(typeName, cancellationToken),
@@ -354,9 +354,9 @@ public class AdvancedReferenceFinderService
             foreach (var methodDecl in methodDeclarations)
             {
                 var symbol = semanticModel.GetDeclaredSymbol(methodDecl);
-                if (symbol != null)
+                if (symbol is IMethodSymbol methodSymbol)
                 {
-                    methods.Add(CreateMethodSignature(symbol));
+                    methods.Add(CreateMethodSignature(methodSymbol));
                 }
             }
         }

@@ -65,7 +65,7 @@ public class TypeUsageResult
     /// Get inheritance usages (base class, interface implementation)
     /// </summary>
     public List<TypeUsageInfo> InheritanceUsages =>
-        Usages.Where(u => u.UsageKind == TypeUsageKind.Inheritance).ToList();
+        Usages.Where(u => u.UsageKind == TypeUsageKind.BaseClass || u.UsageKind == TypeUsageKind.InterfaceImplementation).ToList();
 
     /// <summary>
     /// Get files where this type is used

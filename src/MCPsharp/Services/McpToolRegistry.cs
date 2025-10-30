@@ -69,12 +69,12 @@ public class McpToolRegistry
     /// <summary>
     /// Get all available MCP tools
     /// </summary>
-    public List<McpTool> GetTools() => _tools;
+    public virtual List<McpTool> GetTools() => _tools;
 
     /// <summary>
     /// Execute a tool by name with the provided arguments
     /// </summary>
-    public async Task<ToolCallResult> ExecuteTool(ToolCallRequest request, CancellationToken ct = default)
+    public virtual async Task<ToolCallResult> ExecuteTool(ToolCallRequest request, CancellationToken ct = default)
     {
         try
         {
@@ -2628,22 +2628,21 @@ public class McpToolRegistry
             }
 
             // Parse optional parameters
-            var options = new BulkEditOptions();
-            if (arguments.RootElement.TryGetProperty("maxParallelism", out var maxParallelElement))
-            {
-                options.MaxParallelism = maxParallelElement.GetInt32();
-            }
-            if (arguments.RootElement.TryGetProperty("createBackups", out var backupsElement))
-            {
-                options.CreateBackups = backupsElement.GetBoolean();
-            }
-            if (arguments.RootElement.TryGetProperty("previewMode", out var previewElement))
-            {
-                options.PreviewMode = previewElement.GetBoolean();
-            }
+            var maxParallelism = arguments.RootElement.TryGetProperty("maxParallelism", out var maxParallelElement)
+                ? maxParallelElement.GetInt32()
+                : Environment.ProcessorCount;
+
+            var createBackups = arguments.RootElement.TryGetProperty("createBackups", out var backupsElement)
+                ? backupsElement.GetBoolean()
+                : true;
+
+            var previewMode = arguments.RootElement.TryGetProperty("previewMode", out var previewElement)
+                ? previewElement.GetBoolean()
+                : false;
+
+            var excludedFiles = new List<string>();
             if (arguments.RootElement.TryGetProperty("excludedFiles", out var excludedElement))
             {
-                var excludedFiles = new List<string>();
                 foreach (var excludedFileElement in excludedElement.EnumerateArray())
                 {
                     var excludedFile = excludedFileElement.GetString();
@@ -2652,8 +2651,15 @@ public class McpToolRegistry
                         excludedFiles.Add(excludedFile);
                     }
                 }
-                options.ExcludedFiles = excludedFiles;
             }
+
+            var options = new BulkEditOptions
+            {
+                MaxParallelism = maxParallelism,
+                CreateBackups = createBackups,
+                PreviewMode = previewMode,
+                ExcludedFiles = excludedFiles
+            };
 
             var result = await _bulkEditService.BulkReplaceAsync(files, regexPattern, replacement, options, cancellationToken);
             return new ToolCallResult { Success = result.Success, Result = result, Error = result.Error };
@@ -2984,11 +2990,18 @@ public class McpToolRegistry
                 }
             }
 
-            request = request with
+            request = new BulkEditRequest
             {
-                RegexPattern = regexPattern,
+                OperationType = request.OperationType,
+                Files = request.Files,
+                ExcludedFiles = request.ExcludedFiles,
+                SearchPattern = request.SearchPattern,
                 ReplacementText = replacementText,
-                Condition = condition
+                RegexPattern = regexPattern,
+                RegexReplacement = request.RegexReplacement,
+                Condition = condition,
+                RefactorPattern = request.RefactorPattern,
+                Options = request.Options
             };
 
             var result = await _bulkEditService.PreviewBulkChangesAsync(request, cancellationToken);
@@ -3078,7 +3091,19 @@ public class McpToolRegistry
 
             // Add operation-specific parameters
             var regexPattern = arguments.RootElement.TryGetProperty("regexPattern", out var regexElement) ? regexElement.GetString() : null;
-            request = request with { RegexPattern = regexPattern };
+            request = new BulkEditRequest
+            {
+                OperationType = request.OperationType,
+                Files = request.Files,
+                ExcludedFiles = request.ExcludedFiles,
+                SearchPattern = request.SearchPattern,
+                ReplacementText = request.ReplacementText,
+                RegexPattern = regexPattern,
+                RegexReplacement = request.RegexReplacement,
+                Condition = request.Condition,
+                RefactorPattern = request.RefactorPattern,
+                Options = request.Options
+            };
 
             var result = await _bulkEditService.ValidateBulkEditAsync(request, cancellationToken);
             return new ToolCallResult { Success = result.IsValid, Result = result };
@@ -3662,7 +3687,7 @@ public class McpToolRegistry
 
             var estimatedTime = await _streamingProcessor.EstimateProcessingTimeAsync(request);
 
-            var fileInfo = new FileInfo(filePath);
+            var fileInfo = new System.IO.FileInfo(filePath);
             var fileSize = fileInfo.Exists ? fileInfo.Length : 0;
 
             return new ToolCallResult

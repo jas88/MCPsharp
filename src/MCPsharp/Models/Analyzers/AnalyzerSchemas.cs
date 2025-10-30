@@ -19,13 +19,13 @@ public static class AnalyzerSchemas
             {
                 type = "boolean",
                 description = "Include built-in analyzers in the results",
-                default = true
+  @default = true
             },
             include_external = new
             {
                 type = "boolean",
                 description = "Include external analyzers in the results",
-                default = true
+  @default = true
             },
             category = new
             {
@@ -79,7 +79,7 @@ public static class AnalyzerSchemas
                 description = "Analyzer configuration overrides",
                 properties = new
                 {
-                    is_enabled = new { type = "boolean", default = true },
+                    is_enabled = new { type = "boolean", @default = true },
                     include_files = new
                     {
                         type = "array",
@@ -113,13 +113,13 @@ public static class AnalyzerSchemas
             {
                 type = "boolean",
                 description = "Include disabled rules in analysis",
-                default = false
+                @default = false
             },
             generate_fixes = new
             {
                 type = "boolean",
                 description = "Generate fixes for found issues",
-                default = true
+  @default = true
             }
         }
     };
@@ -186,26 +186,26 @@ public static class AnalyzerSchemas
             {
                 type = "boolean",
                 description = "Only preview fixes without applying them",
-                default = false
+                @default = false
             },
             resolve_conflicts = new
             {
                 type = "boolean",
                 description = "Automatically resolve conflicts between fixes",
-                default = true
+  @default = true
             },
             conflict_strategy = new
             {
                 type = "string",
                 description = "Strategy for resolving conflicts",
                 @enum = new[] { "PreferOlder", "PreferNewer", "PreferConfidence", "PreferSeverity", "Manual", "SkipAll", "Abort" },
-                default = "PreferNewer"
+                @default = "PreferNewer"
             },
             create_backup = new
             {
                 type = "boolean",
                 description = "Create backup files before applying fixes",
-                default = true
+  @default = true
             },
             inputs = new
             {
@@ -234,7 +234,7 @@ public static class AnalyzerSchemas
             {
                 type = "boolean",
                 description = "Automatically enable the analyzer after loading",
-                default = true
+  @default = true
             },
             permissions = new
             {
@@ -242,10 +242,10 @@ public static class AnalyzerSchemas
                 description = "Permissions to grant to the analyzer",
                 properties = new
                 {
-                    can_read_files = new { type = "boolean", default = true },
-                    can_write_files = new { type = "boolean", default = false },
-                    can_execute_commands = new { type = "boolean", default = false },
-                    can_access_network = new { type = "boolean", default = false },
+                    can_read_files = new { type = "boolean", @default = true },
+                    can_write_files = new { type = "boolean", @default = false },
+                    can_execute_commands = new { type = "boolean", @default = false },
+                    can_access_network = new { type = "boolean", @default = false },
                     allowed_paths = new
                     {
                         type = "array",
@@ -279,7 +279,7 @@ public static class AnalyzerSchemas
             {
                 type = "boolean",
                 description = "Force unload even if analyzer is in use",
-                default = false
+                @default = false
             }
         }
     };
@@ -384,7 +384,7 @@ public static class AnalyzerSchemas
             {
                 type = "integer",
                 description = "Maximum number of sessions to return",
-                default = 50,
+                @default = 50,
                 minimum = 1,
                 maximum = 1000
             },
@@ -426,7 +426,7 @@ public static class AnalyzerSchemas
             {
                 type = "boolean",
                 description = "Force rollback even if files have been modified",
-                default = false
+                @default = false
             }
         }
     };

@@ -264,7 +264,16 @@ public class TypeUsageService : ITypeUsageService
         var startTime = DateTime.UtcNow;
         var compilation = _workspace.GetCompilation();
         if (compilation == null)
-            return new TypeUsagePatternAnalysis();
+            return new TypeUsagePatternAnalysis
+        {
+            TypeStatistics = new Dictionary<string, TypeUsageStats>(),
+            CommonPatterns = new List<UsagePattern>(),
+            MostUsedTypes = new List<string>(),
+            LeastUsedTypes = new List<string>(),
+            UsageKindDistribution = new Dictionary<TypeUsageKind, int>(),
+            TotalTypesAnalyzed = 0,
+            TotalUsagesFound = 0
+        };
 
         var typeStatistics = new Dictionary<string, TypeUsageStats>();
         var usageKindDistribution = new Dictionary<TypeUsageKind, int>();
@@ -367,7 +376,8 @@ public class TypeUsageService : ITypeUsageService
                 {
                     Name = kvp.Value.TypeName,
                     ContainingType = kvp.Value.TypeName,
-                    ReturnType = "void"
+                    ReturnType = "void",
+                    Accessibility = "public"
                 });
             }
 
@@ -378,18 +388,21 @@ public class TypeUsageService : ITypeUsageService
                 {
                     Name = kvp.Value.TypeName,
                     ContainingType = kvp.Value.TypeName,
-                    ReturnType = "void"
+                    ReturnType = "void",
+                    Accessibility = "public"
                 });
             }
 
             // Find potential sealed types (classes that are never inherited)
-            if (!kvp.Value.TypeName.StartsWith("I") && kvp.Value.UsagesByKind.GetValueOrDefault(TypeUsageKind.Inheritance, 0) == 0)
+            if (!kvp.Value.TypeName.StartsWith("I") &&
+            kvp.Value.UsagesByKind.GetValueOrDefault(TypeUsageKind.BaseClass, 0) == 0)
             {
                 potentialSealedTypes.Add(new MethodSignature
                 {
                     Name = kvp.Value.TypeName,
                     ContainingType = kvp.Value.TypeName,
-                    ReturnType = "void"
+                    ReturnType = "void",
+                    Accessibility = "public"
                 });
             }
         }
@@ -432,13 +445,14 @@ public class TypeUsageService : ITypeUsageService
         var typesAnalyzed = 0;
 
         // Find all references to the type
-        var referencedSymbols = await SymbolFinder.FindReferencesAsync(typeSymbol, compilation.Solution, cancellationToken);
+        var solution = _workspace.Solution;
+        var referencedSymbols = await SymbolFinder.FindReferencesAsync(typeSymbol, solution, cancellationToken);
 
         foreach (var referencedSymbol in referencedSymbols)
         {
             foreach (var location in referencedSymbol.Locations)
             {
-                if (!location.IsInSource)
+                if (!location.Location.IsInSource)
                     continue;
 
                 var document = location.Document;
@@ -446,7 +460,7 @@ public class TypeUsageService : ITypeUsageService
                     continue;
 
                 filesAnalyzed++;
-                var usageInfo = await AnalyzeTypeUsageLocation(location, typeSymbol, cancellationToken);
+                var usageInfo = await AnalyzeTypeUsageLocation(location.Location, typeSymbol, cancellationToken);
                 if (usageInfo != null)
                 {
                     usages.Add(usageInfo);

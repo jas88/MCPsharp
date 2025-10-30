@@ -41,7 +41,8 @@ public class ReferenceFinderService
 
             var position = syntaxTree.GetText().Lines[line.Value].Start + column.Value;
             var node = (await syntaxTree.GetRootAsync()).FindToken(position).Parent;
-            symbol = node != null ? semanticModel.GetSymbolInfo(node).Symbol : null;
+            var symbolInfo = node != null ? semanticModel.GetSymbolInfo(node) : default;
+            symbol = symbolInfo.CandidateSymbols.FirstOrDefault();
         }
         else if (symbolName != null)
         {
@@ -52,7 +53,7 @@ public class ReferenceFinderService
                 return null;
             }
 
-            symbol = compilation.GetSymbolsWithName(symbolName).FirstOrDefault();
+            symbol = compilation.GetSymbolsWithName(n => n == symbolName).FirstOrDefault();
         }
 
         if (symbol == null)
@@ -108,7 +109,7 @@ public class ReferenceFinderService
             return new List<SymbolResult>();
         }
 
-        var symbol = compilation.GetSymbolsWithName(symbolName, SymbolFilter.Type).FirstOrDefault();
+        var symbol = compilation.GetSymbolsWithName(n => n == symbolName, SymbolFilter.Type).FirstOrDefault();
         if (symbol is not INamedTypeSymbol typeSymbol)
         {
             return new List<SymbolResult>();

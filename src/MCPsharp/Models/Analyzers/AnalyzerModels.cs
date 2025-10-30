@@ -49,6 +49,7 @@ public record AnalyzerFix
 {
     public string Id { get; init; } = Guid.NewGuid().ToString();
     public string RuleId { get; init; } = string.Empty;
+    public string AnalyzerId { get; init; } = string.Empty;
     public string Title { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
     public Confidence Confidence { get; init; }
