@@ -140,3 +140,63 @@ public class ConfigurationKey
     /// </summary>
     public required string Value { get; init; }
 }
+
+/// <summary>
+/// Represents the result of configuration validation analysis.
+/// </summary>
+public class ConfigValidationResult
+{
+    /// <summary>
+    /// Gets the root directory of the project that was validated.
+    /// </summary>
+    public required string ProjectRoot { get; init; }
+
+    /// <summary>
+    /// Gets the list of configuration files that were analyzed.
+    /// </summary>
+    public required IReadOnlyList<string> ConfigurationFiles { get; init; }
+
+    /// <summary>
+    /// Gets the list of validation issues found during analysis.
+    /// </summary>
+    public required IList<ConfigValidationIssue> Issues { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the validation passed without any issues.
+    /// </summary>
+    public bool IsValid => !Issues.Any(i => i.Severity == ValidationSeverity.Error);
+
+    /// <summary>
+    /// Gets the count of issues by severity level.
+    /// </summary>
+    public Dictionary<ValidationSeverity, int> IssueCounts => Issues
+        .GroupBy(i => i.Severity)
+        .ToDictionary(g => g.Key, g => g.Count());
+}
+
+/// <summary>
+/// Represents a validation issue found in configuration analysis.
+/// </summary>
+public class ConfigValidationIssue
+{
+    /// <summary>
+    /// Gets the severity level of this validation issue.
+    /// </summary>
+    public required ValidationSeverity Severity { get; init; }
+
+    /// <summary>
+    /// Gets the descriptive message for this validation issue.
+    /// </summary>
+    public required string Message { get; init; }
+
+    /// <summary>
+    /// Gets the file path where this issue was found (optional).
+    /// </summary>
+    public string? FilePath { get; init; }
+
+    /// <summary>
+    /// Gets additional details about this issue (optional).
+    /// </summary>
+    public IReadOnlyList<string>? Details { get; init; }
+}
+

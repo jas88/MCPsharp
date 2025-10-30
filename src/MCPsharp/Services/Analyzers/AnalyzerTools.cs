@@ -630,10 +630,22 @@ public static class AnalyzerTools
                 session_id = result.SessionId,
                 success = result.Success,
                 error_message = result.ErrorMessage,
-                restored_files = result.RestoredFiles,
+                total_files = result.TotalFiles,
+                successful_rollbacks = result.SuccessfulRollbacks,
+                failed_rollbacks = result.FailedRollbacks,
                 failed_files = result.FailedFiles,
+                file_results = result.FileResults.Select(fr => new
+                {
+                    file_path = fr.FilePath,
+                    success = fr.Success,
+                    error_message = fr.ErrorMessage,
+                    operation_type = fr.OperationType.ToString()
+                }).ToArray(),
                 rolled_back_at = result.RolledBackAt,
-                duration = result.Duration.ToString()
+                duration = result.ElapsedTime.ToString(),
+                cleanup_completed = result.CleanupCompleted,
+                summary = result.Summary,
+                warnings = result.Warnings
             };
 
             return new ToolCallResult

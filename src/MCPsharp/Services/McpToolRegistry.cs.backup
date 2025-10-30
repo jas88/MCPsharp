@@ -2928,6 +2928,72 @@ public partial class McpToolRegistry
         }
     }
 
+    private async Task<ToolCallResult> ExecuteGetConfigSchema(JsonDocument arguments)
+    {
+        if (_configAnalyzer == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "This tool requires Phase 2 features. ConfigAnalyzerService is not available."
+            };
+        }
+
+        var configPath = arguments.RootElement.GetProperty("configPath").GetString();
+        if (string.IsNullOrEmpty(configPath))
+        {
+            return new ToolCallResult { Success = false, Error = "ConfigPath is required" };
+        }
+
+        try
+        {
+            var schema = await _configAnalyzer.GetConfigSchemaAsync(configPath);
+            return new ToolCallResult { Success = true, Result = schema };
+        }
+        catch (NotImplementedException ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteMergeConfigs(JsonDocument arguments)
+    {
+        if (_configAnalyzer == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "This tool requires Phase 2 features. ConfigAnalyzerService is not available."
+            };
+        }
+
+        var configPathsElement = arguments.RootElement.GetProperty("configPaths");
+        var configPaths = new List<string>();
+
+        foreach (var pathElement in configPathsElement.EnumerateArray())
+        {
+            var path = pathElement.GetString();
+            if (!string.IsNullOrEmpty(path))
+            {
+                configPaths.Add(path);
+            }
+        }
+
+        if (configPaths.Count == 0)
+        {
+            return new ToolCallResult { Success = false, Error = "At least one config path is required" };
+        }
+
+        try
+        {
+            var mergedConfig = await _configAnalyzer.MergeConfigsAsync(configPaths.ToArray());
+            return new ToolCallResult { Success = true, Result = mergedConfig };
+        }
+        catch (NotImplementedException ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
 
     private async Task<ToolCallResult> ExecuteAnalyzeImpact(JsonDocument arguments)
     {
@@ -3023,6 +3089,1164 @@ public partial class McpToolRegistry
         {
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
+    }
+
+    // ===== Bulk Edit Tool Execution Methods =====
+
+    private async Task<ToolCallResult> ExecuteBulkReplace(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_bulkEditService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "BulkEditService is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            // Parse files array
+            var filesArray = arguments.RootElement.GetProperty("files");
+            var files = new List<string>();
+            foreach (var fileElement in filesArray.EnumerateArray())
+            {
+                var file = fileElement.GetString();
+                if (!string.IsNullOrEmpty(file))
+                {
+                    files.Add(file);
+                }
+            }
+
+            var regexPattern = arguments.RootElement.GetProperty("regexPattern").GetString();
+            var replacement = arguments.RootElement.GetProperty("replacement").GetString();
+
+            if (files.Count == 0)
+            {
+                return new ToolCallResult { Success = false, Error = "At least one file pattern is required" };
+            }
+
+            if (string.IsNullOrEmpty(regexPattern))
+            {
+                return new ToolCallResult { Success = false, Error = "Regex pattern is required" };
+            }
+
+            if (string.IsNullOrEmpty(replacement))
+            {
+                return new ToolCallResult { Success = false, Error = "Replacement text is required" };
+            }
+
+            // Parse optional parameters
+            var maxParallelism = arguments.RootElement.TryGetProperty("maxParallelism", out var maxParallelElement)
+                ? maxParallelElement.GetInt32()
+                : Environment.ProcessorCount;
+
+            var createBackups = arguments.RootElement.TryGetProperty("createBackups", out var backupsElement)
+                ? backupsElement.GetBoolean()
+                : true;
+
+            var previewMode = arguments.RootElement.TryGetProperty("previewMode", out var previewElement)
+                ? previewElement.GetBoolean()
+                : false;
+
+            var excludedFiles = new List<string>();
+            if (arguments.RootElement.TryGetProperty("excludedFiles", out var excludedElement))
+            {
+                foreach (var excludedFileElement in excludedElement.EnumerateArray())
+                {
+                    var excludedFile = excludedFileElement.GetString();
+                    if (!string.IsNullOrEmpty(excludedFile))
+                    {
+                        excludedFiles.Add(excludedFile);
+                    }
+                }
+            }
+
+            var options = new BulkEditOptions
+            {
+                MaxParallelism = maxParallelism,
+                CreateBackups = createBackups,
+                PreviewMode = previewMode,
+                ExcludedFiles = excludedFiles
+            };
+
+            var result = await _bulkEditService.BulkReplaceAsync(files, regexPattern, replacement, options, cancellationToken);
+            return new ToolCallResult { Success = result.Success, Result = result, Error = result.Error };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteConditionalEdit(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_bulkEditService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "BulkEditService is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            // Parse files array
+            var filesArray = arguments.RootElement.GetProperty("files");
+            var files = new List<string>();
+            foreach (var fileElement in filesArray.EnumerateArray())
+            {
+                var file = fileElement.GetString();
+                if (!string.IsNullOrEmpty(file))
+                {
+                    files.Add(file);
+                }
+            }
+
+            var conditionTypeStr = arguments.RootElement.GetProperty("conditionType").GetString();
+            var pattern = arguments.RootElement.GetProperty("pattern").GetString();
+
+            if (files.Count == 0)
+            {
+                return new ToolCallResult { Success = false, Error = "At least one file pattern is required" };
+            }
+
+            if (string.IsNullOrEmpty(conditionTypeStr))
+            {
+                return new ToolCallResult { Success = false, Error = "Condition type is required" };
+            }
+
+            if (string.IsNullOrEmpty(pattern))
+            {
+                return new ToolCallResult { Success = false, Error = "Pattern is required" };
+            }
+
+            // Parse condition type
+            if (!Enum.TryParse<BulkConditionType>(conditionTypeStr, true, out var conditionType))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid condition type: {conditionTypeStr}" };
+            }
+
+            var condition = new BulkEditCondition
+            {
+                ConditionType = conditionType,
+                Pattern = pattern,
+                Negate = arguments.RootElement.TryGetProperty("negate", out var negateElement) && negateElement.GetBoolean()
+            };
+
+            // Parse edits
+            var editsArray = arguments.RootElement.GetProperty("edits");
+            var edits = new List<TextEdit>();
+            foreach (var editElement in editsArray.EnumerateArray())
+            {
+                var editType = editElement.GetProperty("type").GetString();
+                TextEdit edit = editType switch
+                {
+                    "replace" => new ReplaceEdit
+                    {
+                        StartLine = editElement.GetProperty("start_line").GetInt32(),
+                        StartColumn = editElement.GetProperty("start_column").GetInt32(),
+                        EndLine = editElement.GetProperty("end_line").GetInt32(),
+                        EndColumn = editElement.GetProperty("end_column").GetInt32(),
+                        NewText = editElement.GetProperty("new_text").GetString() ?? ""
+                    },
+                    "insert" => (TextEdit)new InsertEdit
+                    {
+                        StartLine = editElement.GetProperty("line").GetInt32(),
+                        StartColumn = editElement.GetProperty("column").GetInt32(),
+                        EndLine = editElement.GetProperty("line").GetInt32(),
+                        EndColumn = editElement.GetProperty("column").GetInt32(),
+                        NewText = editElement.GetProperty("text").GetString() ?? ""
+                    },
+                    "delete" => (TextEdit)new DeleteEdit
+                    {
+                        StartLine = editElement.GetProperty("start_line").GetInt32(),
+                        StartColumn = editElement.GetProperty("start_column").GetInt32(),
+                        EndLine = editElement.GetProperty("end_line").GetInt32(),
+                        EndColumn = editElement.GetProperty("end_column").GetInt32(),
+                        NewText = ""
+                    },
+                    _ => throw new ArgumentException($"Unknown edit type: {editType}")
+                };
+                edits.Add(edit);
+            }
+
+            var result = await _bulkEditService.ConditionalEditAsync(files, condition, edits, cancellationToken: cancellationToken);
+            return new ToolCallResult { Success = result.Success, Result = result, Error = result.Error };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteBatchRefactor(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_bulkEditService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "BulkEditService is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            // Parse files array
+            var filesArray = arguments.RootElement.GetProperty("files");
+            var files = new List<string>();
+            foreach (var fileElement in filesArray.EnumerateArray())
+            {
+                var file = fileElement.GetString();
+                if (!string.IsNullOrEmpty(file))
+                {
+                    files.Add(file);
+                }
+            }
+
+            var refactorTypeStr = arguments.RootElement.GetProperty("refactorType").GetString();
+            var targetPattern = arguments.RootElement.GetProperty("targetPattern").GetString();
+            var replacementPattern = arguments.RootElement.GetProperty("replacementPattern").GetString();
+
+            if (files.Count == 0)
+            {
+                return new ToolCallResult { Success = false, Error = "At least one file pattern is required" };
+            }
+
+            if (string.IsNullOrEmpty(refactorTypeStr))
+            {
+                return new ToolCallResult { Success = false, Error = "Refactor type is required" };
+            }
+
+            if (string.IsNullOrEmpty(targetPattern))
+            {
+                return new ToolCallResult { Success = false, Error = "Target pattern is required" };
+            }
+
+            if (string.IsNullOrEmpty(replacementPattern))
+            {
+                return new ToolCallResult { Success = false, Error = "Replacement pattern is required" };
+            }
+
+            // Parse refactor type
+            if (!Enum.TryParse<BulkRefactorType>(refactorTypeStr, true, out var refactorType))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid refactor type: {refactorTypeStr}" };
+            }
+
+            var refactorPattern = new BulkRefactorPattern
+            {
+                RefactorType = refactorType,
+                TargetPattern = targetPattern,
+                ReplacementPattern = replacementPattern
+            };
+
+            var result = await _bulkEditService.BatchRefactorAsync(files, refactorPattern, cancellationToken: cancellationToken);
+            return new ToolCallResult { Success = result.Success, Result = result, Error = result.Error };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteMultiFileEdit(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_bulkEditService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "BulkEditService is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            // Parse operations array
+            var operationsArray = arguments.RootElement.GetProperty("operations");
+            var operations = new List<MultiFileEditOperation>();
+            foreach (var operationElement in operationsArray.EnumerateArray())
+            {
+                var filePattern = operationElement.GetProperty("filePattern").GetString();
+                if (string.IsNullOrEmpty(filePattern))
+                {
+                    return new ToolCallResult { Success = false, Error = "File pattern is required for each operation" };
+                }
+
+                // Parse edits for this operation
+                var editsArray = operationElement.GetProperty("edits");
+                var edits = new List<TextEdit>();
+                foreach (var editElement in editsArray.EnumerateArray())
+                {
+                    var editType = editElement.GetProperty("type").GetString();
+                    TextEdit edit = editType switch
+                    {
+                        "replace" => new ReplaceEdit
+                        {
+                            StartLine = editElement.GetProperty("start_line").GetInt32(),
+                            StartColumn = editElement.GetProperty("start_column").GetInt32(),
+                            EndLine = editElement.GetProperty("end_line").GetInt32(),
+                            EndColumn = editElement.GetProperty("end_column").GetInt32(),
+                            NewText = editElement.GetProperty("new_text").GetString() ?? ""
+                        },
+                        "insert" => (TextEdit)new InsertEdit
+                        {
+                            StartLine = editElement.GetProperty("line").GetInt32(),
+                            StartColumn = editElement.GetProperty("column").GetInt32(),
+                            EndLine = editElement.GetProperty("line").GetInt32(),
+                            EndColumn = editElement.GetProperty("column").GetInt32(),
+                            NewText = editElement.GetProperty("text").GetString() ?? ""
+                        },
+                        "delete" => (TextEdit)new DeleteEdit
+                        {
+                            StartLine = editElement.GetProperty("start_line").GetInt32(),
+                            StartColumn = editElement.GetProperty("start_column").GetInt32(),
+                            EndLine = editElement.GetProperty("end_line").GetInt32(),
+                            EndColumn = editElement.GetProperty("end_column").GetInt32(),
+                            NewText = ""
+                        },
+                        _ => throw new ArgumentException($"Unknown edit type: {editType}")
+                    };
+                    edits.Add(edit);
+                }
+
+                var operation = new MultiFileEditOperation
+                {
+                    FilePattern = filePattern,
+                    Edits = edits,
+                    Priority = operationElement.TryGetProperty("priority", out var priorityElement) ? priorityElement.GetInt32() : 0
+                };
+
+                operations.Add(operation);
+            }
+
+            if (operations.Count == 0)
+            {
+                return new ToolCallResult { Success = false, Error = "At least one operation is required" };
+            }
+
+            var result = await _bulkEditService.MultiFileEditAsync(operations, cancellationToken: cancellationToken);
+            return new ToolCallResult { Success = result.Success, Result = result, Error = result.Error };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecutePreviewBulkChanges(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_bulkEditService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "BulkEditService is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var operationTypeStr = arguments.RootElement.GetProperty("operationType").GetString();
+            if (string.IsNullOrEmpty(operationTypeStr))
+            {
+                return new ToolCallResult { Success = false, Error = "Operation type is required" };
+            }
+
+            if (!Enum.TryParse<BulkEditOperationType>(operationTypeStr, true, out var operationType))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid operation type: {operationTypeStr}" };
+            }
+
+            // Parse files array
+            var filesArray = arguments.RootElement.GetProperty("files");
+            var files = new List<string>();
+            foreach (var fileElement in filesArray.EnumerateArray())
+            {
+                var file = fileElement.GetString();
+                if (!string.IsNullOrEmpty(file))
+                {
+                    files.Add(file);
+                }
+            }
+
+            if (files.Count == 0)
+            {
+                return new ToolCallResult { Success = false, Error = "At least one file pattern is required" };
+            }
+
+            // Build bulk edit request based on operation type
+            var request = new BulkEditRequest
+            {
+                OperationType = operationType,
+                Files = files,
+                Options = new BulkEditOptions { PreviewMode = true }
+            };
+
+            // Add operation-specific parameters
+            var regexPattern = arguments.RootElement.TryGetProperty("regexPattern", out var regexElement) ? regexElement.GetString() : null;
+            var replacementText = arguments.RootElement.TryGetProperty("replacement", out var replacementElement) ? replacementElement.GetString() : null;
+            BulkEditCondition? condition = null;
+
+            if (arguments.RootElement.TryGetProperty("conditionType", out var conditionTypeElement))
+            {
+                var conditionTypeStr = conditionTypeElement.GetString();
+                if (Enum.TryParse<BulkConditionType>(conditionTypeStr, true, out var conditionType) &&
+                    arguments.RootElement.TryGetProperty("pattern", out var patternElement))
+                {
+                    condition = new BulkEditCondition
+                    {
+                        ConditionType = conditionType,
+                        Pattern = patternElement.GetString() ?? ""
+                    };
+                }
+            }
+
+            request = new BulkEditRequest
+            {
+                OperationType = request.OperationType,
+                Files = request.Files,
+                ExcludedFiles = request.ExcludedFiles,
+                SearchPattern = request.SearchPattern,
+                ReplacementText = replacementText,
+                RegexPattern = regexPattern,
+                RegexReplacement = request.RegexReplacement,
+                Condition = condition,
+                RefactorPattern = request.RefactorPattern,
+                Options = request.Options
+            };
+
+            var result = await _bulkEditService.PreviewBulkChangesAsync(request, cancellationToken);
+            return new ToolCallResult { Success = result.Success, Result = result, Error = result.Error };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteRollbackBulkEdit(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_bulkEditService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "BulkEditService is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var rollbackId = arguments.RootElement.GetProperty("rollbackId").GetString();
+            if (string.IsNullOrEmpty(rollbackId))
+            {
+                return new ToolCallResult { Success = false, Error = "Rollback ID is required" };
+            }
+
+            var result = await _bulkEditService.RollbackBulkEditAsync(rollbackId, cancellationToken);
+            return new ToolCallResult { Success = result.Success, Result = result, Error = result.Error };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteValidateBulkEdit(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_bulkEditService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "BulkEditService is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var operationTypeStr = arguments.RootElement.GetProperty("operationType").GetString();
+            if (string.IsNullOrEmpty(operationTypeStr))
+            {
+                return new ToolCallResult { Success = false, Error = "Operation type is required" };
+            }
+
+            if (!Enum.TryParse<BulkEditOperationType>(operationTypeStr, true, out var operationType))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid operation type: {operationTypeStr}" };
+            }
+
+            // Parse files array
+            var filesArray = arguments.RootElement.GetProperty("files");
+            var files = new List<string>();
+            foreach (var fileElement in filesArray.EnumerateArray())
+            {
+                var file = fileElement.GetString();
+                if (!string.IsNullOrEmpty(file))
+                {
+                    files.Add(file);
+                }
+            }
+
+            if (files.Count == 0)
+            {
+                return new ToolCallResult { Success = false, Error = "At least one file pattern is required" };
+            }
+
+            // Build bulk edit request for validation
+            var request = new BulkEditRequest
+            {
+                OperationType = operationType,
+                Files = files
+            };
+
+            // Add operation-specific parameters
+            var regexPattern = arguments.RootElement.TryGetProperty("regexPattern", out var regexElement) ? regexElement.GetString() : null;
+            request = new BulkEditRequest
+            {
+                OperationType = request.OperationType,
+                Files = request.Files,
+                ExcludedFiles = request.ExcludedFiles,
+                SearchPattern = request.SearchPattern,
+                ReplacementText = request.ReplacementText,
+                RegexPattern = regexPattern,
+                RegexReplacement = request.RegexReplacement,
+                Condition = request.Condition,
+                RefactorPattern = request.RefactorPattern,
+                Options = request.Options
+            };
+
+            var result = await _bulkEditService.ValidateBulkEditAsync(request, cancellationToken);
+            return new ToolCallResult { Success = result.IsValid, Result = result };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetAvailableRollbacks(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_bulkEditService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "BulkEditService is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var rollbacks = await _bulkEditService.GetAvailableRollbacksAsync(cancellationToken);
+            return new ToolCallResult { Success = true, Result = new { Rollbacks = rollbacks, TotalCount = rollbacks.Count } };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteEstimateBulkImpact(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_bulkEditService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "BulkEditService is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var operationTypeStr = arguments.RootElement.GetProperty("operationType").GetString();
+            if (string.IsNullOrEmpty(operationTypeStr))
+            {
+                return new ToolCallResult { Success = false, Error = "Operation type is required" };
+            }
+
+            if (!Enum.TryParse<BulkEditOperationType>(operationTypeStr, true, out var operationType))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid operation type: {operationTypeStr}" };
+            }
+
+            // Parse files array
+            var filesArray = arguments.RootElement.GetProperty("files");
+            var files = new List<string>();
+            foreach (var fileElement in filesArray.EnumerateArray())
+            {
+                var file = fileElement.GetString();
+                if (!string.IsNullOrEmpty(file))
+                {
+                    files.Add(file);
+                }
+            }
+
+            if (files.Count == 0)
+            {
+                return new ToolCallResult { Success = false, Error = "At least one file pattern is required" };
+            }
+
+            // Build bulk edit request for impact estimation
+            var request = new BulkEditRequest
+            {
+                OperationType = operationType,
+                Files = files
+            };
+
+            var result = await _bulkEditService.EstimateImpactAsync(request, cancellationToken);
+            return new ToolCallResult { Success = true, Result = result };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetBulkFileStatistics(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_bulkEditService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "BulkEditService is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            // Parse files array
+            var filesArray = arguments.RootElement.GetProperty("files");
+            var files = new List<string>();
+            foreach (var fileElement in filesArray.EnumerateArray())
+            {
+                var file = fileElement.GetString();
+                if (!string.IsNullOrEmpty(file))
+                {
+                    files.Add(file);
+                }
+            }
+
+            if (files.Count == 0)
+            {
+                return new ToolCallResult { Success = false, Error = "At least one file pattern is required" };
+            }
+
+            var result = await _bulkEditService.GetFileStatisticsAsync(files, cancellationToken);
+            return new ToolCallResult { Success = true, Result = result };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    // Streaming processor execution methods
+
+    private async Task<ToolCallResult> ExecuteStreamProcessFile(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_streamingProcessor == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "StreamingFileProcessor is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var filePath = arguments.RootElement.GetProperty("filePath").GetString();
+            var outputPath = arguments.RootElement.GetProperty("outputPath").GetString();
+            var processorTypeStr = arguments.RootElement.GetProperty("processorType").GetString();
+
+            if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(outputPath) || string.IsNullOrEmpty(processorTypeStr))
+            {
+                return new ToolCallResult { Success = false, Error = "filePath, outputPath, and processorType are required" };
+            }
+
+            if (!Enum.TryParse<StreamProcessorType>(processorTypeStr, true, out var processorType))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid processor type: {processorTypeStr}" };
+            }
+
+            var request = new StreamProcessRequest
+            {
+                FilePath = filePath,
+                OutputPath = outputPath,
+                ProcessorType = processorType,
+                ChunkSize = arguments.RootElement.TryGetProperty("chunkSize", out var chunkSizeEl) ? chunkSizeEl.GetInt64() : 65536,
+                CreateCheckpoint = arguments.RootElement.TryGetProperty("createCheckpoint", out var checkpointEl) ? checkpointEl.GetBoolean() : true,
+                EnableCompression = arguments.RootElement.TryGetProperty("enableCompression", out var compressionEl) ? compressionEl.GetBoolean() : false
+            };
+
+            // Parse processor options
+            if (arguments.RootElement.TryGetProperty("processorOptions", out var optionsEl))
+            {
+                request.ProcessorOptions = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsEl.GetRawText()) ?? new Dictionary<string, object>();
+            }
+
+            var result = await _streamingProcessor.ProcessFileAsync(request, cancellationToken);
+
+            return new ToolCallResult
+            {
+                Success = result.Success,
+                Result = result.Success ? (object)new
+                {
+                    operationId = result.OperationId,
+                    outputPath = result.OutputPath,
+                    bytesProcessed = result.BytesProcessed,
+                    chunksProcessed = result.ChunksProcessed,
+                    linesProcessed = result.LinesProcessed,
+                    processingTime = result.ProcessingTime.TotalSeconds,
+                    processingSpeed = result.ProcessingSpeedBytesPerSecond,
+                    outputFiles = result.OutputFiles,
+                    temporaryFiles = result.TemporaryFiles
+                } : null,
+                Error = result.ErrorMessage
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteBulkTransform(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_streamingProcessor == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "StreamingFileProcessor is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var inputFiles = new List<string>();
+            foreach (var fileEl in arguments.RootElement.GetProperty("inputFiles").EnumerateArray())
+            {
+                var file = fileEl.GetString();
+                if (!string.IsNullOrEmpty(file))
+                {
+                    inputFiles.Add(file);
+                }
+            }
+
+            var outputDirectory = arguments.RootElement.GetProperty("outputDirectory").GetString();
+            var processorTypeStr = arguments.RootElement.GetProperty("processorType").GetString();
+
+            if (inputFiles.Count == 0 || string.IsNullOrEmpty(outputDirectory) || string.IsNullOrEmpty(processorTypeStr))
+            {
+                return new ToolCallResult { Success = false, Error = "inputFiles, outputDirectory, and processorType are required" };
+            }
+
+            if (!Enum.TryParse<StreamProcessorType>(processorTypeStr, true, out var processorType))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid processor type: {processorTypeStr}" };
+            }
+
+            var request = new BulkTransformRequest
+            {
+                InputFiles = inputFiles,
+                OutputDirectory = outputDirectory,
+                ProcessorType = processorType,
+                ChunkSize = arguments.RootElement.TryGetProperty("chunkSize", out var chunkSizeEl) ? chunkSizeEl.GetInt64() : 65536,
+                MaxDegreeOfParallelism = arguments.RootElement.TryGetProperty("maxDegreeOfParallelism", out var parallelEl) ? parallelEl.GetInt32() : 4,
+                PreserveDirectoryStructure = arguments.RootElement.TryGetProperty("preserveDirectoryStructure", out var preserveEl) ? preserveEl.GetBoolean() : true,
+                FilePattern = arguments.RootElement.TryGetProperty("filePattern", out var patternEl) ? patternEl.GetString() : null,
+                Recursive = arguments.RootElement.TryGetProperty("recursive", out var recursiveEl) ? recursiveEl.GetBoolean() : false,
+                EnableParallelProcessing = true
+            };
+
+            // Parse processor options
+            if (arguments.RootElement.TryGetProperty("processorOptions", out var optionsEl))
+            {
+                request.ProcessorOptions = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsEl.GetRawText()) ?? new Dictionary<string, object>();
+            }
+
+            var results = await _streamingProcessor.BulkTransformAsync(request, null, cancellationToken);
+
+            var summary = new
+            {
+                totalFiles = results.Count,
+                successfulFiles = results.Count(r => r.Success),
+                failedFiles = results.Count(r => !r.Success),
+                totalBytesProcessed = results.Where(r => r.Success).Sum(r => r.BytesProcessed),
+                totalChunksProcessed = results.Where(r => r.Success).Sum(r => r.ChunksProcessed),
+                totalProcessingTime = TimeSpan.FromSeconds(results.Where(r => r.Success).Sum(r => r.ProcessingTime.TotalSeconds)),
+                results = results.Select(r => new
+                {
+                    operationId = r.OperationId,
+                    success = r.Success,
+                    outputPath = r.OutputPath,
+                    bytesProcessed = r.BytesProcessed,
+                    processingTime = r.ProcessingTime.TotalSeconds,
+                    error = r.ErrorMessage
+                }).ToList()
+            };
+
+            return new ToolCallResult { Success = true, Result = summary };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetStreamProgress(JsonDocument arguments)
+    {
+        if (_streamingProcessor == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "StreamingFileProcessor is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var operationId = arguments.RootElement.GetProperty("operationId").GetString();
+            if (string.IsNullOrEmpty(operationId))
+            {
+                return new ToolCallResult { Success = false, Error = "operationId is required" };
+            }
+
+            var progress = await _streamingProcessor.GetProgressAsync(operationId);
+            if (progress == null)
+            {
+                return new ToolCallResult { Success = false, Error = $"Operation {operationId} not found" };
+            }
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new
+                {
+                    operationId = operationId,
+                    bytesProcessed = progress.BytesProcessed,
+                    totalBytes = progress.TotalBytes,
+                    chunksProcessed = progress.ChunksProcessed,
+                    totalChunks = progress.TotalChunks,
+                    linesProcessed = progress.LinesProcessed,
+                    itemsProcessed = progress.ItemsProcessed,
+                    progressPercentage = Math.Round(progress.ProgressPercentage, 2),
+                    estimatedTimeRemaining = progress.EstimatedTimeRemaining.TotalSeconds,
+                    processingSpeedBytesPerSecond = progress.ProcessingSpeedBytesPerSecond,
+                    currentPhase = progress.CurrentPhase,
+                    metadata = progress.Metadata,
+                    lastUpdated = progress.LastUpdated
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteCancelStreamOperation(JsonDocument arguments)
+    {
+        if (_streamingProcessor == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "StreamingFileProcessor is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var operationId = arguments.RootElement.GetProperty("operationId").GetString();
+            if (string.IsNullOrEmpty(operationId))
+            {
+                return new ToolCallResult { Success = false, Error = "operationId is required" };
+            }
+
+            var success = await _streamingProcessor.CancelOperationAsync(operationId);
+
+            return new ToolCallResult
+            {
+                Success = success,
+                Result = success ? (object)new { operationId, cancelled = true } : null,
+                Error = success ? null : $"Failed to cancel operation {operationId} or operation not found"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteResumeStreamOperation(JsonDocument arguments, CancellationToken cancellationToken)
+    {
+        if (_streamingProcessor == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "StreamingFileProcessor is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var operationId = arguments.RootElement.GetProperty("operationId").GetString();
+            if (string.IsNullOrEmpty(operationId))
+            {
+                return new ToolCallResult { Success = false, Error = "operationId is required" };
+            }
+
+            var result = await _streamingProcessor.ResumeOperationAsync(operationId, cancellationToken);
+
+            if (result == null)
+            {
+                return new ToolCallResult { Success = false, Error = $"Failed to resume operation {operationId} or no checkpoint available" };
+            }
+
+            return new ToolCallResult
+            {
+                Success = result.Success,
+                Result = result.Success ? (object)new
+                {
+                    operationId = result.OperationId,
+                    outputPath = result.OutputPath,
+                    bytesProcessed = result.BytesProcessed,
+                    chunksProcessed = result.ChunksProcessed,
+                    linesProcessed = result.LinesProcessed,
+                    processingTime = result.ProcessingTime.TotalSeconds,
+                    processingSpeed = result.ProcessingSpeedBytesPerSecond,
+                    resumed = true
+                } : null,
+                Error = result.ErrorMessage
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteListStreamOperations(JsonDocument arguments)
+    {
+        if (_streamingProcessor == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "StreamingFileProcessor is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var maxCount = arguments.RootElement.TryGetProperty("maxCount", out var maxCountEl) ? maxCountEl.GetInt32() : 50;
+
+            var operations = await _streamingProcessor.ListOperationsAsync(maxCount);
+
+            var operationList = operations.Select(op => new
+            {
+                operationId = op.OperationId,
+                name = op.Name,
+                status = op.Status.ToString(),
+                createdAt = op.CreatedAt,
+                startedAt = op.StartedAt,
+                completedAt = op.CompletedAt,
+                lastCheckpointAt = op.LastCheckpointAt,
+                filePath = op.Request.FilePath,
+                outputPath = op.Request.OutputPath,
+                processorType = op.Request.ProcessorType.ToString(),
+                errorMessage = op.ErrorMessage,
+                hasCheckpoint = op.LastCheckpoint != null
+            }).ToList();
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new
+                {
+                    operations = operationList,
+                    totalCount = operationList.Count
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteCleanupStreamOperations(JsonDocument arguments)
+    {
+        if (_streamingProcessor == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "StreamingFileProcessor is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var olderThanHours = arguments.RootElement.TryGetProperty("olderThanHours", out var hoursEl) ? hoursEl.GetInt32() : 24;
+            var olderThan = TimeSpan.FromHours(olderThanHours);
+
+            await _streamingProcessor.CleanupAsync(olderThan);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new
+                {
+                    cleanedUp = true,
+                    olderThanHours = olderThanHours,
+                    message = $"Cleaned up operations older than {olderThanHours} hours"
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetAvailableProcessors(JsonDocument arguments)
+    {
+        if (_streamingProcessor == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "StreamingFileProcessor is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var processors = await _streamingProcessor.GetAvailableProcessorsAsync();
+
+            var processorList = processors.Select(p => new
+            {
+                name = p.Name,
+                processorType = p.ProcessorType.ToString(),
+                enableParallelProcessing = p.EnableParallelProcessing,
+                maxDegreeOfParallelism = p.MaxDegreeOfParallelism,
+                description = GetProcessorDescription(p.ProcessorType)
+            }).ToList();
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new
+                {
+                    processors = processorList,
+                    totalCount = processorList.Count
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteEstimateStreamProcessing(JsonDocument arguments)
+    {
+        if (_streamingProcessor == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "StreamingFileProcessor is not available. Ensure it's properly initialized."
+            };
+        }
+
+        try
+        {
+            var filePath = arguments.RootElement.GetProperty("filePath").GetString();
+            var processorTypeStr = arguments.RootElement.GetProperty("processorType").GetString();
+
+            if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(processorTypeStr))
+            {
+                return new ToolCallResult { Success = false, Error = "filePath and processorType are required" };
+            }
+
+            if (!Enum.TryParse<StreamProcessorType>(processorTypeStr, true, out var processorType))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid processor type: {processorTypeStr}" };
+            }
+
+            var request = new StreamProcessRequest
+            {
+                FilePath = filePath,
+                ProcessorType = processorType,
+                ChunkSize = arguments.RootElement.TryGetProperty("chunkSize", out var chunkSizeEl) ? chunkSizeEl.GetInt64() : 65536
+            };
+
+            // Parse processor options
+            if (arguments.RootElement.TryGetProperty("processorOptions", out var optionsEl))
+            {
+                request.ProcessorOptions = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsEl.GetRawText()) ?? new Dictionary<string, object>();
+            }
+
+            var estimatedTime = await _streamingProcessor.EstimateProcessingTimeAsync(request);
+
+            var fileInfo = new System.IO.FileInfo(filePath);
+            var fileSize = fileInfo.Exists ? fileInfo.Length : 0;
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new
+                {
+                    filePath = filePath,
+                    fileSizeBytes = fileSize,
+                    processorType = processorTypeStr,
+                    estimatedProcessingTimeSeconds = estimatedTime.TotalSeconds,
+                    estimatedProcessingTimeFormatted = FormatTimeSpan(estimatedTime),
+                    chunkSize = request.ChunkSize,
+                    estimatedChunks = fileSize > 0 ? (fileSize + request.ChunkSize - 1) / request.ChunkSize : 0
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private static string GetProcessorDescription(StreamProcessorType processorType)
+    {
+        return processorType switch
+        {
+            StreamProcessorType.LineProcessor => "Process text files line by line with filtering and transformation capabilities",
+            StreamProcessorType.RegexProcessor => "Apply regex patterns for text matching and replacement operations",
+            StreamProcessorType.CsvProcessor => "Process CSV/TSV files with column selection and filtering",
+            StreamProcessorType.BinaryProcessor => "Process binary files with pattern search and replacement",
+            _ => "Unknown processor type"
+        };
+    }
+
+    private static string FormatTimeSpan(TimeSpan timeSpan)
+    {
+        if (timeSpan.TotalSeconds < 60)
+            return $"{timeSpan.TotalSeconds:F1} seconds";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{timeSpan.TotalMinutes:F1} minutes";
+        if (timeSpan.TotalHours < 24)
+            return $"{timeSpan.TotalHours:F1} hours";
+        return $"{timeSpan.TotalDays:F1} days";
     }
 
     // ===== Phase 3 Architecture Validation Tool Execution Methods =====

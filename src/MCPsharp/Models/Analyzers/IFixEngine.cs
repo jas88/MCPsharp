@@ -186,19 +186,6 @@ public record ConflictResolutionResult
     public DateTime ResolvedAt { get; init; } = DateTime.UtcNow;
 }
 
-/// <summary>
-/// Result of rolling back fixes
-/// </summary>
-public record RollbackResult
-{
-    public bool Success { get; init; }
-    public string? ErrorMessage { get; init; }
-    public string SessionId { get; init; } = string.Empty;
-    public ImmutableArray<string> RestoredFiles { get; init; } = ImmutableArray<string>.Empty;
-    public ImmutableArray<string> FailedFiles { get; init; } = ImmutableArray<string>.Empty;
-    public DateTime RolledBackAt { get; init; } = DateTime.UtcNow;
-    public TimeSpan Duration { get; init; }
-}
 
 /// <summary>
 /// Result of validating fixes
@@ -234,16 +221,6 @@ public record ValidationWarning
     public string FixId { get; init; } = string.Empty;
 }
 
-/// <summary>
-/// Severity of validation issue
-/// </summary>
-public enum ValidationSeverity
-{
-    Info,
-    Warning,
-    Error,
-    Critical
-}
 
 /// <summary>
 /// A fix session
@@ -277,4 +254,66 @@ public record FixStatistics
     public ImmutableArray<string> MostActiveAnalyzers { get; init; } = ImmutableArray<string>.Empty;
     public DateTime PeriodStart { get; init; } = DateTime.UtcNow;
     public DateTime PeriodEnd { get; init; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Result of rolling back fixes
+/// </summary>
+public record RollbackResult
+{
+    public string SessionId { get; init; } = string.Empty;
+    public bool Success { get; init; }
+    public string? ErrorMessage { get; init; }
+    public ImmutableArray<FileRollbackResult> FileResults { get; init; } = ImmutableArray<FileRollbackResult>.Empty;
+    public ImmutableArray<string> FailedFiles { get; init; } = ImmutableArray<string>.Empty;
+    public TimeSpan ElapsedTime { get; init; }
+    public DateTime RolledBackAt { get; init; } = DateTime.UtcNow;
+    public string? Summary { get; init; }
+    public ImmutableArray<string> Warnings { get; init; } = ImmutableArray<string>.Empty;
+
+    // Additional properties expected by FixEngine
+    public int TotalFiles { get; init; }
+    public int SuccessfulRollbacks { get; init; }
+    public int FailedRollbacks { get; init; }
+    public ImmutableArray<RollbackError> Errors { get; init; } = ImmutableArray<RollbackError>.Empty;
+    public bool CleanupCompleted { get; init; }
+}
+
+/// <summary>
+/// Error that occurred during rollback in the Analyzers namespace
+/// </summary>
+public record RollbackError
+{
+    public required string FilePath { get; init; }
+    public required string ErrorMessage { get; init; }
+    public string? ExceptionDetails { get; init; }
+    public required bool IsRecoverable { get; init; }
+    public required DateTime Timestamp { get; init; }
+}
+
+/// <summary>
+/// Result of rolling back fixes for a single file
+/// </summary>
+public record FileRollbackResult
+{
+    public string FilePath { get; init; } = string.Empty;
+    public bool Success { get; init; }
+    public string? ErrorMessage { get; init; }
+    public string? BackupPath { get; init; }
+    public long OriginalSize { get; init; }
+    public long RestoredSize { get; init; }
+    public TimeSpan RollbackDuration { get; init; }
+    public bool VerifyIntegrity { get; init; }
+    public string? OriginalHash { get; init; }
+    public string? RestoredHash { get; init; }
+
+    /// <summary>
+    /// Type of rollback operation performed
+    /// </summary>
+    public Models.RollbackOperationType OperationType { get; init; }
+
+    /// <summary>
+    /// Time taken for this file rollback (alias for RollbackDuration)
+    /// </summary>
+    public TimeSpan ProcessingTime => RollbackDuration;
 }

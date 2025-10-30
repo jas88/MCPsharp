@@ -367,8 +367,8 @@ public class FixEngine : IFixEngine
 
             var successfulRollbacks = 0;
             var failedRollbacks = 0;
-            var fileResults = new List<MCPsharp.Models.FileRollbackResult>();
-            var errors = new List<MCPsharp.Models.RollbackError>();
+            var fileResults = new List<FileRollbackResult>();
+            var errors = new List<RollbackError>();
 
             // Restore from backups
             if (session.Metadata.TryGetValue("BackupPaths", out var backupPathsObj) &&
@@ -385,18 +385,18 @@ public class FixEngine : IFixEngine
                             File.Delete(backupPath);
 
                             successfulRollbacks++;
-                            fileResults.Add(new Models.FileRollbackResult
+                            fileResults.Add(new Models.Analyzers.FileRollbackResult
                             {
                                 FilePath = originalPath,
                                 Success = true,
-                                OperationType = Models.RollbackOperationType.RestoredFromBackup,
+                                OperationType = RollbackOperationType.RestoredFromBackup,
                                 ProcessingTime = DateTime.UtcNow - startTime
                             });
                         }
                         else
                         {
                             failedRollbacks++;
-                            errors.Add(new MCPsharp.Models.RollbackError
+                            errors.Add(new RollbackError
                             {
                                 FilePath = originalPath,
                                 ErrorMessage = "Backup file not found",
@@ -409,7 +409,7 @@ public class FixEngine : IFixEngine
                     {
                         failedRollbacks++;
                         _logger.LogError(ex, "Error restoring file: {FilePath}", originalPath);
-                        errors.Add(new MCPsharp.Models.RollbackError
+                        errors.Add(new RollbackError
                         {
                             FilePath = originalPath,
                             ErrorMessage = ex.Message,
@@ -431,8 +431,8 @@ public class FixEngine : IFixEngine
                 TotalFiles = successfulRollbacks + failedRollbacks,
                 SuccessfulRollbacks = successfulRollbacks,
                 FailedRollbacks = failedRollbacks,
-                FileResults = fileResults.Select(r => ConvertToFileRollbackResult(r)).ToImmutableArray(),
-                Errors = errors.Select(e => ConvertToRollbackError(e)).ToImmutableArray(),
+                FileResults = fileResults,
+                Errors = errors,
                 ElapsedTime = DateTime.UtcNow - session.StartTime,
                 CleanupCompleted = true,
                 Summary = $"Successfully rolled back {successfulRollbacks} files, {failedRollbacks} failed"
@@ -448,15 +448,18 @@ public class FixEngine : IFixEngine
                 TotalFiles = 0,
                 SuccessfulRollbacks = 0,
                 FailedRollbacks = 1,
-                FileResults = ImmutableArray<Models.Analyzers.FileRollbackResult>.Empty,
-                Errors = ImmutableArray.Create(new Models.Analyzers.RollbackError
+                FileResults = new List<FileRollbackResult>(),
+                Errors = new List<RollbackError>
                 {
-                    FilePath = "Session",
-                    ErrorMessage = ex.Message,
-                    ExceptionDetails = ex.StackTrace,
-                    IsRecoverable = false,
-                    Timestamp = DateTime.UtcNow
-                }),
+                    new RollbackError
+                    {
+                        FilePath = "Session",
+                        ErrorMessage = ex.Message,
+                        ExceptionDetails = ex.StackTrace,
+                        IsRecoverable = false,
+                        Timestamp = DateTime.UtcNow
+                    }
+                },
                 ElapsedTime = TimeSpan.Zero,
                 CleanupCompleted = false,
                 Summary = $"Rollback failed: {ex.Message}"
@@ -513,14 +516,14 @@ public class FixEngine : IFixEngine
                         FilePath = filePath,
                         Description = $"Error reading file for validation: {ex.Message}",
                         FixId = "Validation",
-                        Severity = Models.ValidationSeverity.Error
+                        Severity = Models.Analyzers.ValidationSeverity.Error
                     });
                 }
             }
 
             return new Models.Analyzers.ValidationResult
             {
-                IsValid = !errors.Any(e => e.Severity >= Models.ValidationSeverity.Error),
+                IsValid = !errors.Any(e => e.Severity >= Models.Analyzers.ValidationSeverity.Error),
                 SessionId = sessionId,
                 Errors = errors.ToImmutableArray(),
                 Warnings = warnings.ToImmutableArray(),
@@ -847,7 +850,7 @@ public class FixEngine : IFixEngine
                 FilePath = "unknown",
                 Description = "Mismatched braces detected",
                 FixId = "Validation",
-                Severity = Models.ValidationSeverity.Error
+                Severity = Models.Analyzers.ValidationSeverity.Error
             });
         }
 
@@ -858,7 +861,7 @@ public class FixEngine : IFixEngine
                 FilePath = "unknown",
                 Description = "Mismatched parentheses detected",
                 FixId = "Validation",
-                Severity = Models.ValidationSeverity.Error
+                Severity = Models.Analyzers.ValidationSeverity.Error
             });
         }
 
@@ -893,35 +896,5 @@ public class FixEngine : IFixEngine
             await Task.Yield();
             yield return item;
         }
-    }
-
-    /// <summary>
-    /// Converts MCPsharp.Models.FileRollbackResult to MCPsharp.Models.Analyzers.FileRollbackResult
-    /// </summary>
-    private static Models.Analyzers.FileRollbackResult ConvertToFileRollbackResult(MCPsharp.Models.FileRollbackResult source)
-    {
-        return new Models.Analyzers.FileRollbackResult
-        {
-            FilePath = source.FilePath,
-            Success = source.Success,
-            ErrorMessage = source.ErrorMessage,
-            OperationType = source.OperationType,
-            RollbackDuration = source.ProcessingTime
-        };
-    }
-
-    /// <summary>
-    /// Converts MCPsharp.Models.RollbackError to MCPsharp.Models.Analyzers.RollbackError
-    /// </summary>
-    private static Models.Analyzers.RollbackError ConvertToRollbackError(MCPsharp.Models.RollbackError source)
-    {
-        return new Models.Analyzers.RollbackError
-        {
-            FilePath = source.FilePath,
-            ErrorMessage = source.ErrorMessage,
-            ExceptionDetails = source.ExceptionDetails,
-            IsRecoverable = source.IsRecoverable,
-            Timestamp = source.Timestamp
-        };
     }
 }

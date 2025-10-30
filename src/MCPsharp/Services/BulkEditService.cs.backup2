@@ -122,7 +122,15 @@ public class BulkEditService : IBulkEditService
                 ModifiedFiles = summary.SuccessfulFiles,
                 SkippedFiles = summary.SkippedFiles,
                 FailedFiles = summary.FailedFiles,
-                FileResults = fileResults,
+                FileResults = fileResults.Select(fr => new BulkFileEditResult
+                {
+                    FilePath = fr.FilePath,
+                    Success = fr.Success,
+                    ChangeCount = fr.ChangesApplied,
+                    ErrorMessage = fr.ErrorMessage,
+                    BackupPath = fr.BackupPath,
+                    ProcessingTime = fr.ProcessDuration
+                }).ToList(),
                 Errors = errors,
                 ElapsedTime = endTime - startTime,
                 RollbackSessionId = rollbackInfo?.RollbackId ?? string.Empty,
@@ -132,9 +140,7 @@ public class BulkEditService : IBulkEditService
                     : null,
                 OperationId = operationId,
                 StartTime = startTime,
-                EndTime = endTime,
-                SummaryData = summary,
-                RollbackInfo = rollbackInfo
+                EndTime = endTime
             };
 
             _logger.LogInformation(
@@ -163,7 +169,7 @@ public class BulkEditService : IBulkEditService
                 ModifiedFiles = 0,
                 SkippedFiles = 0,
                 FailedFiles = 1,
-                FileResults = Array.Empty<FileBulkEditResult>(),
+                FileResults = Array.Empty<BulkFileEditResult>(),
                 Errors = errors,
                 ElapsedTime = DateTime.UtcNow - startTime,
                 Summary = "Operation failed with exception",
@@ -262,7 +268,15 @@ public class BulkEditService : IBulkEditService
                 ModifiedFiles = summary.SuccessfulFiles,
                 SkippedFiles = summary.SkippedFiles,
                 FailedFiles = summary.FailedFiles,
-                FileResults = fileResults,
+                FileResults = fileResults.Select(fr => new BulkFileEditResult
+                {
+                    FilePath = fr.FilePath,
+                    Success = fr.Success,
+                    ChangeCount = fr.ChangesApplied,
+                    ErrorMessage = fr.ErrorMessage,
+                    BackupPath = fr.BackupPath,
+                    ProcessingTime = fr.ProcessDuration
+                }).ToList(),
                 Errors = errors,
                 ElapsedTime = endTime - startTime,
                 Summary = summary.ToString(),
@@ -364,7 +378,15 @@ public class BulkEditService : IBulkEditService
                 ModifiedFiles = summary.SuccessfulFiles,
                 SkippedFiles = summary.SkippedFiles,
                 FailedFiles = summary.FailedFiles,
-                FileResults = fileResults,
+                FileResults = fileResults.Select(fr => new BulkFileEditResult
+                {
+                    FilePath = fr.FilePath,
+                    Success = fr.Success,
+                    ChangeCount = fr.ChangesApplied,
+                    ErrorMessage = fr.ErrorMessage,
+                    BackupPath = fr.BackupPath,
+                    ProcessingTime = fr.ProcessDuration
+                }).ToList(),
                 Errors = errors,
                 ElapsedTime = endTime - startTime,
                 Summary = summary.ToString(),
@@ -488,7 +510,15 @@ public class BulkEditService : IBulkEditService
                 ModifiedFiles = summary.SuccessfulFiles,
                 SkippedFiles = summary.SkippedFiles,
                 FailedFiles = summary.FailedFiles,
-                FileResults = fileResults,
+                FileResults = fileResults.Select(fr => new BulkFileEditResult
+                {
+                    FilePath = fr.FilePath,
+                    Success = fr.Success,
+                    ChangeCount = fr.ChangesApplied,
+                    ErrorMessage = fr.ErrorMessage,
+                    BackupPath = fr.BackupPath,
+                    ProcessingTime = fr.ProcessDuration
+                }).ToList(),
                 Errors = errors,
                 ElapsedTime = endTime - startTime,
                 Summary = summary.ToString(),
@@ -714,7 +744,7 @@ public class BulkEditService : IBulkEditService
                     ModifiedFiles = 0,
                     SkippedFiles = 0,
                     FailedFiles = 1,
-                    FileResults = Array.Empty<FileBulkEditResult>(),
+                    FileResults = Array.Empty<BulkFileEditResult>(),
                     Errors = errors,
                     ElapsedTime = DateTime.UtcNow - startTime,
                     Summary = "Rollback session not found or expired",
@@ -744,7 +774,7 @@ public class BulkEditService : IBulkEditService
                     ModifiedFiles = 0,
                     SkippedFiles = 0,
                     FailedFiles = 1,
-                    FileResults = Array.Empty<FileBulkEditResult>(),
+                    FileResults = Array.Empty<BulkFileEditResult>(),
                     Errors = errors,
                     ElapsedTime = DateTime.UtcNow - startTime,
                     Summary = "Rollback session no longer available",
@@ -759,8 +789,7 @@ public class BulkEditService : IBulkEditService
             var successfulRollbacks = 0;
 
             // Process each file rollback
-            var filesToRollback = rollbackInfo.Files ?? new List<RollbackFileInfo>();
-            var tasks = filesToRollback.Select(async rollbackFile =>
+            var tasks = rollbackInfo.Files != null ? rollbackInfo.Files : new List<RollbackFileInfo>().Select(async rollbackFile =>
             {
                 await _processingSemaphore.WaitAsync(cancellationToken);
                 try
@@ -781,7 +810,7 @@ public class BulkEditService : IBulkEditService
 
             var summary = new BulkEditSummary
             {
-                TotalFilesMatched = filesToRollback.Count,
+                TotalFilesMatched = rollbackInfo.Files != null ? rollbackInfo.Files : new List<RollbackFileInfo>().Count,
                 TotalFilesProcessed = fileResults.Count,
                 SuccessfulFiles = successfulRollbacks,
                 FailedFiles = fileResults.Count(r => !r.Success),
@@ -799,7 +828,7 @@ public class BulkEditService : IBulkEditService
             };
 
             // Clean up rollback session after successful rollback
-            if (successfulRollbacks == filesToRollback.Count)
+            if (successfulRollbacks == rollbackInfo.Files != null ? rollbackInfo.Files : new List<RollbackFileInfo>().Count)
             {
                 _rollbackSessions.TryRemove(rollbackId, out _);
                 try
@@ -815,11 +844,11 @@ public class BulkEditService : IBulkEditService
                 }
             }
 
-            var rollbackFileCount = filesToRollback.Count;
-            var rollbackErrors = new List<BulkEditError>();
+            var rollbackFileCount = rollbackInfo.Files != null ? rollbackInfo.Files : new List<RollbackFileInfo>().Count;
+            var errors = new List<BulkEditError>();
             if (fileResults.Count(r => !r.Success) > 0)
             {
-                rollbackErrors.Add(new BulkEditError
+                errors.Add(new BulkEditError
                 {
                     FilePath = "Multiple files",
                     ErrorMessage = $"Rollback failed for {fileResults.Count(r => !r.Success)} files",
@@ -834,8 +863,16 @@ public class BulkEditService : IBulkEditService
                 ModifiedFiles = successfulRollbacks,
                 SkippedFiles = fileResults.Count(r => r.Skipped),
                 FailedFiles = fileResults.Count(r => !r.Success),
-                FileResults = fileResults,
-                Errors = rollbackErrors,
+                FileResults = fileResults.Select(fr => new BulkFileEditResult
+                {
+                    FilePath = fr.FilePath,
+                    Success = fr.Success,
+                    ChangeCount = fr.ChangesApplied,
+                    ErrorMessage = fr.ErrorMessage,
+                    BackupPath = fr.BackupPath,
+                    ProcessingTime = fr.ProcessDuration
+                }).ToList(),
+                Errors = errors,
                 ElapsedTime = endTime - startTime,
                 Summary = summary.ToString(),
                 OperationId = operationId,
@@ -1870,15 +1907,11 @@ public class BulkEditService : IBulkEditService
                 FilePath = filePath,
                 Success = true,
                 ChangesApplied = 1,
-                ChangesCount = 1,
                 OriginalSize = originalSize,
                 NewSize = newSize,
                 BackupPath = backupPath,
                 ProcessStartTime = startTime,
-                ProcessEndTime = DateTime.UtcNow,
-                EditDuration = DateTime.UtcNow - startTime,
-                BackupCreated = !string.IsNullOrEmpty(backupPath),
-                Skipped = false
+                ProcessEndTime = DateTime.UtcNow
             };
         }
         catch (Exception ex)
@@ -1889,15 +1922,10 @@ public class BulkEditService : IBulkEditService
                 FilePath = filePath,
                 Success = false,
                 ErrorMessage = ex.Message,
-                ChangesApplied = 0,
-                ChangesCount = 0,
                 OriginalSize = originalSize,
                 NewSize = newSize,
                 ProcessStartTime = startTime,
-                ProcessEndTime = DateTime.UtcNow,
-                EditDuration = DateTime.UtcNow - startTime,
-                BackupCreated = false,
-                Skipped = false
+                ProcessEndTime = DateTime.UtcNow
             };
         }
     }
@@ -1933,14 +1961,10 @@ public class BulkEditService : IBulkEditService
                     FilePath = filePath,
                     Success = true,
                     ChangesApplied = operation.Edits.Count,
-                    ChangesCount = operation.Edits.Count,
                     OriginalSize = originalSize,
                     NewSize = newSize,
                     ProcessStartTime = startTime,
-                    ProcessEndTime = DateTime.UtcNow,
-                    EditDuration = DateTime.UtcNow - startTime,
-                    BackupCreated = false,
-                    Skipped = false
+                    ProcessEndTime = DateTime.UtcNow
                 };
             }
 
@@ -1960,15 +1984,11 @@ public class BulkEditService : IBulkEditService
                 FilePath = filePath,
                 Success = true,
                 ChangesApplied = operation.Edits.Count,
-                ChangesCount = operation.Edits.Count,
                 OriginalSize = originalSize,
                 NewSize = newSize,
                 BackupPath = backupPath,
                 ProcessStartTime = startTime,
-                ProcessEndTime = DateTime.UtcNow,
-                EditDuration = DateTime.UtcNow - startTime,
-                BackupCreated = !string.IsNullOrEmpty(backupPath),
-                Skipped = false
+                ProcessEndTime = DateTime.UtcNow
             };
         }
         catch (Exception ex)
@@ -1979,15 +1999,10 @@ public class BulkEditService : IBulkEditService
                 FilePath = filePath,
                 Success = false,
                 ErrorMessage = ex.Message,
-                ChangesApplied = 0,
-                ChangesCount = 0,
                 OriginalSize = originalSize,
                 NewSize = newSize,
                 ProcessStartTime = startTime,
-                ProcessEndTime = DateTime.UtcNow,
-                EditDuration = DateTime.UtcNow - startTime,
-                BackupCreated = false,
-                Skipped = false
+                ProcessEndTime = DateTime.UtcNow
             };
         }
     }
@@ -2009,16 +2024,12 @@ public class BulkEditService : IBulkEditService
                     FilePath = rollbackFile.OriginalPath,
                     Success = false,
                     ErrorMessage = "Backup file not found",
-                    ChangesApplied = 0,
-                    ChangesCount = 0,
                     Skipped = true,
                     SkipReason = "Backup missing",
                     OriginalSize = originalSize,
                     NewSize = newSize,
                     ProcessStartTime = startTime,
-                    ProcessEndTime = DateTime.UtcNow,
-                    EditDuration = DateTime.UtcNow - startTime,
-                    BackupCreated = false
+                    ProcessEndTime = DateTime.UtcNow
                 };
             }
 
@@ -2430,7 +2441,7 @@ public class BulkEditService : IBulkEditService
             ModifiedFiles = 0,
             SkippedFiles = 0,
             FailedFiles = 1,
-            FileResults = Array.Empty<FileBulkEditResult>(),
+            FileResults = Array.Empty<BulkFileEditResult>(),
             Errors = errors,
             ElapsedTime = DateTime.UtcNow - startTime,
             Summary = $"Operation failed: {error}",

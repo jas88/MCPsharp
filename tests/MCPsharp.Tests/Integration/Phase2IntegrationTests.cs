@@ -1,5 +1,8 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models;
+using MCPsharp.Services;
 using MCPsharp.Services.Phase2;
 using MCPsharp.Services.Roslyn;
 using Xunit;
@@ -16,7 +19,7 @@ public class Phase2IntegrationTests : IDisposable
     private readonly string _testRoot;
     private readonly RoslynWorkspace _workspace;
     private readonly ReferenceFinderService _referenceFinder;
-    private readonly WorkflowAnalyzerService _workflowAnalyzer;
+    private readonly MCPsharp.Services.Phase2.WorkflowAnalyzerService _workflowAnalyzer;
     private readonly ConfigAnalyzerService _configAnalyzer;
     private readonly ImpactAnalyzerService _impactAnalyzer;
 
@@ -28,8 +31,8 @@ public class Phase2IntegrationTests : IDisposable
         // Initialize Roslyn workspace and services
         _workspace = new RoslynWorkspace();
         _referenceFinder = new ReferenceFinderService(_workspace);
-        _workflowAnalyzer = new WorkflowAnalyzerService();
-        _configAnalyzer = new ConfigAnalyzerService();
+        _workflowAnalyzer = new MCPsharp.Services.Phase2.WorkflowAnalyzerService();
+        _configAnalyzer = new ConfigAnalyzerService(NullLogger<ConfigAnalyzerService>.Instance);
         _impactAnalyzer = new ImpactAnalyzerService(_workspace, _referenceFinder, _configAnalyzer, _workflowAnalyzer);
     }
 

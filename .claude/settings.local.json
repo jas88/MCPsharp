@@ -49,7 +49,11 @@
       "mcp__code-index__set_project_path",
       "Bash(cut:*)",
       "mcp__MCPsharp__bulk_replace",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "mcp__MCPsharp__file_write",
+      "mcp__MCPsharp__file_edit",
+      "Bash(tee:*)",
+      "Bash(dotnet publish:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

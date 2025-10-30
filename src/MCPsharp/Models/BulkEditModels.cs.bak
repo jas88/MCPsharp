@@ -1,0 +1,1116 @@
+namespace MCPsharp.Models;
+
+/// <summary>
+/// Request for bulk edit operations across multiple files
+/// </summary>
+public class BulkEditRequest
+{
+    /// <summary>
+    /// Operation type to perform
+    /// </summary>
+    public required BulkEditOperationType OperationType { get; init; }
+
+    /// <summary>
+    /// Files to include in the bulk edit (glob patterns or absolute paths)
+    /// </summary>
+    public required IReadOnlyList<string> Files { get; init; }
+
+    /// <summary>
+    /// Files to exclude from the bulk edit (glob patterns or absolute paths)
+    /// </summary>
+    public IReadOnlyList<string>? ExcludedFiles { get; init; }
+
+    /// <summary>
+    /// Search pattern (for regex/replace operations)
+    /// </summary>
+    public string? SearchPattern { get; init; }
+
+    /// <summary>
+    /// Replacement text (for replace operations)
+    /// </summary>
+    public string? ReplacementText { get; init; }
+
+    /// <summary>
+    /// Regular expression pattern for advanced search/replace
+    /// </summary>
+    public string? RegexPattern { get; init; }
+
+    /// <summary>
+    /// Regex replacement pattern
+    /// </summary>
+    public string? RegexReplacement { get; init; }
+
+    /// <summary>
+    /// Condition for conditional edits
+    /// </summary>
+    public BulkEditCondition? Condition { get; init; }
+
+    /// <summary>
+    /// Refactoring pattern for structured code changes
+    /// </summary>
+    public BulkRefactorPattern? RefactorPattern { get; init; }
+
+    /// <summary>
+    /// Multiple edit operations for coordinated multi-file edits
+    /// </summary>
+    public IReadOnlyList<MultiFileEditOperation>? MultiFileEdits { get; init; }
+
+    /// <summary>
+    /// Options for the bulk edit operation
+    /// </summary>
+    public BulkEditOptions Options { get; init; } = new BulkEditOptions();
+}
+
+/// <summary>
+/// Types of bulk edit operations
+/// </summary>
+public enum BulkEditOperationType
+{
+    /// <summary>
+    /// Replace text using regex patterns
+    /// </summary>
+    BulkReplace,
+
+    /// <summary>
+    /// Edit files based on content conditions
+    /// </summary>
+    ConditionalEdit,
+
+    /// <summary>
+    /// Pattern-based code refactoring
+    /// </summary>
+    BatchRefactor,
+
+    /// <summary>
+    /// Coordinated edits across multiple files
+    /// </summary>
+    MultiFileEdit,
+
+    /// <summary>
+    /// Preview changes without applying them
+    /// </summary>
+    PreviewChanges,
+
+    /// <summary>
+    /// Rollback a previous bulk edit operation
+    /// </summary>
+    RollbackOperation
+}
+
+/// <summary>
+/// Condition for conditional edits
+/// </summary>
+public class BulkEditCondition
+{
+    /// <summary>
+    /// Type of condition to check
+    /// </summary>
+    public required BulkConditionType ConditionType { get; init; }
+
+    /// <summary>
+    /// Pattern to match against
+    /// </summary>
+    public required string Pattern { get; init; }
+
+    /// <summary>
+    /// Whether the condition should be inverted
+    /// </summary>
+    public bool Negate { get; init; }
+
+    /// <summary>
+    /// Additional parameters for the condition
+    /// </summary>
+    public Dictionary<string, object>? Parameters { get; init; }
+}
+
+/// <summary>
+/// Types of conditions for conditional edits
+/// </summary>
+public enum BulkConditionType
+{
+    /// <summary>
+    /// File contains specific text
+    /// </summary>
+    FileContains,
+
+    /// <summary>
+    /// File matches regex pattern
+    /// </summary>
+    FileMatches,
+
+    /// <summary>
+    /// File size is within range
+    /// </summary>
+    FileSize,
+
+    /// <summary>
+    /// File was modified after specific date
+    /// </summary>
+    FileModifiedAfter,
+
+    /// <summary>
+    /// File has specific extension
+    /// </summary>
+    FileExtension,
+
+    /// <summary>
+    /// File is in specific directory
+    /// </summary>
+    FileInDirectory,
+
+    /// <summary>
+    /// Custom condition logic
+    /// </summary>
+    Custom
+}
+
+/// <summary>
+/// Pattern for batch refactoring operations
+/// </summary>
+public class BulkRefactorPattern
+{
+    /// <summary>
+    /// Type of refactoring to perform
+    /// </summary>
+    public required BulkRefactorType RefactorType { get; init; }
+
+    /// <summary>
+    /// Target pattern to match
+    /// </summary>
+    public required string TargetPattern { get; init; }
+
+    /// <summary>
+    /// Replacement pattern
+    /// </summary>
+    public required string ReplacementPattern { get; init; }
+
+    /// <summary>
+    /// Additional refactoring parameters
+    /// </summary>
+    public Dictionary<string, object>? Parameters { get; init; }
+}
+
+/// <summary>
+/// Types of batch refactoring operations
+/// </summary>
+public enum BulkRefactorType
+{
+    /// <summary>
+    /// Rename a symbol across all files
+    /// </summary>
+    RenameSymbol,
+
+    /// <summary>
+    /// Change method signature
+    /// </summary>
+    ChangeMethodSignature,
+
+    /// <summary>
+    /// Extract code to method
+    /// </summary>
+    ExtractMethod,
+
+    /// <summary>
+    /// Inline method
+    /// </summary>
+    InlineMethod,
+
+    /// <summary>
+    /// Move namespace
+    /// </summary>
+    MoveNamespace,
+
+    /// <summary>
+    /// Add using statements
+    /// </summary>
+    AddUsing,
+
+    /// <summary>
+    /// Remove unused using statements
+    /// </summary>
+    RemoveUnusedUsings,
+
+    /// <summary>
+    /// Format code according to style rules
+    /// </summary>
+    FormatCode,
+
+    /// <summary>
+    /// Apply code fix pattern
+    /// </summary>
+    ApplyCodeFix
+}
+
+/// <summary>
+/// Multi-file edit operation for coordinated changes
+/// </summary>
+public class MultiFileEditOperation
+{
+    /// <summary>
+    /// File pattern this operation applies to
+    /// </summary>
+    public required string FilePattern { get; init; }
+
+    /// <summary>
+    /// List of edits to apply to matching files
+    /// </summary>
+    public required IReadOnlyList<TextEdit> Edits { get; init; }
+
+    /// <summary>
+    /// Order priority for this operation (lower = earlier)
+    /// </summary>
+    public int Priority { get; init; } = 0;
+
+    /// <summary>
+    /// Whether this operation depends on other operations completing first
+    /// </summary>
+    public IReadOnlyList<string>? DependsOn { get; init; }
+}
+
+/// <summary>
+/// Options for bulk edit operations
+/// </summary>
+public class BulkEditOptions
+{
+    /// <summary>
+    /// Maximum number of files to process in parallel
+    /// </summary>
+    public int MaxParallelism { get; init; } = Environment.ProcessorCount;
+
+    /// <summary>
+    /// Whether to create backups before editing
+    /// </summary>
+    public bool CreateBackups { get; init; } = true;
+
+    /// <summary>
+    /// Directory to store backups in
+    /// </summary>
+    public string? BackupDirectory { get; init; }
+
+    /// <summary>
+    /// Whether to run in preview mode (don't apply changes)
+    /// </summary>
+    public bool PreviewMode { get; init; } = false;
+
+    /// <summary>
+    /// Whether to validate changes before applying
+    /// </summary>
+    public bool ValidateChanges { get; init; } = true;
+
+    /// <summary>
+    /// Maximum file size to process (in bytes)
+    /// </summary>
+    public long MaxFileSize { get; init; } = 10 * 1024 * 1024; // 10MB
+
+    /// <summary>
+    /// Whether to include hidden files
+    /// </summary>
+    public bool IncludeHiddenFiles { get; init; } = false;
+
+    /// <summary>
+    /// Whether to stop on first error
+    /// </summary>
+    public bool StopOnFirstError { get; init; } = false;
+
+    /// <summary>
+    /// Timeout for individual file operations (in seconds)
+    /// </summary>
+    public int FileOperationTimeout { get; init; } = 30;
+
+    /// <summary>
+    /// Regular expression options for regex operations
+    /// </summary>
+    public System.Text.RegularExpressions.RegexOptions RegexOptions { get; init; } =
+        System.Text.RegularExpressions.RegexOptions.Multiline |
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant;
+
+    /// <summary>
+    /// Whether to preserve file timestamps
+    /// </summary>
+    public bool PreserveTimestamps { get; init; } = false;
+
+    /// <summary>
+    /// Custom progress reporter callback
+    /// </summary>
+    public Action<BulkEditProgress>? ProgressReporter { get; init; }
+
+    /// <summary>
+    /// Cancellation token for the operation
+    /// </summary>
+    public CancellationToken CancellationToken { get; init; } = CancellationToken.None;
+
+    /// <summary>
+    /// Files to exclude from the operation
+    /// </summary>
+    public List<string> ExcludedFiles { get; init; } = new();
+}
+
+/// <summary>
+/// Result of a bulk edit operation
+/// </summary>
+public class BulkEditResult
+{
+    /// <summary>
+    /// Whether the operation was successful
+    /// </summary>
+    public required bool Success { get; init; }
+
+    /// <summary>
+    /// Total number of files processed
+    /// </summary>
+    public required int TotalFiles { get; init; }
+
+    /// <summary>
+    /// Number of files successfully modified
+    /// </summary>
+    public required int ModifiedFiles { get; init; }
+
+    /// <summary>
+    /// Number of files skipped
+    /// </summary>
+    public required int SkippedFiles { get; init; }
+
+    /// <summary>
+    /// Number of files that failed to process
+    /// </summary>
+    public required int FailedFiles { get; init; }
+
+    /// <summary>
+    /// List of individual file results
+    /// </summary>
+    public required IReadOnlyList<BulkFileEditResult> FileResults { get; init; }
+
+    /// <summary>
+    /// List of errors that occurred during processing
+    /// </summary>
+    public required IReadOnlyList<BulkEditError> Errors { get; init; }
+
+    /// <summary>
+    /// Total time taken for the operation
+    /// </summary>
+    public required TimeSpan ElapsedTime { get; init; }
+
+    /// <summary>
+    /// Session ID for rollback purposes
+    /// </summary>
+    public string? RollbackSessionId { get; init; }
+
+    /// <summary>
+    /// Summary message
+    /// </summary>
+    public string? Summary { get; init; }
+}
+
+/// <summary>
+/// Result for a single file edit operation
+/// </summary>
+public class BulkFileEditResult
+{
+    /// <summary>
+    /// Path to the file that was processed
+    /// </summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>
+    /// Whether the file was successfully modified
+    /// </summary>
+    public required bool Success { get; init; }
+
+    /// <summary>
+    /// Number of changes made to the file
+    /// </summary>
+    public required int ChangeCount { get; init; }
+
+    /// <summary>
+    /// Error message if processing failed
+    /// </summary>
+    public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// Backup file path if backup was created
+    /// </summary>
+    public string? BackupPath { get; init; }
+
+    /// <summary>
+    /// Time taken to process this file
+    /// </summary>
+    public required TimeSpan ProcessingTime { get; init; }
+}
+
+/// <summary>
+/// Error that occurred during bulk edit operation
+/// </summary>
+public class BulkEditError
+{
+    /// <summary>
+    /// File path where the error occurred
+    /// </summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>
+    /// Error message
+    /// </summary>
+    public required string ErrorMessage { get; init; }
+
+    /// <summary>
+    /// Exception details if available
+    /// </summary>
+    public string? ExceptionDetails { get; init; }
+
+    /// <summary>
+    /// Error severity
+    /// </summary>
+    public ValidationSeverity Severity { get; init; } = ValidationSeverity.Error;
+
+    /// <summary>
+    /// Timestamp when the error occurred
+    /// </summary>
+    public required DateTime Timestamp { get; init; }
+}
+
+/// <summary>
+/// Preview of bulk edit changes without applying them
+/// </summary>
+public class BulkEditPreview
+{
+    /// <summary>
+    /// List of files that would be modified
+    /// </summary>
+    public required IReadOnlyList<FileChangePreview> FileChanges { get; init; }
+
+    /// <summary>
+    /// Total number of files that would be affected
+    /// </summary>
+    public required int TotalFiles { get; init; }
+
+    /// <summary>
+    /// Total number of changes across all files
+    /// </summary>
+    public required int TotalChanges { get; init; }
+
+    /// <summary>
+    /// Estimated impact and risk assessment
+    /// </summary>
+    public required ImpactAssessment Impact { get; init; }
+
+    /// <summary>
+    /// Validation issues found during preview
+    /// </summary>
+    public required IReadOnlyList<ValidationIssue> ValidationIssues { get; init; }
+
+    /// <summary>
+    /// Summary of the preview
+    /// </summary>
+    public string? Summary { get; init; }
+}
+
+/// <summary>
+/// Preview of changes for a single file
+/// </summary>
+public class FileChangePreview
+{
+    /// <summary>
+    /// Path to the file
+    /// </summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>
+    /// List of changes that would be made
+    /// </summary>
+    public required IReadOnlyList<FileChange> Changes { get; init; }
+
+    /// <summary>
+    /// Number of changes
+    /// </summary>
+    public required int ChangeCount { get; init; }
+
+    /// <summary>
+    /// Risk level for this file
+    /// </summary>
+    public ValidationSeverity RiskLevel { get; init; } = ValidationSeverity.Warning;
+
+    /// <summary>
+    /// Whether the file would be backed up before changes
+    /// </summary>
+    public required bool WillCreateBackup { get; init; }
+}
+
+/// <summary>
+/// Impact assessment for bulk changes
+/// </summary>
+public class ImpactAssessment
+{
+    /// <summary>
+    /// Overall risk level
+    /// </summary>
+    public ValidationSeverity OverallRisk { get; init; } = ValidationSeverity.Warning;
+
+    /// <summary>
+    /// Number of critical files that would be modified
+    /// </summary>
+    public required int CriticalFilesCount { get; init; }
+
+    /// <summary>
+    /// List of potentially risky changes
+    /// </summary>
+    public required IReadOnlyList<string> RiskFactors { get; init; }
+
+    /// <summary>
+    /// Estimated time to apply changes
+    /// </summary>
+    public required TimeSpan EstimatedDuration { get; init; }
+
+    /// <summary>
+    /// Recommendations before applying changes
+    /// </summary>
+    public required IReadOnlyList<string> Recommendations { get; init; }
+}
+
+/// <summary>
+/// Session for tracking rollback information
+/// </summary>
+public class RollbackSession
+{
+    /// <summary>
+    /// Unique identifier for the rollback session
+    /// </summary>
+    public required string SessionId { get; init; }
+
+    /// <summary>
+    /// Original operation type that created this session
+    /// </summary>
+    public required BulkEditOperationType OperationType { get; init; }
+
+    /// <summary>
+    /// When the session was created
+    /// </summary>
+    public required DateTime CreatedAt { get; init; }
+
+    /// <summary>
+    /// When the session expires
+    /// </summary>
+    public required DateTime ExpiresAt { get; init; }
+
+    /// <summary>
+    /// List of files that were modified in the original operation
+    /// </summary>
+    public required IReadOnlyList<RollbackFileInfo> ModifiedFiles { get; init; }
+
+    /// <summary>
+    /// Directory where backups are stored
+    /// </summary>
+    public required string BackupDirectory { get; init; }
+
+    /// <summary>
+    /// Whether the session is still active
+    /// </summary>
+    public required bool IsActive { get; init; }
+
+    /// <summary>
+    /// Description of the original operation
+    /// </summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Metadata about the original operation
+    /// </summary>
+    public Dictionary<string, object>? Metadata { get; init; }
+}
+
+/// <summary>
+/// Information about a file that can be rolled back
+/// </summary>
+public class RollbackFileInfo
+{
+    /// <summary>
+    /// Path to the original file
+    /// </summary>
+    public required string OriginalPath { get; init; }
+
+    /// <summary>
+    /// Path to the backup file
+    /// </summary>
+    public required string BackupPath { get; init; }
+
+    /// <summary>
+    /// Whether the file was newly created (should be deleted on rollback)
+    /// </summary>
+    public required bool WasCreated { get; init; }
+
+    /// <summary>
+    /// Whether the file was deleted (should be restored on rollback)
+    /// </summary>
+    public required bool WasDeleted { get; init; }
+
+    /// <summary>
+    /// Checksum of the original file for integrity verification
+    /// </summary>
+    public string? OriginalChecksum { get; init; }
+
+    /// <summary>
+    /// Checksum of the backup file for integrity verification
+    /// </summary>
+    public string? BackupChecksum { get; init; }
+}
+
+/// <summary>
+/// Result of a rollback operation
+/// </summary>
+public class RollbackResult
+{
+    /// <summary>
+    /// Whether the rollback was successful
+    /// </summary>
+    public required bool Success { get; init; }
+
+    /// <summary>
+    /// Session ID that was rolled back
+    /// </summary>
+    public required string SessionId { get; init; }
+
+    /// <summary>
+    /// Total number of files that needed to be rolled back
+    /// </summary>
+    public required int TotalFiles { get; init; }
+
+    /// <summary>
+    /// Number of files successfully rolled back
+    /// </summary>
+    public required int SuccessfulRollbacks { get; init; }
+
+    /// <summary>
+    /// Number of files that failed to rollback
+    /// </summary>
+    public required int FailedRollbacks { get; init; }
+
+    /// <summary>
+    /// List of individual file rollback results
+    /// </summary>
+    public required IReadOnlyList<FileRollbackResult> FileResults { get; init; }
+
+    /// <summary>
+    /// List of errors that occurred during rollback
+    /// </summary>
+    public required IReadOnlyList<RollbackError> Errors { get; init; }
+
+    /// <summary>
+    /// Time taken for the rollback operation
+    /// </summary>
+    public required TimeSpan ElapsedTime { get; init; }
+
+    /// <summary>
+    /// Whether backup files were cleaned up after successful rollback
+    /// </summary>
+    public required bool CleanupCompleted { get; init; }
+
+    /// <summary>
+    /// Summary message
+    /// </summary>
+    public string? Summary { get; init; }
+}
+
+/// <summary>
+/// Result of rolling back a single file
+/// </summary>
+public class FileRollbackResult
+{
+    /// <summary>
+    /// Path to the file
+    /// </summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>
+    /// Whether the rollback was successful
+    /// </summary>
+    public required bool Success { get; init; }
+
+    /// <summary>
+    /// Type of rollback operation performed
+    /// </summary>
+    public required RollbackOperationType OperationType { get; init; }
+
+    /// <summary>
+    /// Error message if rollback failed
+    /// </summary>
+    public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// Time taken for this file rollback
+    /// </summary>
+    public required TimeSpan ProcessingTime { get; init; }
+}
+
+/// <summary>
+/// Type of rollback operation performed
+/// </summary>
+public enum RollbackOperationType
+{
+    /// <summary>
+    /// Restored file from backup
+    /// </summary>
+    RestoredFromBackup,
+
+    /// <summary>
+    /// Deleted newly created file
+    /// </summary>
+    DeletedNewFile,
+
+    /// <summary>
+    /// Restored previously deleted file
+    /// </summary>
+    RestoredDeletedFile,
+
+    /// <summary>
+    /// No action needed (file was unchanged)
+    /// </summary>
+    NoAction
+}
+
+/// <summary>
+/// Error that occurred during rollback
+/// </summary>
+public class RollbackError
+{
+    /// <summary>
+    /// File path where the error occurred
+    /// </summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>
+    /// Error message
+    /// </summary>
+    public required string ErrorMessage { get; init; }
+
+    /// <summary>
+    /// Exception details if available
+    /// </summary>
+    public string? ExceptionDetails { get; init; }
+
+    /// <summary>
+    /// Whether the error is recoverable
+    /// </summary>
+    public required bool IsRecoverable { get; init; }
+
+    /// <summary>
+    /// Timestamp when the error occurred
+    /// </summary>
+    public required DateTime Timestamp { get; init; }
+}
+
+/// <summary>
+/// Progress information for bulk edit operations
+/// </summary>
+public class BulkEditProgress
+{
+    /// <summary>
+    /// Current operation being performed
+    /// </summary>
+    public required string CurrentOperation { get; init; }
+
+    /// <summary>
+    /// Number of files processed so far
+    /// </summary>
+    public required int ProcessedFiles { get; init; }
+
+    /// <summary>
+    /// Total number of files to process
+    /// </summary>
+    public required int TotalFiles { get; init; }
+
+    /// <summary>
+    /// Percentage complete (0-100)
+    /// </summary>
+    public required int PercentageComplete { get; init; }
+
+    /// <summary>
+    /// Time elapsed so far
+    /// </summary>
+    public required TimeSpan ElapsedTime { get; init; }
+
+    /// <summary>
+    /// Estimated remaining time
+    /// </summary>
+    public required TimeSpan? EstimatedRemainingTime { get; init; }
+
+    /// <summary>
+    /// Current file being processed
+    /// </summary>
+    public string? CurrentFile { get; init; }
+
+    /// <summary>
+    /// Additional status information
+    /// </summary>
+    public string? Status { get; init; }
+}
+
+/// <summary>
+/// Result of previewing bulk changes before applying them
+/// </summary>
+public class PreviewResult
+{
+    /// <summary>
+    /// Unique identifier for this preview session
+    /// </summary>
+    public required string PreviewId { get; init; } = Guid.NewGuid().ToString();
+
+    /// <summary>
+    /// Files that would be modified
+    /// </summary>
+    public required IReadOnlyList<FileChangePreview> FileChanges { get; init; } = new List<FileChangePreview>();
+
+    /// <summary>
+    /// Total number of changes across all files
+    /// </summary>
+    public required int TotalChanges { get; init; }
+
+    /// <summary>
+    /// Estimated risk level of applying these changes
+    /// </summary>
+    public required RiskLevel RiskLevel { get; init; }
+
+    /// <summary>
+    /// Estimated time to apply changes
+    /// </summary>
+    public required TimeSpan EstimatedDuration { get; init; }
+
+    /// <summary>
+    /// Warnings about potential issues
+    /// </summary>
+    public required IReadOnlyList<string> Warnings { get; init; } = new List<string>();
+
+    /// <summary>
+    /// When the preview was generated
+    /// </summary>
+    public required DateTime GeneratedAt { get; init; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Preview of changes for a single file
+/// </summary>
+public class FileChangePreview
+{
+    /// <summary>
+    /// Path to the file
+    /// </summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>
+    /// Number of changes in this file
+    /// </summary>
+    public required int ChangeCount { get; init; }
+
+    /// <summary>
+    /// Type of changes being made
+    /// </summary>
+    public required ChangeType ChangeType { get; init; }
+
+    /// <summary>
+    /// Sample of the changes (first few)
+    /// </summary>
+    public required IReadOnlyList<string> ChangeSamples { get; init; } = new List<string>();
+
+    /// <summary>
+    /// Size of the file in bytes
+    /// </summary>
+    public required long FileSize { get; init; }
+
+    /// <summary>
+    /// Whether the file is under source control
+    /// </summary>
+    public required bool IsUnderSourceControl { get; init; }
+}
+
+/// <summary>
+/// Information about a rollback session
+/// </summary>
+public class RollbackInfo
+{
+    /// <summary>
+    /// Unique identifier for the rollback session
+    /// </summary>
+    public required string RollbackId { get; init; } = Guid.NewGuid().ToString();
+
+    /// <summary>
+    /// Original operation that can be rolled back
+    /// </summary>
+    public required string OriginalOperationId { get; init; }
+
+    /// <summary>
+    /// Type of operation that was performed
+    /// </summary>
+    public required string OperationType { get; init; }
+
+    /// <summary>
+    /// Files that were modified
+    /// </summary>
+    public required IReadOnlyList<string> ModifiedFiles { get; init; } = new List<string>();
+
+    /// <summary>
+    /// Backup locations for each file
+    /// </summary>
+    public required IReadOnlyDictionary<string, string> BackupLocations { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>
+    /// When the original operation was performed
+    /// </summary>
+    public required DateTime OperationTimestamp { get; init; }
+
+    /// <summary>
+    /// When this rollback expires (if applicable)
+    /// </summary>
+    public required DateTime? ExpiresAt { get; init; }
+
+    /// <summary>
+    /// Size of all backups combined
+    /// </summary>
+    public required long TotalBackupSize { get; init; }
+
+    /// <summary>
+    /// Whether rollback is still possible
+    /// </summary>
+    public required bool IsRollbackPossible { get; init; }
+}
+
+/// <summary>
+/// Estimate of the impact and complexity of a bulk operation
+/// </summary>
+public class ImpactEstimate
+{
+    /// <summary>
+    /// Overall complexity level
+    /// </summary>
+    public required ComplexityLevel ComplexityLevel { get; init; }
+
+    /// <summary>
+    /// Estimated number of files to be modified
+    /// </summary>
+    public required int EstimatedFilesAffected { get; init; }
+
+    /// <summary>
+    /// Estimated number of total changes
+    /// </summary>
+    public required int EstimatedTotalChanges { get; init; }
+
+    /// <summary>
+    /// Estimated time to complete the operation
+    /// </summary>
+    public required TimeSpan EstimatedDuration { get; init; }
+
+    /// <summary>
+    /// Risk assessment
+    /// </summary>
+    public required RiskLevel RiskLevel { get; init; }
+
+    /// <summary>
+    /// Files that might be affected but are uncertain
+    /// </summary>
+    public required IReadOnlyList<string> UncertainFiles { get; init; } = new List<string>();
+
+    /// <summary>
+    /// Potential breaking changes
+    /// </summary>
+    public required IReadOnlyList<string> BreakingChanges { get; init; } = new List<string>();
+
+    /// <summary>
+    /// Dependencies that might be affected
+    /// </summary>
+    public required IReadOnlyList<string> AffectedDependencies { get; init; } = new List<string>();
+
+    /// <summary>
+    /// Recommendations for safe execution
+    /// </summary>
+    public required IReadOnlyList<string> Recommendations { get; init; } = new List<string>();
+
+    /// <summary>
+    /// Confidence level in the estimate
+    /// </summary>
+    public required double ConfidenceLevel { get; init; }
+}
+
+/// <summary>
+/// Type of change being made to a file
+/// </summary>
+public enum ChangeType
+{
+    /// <summary>
+    /// Text replacement
+    /// </summary>
+    Replacement,
+
+    /// <summary>
+    /// Insertion of new content
+    /// </summary>
+    Insertion,
+
+    /// <summary>
+    /// Deletion of content
+    /// </summary>
+    Deletion,
+
+    /// <summary>
+    /// Structural refactoring
+    /// </summary>
+    Refactoring,
+
+    /// <summary>
+    /// Formatting changes only
+    /// </summary>
+    Formatting,
+
+    /// <summary>
+    /// Multiple types of changes
+    /// </summary>
+    Mixed
+}
+
+/// <summary>
+/// Complexity levels for operations
+/// </summary>
+public enum ComplexityLevel
+{
+    /// <summary>
+    /// Simple, low-risk operation
+    /// </summary>
+    Simple,
+
+    /// <summary>
+    /// Moderate complexity
+    /// </summary>
+    Moderate,
+
+    /// <summary>
+    /// Complex operation requiring care
+    /// </summary>
+    Complex,
+
+    /// <summary>
+    /// Very complex, high-risk operation
+    /// </summary>
+    VeryComplex
+}
+
+/// <summary>
+/// Risk levels for operations
+/// </summary>
+public enum RiskLevel
+{
+    /// <summary>
+    /// Very low risk
+    /// </summary>
+    Low,
+
+    /// <summary>
+    /// Moderate risk
+    /// </summary>
+    Medium,
+
+    /// <summary>
+    /// High risk operation
+    /// </summary>
+    High,
+
+    /// <summary>
+    /// Very high risk, potentially breaking
+    /// </summary>
+    Critical
+}

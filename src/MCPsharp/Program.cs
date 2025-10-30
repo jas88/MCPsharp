@@ -39,7 +39,9 @@ class Program
             var roslynWorkspace = new RoslynWorkspace();
 
             // Phase 2 services that can be instantiated immediately
-            var configAnalyzer = new MCPsharp.Services.Phase2.ConfigAnalyzerService();
+            var configAnalyzer = new MCPsharp.Services.ConfigAnalyzerService(
+              loggerFactory?.CreateLogger<MCPsharp.Services.ConfigAnalyzerService>() ??
+              Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.ConfigAnalyzerService>.Instance);
             var workflowAnalyzer = new MCPsharp.Services.Phase2.WorkflowAnalyzerService();
 
             // Supporting services

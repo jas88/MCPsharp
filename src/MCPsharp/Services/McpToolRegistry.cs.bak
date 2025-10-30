@@ -2928,6 +2928,72 @@ public partial class McpToolRegistry
         }
     }
 
+    private async Task<ToolCallResult> ExecuteGetConfigSchema(JsonDocument arguments)
+    {
+        if (_configAnalyzer == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "This tool requires Phase 2 features. ConfigAnalyzerService is not available."
+            };
+        }
+
+        var configPath = arguments.RootElement.GetProperty("configPath").GetString();
+        if (string.IsNullOrEmpty(configPath))
+        {
+            return new ToolCallResult { Success = false, Error = "ConfigPath is required" };
+        }
+
+        try
+        {
+            var schema = await _configAnalyzer.GetConfigSchemaAsync(configPath);
+            return new ToolCallResult { Success = true, Result = schema };
+        }
+        catch (NotImplementedException ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteMergeConfigs(JsonDocument arguments)
+    {
+        if (_configAnalyzer == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "This tool requires Phase 2 features. ConfigAnalyzerService is not available."
+            };
+        }
+
+        var configPathsElement = arguments.RootElement.GetProperty("configPaths");
+        var configPaths = new List<string>();
+
+        foreach (var pathElement in configPathsElement.EnumerateArray())
+        {
+            var path = pathElement.GetString();
+            if (!string.IsNullOrEmpty(path))
+            {
+                configPaths.Add(path);
+            }
+        }
+
+        if (configPaths.Count == 0)
+        {
+            return new ToolCallResult { Success = false, Error = "At least one config path is required" };
+        }
+
+        try
+        {
+            var mergedConfig = await _configAnalyzer.MergeConfigsAsync(configPaths.ToArray());
+            return new ToolCallResult { Success = true, Result = mergedConfig };
+        }
+        catch (NotImplementedException ex)
+        {
+            return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
 
     private async Task<ToolCallResult> ExecuteAnalyzeImpact(JsonDocument arguments)
     {

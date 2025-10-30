@@ -98,7 +98,7 @@ public class McpToolsIntegrationTests : IntegrationTestBase
             // Assert
             Assert.That(editResult, Is.Not.Null);
             Assert.That(editResult.Success, Is.True);
-            Assert.That(editResult.Summary.TotalChangesApplied, Is.GreaterThan(0));
+            Assert.That(editResult.SummaryData?.TotalChangesApplied, Is.GreaterThan(0));
 
             // Step 6: Verify the changes by searching for the new method name
             var updatedUsages = await _referenceFinder.FindCallersAsync("ProcessDataEnhanced", containingType);
@@ -249,8 +249,8 @@ public class McpToolsIntegrationTests : IntegrationTestBase
         // Assert edits
         Assert.That(editResult, Is.Not.Null);
         Assert.That(editResult.Success, Is.True);
-        Assert.That(editResult.Summary.TotalFilesProcessed, Is.EqualTo(files.Length));
-        Assert.That(editResult.Summary.TotalChangesApplied, Is.EqualTo(3)); // One change per file
+        Assert.That(editResult.SummaryData?.TotalFilesProcessed, Is.EqualTo(files.Length));
+        Assert.That(editResult.SummaryData?.TotalChangesApplied, Is.EqualTo(3)); // One change per file
 
         // Step 6: Verify rollback functionality
         if (editResult.RollbackInfo != null)
@@ -299,10 +299,10 @@ public class McpToolsIntegrationTests : IntegrationTestBase
         Assert.That(result.Success, Is.True);
 
         // Should have processed 2 files (those containing TODO:)
-        Assert.That(result.FileResults.Count(f => f.ChangesApplied > 0), Is.EqualTo(2));
+        Assert.That(result.FileResults.Count(f => f.ChangeCount > 0), Is.EqualTo(2));
 
-        // Should have skipped 1 file (no TODO)
-        Assert.That(result.FileResults.Count(f => f.Skipped), Is.EqualTo(1));
+        // Should have skipped 1 file (no TODO) - using BulkFileEditResult structure
+        Assert.That(result.FileResults.Count(f => !f.Success && f.ChangeCount == 0), Is.EqualTo(1));
     }
 
     [Test]
@@ -408,8 +408,8 @@ public class McpToolsIntegrationTests : IntegrationTestBase
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Summary.TotalBytesProcessed, Is.EqualTo(largeContent.Length));
-        Assert.That(result.Summary.TotalChangesApplied, Is.GreaterThan(0));
+        Assert.That(result.SummaryData?.TotalBytesProcessed, Is.EqualTo(largeContent.Length));
+        Assert.That(result.SummaryData?.TotalChangesApplied, Is.GreaterThan(0));
 
         // Step 2: Test with file size limit exceeded
         var strictConfig = new BulkEditOptions
@@ -520,7 +520,7 @@ public class McpToolsIntegrationTests : IntegrationTestBase
 
         // Assert
         Assert.That(result1.Success, Is.EqualTo(result2.Success));
-        Assert.That(result1.Summary.TotalChangesApplied, Is.EqualTo(result2.Summary.TotalChangesApplied));
-        Assert.That(result1.Summary.TotalFilesProcessed, Is.EqualTo(result2.Summary.TotalFilesProcessed));
+        Assert.That(result1.SummaryData?.TotalChangesApplied, Is.EqualTo(result2.SummaryData?.TotalChangesApplied));
+        Assert.That(result1.SummaryData?.TotalFilesProcessed, Is.EqualTo(result2.SummaryData?.TotalFilesProcessed));
     }
 }
