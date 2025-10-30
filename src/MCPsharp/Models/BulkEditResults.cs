@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace MCPsharp.Models;
 
 /// <summary>
@@ -510,6 +512,11 @@ public enum RiskType
     /// Could affect API compatibility
     /// </summary>
     ApiCompatibility,
+
+    /// <summary>
+    /// Could cause file access issues
+    /// </summary>
+    FileAccessIssue,
 
     /// <summary>
     /// Other type of risk

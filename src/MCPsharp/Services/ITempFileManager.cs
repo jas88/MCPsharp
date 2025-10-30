@@ -17,6 +17,11 @@ public interface ITempFileManager
     Task<string> CreateTempFileAsync(string? prefix = null, string? extension = null, string? operationId = null);
 
     /// <summary>
+    /// Create a new temporary file (synchronous version)
+    /// </summary>
+    string CreateTempFile(string? prefix = null, string? extension = null, string? operationId = null);
+
+    /// <summary>
     /// Create a temporary directory
     /// </summary>
     Task<string> CreateTempDirectoryAsync(string? prefix = null, string? operationId = null);

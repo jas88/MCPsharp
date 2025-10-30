@@ -3,6 +3,7 @@ using System.Text.Json;
 using FluentAssertions;
 using MCPsharp.Services;
 using MCPsharp.Models;
+using Xunit;
 
 namespace MCPsharp.Tests.Integration;
 
@@ -199,9 +200,11 @@ public class McpServerIntegrationTests : IDisposable
         {
             new InsertEdit
             {
-                Line = 2,
-                Column = 4,
-                Text = "    // This is a helper class\n"
+                StartLine = 2,
+                StartColumn = 4,
+                EndLine = 2,
+                EndColumn = 4,
+                NewText = "    // This is a helper class\n"
             }
         };
 
@@ -320,9 +323,11 @@ public class McpServerIntegrationTests : IDisposable
         {
             new InsertEdit
             {
-                Line = 2,
-                Column = 28, // Position right before closing brace (length of "    public class Workflow { }")
-                Text = "\n        public void Execute() { }\n    "
+                StartLine = 2,
+                StartColumn = 28, // Position right before closing brace (length of "    public class Workflow { }")
+                EndLine = 2,
+                EndColumn = 28,
+                NewText = "\n        public void Execute() { }\n    "
             }
         };
         var editResult = await _fileService.EditFileAsync(fileName, edits);
@@ -384,11 +389,11 @@ public class McpServerIntegrationTests : IDisposable
         var edits = new List<TextEdit>
         {
             // Insert at beginning of Line 1
-            new InsertEdit { Line = 0, Column = 0, Text = "// Header\n" },
+            new InsertEdit { StartLine = 0, StartColumn = 0, EndLine = 0, EndColumn = 0, NewText = "// Header\n" },
             // Replace Line 3
             new ReplaceEdit { StartLine = 2, StartColumn = 0, EndLine = 2, EndColumn = 6, NewText = "Modified Line 3" },
             // Delete part of Line 5
-            new DeleteEdit { StartLine = 4, StartColumn = 0, EndLine = 4, EndColumn = 5 }
+            new DeleteEdit { StartLine = 4, StartColumn = 0, EndLine = 4, EndColumn = 5, NewText = "" }
         };
 
         var editResult = await _fileService.EditFileAsync(fileName, edits);

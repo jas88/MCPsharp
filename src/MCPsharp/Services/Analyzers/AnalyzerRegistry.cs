@@ -127,6 +127,14 @@ public class AnalyzerRegistry : IAnalyzerRegistry
         }
     }
 
+    public List<IAnalyzer> GetLoadedAnalyzers()
+    {
+        lock (_lock)
+        {
+            return _analyzers.Values.ToList();
+        }
+    }
+
     public IAnalyzer? GetAnalyzer(string analyzerId)
     {
         lock (_lock)

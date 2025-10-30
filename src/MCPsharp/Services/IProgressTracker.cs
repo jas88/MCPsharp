@@ -54,4 +54,9 @@ public interface IProgressTracker
     /// Clean up old progress trackers
     /// </summary>
     Task CleanupAsync(TimeSpan olderThan);
+
+    /// <summary>
+    /// Report progress for file processing operations
+    /// </summary>
+    void ReportProgress(FileProcessingProgress progress);
 }

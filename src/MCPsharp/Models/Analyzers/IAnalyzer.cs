@@ -48,6 +48,11 @@ public interface IAnalyzer
     AnalyzerConfiguration Configuration { get; set; }
 
     /// <summary>
+    /// Check if the analyzer can analyze the specified target path
+    /// </summary>
+    bool CanAnalyze(string targetPath);
+
+    /// <summary>
     /// Initialize the analyzer
     /// </summary>
     Task InitializeAsync(CancellationToken cancellationToken = default);
@@ -66,6 +71,11 @@ public interface IAnalyzer
     /// Get available fixes for a specific rule
     /// </summary>
     ImmutableArray<AnalyzerFix> GetFixes(string ruleId);
+
+    /// <summary>
+    /// Get capabilities of this analyzer
+    /// </summary>
+    AnalyzerCapabilities GetCapabilities();
 
     /// <summary>
     /// Cleanup resources

@@ -81,7 +81,7 @@ namespace TestProject.Models
 
         public override bool CanProcess(string data)
         {
-            return base.CanProcess(data) && data.Length > 0;
+            return base.CanProcess(data) && data.Count > 0;
         }
     }
 
@@ -164,7 +164,7 @@ namespace TestProject.Workflows
     /// <summary>
     /// Large file for testing performance with substantial code
     /// </summary>
-    public const string LargeFile = GenerateLargeFile();
+    public static readonly string LargeFile = GenerateLargeFile();
 
     private static string GenerateLargeFile()
     {

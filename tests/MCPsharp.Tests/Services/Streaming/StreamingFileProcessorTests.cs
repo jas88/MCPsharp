@@ -24,7 +24,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     private StreamingFileProcessor _processor = null!;
 
     [SetUp]
-    public override void Setup()
+    protected override void Setup()
     {
         base.Setup();
         _mockProgressTracker = Substitute.For<IProgressTracker>();
@@ -56,20 +56,22 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile("Small file content");
-        var config = new StreamingFileConfiguration
+        var config = new StreamProcessRequest
         {
-            MaxFileSize = 1024 * 1024, // 1MB
+            FilePath = testFile,
+            OutputPath = testFile + ".processed",
+            ProcessorType = StreamProcessorType.LineProcessor,
             ChunkSize = 1024
         };
 
         // Act
-        var result = await _processor.ProcessFileAsync(testFile, config);
+        var result = await _processor.ProcessFileAsync(config);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.FilePath, Is.EqualTo(testFile));
-        Assert.That(result.ProcessedSize, Is.GreaterThan(0));
+        Assert.That(result.OutputPath, Is.EqualTo(testFile));
+        Assert.That(result.BytesProcessed, Is.GreaterThan(0));
         Assert.That(result.ChunksProcessed, Is.GreaterThan(0));
         Assert.That(result.ProcessingTime, Is.GreaterThan(TimeSpan.Zero));
     }
@@ -80,20 +82,22 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         // Arrange
         var largeContent = TestDataFixtures.PerformanceTestData.GenerateLargeText(10000);
         var testFile = CreateTestFile(largeContent);
-        var config = new StreamingFileConfiguration
+        var config = new StreamProcessRequest
         {
-            MaxFileSize = 10 * 1024 * 1024, // 10MB
+            FilePath = testFile,
+            OutputPath = testFile + ".processed",
+            ProcessorType = StreamProcessorType.LineProcessor,
             ChunkSize = 1024 // 1KB chunks
         };
 
         // Act
-        var result = await _processor.ProcessFileAsync(testFile, config);
+        var result = await _processor.ProcessFileAsync(config);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.OriginalSize, Is.EqualTo(largeContent.Length));
-        Assert.That(result.ProcessedSize, Is.EqualTo(largeContent.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(largeContent.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(largeContent.Length));
         Assert.That(result.ChunksProcessed, Is.GreaterThan(10)); // Should have multiple chunks
         Assert.That(result.MemoryUsage, Is.LessThan(largeContent.Length)); // Should use less memory than file size
     }
@@ -103,13 +107,13 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile("Test content");
-        var config = new StreamingFileConfiguration
+        var config = new StreamProcessRequest
         {
-            MaxFileSize = 10 // Very small limit
+            FilePath = testFile // Very small limit
         };
 
         // Act
-        var result = await _processor.ProcessFileAsync(testFile, config);
+        var result = await _processor.ProcessFileAsync(config);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -122,10 +126,13 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var nonExistentFile = Path.Combine(TempDirectory, "nonexistent.txt");
-        var config = new StreamingFileConfiguration();
+        var config = new StreamProcessRequest
+        {
+            FilePath = nonExistentFile
+        };
 
         // Act
-        var result = await _processor.ProcessFileAsync(nonExistentFile, config);
+        var result = await _processor.ProcessFileAsync(config);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -138,14 +145,18 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile(TestDataFixtures.PerformanceTestData.GenerateLargeText(5000));
-        var config = new StreamingFileConfiguration { ChunkSize = 512 };
+        var config = new StreamProcessRequest
+        {
+            FilePath = testFile,
+            ChunkSize = 512
+        };
         var progressReports = new List<FileProcessingProgress>();
 
         _mockProgressTracker.When(x => x.ReportProgress(Arg.Any<FileProcessingProgress>()))
             .Do(x => progressReports.Add(x.Arg<FileProcessingProgress>()));
 
         // Act
-        var result = await _processor.ProcessFileAsync(testFile, config);
+        var result = await _processor.ProcessFileAsync(config);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -153,7 +164,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         Assert.That(progressReports.Count, Is.GreaterThan(1));
 
         // Verify progress was reported
-        await _mockProgressTracker.ReceivedWithAnyArgs().ReportProgress(null!);
+        _mockProgressTracker.ReceivedWithAnyArgs().ReportProgress(null!);
 
         // Verify progress reports are in order
         Assert.That(progressReports, Is.Ordered.By("ProgressPercentage").Ascending);
@@ -165,7 +176,11 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile(TestDataFixtures.PerformanceTestData.GenerateLargeText(10000));
-        var config = new StreamingFileConfiguration { ChunkSize = 512 };
+        var config = new StreamProcessRequest
+        {
+            FilePath = testFile,
+            ChunkSize = 512
+        };
         var cts = new CancellationTokenSource();
 
         // Cancel after a short delay
@@ -173,7 +188,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
 
         // Act & Assert
         Assert.ThrowsAsync<OperationCanceledException>(
-            async () => await _processor.ProcessFileAsync(testFile, config, cts.Token));
+            async () => await _processor.ProcessFileAsync(config));
     }
 
     [Test]
@@ -186,7 +201,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
             CreateTestFile("File 2 content"),
             CreateTestFile("File 3 content")
         };
-        var config = new StreamingFileConfiguration { MaxConcurrentFiles = 2 };
+        var config = new StreamProcessRequest { MaxConcurrentFiles = 2 };
 
         // Act
         var results = await _processor.ProcessMultipleFilesAsync(files, config);
@@ -208,7 +223,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
             "/non/existent/file.txt", // Invalid file
             CreateTestFile("Another valid content")
         };
-        var config = new StreamingFileConfiguration();
+        var config = new StreamProcessRequest();
 
         // Act
         var results = await _processor.ProcessMultipleFilesAsync(files, config);
@@ -227,7 +242,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         var files = Enumerable.Range(0, 10)
             .Select(i => CreateTestFile($"Content {i}"))
             .ToArray();
-        var config = new StreamingFileConfiguration { MaxConcurrentFiles = 3 };
+        var config = new StreamProcessRequest { MaxConcurrentFiles = 3 };
 
         // Act
         var startTime = DateTime.UtcNow;
@@ -247,7 +262,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile("original content\nmore content");
-        var config = new StreamingFileConfiguration();
+        var config = new StreamProcessRequest { FilePath = testFile };
         var transform = new Func<string, string>(content => content.ToUpper());
 
         // Act
@@ -256,7 +271,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.ProcessedSize, Is.EqualTo("ORIGINAL CONTENT\nMORE CONTENT".Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo("ORIGINAL CONTENT\nMORE CONTENT".Length));
     }
 
     [Test]
@@ -264,7 +279,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile("content");
-        var config = new StreamingFileConfiguration();
+        var config = new StreamProcessRequest { FilePath = testFile };
         var transform = new Func<string, string>(_ => throw new InvalidOperationException("Transform failed"));
 
         // Act
@@ -281,7 +296,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile("content with keyword");
-        var config = new StreamingFileConfiguration();
+        var config = new StreamProcessRequest { FilePath = testFile };
         var filter = new Func<string, bool>(content => content.Contains("keyword"));
 
         // Act
@@ -298,7 +313,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile("content without special word");
-        var config = new StreamingFileConfiguration();
+        var config = new StreamProcessRequest { FilePath = testFile };
         var filter = new Func<string, bool>(content => content.Contains("keyword"));
 
         // Act
@@ -320,7 +335,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
             CreateTestFile("Content 2"),
             CreateTestFile("Content 3")
         };
-        var config = new StreamingFileConfiguration();
+        var config = new StreamProcessRequest();
 
         // Process some files first
         await _processor.ProcessMultipleFilesAsync(files, config);
@@ -341,10 +356,10 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile("test content");
-        var config = new StreamingFileConfiguration();
+        var config = new StreamProcessRequest { FilePath = testFile };
 
         // Process a file first
-        await _processor.ProcessFileAsync(testFile, config);
+        await _processor.ProcessFileAsync(config);
 
         var statsBefore = await _processor.GetProcessingStatisticsAsync();
         Assert.That(statsBefore.TotalFilesProcessed, Is.GreaterThan(0));
@@ -363,8 +378,9 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile("test content");
-        var config = new StreamingFileConfiguration
+        var config = new StreamProcessRequest
         {
+            FilePath = testFile,
             RetryCount = 3,
             RetryDelay = TimeSpan.FromMilliseconds(10)
         };
@@ -382,7 +398,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
             });
 
         // Act
-        var result = await _processor.ProcessFileAsync(testFile, config);
+        var result = await _processor.ProcessFileAsync(config);
 
         // Assert - This test would need proper implementation of retry logic
         Assert.That(result, Is.Not.Null);
@@ -395,13 +411,14 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile(TestDataFixtures.PerformanceTestData.GenerateLargeText(10000));
-        var config = new StreamingFileConfiguration
+        var config = new StreamProcessRequest
         {
+            FilePath = testFile,
             ProcessingTimeout = TimeSpan.FromMilliseconds(100)
         };
 
         // Act
-        var result = await _processor.ProcessFileAsync(testFile, config);
+        var result = await _processor.ProcessFileAsync(config);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -420,16 +437,20 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         // Arrange
         var content = TestDataFixtures.PerformanceTestData.GenerateLargeText(5000);
         var testFile = CreateTestFile(content);
-        var config = new StreamingFileConfiguration { ChunkSize = chunkSize };
+        var config = new StreamProcessRequest
+        {
+            FilePath = testFile,
+            ChunkSize = chunkSize
+        };
 
         // Act
-        var result = await _processor.ProcessFileAsync(testFile, config);
+        var result = await _processor.ProcessFileAsync(config);
 
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.OriginalSize, Is.EqualTo(content.Length));
-        Assert.That(result.ProcessedSize, Is.EqualTo(content.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
         Assert.That(result.ChunksProcessed, Is.GreaterThan(0));
     }
 
@@ -438,16 +459,16 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile("");
-        var config = new StreamingFileConfiguration();
+        var config = new StreamProcessRequest { FilePath = testFile };
 
         // Act
-        var result = await _processor.ProcessFileAsync(testFile, config);
+        var result = await _processor.ProcessFileAsync(config);
 
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.OriginalSize, Is.EqualTo(0));
-        Assert.That(result.ProcessedSize, Is.EqualTo(0));
+        Assert.That(result.BytesProcessed, Is.EqualTo(0));
+        Assert.That(result.BytesProcessed, Is.EqualTo(0));
         Assert.That(result.ChunksProcessed, Is.EqualTo(0));
     }
 
@@ -457,16 +478,16 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         // Arrange
         var content = TestDataFixtures.EdgeCaseData.SpecialCharacters;
         var testFile = CreateTestFile(content);
-        var config = new StreamingFileConfiguration();
+        var config = new StreamProcessRequest { FilePath = testFile };
 
         // Act
-        var result = await _processor.ProcessFileAsync(testFile, config);
+        var result = await _processor.ProcessFileAsync(config);
 
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.OriginalSize, Is.EqualTo(content.Length));
-        Assert.That(result.ProcessedSize, Is.EqualTo(content.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
     }
 
     [Test]
@@ -479,8 +500,13 @@ public class StreamingFileProcessorTests : FileServiceTestBase
             Substitute.For<ITempFileManager>());
 
         // Act
-        await processor.ProcessFileAsync(CreateTestFile("test"), new StreamingFileConfiguration());
-        processor.Dispose();
+        var config = new StreamProcessRequest
+        {
+            FilePath = CreateTestFile("test"),
+            OutputPath = CreateTestFile("test") + ".processed",
+            ProcessorType = StreamProcessorType.LineProcessor
+        };
+        await processor.ProcessFileAsync(config);
 
         // Assert - Should not throw
         Assert.DoesNotThrow(() => processor.Dispose());
@@ -492,11 +518,11 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     {
         // Arrange
         var testFile = CreateTestFile("Consistent test content");
-        var config = new StreamingFileConfiguration();
+        var config = new StreamProcessRequest { FilePath = testFile };
 
         // Act
-        var result1 = await _processor.ProcessFileAsync(testFile, config);
-        var result2 = await _processor.ProcessFileAsync(testFile, config);
+        var result1 = await _processor.ProcessFileAsync(config);
+        var result2 = await _processor.ProcessFileAsync(config);
 
         // Assert
         Assert.That(result1.Success, Is.EqualTo(result2.Success));

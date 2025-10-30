@@ -369,7 +369,7 @@ public class FileOperationsService
         return edit switch
         {
             ReplaceEdit replace => (replace.StartLine, replace.StartColumn),
-            InsertEdit insert => (insert.Line, insert.Column),
+            InsertEdit insert => (insert.StartLine, insert.StartColumn),
             DeleteEdit delete => (delete.StartLine, delete.StartColumn),
             _ => throw new ArgumentException($"Unknown edit type: {edit.GetType().Name}")
         };

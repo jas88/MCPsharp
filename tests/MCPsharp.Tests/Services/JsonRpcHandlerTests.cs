@@ -3,6 +3,7 @@ using FluentAssertions;
 using MCPsharp.Models;
 using MCPsharp.Services;
 using MCPsharp.Services.Roslyn;
+using Xunit;
 
 namespace MCPsharp.Tests.Services;
 

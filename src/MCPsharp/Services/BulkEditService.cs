@@ -2118,11 +2118,11 @@ public class BulkEditService : IBulkEditService
             InsertEdit insert => new FileChange
             {
                 ChangeType = FileChangeType.Insert,
-                StartLine = insert.Line,
-                StartColumn = insert.Column,
-                EndLine = insert.Line,
-                EndColumn = insert.Column,
-                NewText = insert.Text
+                StartLine = insert.StartLine,
+                StartColumn = insert.StartColumn,
+                EndLine = insert.StartLine,
+                EndColumn = insert.StartColumn,
+                NewText = insert.NewText
             },
             DeleteEdit delete => new FileChange
             {

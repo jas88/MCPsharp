@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 
 namespace MCPsharp.Models.Analyzers;
 
@@ -12,7 +13,7 @@ public interface ISecurityManager
     /// <summary>
     /// Validate an analyzer assembly
     /// </summary>
-    Task<SecurityValidationResult> ValidateAssemblyAsync(string assemblyPath);
+    Task<SecurityValidationResult> ValidateAssemblyAsync(string assemblyPath, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Check if an operation is allowed

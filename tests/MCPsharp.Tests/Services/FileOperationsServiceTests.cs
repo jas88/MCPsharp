@@ -1,6 +1,7 @@
 using FluentAssertions;
 using MCPsharp.Models;
 using MCPsharp.Services;
+using Xunit;
 
 namespace MCPsharp.Tests.Services;
 
@@ -244,9 +245,11 @@ public class FileOperationsServiceTests : IDisposable
         {
             new InsertEdit
             {
-                Line = 0,
-                Column = 10,
-                Text = " // comment"
+                StartLine = 0,
+                StartColumn = 10,
+                EndLine = 0,
+                EndColumn = 10,
+                NewText = " // comment"
             }
         };
 
@@ -271,7 +274,8 @@ public class FileOperationsServiceTests : IDisposable
                 StartLine = 0,
                 StartColumn = 11,
                 EndLine = 0,
-                EndColumn = 25  // String length is 25
+                EndColumn = 25,  // String length is 25
+                NewText = ""
             }
         };
 
@@ -292,9 +296,9 @@ public class FileOperationsServiceTests : IDisposable
 
         var edits = new List<TextEdit>
         {
-            new InsertEdit { Line = 0, Column = 6, Text = " INSERTED" },
+            new InsertEdit { StartLine = 0, StartColumn = 6, EndLine = 0, EndColumn = 6, NewText = " INSERTED" },
             new ReplaceEdit { StartLine = 1, StartColumn = 0, EndLine = 1, EndColumn = 4, NewText = "Modified" },
-            new DeleteEdit { StartLine = 2, StartColumn = 5, EndLine = 2, EndColumn = 6 }
+            new DeleteEdit { StartLine = 2, StartColumn = 5, EndLine = 2, EndColumn = 6, NewText = "" }
         };
 
         // Act
@@ -339,7 +343,7 @@ public class FileOperationsServiceTests : IDisposable
         // Arrange
         var edits = new List<TextEdit>
         {
-            new InsertEdit { Line = 0, Column = 0, Text = "test" }
+            new InsertEdit { StartLine = 0, StartColumn = 0, EndLine = 0, EndColumn = 0, NewText = "test" }
         };
 
         // Act
@@ -356,7 +360,7 @@ public class FileOperationsServiceTests : IDisposable
         // Arrange
         var edits = new List<TextEdit>
         {
-            new InsertEdit { Line = 0, Column = 0, Text = "test" }
+            new InsertEdit { StartLine = 0, StartColumn = 0, EndLine = 0, EndColumn = 0, NewText = "test" }
         };
 
         // Act

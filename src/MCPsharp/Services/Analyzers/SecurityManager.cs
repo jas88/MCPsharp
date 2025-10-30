@@ -29,7 +29,7 @@ public class SecurityManager : ISecurityManager
         _securityLog = new List<SecurityEvent>();
     }
 
-    public async Task<SecurityValidationResult> ValidateAssemblyAsync(string assemblyPath)
+    public async Task<SecurityValidationResult> ValidateAssemblyAsync(string assemblyPath, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -45,13 +45,13 @@ public class SecurityManager : ISecurityManager
                 };
             }
 
-            var checksum = await ComputeChecksumAsync(assemblyPath);
-            var maliciousPatterns = await ScanForMaliciousPatternsAsync(assemblyPath);
+            var checksum = await ComputeChecksumAsync(assemblyPath, cancellationToken);
+            var maliciousPatterns = await ScanForMaliciousPatternsAsync(assemblyPath, cancellationToken);
 
             // Check signature
-            var signatureResult = await CheckSignatureAsync(assemblyPath);
+            var signatureResult = await CheckSignatureAsync(assemblyPath, cancellationToken);
             var isSigned = signatureResult.IsValid;
-            var isTrusted = isSigned && await IsSignerTrustedAsync(signatureResult.Signer);
+            var isTrusted = isSigned && await IsSignerTrustedAsync(signatureResult.Signer, cancellationToken);
 
             var result = new SecurityValidationResult
             {
@@ -268,13 +268,13 @@ public class SecurityManager : ISecurityManager
         }
     }
 
-    private async Task<string?> ComputeChecksumAsync(string filePath)
+    private async Task<string?> ComputeChecksumAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
         {
             using var sha256 = SHA256.Create();
             using var stream = File.OpenRead(filePath);
-            var hash = await sha256.ComputeHashAsync(stream);
+            var hash = await sha256.ComputeHashAsync(stream, cancellationToken);
             return Convert.ToBase64String(hash);
         }
         catch (Exception ex)
@@ -284,7 +284,7 @@ public class SecurityManager : ISecurityManager
         }
     }
 
-    private async Task<(bool IsValid, string? Signer)> CheckSignatureAsync(string assemblyPath)
+    private async Task<(bool IsValid, string? Signer)> CheckSignatureAsync(string assemblyPath, CancellationToken cancellationToken = default)
     {
         string? signer = null;
         try
@@ -303,7 +303,7 @@ public class SecurityManager : ISecurityManager
         return (false, signer);
     }
 
-    private async Task<bool> IsSignerTrustedAsync(string? signer)
+    private async Task<bool> IsSignerTrustedAsync(string? signer, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(signer))
             return false;
@@ -312,14 +312,14 @@ public class SecurityManager : ISecurityManager
             cert.Subject.Contains(signer, StringComparison.OrdinalIgnoreCase));
     }
 
-    private async Task<List<string>> ScanForMaliciousPatternsAsync(string assemblyPath)
+    private async Task<List<string>> ScanForMaliciousPatternsAsync(string assemblyPath, CancellationToken cancellationToken = default)
     {
         var patterns = new List<string>();
 
         try
         {
             // Read assembly bytes for pattern matching
-            var bytes = await File.ReadAllBytesAsync(assemblyPath);
+            var bytes = await File.ReadAllBytesAsync(assemblyPath, cancellationToken);
             var content = Encoding.UTF8.GetString(bytes);
 
             // Check for suspicious patterns

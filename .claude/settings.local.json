@@ -36,13 +36,25 @@
       "WebFetch(domain:spec.modelcontextprotocol.io)",
       "Bash(/tmp/test-mcp-sequence.sh)",
       "Bash(dotnet run:*)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "mcp__MCPsharp__project_open",
+      "mcp__MCPsharp__find_symbol",
+      "mcp__MCPsharp__get_class_structure",
+      "mcp__MCPsharp__find_implementations",
+      "mcp__MCPsharp__conditional_edit",
+      "mcp__MCPsharp__project_info",
+      "mcp__MCPsharp__file_read",
+      "mcp__MCPsharp__file_list",
+      "mcp__code-index__search_code_advanced",
+      "mcp__code-index__set_project_path",
+      "Bash(cut:*)",
+      "mcp__MCPsharp__bulk_replace"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "github",
     "playwright",
     "code-index"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }

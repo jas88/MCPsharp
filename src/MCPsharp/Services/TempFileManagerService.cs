@@ -58,6 +58,34 @@ public class TempFileManagerService : ITempFileManager, IDisposable
         return filePath;
     }
 
+    public string CreateTempFile(string? prefix = null, string? extension = null, string? operationId = null)
+    {
+        prefix ??= "mcp";
+        extension ??= ".tmp";
+
+        var fileName = $"{prefix}_{Guid.NewGuid()}{extension}";
+        var filePath = Path.Combine(_tempBasePath, fileName);
+
+        // Ensure the directory exists
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+
+        // Create the file
+        using var fs = File.Create(filePath);
+
+        // Register the file synchronously
+        if (!string.IsNullOrEmpty(operationId))
+        {
+            _operationFiles.AddOrUpdate(operationId,
+                new HashSet<string> { filePath },
+                (key, existing) => { existing.Add(filePath); return existing; });
+        }
+
+        _fileCreationTimes[filePath] = DateTime.UtcNow;
+
+        _logger.LogDebug("Created temporary file: {FilePath}", filePath);
+        return filePath;
+    }
+
     public async Task<string> CreateTempDirectoryAsync(string? prefix = null, string? operationId = null)
     {
         prefix ??= "mcp";

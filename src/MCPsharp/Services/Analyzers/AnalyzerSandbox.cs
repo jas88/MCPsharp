@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Threading.Channels;
+using System.Runtime.Loader;
 using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Services.Analyzers;
@@ -48,6 +49,51 @@ public class AnalyzerSandbox : IAnalyzerSandbox
         _currentUsage = new SandboxUsage { StartTime = DateTime.UtcNow };
 
         _processingTask = Task.Run(ProcessOperationsAsync);
+    }
+
+    public async Task<IAnalyzer> LoadAnalyzerAsync(string assemblyPath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Loading analyzer from assembly: {AssemblyPath}", assemblyPath);
+
+            if (!File.Exists(assemblyPath))
+            {
+                throw new FileNotFoundException($"Assembly not found: {assemblyPath}");
+            }
+
+            // Load the assembly and find analyzer types
+            var assemblyContext = new AssemblyLoadContext(assemblyPath, isCollectible: true);
+            var assembly = assemblyContext.LoadFromAssemblyPath(assemblyPath);
+
+            var analyzerTypes = assembly.GetTypes()
+                .Where(t => t.IsClass && !t.IsAbstract && typeof(IAnalyzer).IsAssignableFrom(t))
+                .ToList();
+
+            if (!analyzerTypes.Any())
+            {
+                throw new InvalidOperationException("No analyzer types found in assembly");
+            }
+
+            // Create the first analyzer found (for simplicity)
+            var analyzerType = analyzerTypes.First();
+            var constructor = analyzerType.GetConstructor(Type.EmptyTypes);
+            if (constructor == null)
+            {
+                throw new InvalidOperationException($"Analyzer type {analyzerType.Name} does not have a parameterless constructor");
+            }
+
+            var analyzer = (IAnalyzer)constructor.Invoke(Array.Empty<object>());
+            await analyzer.InitializeAsync(cancellationToken);
+
+            _logger.LogInformation("Successfully loaded analyzer: {AnalyzerId}", analyzer.Id);
+            return analyzer;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading analyzer from assembly: {AssemblyPath}", assemblyPath);
+            throw;
+        }
     }
 
     public async Task<AnalysisResult> ExecuteAnalyzerAsync(IAnalyzer analyzer, string filePath, string content, CancellationToken cancellationToken = default)

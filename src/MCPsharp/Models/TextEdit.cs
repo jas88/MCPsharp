@@ -64,3 +64,29 @@ public class DeleteEdit : TextEdit
 {
     public override string Type => "delete";
 }
+
+/// <summary>
+/// Request for editing a file
+/// </summary>
+public class FileEditRequest
+{
+    /// <summary>
+    /// Path to the file to edit
+    /// </summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>
+    /// List of edits to apply to the file
+    /// </summary>
+    public required IReadOnlyList<TextEdit> Edits { get; init; }
+
+    /// <summary>
+    /// Whether to create a backup before editing
+    /// </summary>
+    public bool CreateBackup { get; init; } = true;
+
+    /// <summary>
+    /// Cancellation token
+    /// </summary>
+    public CancellationToken CancellationToken { get; init; } = default;
+}

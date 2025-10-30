@@ -4,13 +4,19 @@ using Microsoft.CodeAnalysis.Text;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Tests.TestFixtures;
+using Xunit;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace MCPsharp.Tests.Services;
 
 /// <summary>
 /// Unit tests for CallerAnalysisService
 /// </summary>
-public class CallerAnalysisServiceTests : IDisposable
+public class CallerAnalysisServiceTests
 {
     private readonly RoslynWorkspace _workspace;
     private readonly SymbolQueryService _symbolQuery;
@@ -28,6 +34,10 @@ public class CallerAnalysisServiceTests : IDisposable
 
     private void InitializeWorkspace()
     {
+        // Initialize workspace with a temporary directory
+        var tempDir = Path.Combine(Path.GetTempPath(), "MCPsharpTests", Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+
         // Add test fixture files to workspace
         var testFiles = new[]
         {
@@ -106,12 +116,18 @@ public class DerivedService : IService
 }")
         };
 
-        // Add files to workspace
+        // Write test files to temporary directory
         foreach (var (fileName, content) in testFiles)
         {
-            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "TestFixtures", fileName);
-            _workspace.AddDocumentAsync(filePath).Wait();
+            var filePath = Path.Combine(tempDir, fileName);
+            File.WriteAllText(filePath, content);
         }
+
+        // Initialize workspace with the temporary directory
+        _workspace.InitializeAsync(tempDir).Wait();
+
+        // Note: The workspace is now initialized with test files
+        // Cleanup of tempDir would happen in a Dispose method if we had one
     }
 
     [Fact]
@@ -300,8 +316,5 @@ public class DerivedService : IService
         Assert.False(signature1.Matches(signature2));
     }
 
-    public void Dispose()
-    {
-        _workspace?.Dispose();
-    }
+    // Dispose() method removed since RoslynWorkspace no longer implements IDisposable
 }

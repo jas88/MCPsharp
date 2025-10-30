@@ -23,6 +23,11 @@ public interface IAnalyzerRegistry
     ImmutableArray<AnalyzerInfo> GetRegisteredAnalyzers();
 
     /// <summary>
+    /// Get all loaded analyzers as IAnalyzer instances
+    /// </summary>
+    List<IAnalyzer> GetLoadedAnalyzers();
+
+    /// <summary>
     /// Get analyzer by ID
     /// </summary>
     IAnalyzer? GetAnalyzer(string analyzerId);

@@ -113,12 +113,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
                 ReturnType = "void",
                 Accessibility = "public"
             },
-            Callers = new List<CallerInfo>
-            {
-                new() { CallerMethod = "Caller1", CallerType = "TestType", File = "test.cs", Line = 1, Column = 1, CallExpression = "TestMethod()", CallType = CallType.Direct, Confidence = ConfidenceLevel.High, CallerSignature = null },
-                new() { CallerMethod = "Caller2", CallerType = "TestType", File = "test.cs", Line = 2, Column = 1, CallExpression = "TestMethod()", CallType = CallType.Direct, Confidence = ConfidenceLevel.High, CallerSignature = null },
-                new() { CallerMethod = "Caller3", CallerType = "TestType", File = "test.cs", Line = 3, Column = 1, CallExpression = "TestMethod()", CallType = CallType.Direct, Confidence = ConfidenceLevel.High, CallerSignature = null }
-            }
+            TotalCallers = 3
         };
 
         if (includeIndirect)
@@ -257,7 +252,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Callers.Count, Is.EqualTo(1));
-        Assert.That(result.Callers[0].CallerMethod, Is.EqualTo("DirectCaller"));
+        Assert.That(result.Callers[0].MethodName, Is.EqualTo("DirectCaller"));
     }
 
     [Test]
@@ -280,7 +275,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
             Direction = direction
         };
 
-        _mockCallChain.FindCallChainsAsync(methodName, containingType, maxDepth, Arg.Any<CancellationToken>())
+        _mockCallChain.FindCallChainsAsync(methodName, containingType, direction, maxDepth, Arg.Any<CancellationToken>())
             .Returns(expected);
 
         // Act
@@ -288,11 +283,11 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.TargetMethod.Name, Is.EqualTo(methodName));
+        Assert.That(result.TargetSignature.Name, Is.EqualTo(methodName));
         Assert.That(result.Direction, Is.EqualTo(direction));
         Assert.That(result.TotalPaths, Is.EqualTo(3));
 
-        await _mockCallChain.Received(1).FindCallChainsAsync(methodName, containingType, maxDepth, Arg.Any<CancellationToken>());
+        await _mockCallChain.Received(1).FindCallChainsAsync(methodName, containingType, direction, maxDepth, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -315,7 +310,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
             }
         };
 
-        _mockCallChain.FindCallChainsAsync(methodName, null, maxDepth, Arg.Any<CancellationToken>())
+        _mockCallChain.FindCallChainsAsync(methodName, null, direction, maxDepth, Arg.Any<CancellationToken>())
             .Returns(expected);
 
         // Act
@@ -323,7 +318,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        await _mockCallChain.Received(1).FindCallChainsAsync(methodName, null, maxDepth, Arg.Any<CancellationToken>());
+        await _mockCallChain.Received(1).FindCallChainsAsync(methodName, null, direction, maxDepth, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -366,15 +361,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         {
             TypeName = typeName,
             FullTypeName = $"TestProject.{typeName}",
-            Usages = Enumerable.Range(1, 8).Select(i => new TypeUsageInfo
-            {
-                UsageKind = TypeUsageKind.Instantiation,
-                Confidence = ConfidenceLevel.High,
-                File = $"test{i}.cs",
-                Line = i,
-                Column = 1,
-                Context = $"new {typeName}()"
-            }).ToList()
+            TotalUsages = 8
         };
 
         _mockTypeUsage.FindTypeUsagesAsync(typeName, Arg.Any<CancellationToken>())
@@ -402,15 +389,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         {
             TypeName = "SampleType",
             FullTypeName = "TestProject.SampleType",
-            Usages = Enumerable.Range(1, 3).Select(i => new TypeUsageInfo
-            {
-                UsageKind = TypeUsageKind.Instantiation,
-                Confidence = ConfidenceLevel.High,
-                File = $"test{i}.cs",
-                Line = i,
-                Column = 1,
-                Context = $"new SampleType()"
-            }).ToList()
+            TotalUsages = 3
         };
 
         _mockTypeUsage.FindTypeUsagesAtLocationAsync(filePath, line, column, Arg.Any<CancellationToken>())
@@ -452,8 +431,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.TargetMethod.Name, Is.EqualTo(methodName));
-        Assert.That(result.TargetMethod.ContainingType, Is.EqualTo(containingType));
+        Assert.That(result.TargetSignature.Name, Is.EqualTo(methodName));
+        Assert.That(result.TargetSignature.ContainingType, Is.EqualTo(containingType));
 
         await _mockCallerAnalysis.Received(1).AnalyzeCallPatternsAsync(methodName, containingType, Arg.Any<CancellationToken>());
     }
@@ -560,7 +539,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.TargetType, Is.EqualTo(typeName));
+        Assert.That(result.TypeName, Is.EqualTo(typeName));
 
         await _mockTypeUsage.Received(1).AnalyzeInheritanceAsync(typeName, Arg.Any<CancellationToken>());
     }
@@ -596,7 +575,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         // Arrange
         var expected = new List<MethodSignature>
         {
-            new() { Name = "TestMethod", ContainingType = "TestClass", ReturnType = "void", Accessibility = "public" }
+            new() { Name = "TestMethod" }
         };
 
         _mockCallerAnalysis.FindTestOnlyMethodsAsync(Arg.Any<CancellationToken>())
@@ -620,14 +599,9 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var typeName = "SampleService";
         var expected = new CallGraphAnalysis
         {
-            Scope = typeName,
-            Methods = new List<MethodSignature>(),
-            Relationships = new List<CallRelationship>(),
-            CallGraph = new Dictionary<string, List<string>>(),
-            ReverseCallGraph = new Dictionary<string, List<string>>(),
-            EntryPoints = new List<string>(),
-            LeafMethods = new List<string>(),
-            CircularDependencies = new List<CircularDependency>()
+            TargetType = typeName,
+            TotalNodes = 15,
+            TotalEdges = 25
         };
 
         _mockCallChain.AnalyzeCallGraphAsync(typeName, null, Arg.Any<CancellationToken>())
@@ -638,8 +612,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.Scope, Is.EqualTo(typeName));
-        Assert.That(result.Methods.Count, Is.EqualTo(15));
+        Assert.That(result.TargetType, Is.EqualTo(typeName));
+        Assert.That(result.TotalNodes, Is.EqualTo(15));
 
         await _mockCallChain.Received(1).AnalyzeCallGraphAsync(typeName, null, Arg.Any<CancellationToken>());
     }
@@ -651,30 +625,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var namespaceFilter = "TestProject";
         var expected = new List<CircularDependency>
         {
-            new() {
-                Methods = new List<MethodSignature> {
-                    new() {
-                        Name = "Method1",
-                        ContainingType = "Class1",
-                        ReturnType = "void",
-                        Accessibility = "public"
-                    }
-                },
-                CycleLength = 1,
-                Steps = new List<CallChainStep> {
-                    new() {
-                        FromMethod = new() { Name = "Method1", ContainingType = "Class1", ReturnType = "void", Accessibility = "public" },
-                        ToMethod = new() { Name = "Method1", ContainingType = "Class1", ReturnType = "void", Accessibility = "public" },
-                        File = "File1.cs",
-                        Line = 1,
-                        Column = 1,
-                        CallType = CallType.Direct,
-                        Confidence = ConfidenceLevel.High
-                    }
-                },
-                Confidence = ConfidenceLevel.High,
-                FilesInvolved = new List<string> { "File1.cs" }
-            }
+            new() { Severity = DependencySeverity.High, Description = "Circular reference detected" }
         };
 
         _mockCallChain.FindCircularDependenciesAsync(namespaceFilter, Arg.Any<CancellationToken>())
@@ -686,7 +637,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Count, Is.EqualTo(1));
-        Assert.That(result[0].Confidence, Is.EqualTo(ConfidenceLevel.High));
+        Assert.That(result[0].Severity, Is.EqualTo(DependencySeverity.High));
 
         await _mockCallChain.Received(1).FindCircularDependenciesAsync(namespaceFilter, Arg.Any<CancellationToken>());
     }
@@ -696,7 +647,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
     {
         // Arrange
         var fromMethod = TestDataFixtures.SampleMethodSignature;
-        var toMethod = new MethodSignature { Name = "TestMethod", ContainingType = "TestClass", ReturnType = "void", Accessibility = "public" };
+        var toMethod = new MethodSignature { Name = "TargetMethod", ContainingType = "TestClass", ReturnType = "void", Accessibility = "public" };
         var expected = new CallChainPath
         {
             Steps = new List<CallChainStep>
@@ -727,18 +678,9 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var containingType = "WorkflowClass";
         var expected = new ReachabilityAnalysis
         {
-            StartMethod = new MethodSignature {
-                Name = methodName,
-                ContainingType = containingType,
-                ReturnType = "void",
-                Accessibility = "public"
-            },
-            ReachableMethods = new List<MethodSignature>(),
-            MethodsByDepth = new Dictionary<int, List<MethodSignature>>(),
-            UnreachableMethods = new List<MethodSignature>(),
-            MaxDepthReached = 5,
-            TotalMethodsAnalyzed = 12,
-            AnalysisDuration = TimeSpan.FromMilliseconds(100)
+            MethodName = methodName,
+            ContainingType = containingType,
+            TotalReachableMethods = 12
         };
 
         _mockCallChain.FindReachableMethodsAsync(methodName, containingType, 10, Arg.Any<CancellationToken>())
@@ -749,7 +691,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.ReachableMethods.Count, Is.EqualTo(12));
+        Assert.That(result.TotalReachableMethods, Is.EqualTo(12));
 
         await _mockCallChain.Received(1).FindReachableMethodsAsync(methodName, containingType, 10, Arg.Any<CancellationToken>());
     }
@@ -761,13 +703,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var typeName = "ComplexService";
         var expected = new TypeDependencyAnalysis
         {
-            TargetType = typeName,
-            Dependencies = new List<TypeDependency>(),
-            Dependents = new List<TypeDependency>(),
-            DependencyFrequency = new Dictionary<string, int>(),
-            CircularDependencies = new List<string>(),
-            TotalDependencies = 8,
-            TotalDependents = 2
+            TypeName = typeName,
+            TotalDependencies = 8
         };
 
         _mockTypeUsage.AnalyzeTypeDependenciesAsync(typeName, Arg.Any<CancellationToken>())
@@ -778,7 +715,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.TargetType, Is.EqualTo(typeName));
+        Assert.That(result.TypeName, Is.EqualTo(typeName));
         Assert.That(result.TotalDependencies, Is.EqualTo(8));
 
         await _mockTypeUsage.Received(1).AnalyzeTypeDependenciesAsync(typeName, Arg.Any<CancellationToken>());
@@ -791,13 +728,9 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var namespaceFilter = "TestProject.Models";
         var expected = new TypeUsagePatternAnalysis
         {
-            TypeStatistics = new Dictionary<string, TypeUsageStats>(),
-            CommonPatterns = new(),
-            MostUsedTypes = new(),
-            LeastUsedTypes = new(),
-            UsageKindDistribution = new Dictionary<TypeUsageKind, int>(),
-            TotalTypesAnalyzed = 15,
-            TotalUsagesFound = 50
+            AnalyzedNamespace = namespaceFilter,
+            TotalTypes = 15,
+            CommonPatterns = new()
         };
 
         _mockTypeUsage.AnalyzeUsagePatternsAsync(namespaceFilter, Arg.Any<CancellationToken>())
@@ -808,7 +741,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.TotalTypesAnalyzed, Is.GreaterThan(0));
+        Assert.That(result.AnalyzedNamespace, Is.EqualTo(namespaceFilter));
 
         await _mockTypeUsage.Received(1).AnalyzeUsagePatternsAsync(namespaceFilter, Arg.Any<CancellationToken>());
     }
@@ -820,14 +753,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var namespaceFilter = "TestProject.OldCode";
         var expected = new TypeRefactoringOpportunities
         {
-            UnusedTypes = new(),
-            SingleImplementationInterfaces = new(),
-            PotentialSealedTypes = new(),
-            LargeTypes = new(),
-            TypesWithCircularDependencies = new(),
-            DuplicatedTypes = new(),
-            TotalOpportunities = 5,
-            OpportunityBreakdown = new Dictionary<string, int>()
+            AnalyzedNamespace = namespaceFilter,
+            TotalOpportunities = 5
         };
 
         _mockTypeUsage.FindRefactoringOpportunitiesAsync(namespaceFilter, Arg.Any<CancellationToken>())
@@ -838,6 +765,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
+        Assert.That(result.AnalyzedNamespace, Is.EqualTo(namespaceFilter));
         Assert.That(result.TotalOpportunities, Is.EqualTo(5));
 
         await _mockTypeUsage.Received(1).FindRefactoringOpportunitiesAsync(namespaceFilter, Arg.Any<CancellationToken>());
@@ -852,76 +780,40 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         var mockCallers = new CallerResult
         {
-            TargetSymbol = methodName,
-            TargetSignature = new MethodSignature { Name = methodName, ContainingType = containingType ?? "TestClass", ReturnType = "void", Accessibility = "public" },
-            Callers = new List<CallerInfo>()
+            MethodName = methodName,
+            TotalCallers = 3,
+            DirectCallers = new(),
+            IndirectCallers = new()
         };
 
         var mockBackwardChains = new CallChainResult
         {
-            TargetMethod = new MethodSignature { Name = methodName, ContainingType = containingType ?? "TestClass", ReturnType = "void", Accessibility = "public" },
-            Direction = CallDirection.Backward,
-            Paths = Enumerable.Range(1, 5).Select(i => new CallChainPath
-            {
-                Confidence = ConfidenceLevel.High,
-                Steps = new List<CallChainStep>
-                {
-                    new() { FromMethod = new MethodSignature { Name = $"Caller{i}", ContainingType = "TestClass", ReturnType = "void", Accessibility = "public" },
-                           ToMethod = new MethodSignature { Name = methodName, ContainingType = containingType ?? "TestClass", ReturnType = "void", Accessibility = "public" },
-                           File = "test.cs", Line = i, Column = 1, CallType = CallType.Direct, Confidence = ConfidenceLevel.High }
-                }
-            }).ToList()
+            MethodName = methodName,
+            TotalPaths = 5
         };
 
         var mockForwardChains = new CallChainResult
         {
-            TargetMethod = new MethodSignature { Name = methodName, ContainingType = containingType ?? "TestClass", ReturnType = "void", Accessibility = "public" },
-            Direction = CallDirection.Forward,
-            Paths = Enumerable.Range(1, 2).Select(i => new CallChainPath
-            {
-                Confidence = ConfidenceLevel.High,
-                Steps = new List<CallChainStep>
-                {
-                    new() { FromMethod = new MethodSignature { Name = methodName, ContainingType = containingType ?? "TestClass", ReturnType = "void", Accessibility = "public" },
-                           ToMethod = new MethodSignature { Name = $"Callee{i}", ContainingType = "TestClass", ReturnType = "void", Accessibility = "public" },
-                           File = "test.cs", Line = i, Column = 1, CallType = CallType.Direct, Confidence = ConfidenceLevel.High }
-                }
-            }).ToList()
+            MethodName = methodName,
+            TotalPaths = 2
         };
 
         var mockCallPatterns = new CallPatternAnalysis
         {
-            TargetMethod = new MethodSignature
-            {
-                Name = methodName,
-                ContainingType = containingType ?? "TestClass",
-                ReturnType = "void",
-                Accessibility = "public"
-            },
-            TotalCallSites = 3
+            MethodName = methodName,
+            TotalCallers = 3
         };
 
         var mockRecursiveChains = new List<CallChainPath>
         {
-            new() {
-                IsRecursive = true,
-                Steps = new List<CallChainStep>
-                {
-                    new() {
-                        FromMethod = new MethodSignature { Name = methodName, ContainingType = containingType ?? "TestClass", ReturnType = "void", Accessibility = "public" },
-                        ToMethod = new MethodSignature { Name = methodName, ContainingType = containingType ?? "TestClass", ReturnType = "void", Accessibility = "public" },
-                        File = "test.cs", Line = 1, Column = 1, CallType = CallType.Direct, Confidence = ConfidenceLevel.High
-                    }
-                },
-                Confidence = ConfidenceLevel.High
-            }
+            new() { IsRecursive = true }
         };
 
         _mockCallerAnalysis.FindCallersAsync(methodName, containingType, Arg.Any<CancellationToken>())
             .Returns(mockCallers);
-        _mockCallChain.FindCallChainsAsync(methodName, containingType, 5, Arg.Any<CancellationToken>())
+        _mockCallChain.FindCallChainsAsync(methodName, containingType, CallDirection.Backward, 5, Arg.Any<CancellationToken>())
             .Returns(mockBackwardChains);
-        _mockCallChain.FindForwardCallChainsAsync(methodName, containingType, 5, Arg.Any<CancellationToken>())
+        _mockCallChain.FindCallChainsAsync(methodName, containingType, CallDirection.Forward, 5, Arg.Any<CancellationToken>())
             .Returns(mockForwardChains);
         _mockCallerAnalysis.AnalyzeCallPatternsAsync(methodName, containingType, Arg.Any<CancellationToken>())
             .Returns(mockCallPatterns);
@@ -933,8 +825,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.MethodName, Is.EqualTo(methodName));
-        Assert.That(result.ContainingType, Is.EqualTo(containingType));
+        Assert.That(result.TargetSignature.Name, Is.EqualTo(methodName));
+        Assert.That(result.TargetSignature.ContainingType, Is.EqualTo(containingType));
         Assert.That(result.TotalDirectCallers, Is.EqualTo(3));
         Assert.That(result.TotalBackwardPaths, Is.EqualTo(5));
         Assert.That(result.TotalForwardPaths, Is.EqualTo(2));
@@ -951,50 +843,27 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var mockTypeUsages = new TypeUsageResult
         {
             TypeName = typeName,
-            FullTypeName = $"TestProject.{typeName}",
-            Usages = Enumerable.Range(1, 10).Select(i => new TypeUsageInfo
-            {
-                UsageKind = TypeUsageKind.Instantiation,
-                Confidence = ConfidenceLevel.High,
-                File = $"test{i}.cs",
-                Line = i,
-                Column = 1,
-                Context = $"new {typeName}()"
-            }).ToList()
+            TotalUsages = 10,
+            Instantiations = new(),
+            TypeReferences = new()
         };
 
         var mockInheritance = new InheritanceAnalysis
         {
-            TargetType = typeName,
-            BaseClasses = new List<TypeUsageInfo>(),
-            DerivedClasses = new List<TypeUsageInfo>(),
-            ImplementedInterfaces = new List<TypeUsageInfo>(),
-            InterfaceImplementations = new List<TypeUsageInfo>(),
-            InheritanceDepth = 0,
-            InheritanceChain = new List<string>()
+            TypeName = typeName,
+            DerivedClasses = new(),
+            InterfaceImplementations = new()
         };
 
         var mockDependencies = new TypeDependencyAnalysis
         {
-            TargetType = typeName,
-            Dependencies = new List<TypeDependency>(),
-            Dependents = new List<TypeDependency>(),
-            DependencyFrequency = new Dictionary<string, int>(),
-            CircularDependencies = new List<string>(),
-            TotalDependencies = 5,
-            TotalDependents = 1
+            TypeName = typeName,
+            TotalDependencies = 5
         };
 
         var mockGenericUsages = new List<TypeUsageInfo>
         {
-            new() {
-                UsageKind = TypeUsageKind.GenericArgument,
-                Confidence = ConfidenceLevel.High,
-                File = "test.cs",
-                Line = 1,
-                Column = 1,
-                Context = $"List<{typeName}>()"
-            }
+            new() { TypeName = typeName }
         };
 
         _mockTypeUsage.FindTypeUsagesAsync(typeName, Arg.Any<CancellationToken>())
@@ -1025,13 +894,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var signature = TestDataFixtures.SampleMethodSignature;
         var mockSymbols = new List<SymbolResult>
         {
-            new() {
-                Name = signature.Name,
-                Kind = "method",
-                File = "/test/SampleService.cs",
-                Line = 15,
-                Column = 1
-            }
+            new() { File = "/test/SampleService.cs", Line = 15 }
         };
 
         _mockSymbolQuery.FindSymbolsAsync(signature.Name, "method")
@@ -1066,25 +929,9 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var threshold = 0.8;
         var mockAllMethods = new List<MethodSignature>
         {
-            new() {
-                Name = "ProcessDataAsync",
-                ReturnType = "Task",
-                ContainingType = "TestClass",
-                Accessibility = "public",
-                IsAsync = true
-            },
-            new() {
-                Name = "ProcessInformation",
-                ReturnType = "void",
-                ContainingType = "TestClass",
-                Accessibility = "public"
-            },
-            new() {
-                Name = "HandleData",
-                ReturnType = "void",
-                ContainingType = "TestClass",
-                Accessibility = "private"
-            }
+            new() { Name = "ProcessDataAsync" },
+            new() { Name = "ProcessInformation" },
+            new() { Name = "HandleData" }
         };
 
         // We need to mock the workspace and compilation

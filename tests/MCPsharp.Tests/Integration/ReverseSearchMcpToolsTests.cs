@@ -1,7 +1,9 @@
 using System.Text.Json;
 using MCPsharp.Models;
 using MCPsharp.Services;
+using MCPsharp.Services.Roslyn;
 using MCPsharp.Tests.TestFixtures;
+using Xunit;
 
 namespace MCPsharp.Tests.Integration;
 
@@ -476,7 +478,6 @@ public class Consumer
             }
         }
 
-        _workspace?.Dispose();
-        _projectContext?.Dispose();
+        // RoslynWorkspace and ProjectContext no longer implement IDisposable
     }
 }

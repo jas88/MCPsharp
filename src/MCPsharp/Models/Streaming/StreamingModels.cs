@@ -16,6 +16,10 @@ public class StreamProcessRequest
     public StreamProcessorType ProcessorType { get; set; }
     public Dictionary<string, object> ProcessorOptions { get; set; } = new();
     public long ChunkSize { get; set; } = 64 * 1024; // 64KB default
+    public int MaxConcurrentFiles { get; set; } = Environment.ProcessorCount;
+    public int RetryCount { get; set; } = 3;
+    public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(1);
+    public TimeSpan ProcessingTimeout { get; set; } = TimeSpan.FromMinutes(30);
     public bool CreateCheckpoint { get; set; } = true;
     public bool EnableCompression { get; set; } = false;
     public string? CheckpointDirectory { get; set; }
@@ -108,14 +112,30 @@ public class CheckpointData
 }
 
 /// <summary>
+/// Statistics for processing operations
+/// </summary>
+public class ProcessingStatistics
+{
+    public long TotalFilesProcessed { get; set; }
+    public long TotalBytesProcessed { get; set; }
+    public TimeSpan AverageProcessingTime { get; set; }
+    public int ActiveProcessingTasks { get; set; }
+    public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
 /// Result of a streaming operation
 /// </summary>
 public class StreamResult
 {
     public bool Success { get; set; }
+    public bool WasProcessed { get; set; }
     public string OperationId { get; set; } = string.Empty;
     public string OutputPath { get; set; } = string.Empty;
     public long BytesProcessed { get; set; }
+    public long ProcessedSize { get; set; }
+    public long OriginalSize { get; set; }
+    public long MemoryUsage { get; set; }
     public long ChunksProcessed { get; set; }
     public long LinesProcessed { get; set; }
     public long ItemsProcessed { get; set; }
@@ -124,6 +144,7 @@ public class StreamResult
     public List<string> OutputFiles { get; set; } = new();
     public List<string> TemporaryFiles { get; set; } = new();
     public Dictionary<string, object> Statistics { get; set; } = new();
+    public string? Error { get; set; }
     public string? ErrorMessage { get; set; }
     public Exception? Exception { get; set; }
     public CheckpointData? FinalCheckpoint { get; set; }
@@ -236,4 +257,24 @@ public class BinaryProcessorConfig
     public string ChecksumAlgorithm { get; set; } = "SHA256";
     public bool PreserveTimestamps { get; set; } = true;
     public Dictionary<string, object> CustomMetadata { get; set; } = new();
+}
+
+/// <summary>
+/// Progress information for file processing operations
+/// </summary>
+public class FileProcessingProgress
+{
+    public string OperationId { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public double ProgressPercentage { get; set; }
+    public long BytesProcessed { get; set; }
+    public long TotalBytes { get; set; }
+    public long ChunksProcessed { get; set; }
+    public long TotalChunks { get; set; }
+    public TimeSpan ElapsedTime { get; set; }
+    public TimeSpan EstimatedTimeRemaining { get; set; }
+    public long ProcessingSpeedBytesPerSecond { get; set; }
+    public string? CurrentPhase { get; set; }
+    public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+    public Dictionary<string, object> Metadata { get; set; } = new();
 }

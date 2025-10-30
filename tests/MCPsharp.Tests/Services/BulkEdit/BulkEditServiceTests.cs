@@ -9,7 +9,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using MCPsharp.Services;
 using MCPsharp.Models;
-using MCPsharp.Models.BulkEditModels;
 using MCPsharp.Tests.TestData;
 
 namespace MCPsharp.Tests.Services.BulkEdit;
@@ -22,7 +21,7 @@ public class BulkEditServiceTests : FileServiceTestBase
     private BulkEditService _service = null!;
 
     [SetUp]
-    public override void Setup()
+    protected override void Setup()
     {
         base.Setup();
         _service = new BulkEditService(CreateNullLogger<BulkEditService>());
@@ -163,7 +162,7 @@ public class BulkEditServiceTests : FileServiceTestBase
         Assert.That(result.Success, Is.True);
         Assert.That(result.FileResults.Count, Is.EqualTo(3));
         Assert.That(result.Summary.SuccessfulFiles, Is.EqualTo(3));
-        Assert.That(result.FilesPerSecond, Is.GreaterThan(0));
+        Assert.That(result.Summary.FilesPerSecond, Is.GreaterThan(0));
     }
 
     [Test]
@@ -183,7 +182,7 @@ public class BulkEditServiceTests : FileServiceTestBase
                 StartLine = 1,
                 StartColumn = 1,
                 EndLine = 1,
-                EndLine = 1,
+                EndColumn = 1,
                 NewText = "FIXME: Fix this issue"
             }
         };
@@ -255,7 +254,9 @@ public class BulkEditServiceTests : FileServiceTestBase
         var testFile = CreateTestFile("public class OldClassName\n{\n    public void OldMethodName() { }\n}");
         var refactorPattern = new BulkRefactorPattern
         {
-            RefactorType = BulkRefactorType.RenameMethod,
+            RefactorType = BulkRefactorType.RenameSymbol,
+            TargetPattern = "OldMethodName",
+            ReplacementPattern = "NewMethodName",
             Parameters = new Dictionary<string, object>
             {
                 ["oldName"] = "OldMethodName",
@@ -285,7 +286,14 @@ public class BulkEditServiceTests : FileServiceTestBase
                 Priority = 2,
                 Edits = new List<TextEdit>
                 {
-                    new ReplaceEdit { NewText = "Second edit" }
+                    new ReplaceEdit
+                  {
+                      StartLine = 1,
+                      StartColumn = 1,
+                      EndLine = 1,
+                      EndColumn = 1,
+                      NewText = "Second edit"
+                  }
                 }
             },
             new()
@@ -294,7 +302,14 @@ public class BulkEditServiceTests : FileServiceTestBase
                 Priority = 1,
                 Edits = new List<TextEdit>
                 {
-                    new ReplaceEdit { NewText = "First edit" }
+                    new ReplaceEdit
+                  {
+                      StartLine = 1,
+                      StartColumn = 1,
+                      EndLine = 1,
+                      EndColumn = 1,
+                      NewText = "First edit"
+                  }
                 }
             }
         };
@@ -533,7 +548,12 @@ public class BulkEditServiceTests : FileServiceTestBase
         {
             OperationType = BulkEditOperationType.BatchRefactor,
             Files = new[] { testFile },
-            RefactorPattern = new BulkRefactorPattern { RefactorType = BulkRefactorType.RenameMethod }
+            RefactorPattern = new BulkRefactorPattern
+            {
+                RefactorType = BulkRefactorType.RenameSymbol,
+                TargetPattern = "OldSymbol",
+                ReplacementPattern = "NewSymbol"
+            }
         };
 
         // Act
@@ -655,7 +675,7 @@ public class BulkEditServiceTests : FileServiceTestBase
             async () => await _service.BulkReplaceAsync(new[] { testFile }, "Test", "Modified", cancellationToken: cts.Token));
 
         Assert.ThrowsAsync<OperationCanceledException>(
-            async () => await _service.PreviewBulkChangesAsync(new BulkEditRequest(), cts.Token));
+            async () => await _service.PreviewBulkChangesAsync(new BulkEditRequest { OperationType = BulkEditOperationType.PreviewChanges, Files = new[] { "test.cs" } }, cts.Token));
     }
 
     [Test]

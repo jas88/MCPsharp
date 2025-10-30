@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.RegularExpressions;
+using MCPsharp.Models;
 using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Services.Analyzers.BuiltIn;
@@ -84,6 +85,28 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
     public ImmutableArray<string> SupportedExtensions => _supportedExtensions;
     public bool IsEnabled { get; set; } = true;
     public AnalyzerConfiguration Configuration { get; set; } = new();
+
+    public bool CanAnalyze(string targetPath)
+    {
+        if (string.IsNullOrEmpty(targetPath))
+            return false;
+
+        // Check if the target path is a file with supported extension
+        if (File.Exists(targetPath))
+        {
+            var extension = Path.GetExtension(targetPath);
+            return _supportedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
+        }
+
+        // Check if the target path is a directory containing C# files
+        if (Directory.Exists(targetPath))
+        {
+            return Directory.GetFiles(targetPath, "*.cs", SearchOption.AllDirectories)
+                .Any(path => _supportedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase));
+        }
+
+        return false;
+    }
 
     public NUnitUpgraderAnalyzer()
     {
@@ -211,6 +234,20 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         });
     }
 
+    public AnalyzerCapabilities GetCapabilities()
+    {
+        return new AnalyzerCapabilities
+        {
+            SupportedLanguages = new[] { "C#" },
+            SupportedFileTypes = new[] { ".cs" },
+            MaxFileSize = 10 * 1024 * 1024, // 10MB
+            CanAnalyzeProjects = true,
+            CanAnalyzeSolutions = true,
+            SupportsParallelProcessing = false,
+            CanFixIssues = true
+        };
+    }
+
     public async Task DisposeAsync()
     {
         // No disposal needed
@@ -254,7 +291,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
             Confidence = Confidence.High,
             IsInteractive = false,
             IsBatchable = true,
-            Edits = ImmutableArray.Create(new ReplaceEdit
+            Edits = ImmutableArray.Create<TextEdit>(new ReplaceEdit
             {
                 StartLine = GetPosition(content, match.Index).line + 1,
                 StartColumn = GetPosition(content, match.Index).column + 1,
@@ -281,7 +318,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
             Confidence = Confidence.High,
             IsInteractive = false,
             IsBatchable = true,
-            Edits = ImmutableArray.Create(new ReplaceEdit
+            Edits = ImmutableArray.Create<TextEdit>(new ReplaceEdit
             {
                 StartLine = GetPosition(content, match.Index).line + 1,
                 StartColumn = GetPosition(content, match.Index).column + 1,
@@ -316,7 +353,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
             IsInteractive = true,
             IsBatchable = false,
             RequiredInputs = ImmutableArray.Create("TestMethodName"),
-            Edits = ImmutableArray.Create(new ReplaceEdit
+            Edits = ImmutableArray.Create<TextEdit>(new ReplaceEdit
             {
                 StartLine = GetPosition(content, match.Index).line + 1,
                 StartColumn = GetPosition(content, match.Index).column + 1,
@@ -345,7 +382,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
             Confidence = Confidence.High,
             IsInteractive = false,
             IsBatchable = true,
-            Edits = ImmutableArray.Create(new ReplaceEdit
+            Edits = ImmutableArray.Create<TextEdit>(new ReplaceEdit
             {
                 StartLine = GetPosition(content, match.Index).line + 1,
                 StartColumn = GetPosition(content, match.Index).column + 1,
@@ -369,7 +406,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
             Confidence = Confidence.High,
             IsInteractive = false,
             IsBatchable = true,
-            Edits = ImmutableArray.Create(new ReplaceEdit
+            Edits = ImmutableArray.Create<TextEdit>(new ReplaceEdit
             {
                 StartLine = GetPosition(content, match.Index).line + 1,
                 StartColumn = GetPosition(content, match.Index).column + 1,

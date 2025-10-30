@@ -165,6 +165,57 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
         }
     }
 
+    public void ReportProgress(FileProcessingProgress progress)
+    {
+        if (progress == null) return;
+
+        // Update or create progress tracker with file processing progress
+        var streamProgress = new StreamProgress
+        {
+            BytesProcessed = progress.BytesProcessed,
+            TotalBytes = progress.TotalBytes,
+            ChunksProcessed = progress.ChunksProcessed,
+            TotalChunks = progress.TotalChunks,
+            LinesProcessed = 0, // Not directly mapped from FileProcessingProgress
+            ItemsProcessed = 0, // Not directly mapped from FileProcessingProgress
+            CurrentPhase = progress.CurrentPhase ?? "Processing",
+            LastUpdated = progress.LastUpdated,
+            EstimatedTimeRemaining = progress.EstimatedTimeRemaining,
+            ProcessingSpeedBytesPerSecond = progress.ProcessingSpeedBytesPerSecond
+        };
+
+        // Copy metadata
+        foreach (var kvp in progress.Metadata)
+        {
+            streamProgress.Metadata[kvp.Key] = kvp.Value;
+        }
+
+        _progressTracker.AddOrUpdate(progress.OperationId, streamProgress, (key, existing) =>
+        {
+            lock (existing)
+            {
+                existing.BytesProcessed = streamProgress.BytesProcessed;
+                existing.TotalBytes = streamProgress.TotalBytes;
+                existing.ChunksProcessed = streamProgress.ChunksProcessed;
+                existing.TotalChunks = streamProgress.TotalChunks;
+                existing.CurrentPhase = streamProgress.CurrentPhase;
+                existing.LastUpdated = streamProgress.LastUpdated;
+                existing.EstimatedTimeRemaining = streamProgress.EstimatedTimeRemaining;
+                existing.ProcessingSpeedBytesPerSecond = streamProgress.ProcessingSpeedBytesPerSecond;
+
+                // Merge metadata
+                foreach (var kvp in streamProgress.Metadata)
+                {
+                    existing.Metadata[kvp.Key] = kvp.Value;
+                }
+            }
+            return existing;
+        });
+
+        _logger.LogDebug("Reported progress for operation {OperationId}: {ProgressPercentage:F1}%",
+            progress.OperationId, progress.ProgressPercentage);
+    }
+
     public void Dispose()
     {
         _cleanupTimer?.Dispose();

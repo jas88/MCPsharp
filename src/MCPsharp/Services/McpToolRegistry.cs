@@ -1702,16 +1702,19 @@ public class McpToolRegistry
                 },
                 "insert" => (TextEdit)new InsertEdit
                 {
-                    Line = editElement.GetProperty("line").GetInt32(),
-                    Column = editElement.GetProperty("column").GetInt32(),
-                    Text = editElement.GetProperty("text").GetString() ?? ""
+                    StartLine = editElement.GetProperty("line").GetInt32(),
+                    StartColumn = editElement.GetProperty("column").GetInt32(),
+                    EndLine = editElement.GetProperty("line").GetInt32(),
+                    EndColumn = editElement.GetProperty("column").GetInt32(),
+                    NewText = editElement.GetProperty("text").GetString() ?? ""
                 },
                 "delete" => (TextEdit)new DeleteEdit
                 {
                     StartLine = editElement.GetProperty("start_line").GetInt32(),
                     StartColumn = editElement.GetProperty("start_column").GetInt32(),
                     EndLine = editElement.GetProperty("end_line").GetInt32(),
-                    EndColumn = editElement.GetProperty("end_column").GetInt32()
+                    EndColumn = editElement.GetProperty("end_column").GetInt32(),
+                    NewText = ""
                 },
                 _ => throw new ArgumentException($"Unknown edit type: {type}")
             };
@@ -2744,16 +2747,19 @@ public class McpToolRegistry
                     },
                     "insert" => (TextEdit)new InsertEdit
                     {
-                        Line = editElement.GetProperty("line").GetInt32(),
-                        Column = editElement.GetProperty("column").GetInt32(),
-                        Text = editElement.GetProperty("text").GetString() ?? ""
+                        StartLine = editElement.GetProperty("line").GetInt32(),
+                        StartColumn = editElement.GetProperty("column").GetInt32(),
+                        EndLine = editElement.GetProperty("line").GetInt32(),
+                        EndColumn = editElement.GetProperty("column").GetInt32(),
+                        NewText = editElement.GetProperty("text").GetString() ?? ""
                     },
                     "delete" => (TextEdit)new DeleteEdit
                     {
                         StartLine = editElement.GetProperty("start_line").GetInt32(),
                         StartColumn = editElement.GetProperty("start_column").GetInt32(),
                         EndLine = editElement.GetProperty("end_line").GetInt32(),
-                        EndColumn = editElement.GetProperty("end_column").GetInt32()
+                        EndColumn = editElement.GetProperty("end_column").GetInt32(),
+                        NewText = ""
                     },
                     _ => throw new ArgumentException($"Unknown edit type: {editType}")
                 };
@@ -2882,16 +2888,19 @@ public class McpToolRegistry
                         },
                         "insert" => (TextEdit)new InsertEdit
                         {
-                            Line = editElement.GetProperty("line").GetInt32(),
-                            Column = editElement.GetProperty("column").GetInt32(),
-                            Text = editElement.GetProperty("text").GetString() ?? ""
+                            StartLine = editElement.GetProperty("line").GetInt32(),
+                            StartColumn = editElement.GetProperty("column").GetInt32(),
+                            EndLine = editElement.GetProperty("line").GetInt32(),
+                            EndColumn = editElement.GetProperty("column").GetInt32(),
+                            NewText = editElement.GetProperty("text").GetString() ?? ""
                         },
                         "delete" => (TextEdit)new DeleteEdit
                         {
                             StartLine = editElement.GetProperty("start_line").GetInt32(),
                             StartColumn = editElement.GetProperty("start_column").GetInt32(),
                             EndLine = editElement.GetProperty("end_line").GetInt32(),
-                            EndColumn = editElement.GetProperty("end_column").GetInt32()
+                            EndColumn = editElement.GetProperty("end_column").GetInt32(),
+                            NewText = ""
                         },
                         _ => throw new ArgumentException($"Unknown edit type: {editType}")
                     };

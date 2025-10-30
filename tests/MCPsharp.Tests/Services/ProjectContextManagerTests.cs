@@ -1,5 +1,6 @@
 using FluentAssertions;
 using MCPsharp.Services;
+using Xunit;
 
 namespace MCPsharp.Tests.Services;
 

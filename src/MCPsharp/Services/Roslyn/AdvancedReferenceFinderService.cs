@@ -54,7 +54,14 @@ public class AdvancedReferenceFinderService
             return result;
 
         // Filter to direct callers only
-        return result with { Callers = result.DirectCallers };
+        return new CallerResult
+        {
+            TargetSymbol = result.TargetSymbol,
+            TargetSignature = result.TargetSignature,
+            Callers = result.DirectCallers,
+            AnalysisTime = result.AnalysisTime,
+            Metadata = result.Metadata
+        };
     }
 
     /// <summary>
@@ -130,6 +137,14 @@ public class AdvancedReferenceFinderService
     }
 
     /// <summary>
+    /// Find methods only called by tests (synchronous wrapper for tests)
+    /// </summary>
+    public async Task<List<MethodSignature>> FindTestOnlyMethods()
+    {
+        return await FindTestOnlyMethodsAsync();
+    }
+
+    /// <summary>
     /// Find methods only called by tests
     /// </summary>
     public async Task<List<MethodSignature>> FindTestOnlyMethodsAsync(CancellationToken cancellationToken = default)
@@ -198,31 +213,32 @@ public class AdvancedReferenceFinderService
     /// </summary>
     public async Task<MethodComprehensiveAnalysis> AnalyzeMethodComprehensivelyAsync(string methodName, string? containingType = null, CancellationToken cancellationToken = default)
     {
-        var tasks = new Task[]
-        {
-            FindCallersAsync(methodName, containingType, cancellationToken: cancellationToken),
-            FindCallChainsAsync(methodName, containingType, CallDirection.Backward, 5, cancellationToken),
-            FindCallChainsAsync(methodName, containingType, CallDirection.Forward, 5, cancellationToken),
-            AnalyzeCallPatternsAsync(methodName, containingType, cancellationToken),
-            FindRecursiveCallChainsAsync(methodName, containingType, 10, cancellationToken)
-        };
+        var callersTask = FindCallersAsync(methodName, containingType, cancellationToken: cancellationToken);
+        var backwardChainsTask = FindCallChainsAsync(methodName, containingType, CallDirection.Backward, 5, cancellationToken);
+        var forwardChainsTask = FindCallChainsAsync(methodName, containingType, CallDirection.Forward, 5, cancellationToken);
+        var patternsTask = AnalyzeCallPatternsAsync(methodName, containingType, cancellationToken);
+        var recursiveTask = FindRecursiveCallChainsAsync(methodName, containingType, 10, cancellationToken);
 
-        var results = await Task.WhenAll(tasks);
+        var callers = await callersTask;
+        var backwardChains = await backwardChainsTask;
+        var forwardChains = await forwardChainsTask;
+        var patterns = await patternsTask;
+        var recursive = await recursiveTask;
 
         return new MethodComprehensiveAnalysis
         {
             MethodName = methodName,
             ContainingType = containingType ?? "",
-            Callers = results[0],
-            BackwardCallChains = results[1],
-            ForwardCallChains = results[2],
-            CallPatterns = results[3],
-            RecursiveCallChains = results[4],
-            TotalDirectCallers = results[0]?.DirectCallers.Count ?? 0,
-            TotalIndirectCallers = results[0]?.IndirectCallers.Count ?? 0,
-            TotalBackwardPaths = results[1]?.TotalPaths ?? 0,
-            TotalForwardPaths = results[2]?.TotalPaths ?? 0,
-            HasRecursiveCalls = (results[4]?.Count ?? 0) > 0,
+            Callers = callers,
+            BackwardCallChains = backwardChains,
+            ForwardCallChains = forwardChains,
+            CallPatterns = patterns,
+            RecursiveCallChains = recursive,
+            TotalDirectCallers = callers?.DirectCallers.Count ?? 0,
+            TotalIndirectCallers = callers?.IndirectCallers.Count ?? 0,
+            TotalBackwardPaths = backwardChains?.TotalPaths ?? 0,
+            TotalForwardPaths = forwardChains?.TotalPaths ?? 0,
+            HasRecursiveCalls = (recursive?.Count ?? 0) > 0,
             AnalysisTime = DateTime.UtcNow
         };
     }
@@ -232,29 +248,29 @@ public class AdvancedReferenceFinderService
     /// </summary>
     public async Task<TypeComprehensiveAnalysis> AnalyzeTypeComprehensivelyAsync(string typeName, CancellationToken cancellationToken = default)
     {
-        var tasks = new Task[]
-        {
-            FindTypeUsagesAsync(typeName, cancellationToken),
-            AnalyzeInheritanceAsync(typeName, cancellationToken),
-            AnalyzeTypeDependenciesAsync(typeName, cancellationToken),
-            FindGenericUsagesAsync(typeName, cancellationToken)
-        };
+        var usagesTask = FindTypeUsagesAsync(typeName, cancellationToken);
+        var inheritanceTask = AnalyzeInheritanceAsync(typeName, cancellationToken);
+        var dependenciesTask = AnalyzeTypeDependenciesAsync(typeName, cancellationToken);
+        var genericTask = FindGenericUsagesAsync(typeName, cancellationToken);
 
-        var results = await Task.WhenAll(tasks);
+        var usages = await usagesTask;
+        var inheritance = await inheritanceTask;
+        var dependencies = await dependenciesTask;
+        var generic = await genericTask;
 
         return new TypeComprehensiveAnalysis
         {
             TypeName = typeName,
-            TypeUsages = results[0],
-            InheritanceAnalysis = results[1],
-            DependencyAnalysis = results[2],
-            GenericUsages = results[3],
-            TotalUsages = results[0]?.TotalUsages ?? 0,
-            InstantiationCount = results[0]?.Instantiations.Count ?? 0,
-            DerivedTypeCount = results[1]?.DerivedClasses.Count ?? 0,
-            InterfaceImplementationCount = results[1]?.InterfaceImplementations.Count ?? 0,
-            DependencyCount = results[2]?.TotalDependencies ?? 0,
-            GenericUsageCount = results[3]?.Count ?? 0,
+            TypeUsages = usages,
+            InheritanceAnalysis = inheritance,
+            DependencyAnalysis = dependencies,
+            GenericUsages = generic,
+            TotalUsages = usages?.TotalUsages ?? 0,
+            InstantiationCount = usages?.Instantiations.Count ?? 0,
+            DerivedTypeCount = inheritance?.DerivedClasses.Count ?? 0,
+            InterfaceImplementationCount = inheritance?.InterfaceImplementations.Count ?? 0,
+            DependencyCount = dependencies?.TotalDependencies ?? 0,
+            GenericUsageCount = generic?.Count ?? 0,
             AnalysisTime = DateTime.UtcNow
         };
     }
@@ -292,6 +308,14 @@ public class AdvancedReferenceFinderService
         return allMethods
             .Where(m => CalculateSimilarity(m.Name, methodName) >= threshold)
             .ToList();
+    }
+
+    /// <summary>
+    /// Find methods with similar names (synchronous wrapper for tests)
+    /// </summary>
+    public async Task<List<MethodSignature>> FindSimilarMethods(string methodName, double threshold = 0.8)
+    {
+        return await FindSimilarMethodsAsync(methodName, threshold);
     }
 
     /// <summary>

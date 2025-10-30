@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using MCPsharp.Models;
 using MCPsharp.Models.Roslyn;
-using MCPsharp.Models.BulkEditModels;
 using MCPsharp.Models.Streaming;
 
 namespace MCPsharp.Tests.TestData;
@@ -18,24 +17,7 @@ public static class TestDataFixtures
     /// </summary>
     public static ProjectContext SampleProjectContext => new()
     {
-        RootPath = "/test/project",
-        SolutionFile = "/test/project/TestProject.sln",
-        ProjectFiles = new[]
-        {
-            "/test/project/src/TestProject.csproj",
-            "/test/project/tests/TestProject.Tests.csproj"
-        },
-        SourceFiles = new[]
-        {
-            "/test/project/src/Services/SampleService.cs",
-            "/test/project/src/Models/SampleModel.cs"
-        },
-        ConfigurationFiles = new[]
-        {
-            "/test/project/appsettings.json",
-            "/test/project/appsettings.Development.json"
-        },
-        WorkspaceFiles = Array.Empty<string>()
+        RootPath = "/test/project"
     };
 
     /// <summary>
@@ -108,7 +90,9 @@ public static class TestDataFixtures
     /// </summary>
     public static BulkRefactorPattern SampleRefactorPattern => new()
     {
-        RefactorType = BulkRefactorType.RenameMethod,
+        RefactorType = BulkRefactorType.RenameSymbol,
+        TargetPattern = "OldMethodName",
+        ReplacementPattern = "NewMethodName",
         Parameters = new Dictionary<string, object>
         {
             ["oldName"] = "OldMethodName",
@@ -119,31 +103,30 @@ public static class TestDataFixtures
     /// <summary>
     /// Sample streaming file configuration
     /// </summary>
-    public static StreamingFileConfiguration SampleStreamingConfig => new()
+    public static StreamProcessRequest SampleStreamingConfig => new()
     {
-        MaxFileSize = 10 * 1024 * 1024, // 10MB
         ChunkSize = 64 * 1024, // 64KB
-        MaxConcurrentFiles = 4,
-        ProcessingTimeout = TimeSpan.FromMinutes(5),
-        RetryCount = 3,
-        RetryDelay = TimeSpan.FromSeconds(1)
+        ProcessorType = StreamProcessorType.LineProcessor,
+        CreateCheckpoint = true,
+        EnableCompression = false
     };
 
     /// <summary>
     /// Sample validation request for testing
+    /// TODO: Implement ValidationRequest class or replace with appropriate validation model
     /// </summary>
-    public static ValidationRequest SampleValidationRequest => new()
-    {
-        OperationType = ValidationOperationType.Compilation,
-        TargetPaths = new[] { "/test/project/src" },
-        Options = new ValidationOptions
-        {
-            EnableSemanticAnalysis = true,
-            EnableSyntacticAnalysis = true,
-            EnablePerformanceAnalysis = false,
-            MaxDiagnostics = 100
-        }
-    };
+    // public static ValidationRequest SampleValidationRequest => new()
+    // {
+    //     OperationType = ValidationOperationType.Compilation,
+    //     TargetPaths = new[] { "/test/project/src" },
+    //     Options = new ValidationOptions
+    //     {
+    //         EnableSemanticAnalysis = true,
+    //         EnableSyntacticAnalysis = true,
+    //         EnablePerformanceAnalysis = false,
+    //         MaxDiagnostics = 100
+    //     }
+    // };
 
     /// <summary>
     /// File paths for different test scenarios
@@ -237,7 +220,7 @@ var result = service.ProcessData(""test"");
             return string.Join("\n", linesList);
         }
 
-        private static string GenerateRandomWords(Random random, int count)
+        public static string GenerateRandomWords(Random random, int count)
         {
             var words = new List<string>();
             var wordLengths = new[] { 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
@@ -321,7 +304,7 @@ var result = service.ProcessData(""test"");
         /// <summary>
         /// File with very long lines
         /// </summary>
-        public static string LongLineFile => new('x', 10000) + "\n" + new('y', 15000);
+        public static string LongLineFile => new string('x', 10000) + "\n" + new string('y', 15000);
 
         /// <summary>
         /// File with special characters

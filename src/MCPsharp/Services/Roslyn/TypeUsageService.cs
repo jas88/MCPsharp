@@ -28,7 +28,7 @@ public class TypeUsageService : ITypeUsageService
             return null;
 
         // Find the type symbol
-        var typeSymbol = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type).FirstOrDefault();
+        var typeSymbol = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type).OfType<INamedTypeSymbol>().FirstOrDefault();
         if (typeSymbol == null)
             return null;
 
@@ -81,14 +81,38 @@ public class TypeUsageService : ITypeUsageService
     {
         var compilation = _workspace.GetCompilation();
         if (compilation == null)
-            return new InheritanceAnalysis { TargetType = typeName };
+            return new InheritanceAnalysis
+            {
+                TargetType = typeName,
+                BaseClasses = new List<TypeUsageInfo>(),
+                DerivedClasses = new List<TypeUsageInfo>(),
+                ImplementedInterfaces = new List<TypeUsageInfo>(),
+                InterfaceImplementations = new List<TypeUsageInfo>(),
+                InheritanceDepth = 0,
+                InheritanceChain = new List<string>(),
+                IsAbstract = false,
+                IsInterface = false,
+                IsSealed = false
+            };
 
         var typeSymbol = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type)
             .OfType<INamedTypeSymbol>()
             .FirstOrDefault();
 
         if (typeSymbol == null)
-            return new InheritanceAnalysis { TargetType = typeName };
+            return new InheritanceAnalysis
+            {
+                TargetType = typeName,
+                BaseClasses = new List<TypeUsageInfo>(),
+                DerivedClasses = new List<TypeUsageInfo>(),
+                ImplementedInterfaces = new List<TypeUsageInfo>(),
+                InterfaceImplementations = new List<TypeUsageInfo>(),
+                InheritanceDepth = 0,
+                InheritanceChain = new List<string>(),
+                IsAbstract = false,
+                IsInterface = false,
+                IsSealed = false
+            };
 
         var usages = await FindTypeUsagesAsync(typeSymbol, cancellationToken);
         var baseClasses = new List<TypeUsageInfo>();
@@ -105,7 +129,7 @@ public class TypeUsageService : ITypeUsageService
         }
 
         // Find derived classes
-        var derivedSymbols = await SymbolFinder.FindDerivedClassesAsync(typeSymbol, compilation.Solution, cancellationToken);
+        var derivedSymbols = await SymbolFinder.FindDerivedClassesAsync(typeSymbol, _workspace.Solution, true);
         foreach (var derived in derivedSymbols)
         {
             var location = derived.Locations.FirstOrDefault();
@@ -117,7 +141,7 @@ public class TypeUsageService : ITypeUsageService
                     File = lineSpan.Path,
                     Line = lineSpan.StartLinePosition.Line,
                     Column = lineSpan.StartLinePosition.Character,
-                    UsageKind = TypeUsageKind.Inheritance,
+                    UsageKind = TypeUsageKind.BaseClass,
                     Context = $"class {derived.Name} : {typeSymbol.Name}",
                     Confidence = ConfidenceLevel.High,
                     MemberName = derived.Name,
@@ -135,7 +159,7 @@ public class TypeUsageService : ITypeUsageService
         // Find classes that implement this interface
         if (typeSymbol.TypeKind == TypeKind.Interface)
         {
-            var implementations = await SymbolFinder.FindImplementationsAsync(typeSymbol, compilation.Solution, cancellationToken);
+            var implementations = await SymbolFinder.FindImplementationsAsync(typeSymbol, _workspace.Solution, true);
             foreach (var impl in implementations)
             {
                 var location = impl.Locations.FirstOrDefault();
@@ -202,7 +226,14 @@ public class TypeUsageService : ITypeUsageService
         var startTime = DateTime.UtcNow;
         var result = await FindTypeUsagesAsync(typeName, cancellationToken);
         if (result == null)
-            return new TypeDependencyAnalysis { TargetType = typeName };
+            return new TypeDependencyAnalysis
+            {
+                TargetType = typeName,
+                Dependencies = new List<TypeDependency>(),
+                Dependents = new List<TypeDependency>(),
+                DependencyFrequency = new Dictionary<string, int>(),
+                CircularDependencies = new List<string>()
+            };
 
         var dependencies = new List<TypeDependency>();
         var dependents = new List<TypeDependency>();
@@ -452,7 +483,8 @@ public class TypeUsageService : ITypeUsageService
         {
             foreach (var location in referencedSymbol.Locations)
             {
-                if (!location.Location.IsInSource)
+                var lineSpan = location.Location.GetLineSpan();
+                if (!lineSpan.Path?.EndsWith(".cs") == true)
                     continue;
 
                 var document = location.Document;
@@ -460,7 +492,8 @@ public class TypeUsageService : ITypeUsageService
                     continue;
 
                 filesAnalyzed++;
-                var usageInfo = await AnalyzeTypeUsageLocation(location.Location, typeSymbol, cancellationToken);
+                var symbolLocation = ConvertToSymbolLocation(location.Location);
+                var usageInfo = await AnalyzeTypeUsageLocation(symbolLocation, typeSymbol, cancellationToken);
                 if (usageInfo != null)
                 {
                     usages.Add(usageInfo);
@@ -701,5 +734,22 @@ public class TypeUsageService : ITypeUsageService
     {
         return filePath.Contains("test", StringComparison.OrdinalIgnoreCase) ||
                filePath.Contains("spec", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Converts Microsoft.CodeAnalysis.Location to SymbolLocation
+    /// </summary>
+    private static SymbolLocation ConvertToSymbolLocation(Microsoft.CodeAnalysis.Location location)
+    {
+        var lineSpan = location.GetLineSpan();
+
+        return new SymbolLocation
+        {
+            FilePath = lineSpan.Path,
+            Line = lineSpan.StartLinePosition.Line,
+            Column = lineSpan.StartLinePosition.Character,
+            Location = location,
+            TextSpan = location.SourceSpan
+        };
     }
 }

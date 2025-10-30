@@ -158,7 +158,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = true,
-                Data = JsonSerializer.Serialize(result)
+                Result = JsonSerializer.Serialize(result)
             };
         }
         catch (Exception ex)
@@ -214,7 +214,7 @@ public static class AnalyzerTools
                 session_id = result.SessionId,
                 analyzer_id = result.AnalyzerId,
                 success = result.Success,
-                error_message = result.Error,
+                error_message = result.ErrorMessage,
                 start_time = result.StartTime,
                 end_time = result.EndTime,
                 statistics = result.Statistics,
@@ -222,7 +222,7 @@ public static class AnalyzerTools
                 {
                     file_path = r.FilePath,
                     success = r.Success,
-                    error_message = r.Error,
+                    error_message = r.ErrorMessage,
                     issues = r.Issues.Select(i => new
                     {
                         id = i.Id,
@@ -246,7 +246,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = true,
-                Data = JsonSerializer.Serialize(response)
+                Result = JsonSerializer.Serialize(response)
             };
         }
         catch (Exception ex)
@@ -301,7 +301,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = true,
-                Data = JsonSerializer.Serialize(result)
+                Result = JsonSerializer.Serialize(result)
             };
         }
         catch (Exception ex)
@@ -360,7 +360,7 @@ public static class AnalyzerTools
                 session_id = result.SessionId,
                 analyzer_id = result.AnalyzerId,
                 success = result.Success,
-                error_message = result.Error,
+                error_message = result.ErrorMessage,
                 start_time = result.StartTime,
                 end_time = result.EndTime,
                 modified_files = result.ModifiedFiles,
@@ -371,7 +371,7 @@ public static class AnalyzerTools
                     id = r.Id,
                     fix_id = r.FixId,
                     success = r.Success,
-                    error_message = r.Error,
+                    error_message = r.ErrorMessage,
                     modified_files = r.ModifiedFiles,
                     conflicts = r.Conflicts,
                     applied_at = r.AppliedAt,
@@ -382,7 +382,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = true,
-                Data = JsonSerializer.Serialize(response)
+                Result = JsonSerializer.Serialize(response)
             };
         }
         catch (Exception ex)
@@ -416,7 +416,7 @@ public static class AnalyzerTools
             {
                 success = result.Success,
                 analyzer_id = result.AnalyzerId,
-                error_message = result.Error,
+                error_message = result.ErrorMessage,
                 security_validation = result.SecurityValidation != null ? new
                 {
                     is_valid = result.SecurityValidation.IsValid,
@@ -432,7 +432,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = true,
-                Data = JsonSerializer.Serialize(response)
+                Result = JsonSerializer.Serialize(response)
             };
         }
         catch (Exception ex)
@@ -460,7 +460,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = true,
-                Data = JsonSerializer.Serialize(new
+                Result = JsonSerializer.Serialize(new
                 {
                     analyzer_id = analyzerId,
                     success = success,
@@ -506,7 +506,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = true,
-                Data = JsonSerializer.Serialize(new
+                Result = JsonSerializer.Serialize(new
                 {
                     analyzer_id = analyzerId,
                     configured_at = DateTime.UtcNow
@@ -548,7 +548,7 @@ public static class AnalyzerTools
                     last_activity = h.LastActivity,
                     uptime = h.Uptime.ToString(),
                     analyses_run = h.AnalysesRun,
-                    errors_encountered = h.ErrorsEncountered,
+                    errors_encountered = h.ErrorMessagesEncountered,
                     warnings = h.Warnings,
                     last_error = h.LastError,
                     metrics = h.Metrics
@@ -558,7 +558,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = true,
-                Data = JsonSerializer.Serialize(result)
+                Result = JsonSerializer.Serialize(result)
             };
         }
         catch (Exception ex)
@@ -600,7 +600,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = true,
-                Data = JsonSerializer.Serialize(result)
+                Result = JsonSerializer.Serialize(result)
             };
         }
         catch (Exception ex)
@@ -629,7 +629,7 @@ public static class AnalyzerTools
             {
                 session_id = result.SessionId,
                 success = result.Success,
-                error_message = result.Error,
+                error_message = result.ErrorMessage,
                 restored_files = result.RestoredFiles,
                 failed_files = result.FailedFiles,
                 rolled_back_at = result.RolledBackAt,
@@ -639,7 +639,7 @@ public static class AnalyzerTools
             return new ToolCallResult
             {
                 Success = true,
-                Data = JsonSerializer.Serialize(response)
+                Result = JsonSerializer.Serialize(response)
             };
         }
         catch (Exception ex)

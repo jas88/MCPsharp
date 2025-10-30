@@ -81,7 +81,7 @@ public class FixEngine : IFixEngine
             }
 
             // Detect conflicts
-            var conflictEnumerable = DetectFixConflictsAsync(previews, cancellationToken);
+            var conflictEnumerable = await DetectFixConflictsAsync(previews, cancellationToken);
             conflicts = new List<FixConflict>();
             await foreach (var conflict in conflictEnumerable.WithCancellation(cancellationToken))
             {
@@ -224,12 +224,10 @@ public class FixEngine : IFixEngine
                 Success = !failedFiles.Any(),
                 ModifiedFiles = modifiedFiles.ToImmutableArray(),
                 AppliedFixes = appliedFixes.ToImmutableArray(),
-                Metadata = new Dictionary<string, object>
-                {
-                    ["BackupPaths"] = backupPaths,
-                    ["ConflictsResolved"] = conflicts.Count,
-                    ["ValidationWarnings"] = validationWarnings.Count
-                }.ToImmutableDictionary()
+                Metadata = ImmutableDictionary<string, object>.Empty
+                    .Add("BackupPaths", backupPaths)
+                    .Add("ConflictsResolved", conflicts.Length)
+                    .Add("ValidationWarnings", validationWarnings.Count)
             };
 
             _sessions[sessionId] = session;
@@ -274,7 +272,9 @@ public class FixEngine : IFixEngine
 
             foreach (var (filePath, fileFixes) in fixesByFile)
             {
-                var fileConflicts = await DetectFileConflictsAsync(filePath, fileFixes, cancellationToken);
+                // Convert AnalyzerFix objects to FixPreview objects
+                var fixPreviews = fileFixes.Select(ConvertToFixPreview).ToList();
+                var fileConflicts = await DetectFileConflictsAsync(filePath, fixPreviews, cancellationToken);
                 conflicts.AddRange(fileConflicts);
             }
 
@@ -378,7 +378,7 @@ public class FixEngine : IFixEngine
                     {
                         if (File.Exists(backupPath))
                         {
-                            await File.CopyAsync(backupPath, originalPath, true, cancellationToken);
+                            File.Copy(backupPath, originalPath, true);
                             restoredFiles.Add(originalPath);
                             File.Delete(backupPath);
                         }
@@ -587,7 +587,7 @@ public class FixEngine : IFixEngine
             conflicts.AddRange(fileConflicts);
         }
 
-        return conflicts.ToAsyncEnumerable();
+        return CreateAsyncEnumerable(conflicts);
     }
 
     private async Task<List<FixConflict>> DetectFileConflictsAsync(
@@ -631,7 +631,8 @@ public class FixEngine : IFixEngine
         var end1 = (edit1.EndLine, edit1.EndColumn);
         var end2 = (edit2.EndLine, edit2.EndColumn);
 
-        return !(end1 < pos2 || end2 < pos1);
+        return !(end1.Item1 < pos2.Item1 || (end1.Item1 == pos2.Item1 && end1.Item2 < pos2.Item2) ||
+                 end2.Item1 < pos1.Item1 || (end2.Item1 == pos1.Item1 && end2.Item2 < pos1.Item2));
     }
 
     private async Task<ConflictResolution?> ResolveSingleConflictAsync(
@@ -705,19 +706,16 @@ public class FixEngine : IFixEngine
         {
             try
             {
-                var result = await _fileOperations.EditFileAsync(new FileEditRequest
+                var editFilePath = edit.FilePath ?? string.Empty;
+                var edits = new[] { new ReplaceEdit
                 {
-                    FilePath = edit.FilePath,
-                    Edits = new[] { new Models.TextEdit
-                    {
-                        StartLine = edit.StartLine,
-                        StartColumn = edit.StartColumn,
-                        EndLine = edit.EndLine,
-                        EndColumn = edit.EndColumn,
-                        NewText = edit.NewText
-                    }},
-                    CreateBackup = false // We handle backup at session level
-                }, cancellationToken);
+                    StartLine = edit.StartLine,
+                    StartColumn = edit.StartColumn,
+                    EndLine = edit.EndLine,
+                    EndColumn = edit.EndColumn,
+                    NewText = edit.NewText
+                }};
+                var result = await _fileOperations.EditFileAsync(editFilePath, edits, cancellationToken);
 
                 if (result.Success)
                 {
@@ -730,7 +728,7 @@ public class FixEngine : IFixEngine
                         Success = false,
                         FixId = fix.Id,
                         AnalyzerId = fix.AnalyzerId,
-                        ErrorMessage = result.ErrorMessage,
+                        ErrorMessage = result.Error,
                         ModifiedFiles = modifiedFiles.ToImmutableArray()
                     };
                 }
@@ -818,5 +816,35 @@ public class FixEngine : IFixEngine
         }
 
         return errors;
+    }
+
+    /// <summary>
+    /// Converts an AnalyzerFix to a FixPreview
+    /// </summary>
+    private static FixPreview ConvertToFixPreview(AnalyzerFix fix)
+    {
+        return new FixPreview
+        {
+            FixId = fix.Id,
+            IssueId = fix.RuleId, // Use RuleId as IssueId for now
+            FilePath = fix.Edits.FirstOrDefault()?.FilePath ?? string.Empty,
+            OriginalContent = string.Empty, // Not available in AnalyzerFix
+            ModifiedContent = string.Empty, // Not available in AnalyzerFix
+            Edits = fix.Edits,
+            Description = fix.Description,
+            Confidence = fix.Confidence
+        };
+    }
+
+    /// <summary>
+    /// Creates an IAsyncEnumerable from a List
+    /// </summary>
+    private static async IAsyncEnumerable<T> CreateAsyncEnumerable<T>(IEnumerable<T> items)
+    {
+        foreach (var item in items)
+        {
+            await Task.Yield();
+            yield return item;
+        }
     }
 }

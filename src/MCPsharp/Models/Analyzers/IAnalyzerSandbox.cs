@@ -8,6 +8,11 @@ namespace MCPsharp.Models.Analyzers;
 public interface IAnalyzerSandbox : IDisposable
 {
     /// <summary>
+    /// Load an analyzer into the sandbox
+    /// </summary>
+    Task<IAnalyzer> LoadAnalyzerAsync(string assemblyPath, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Execute an analyzer in isolation
     /// </summary>
     Task<AnalysisResult> ExecuteAnalyzerAsync(IAnalyzer analyzer, string filePath, string content, CancellationToken cancellationToken = default);

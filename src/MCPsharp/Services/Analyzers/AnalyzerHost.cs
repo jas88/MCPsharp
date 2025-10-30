@@ -95,6 +95,7 @@ public class AnalyzerHost : IAnalyzerHost
 
             // Load analyzers from assembly
             var analyzerInfos = await _registry.DiscoverAnalyzersAsync(Path.GetDirectoryName(assemblyPath)!, cancellationToken);
+            IAnalyzer? loadedAnalyzer = null;
             var loadedAnalyzers = new List<string>();
 
             foreach (var info in analyzerInfos.Where(i => i.AssemblyPath == assemblyPath))
@@ -108,6 +109,7 @@ public class AnalyzerHost : IAnalyzerHost
                         if (registered)
                         {
                             loadedAnalyzers.Add(analyzer.Id);
+                            loadedAnalyzer ??= analyzer; // Keep the first loaded analyzer
 
                             // Create sandbox for the analyzer
                             var sandbox = new AnalyzerSandbox(
@@ -152,6 +154,7 @@ public class AnalyzerHost : IAnalyzerHost
             {
                 Success = true,
                 AnalyzerId = loadedAnalyzers.First(), // Return the first loaded analyzer ID
+                Analyzer = loadedAnalyzer,
                 SecurityValidation = securityValidation,
                 Warnings = compatibilityResult.Warnings.Concat(securityValidation.Warnings).ToImmutableArray()
             };
@@ -662,5 +665,229 @@ public class AnalyzerHost : IAnalyzerHost
         {
             _logger.LogError(ex, "Error generating fixes for session {SessionId}", sessionResult.SessionId);
         }
+    }
+
+    public async Task<AnalyzerResult> RunAnalyzerAsync(string analyzerId, string targetPath, AnalyzerOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Running analyzer {AnalyzerId} on target {TargetPath}", analyzerId, targetPath);
+
+            var analyzer = _registry.GetAnalyzer(analyzerId);
+            if (analyzer == null)
+            {
+                return new AnalyzerResult
+                {
+                    Success = false,
+                    AnalyzerId = analyzerId,
+                    ErrorMessage = $"Analyzer not found: {analyzerId}"
+                };
+            }
+
+            if (!analyzer.IsEnabled)
+            {
+                return new AnalyzerResult
+                {
+                    Success = false,
+                    AnalyzerId = analyzerId,
+                    ErrorMessage = $"Analyzer is disabled: {analyzerId}"
+                };
+            }
+
+            if (!analyzer.CanAnalyze(targetPath))
+            {
+                return new AnalyzerResult
+                {
+                    Success = false,
+                    AnalyzerId = analyzerId,
+                    ErrorMessage = $"Analyzer cannot analyze target: {targetPath}"
+                };
+            }
+
+            // Initialize analyzer if needed
+            await analyzer.InitializeAsync(cancellationToken);
+
+            // Determine if target is file or directory
+            if (File.Exists(targetPath))
+            {
+                var content = await File.ReadAllTextAsync(targetPath, cancellationToken);
+                var analysisResult = await analyzer.AnalyzeAsync(targetPath, content, cancellationToken);
+
+                return new AnalyzerResult
+                {
+                    Success = true,
+                    AnalyzerId = analyzerId,
+                    Findings = analysisResult.Issues.Select(i => new Finding
+                    {
+                        Message = i.Description,
+                        Severity = MapSeverity(i.Severity),
+                        FilePath = i.FilePath,
+                        LineNumber = i.LineNumber,
+                        ColumnNumber = i.ColumnNumber
+                    }).ToList()
+                };
+            }
+            else if (Directory.Exists(targetPath))
+            {
+                // For directory analysis, find all supported files
+                var supportedExtensions = analyzer.SupportedExtensions;
+                var files = Directory.GetFiles(targetPath, "*.*", SearchOption.AllDirectories)
+                    .Where(f => supportedExtensions.Contains(Path.GetExtension(f)))
+                    .Take(100); // Limit to 100 files for now
+
+                var allFindings = new List<Finding>();
+                foreach (var file in files)
+                {
+                    try
+                    {
+                        var content = await File.ReadAllTextAsync(file, cancellationToken);
+                        var analysisResult = await analyzer.AnalyzeAsync(file, content, cancellationToken);
+
+                        allFindings.AddRange(analysisResult.Issues.Select(i => new Finding
+                        {
+                            Message = i.Description,
+                            Severity = MapSeverity(i.Severity),
+                            FilePath = i.FilePath,
+                            LineNumber = i.LineNumber,
+                            ColumnNumber = i.ColumnNumber
+                        }));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error analyzing file: {FilePath}", file);
+                    }
+                }
+
+                return new AnalyzerResult
+                {
+                    Success = true,
+                    AnalyzerId = analyzerId,
+                    Findings = allFindings
+                };
+            }
+            else
+            {
+                return new AnalyzerResult
+                {
+                    Success = false,
+                    AnalyzerId = analyzerId,
+                    ErrorMessage = $"Target path does not exist: {targetPath}"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error running analyzer {AnalyzerId} on target {TargetPath}", analyzerId, targetPath);
+            return new AnalyzerResult
+            {
+                Success = false,
+                AnalyzerId = analyzerId,
+                ErrorMessage = ex.Message
+            };
+        }
+    }
+
+    public async Task<List<IAnalyzer>> GetLoadedAnalyzersAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await Task.FromResult(_registry.GetLoadedAnalyzers());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting loaded analyzers");
+            return new List<IAnalyzer>();
+        }
+    }
+
+    public async Task<AnalyzerCapabilities?> GetAnalyzerCapabilitiesAsync(string analyzerId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var analyzer = _registry.GetAnalyzer(analyzerId);
+            if (analyzer == null)
+            {
+                return null;
+            }
+
+            return analyzer.GetCapabilities();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting capabilities for analyzer: {AnalyzerId}", analyzerId);
+            return null;
+        }
+    }
+
+    public async Task<AnalyzerUnloadResult> UnloadAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Unloading analyzer: {AnalyzerId}", analyzer.Id);
+
+            // Remove sandbox
+            IAnalyzerSandbox? sandbox = null;
+            lock (_lock)
+            {
+                if (_sandboxes.TryGetValue(analyzer.Id, out sandbox))
+                {
+                    _sandboxes.Remove(analyzer.Id);
+                }
+            }
+
+            sandbox?.Dispose();
+
+            // Unregister from registry
+            var unregistered = await _registry.UnregisterAnalyzerAsync(analyzer.Id, cancellationToken);
+
+            if (unregistered)
+            {
+                await _securityManager.LogSecurityEventAsync(new SecurityEvent
+                {
+                    AnalyzerId = analyzer.Id,
+                    EventType = SecurityEventType.AssemblyValidation,
+                    Operation = "UnloadAnalyzer",
+                    Success = true,
+                    Details = $"Analyzer {analyzer.Id} unloaded successfully"
+                });
+
+                return new AnalyzerUnloadResult
+                {
+                    Success = true,
+                    AnalyzerId = analyzer.Id
+                };
+            }
+            else
+            {
+                return new AnalyzerUnloadResult
+                {
+                    Success = false,
+                    AnalyzerId = analyzer.Id,
+                    ErrorMessage = "Failed to unregister analyzer"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error unloading analyzer: {AnalyzerId}", analyzer.Id);
+            return new AnalyzerUnloadResult
+            {
+                Success = false,
+                AnalyzerId = analyzer.Id,
+                ErrorMessage = ex.Message
+            };
+        }
+    }
+
+    private FindingSeverity MapSeverity(IssueSeverity analyzerSeverity)
+    {
+        return analyzerSeverity switch
+        {
+            IssueSeverity.Info => FindingSeverity.Info,
+            IssueSeverity.Warning => FindingSeverity.Warning,
+            IssueSeverity.Error => FindingSeverity.Error,
+            IssueSeverity.Critical => FindingSeverity.Critical,
+            _ => FindingSeverity.Info
+        };
     }
 }

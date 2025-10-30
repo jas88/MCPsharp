@@ -78,8 +78,14 @@ public class CallerAnalysisService : ICallerAnalysisService
             return null;
 
         // Filter to only direct callers
-        result.Callers = result.DirectCallers;
-        return result;
+        return new CallerResult
+        {
+            TargetSymbol = result.TargetSymbol,
+            TargetSignature = result.TargetSignature,
+            Callers = result.DirectCallers,
+            AnalysisTime = result.AnalysisTime,
+            Metadata = result.Metadata
+        };
     }
 
     public async Task<CallerResult?> FindIndirectCallersAsync(string methodName, string? containingType = null, CancellationToken cancellationToken = default)
@@ -89,15 +95,21 @@ public class CallerAnalysisService : ICallerAnalysisService
             return null;
 
         // Filter to only indirect callers
-        result.Callers = result.IndirectCallers;
-        return result;
+        return new CallerResult
+        {
+            TargetSymbol = result.TargetSymbol,
+            TargetSignature = result.TargetSignature,
+            Callers = result.IndirectCallers,
+            AnalysisTime = result.AnalysisTime,
+            Metadata = result.Metadata
+        };
     }
 
     public async Task<CallPatternAnalysis> AnalyzeCallPatternsAsync(string methodName, string? containingType = null, CancellationToken cancellationToken = default)
     {
         var callerResult = await FindCallersAsync(methodName, containingType, cancellationToken);
         if (callerResult == null)
-            return new CallPatternAnalysis { TargetMethod = new MethodSignature { Name = methodName, ContainingType = containingType ?? "", ReturnType = "void" } };
+            return new CallPatternAnalysis { TargetMethod = new MethodSignature { Name = methodName, ContainingType = containingType ?? "", ReturnType = "void", Accessibility = "public" } };
 
         var patterns = new List<CallPattern>();
         var callFrequencyByFile = new Dictionary<string, int>();
@@ -198,7 +210,7 @@ public class CallerAnalysisService : ICallerAnalysisService
                 }
 
                 // Find references to this method
-                var references = await SymbolFinder.FindReferencesAsync(symbol, compilation);
+                var references = await SymbolFinder.FindReferencesAsync(symbol, _workspace.Solution);
                 if (!references.Any())
                 {
                     unusedMethods.Add(CreateMethodSignature(symbol));
@@ -232,7 +244,7 @@ public class CallerAnalysisService : ICallerAnalysisService
                     continue;
 
                 // Find references to this method
-                var references = await SymbolFinder.FindReferencesAsync(symbol, compilation);
+                var references = await SymbolFinder.FindReferencesAsync(symbol, _workspace.Solution);
                 var referenceFiles = references
                     .SelectMany(r => r.Locations)
                     .Select(l => l.Document.FilePath ?? "")
@@ -261,13 +273,14 @@ public class CallerAnalysisService : ICallerAnalysisService
         var methodsAnalyzed = 0;
 
         // Find all references to the symbol
-        var referencedSymbols = await SymbolFinder.FindReferencesAsync(symbol, compilation.Solution, cancellationToken);
+        var referencedSymbols = await SymbolFinder.FindReferencesAsync(symbol, _workspace.Solution, cancellationToken);
 
         foreach (var referencedSymbol in referencedSymbols)
         {
             foreach (var location in referencedSymbol.Locations)
             {
-                if (!location.IsInSource)
+                var lineSpan = location.Location.GetLineSpan();
+                if (!lineSpan.Path?.EndsWith(".cs") == true)
                     continue;
 
                 var document = location.Document;
@@ -275,7 +288,8 @@ public class CallerAnalysisService : ICallerAnalysisService
                     continue;
 
                 filesAnalyzed++;
-                var callerInfo = await AnalyzeCallerLocation(location, symbol, targetSignature, cancellationToken);
+                var symbolLocation = ConvertToSymbolLocation(location);
+                var callerInfo = await AnalyzeCallerLocation(symbolLocation, symbol, targetSignature, cancellationToken);
                 if (callerInfo != null)
                 {
                     callers.Add(callerInfo);
@@ -317,7 +331,7 @@ public class CallerAnalysisService : ICallerAnalysisService
         if (targetSymbol.ContainingType?.TypeKind == TypeKind.Interface)
         {
             var solution = _workspace.Solution;
-            var implementations = await SymbolFinder.FindImplementationsAsync(targetSymbol.ContainingType, solution, cancellationToken);
+            var implementations = await SymbolFinder.FindImplementationsAsync(targetSymbol.ContainingType, solution);
             foreach (var impl in implementations)
             {
                 var implMethod = impl.GetMembers(targetSymbol.Name).FirstOrDefault();
@@ -566,5 +580,23 @@ public class CallerAnalysisService : ICallerAnalysisService
     {
         return filePath.Contains("test", StringComparison.OrdinalIgnoreCase) ||
                filePath.Contains("spec", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Converts ReferenceLocation to SymbolLocation
+    /// </summary>
+    private static SymbolLocation ConvertToSymbolLocation(Microsoft.CodeAnalysis.FindSymbols.ReferenceLocation referenceLocation)
+    {
+        var location = referenceLocation.Location;
+        var lineSpan = location.GetLineSpan();
+
+        return new SymbolLocation
+        {
+            FilePath = lineSpan.Path,
+            Line = lineSpan.StartLinePosition.Line,
+            Column = lineSpan.StartLinePosition.Character,
+            Location = location,
+            TextSpan = location.SourceSpan
+        };
     }
 }

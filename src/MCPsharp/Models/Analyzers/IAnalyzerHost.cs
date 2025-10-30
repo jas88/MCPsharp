@@ -63,6 +63,26 @@ public interface IAnalyzerHost
     Task<ImmutableArray<AnalyzerHealthStatus>> GetHealthStatusAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Run a specific analyzer on a target path
+    /// </summary>
+    Task<AnalyzerResult> RunAnalyzerAsync(string analyzerId, string targetPath, AnalyzerOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all loaded analyzers as IAnalyzer instances
+    /// </summary>
+    Task<List<IAnalyzer>> GetLoadedAnalyzersAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get capabilities of a specific analyzer
+    /// </summary>
+    Task<AnalyzerCapabilities?> GetAnalyzerCapabilitiesAsync(string analyzerId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Unload an analyzer instance
+    /// </summary>
+    Task<AnalyzerUnloadResult> UnloadAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Event fired when an analyzer is loaded
     /// </summary>
     event EventHandler<AnalyzerLoadedEventArgs>? AnalyzerLoaded;
@@ -85,7 +105,9 @@ public record AnalyzerLoadResult
 {
     public bool Success { get; init; }
     public string AnalyzerId { get; init; } = string.Empty;
+    public IAnalyzer? Analyzer { get; init; }
     public string? ErrorMessage { get; init; }
+    public string? Error => ErrorMessage; // Alias for test compatibility
     public SecurityValidationResult? SecurityValidation { get; init; }
     public ImmutableArray<string> Warnings { get; init; } = ImmutableArray<string>.Empty;
     public DateTime LoadedAt { get; init; } = DateTime.UtcNow;
@@ -137,6 +159,7 @@ public record AnalyzerHealthStatus
     public TimeSpan Uptime { get; init; }
     public int AnalysesRun { get; init; }
     public int ErrorsEncountered { get; init; }
+    public ImmutableArray<string> ErrorMessagesEncountered { get; init; } = ImmutableArray<string>.Empty;
     public ImmutableArray<string> Warnings { get; init; } = ImmutableArray<string>.Empty;
     public string? LastError { get; init; }
     public ImmutableDictionary<string, object> Metrics { get; init; } = ImmutableDictionary<string, object>.Empty;
@@ -156,3 +179,55 @@ public record AnalyzerUnloadedEventArgs(string AnalyzerId);
 /// Event args for analysis completed
 /// </summary>
 public record AnalysisCompletedEventArgs(string SessionId, AnalysisSessionResult Result);
+
+/// <summary>
+/// Result of unloading an analyzer
+/// </summary>
+public record AnalyzerUnloadResult
+{
+    public bool Success { get; init; }
+    public string AnalyzerId { get; init; } = string.Empty;
+    public string? ErrorMessage { get; init; }
+    public DateTime UnloadedAt { get; init; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Capabilities of an analyzer
+/// </summary>
+public record AnalyzerCapabilities
+{
+    /// <summary>
+    /// Supported programming languages
+    /// </summary>
+    public string[] SupportedLanguages { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Supported file types
+    /// </summary>
+    public string[] SupportedFileTypes { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Maximum file size that can be analyzed
+    /// </summary>
+    public long MaxFileSize { get; init; } = 10 * 1024 * 1024; // 10MB default
+
+    /// <summary>
+    /// Whether the analyzer can analyze projects
+    /// </summary>
+    public bool CanAnalyzeProjects { get; init; }
+
+    /// <summary>
+    /// Whether the analyzer can analyze solutions
+    /// </summary>
+    public bool CanAnalyzeSolutions { get; init; }
+
+    /// <summary>
+    /// Whether the analyzer supports parallel processing
+    /// </summary>
+    public bool SupportsParallelProcessing { get; init; }
+
+    /// <summary>
+    /// Whether the analyzer can fix issues
+    /// </summary>
+    public bool CanFixIssues { get; init; }
+}
