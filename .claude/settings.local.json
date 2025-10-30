@@ -48,7 +48,8 @@
       "mcp__code-index__search_code_advanced",
       "mcp__code-index__set_project_path",
       "Bash(cut:*)",
-      "mcp__MCPsharp__bulk_replace"
+      "mcp__MCPsharp__bulk_replace",
+      "Bash(timeout:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

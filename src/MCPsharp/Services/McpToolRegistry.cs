@@ -1,8 +1,12 @@
+using System.Text;
 using System.Text.Json;
 using MCPsharp.Models;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Models.Streaming;
+using MCPsharp.Models.Architecture;
 using MCPsharp.Services.Roslyn;
+using MCPsharp.Services.Phase3;
+using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;
 
@@ -27,6 +31,12 @@ public class McpToolRegistry
     private ITypeUsageService? _typeUsage;
     private AdvancedReferenceFinderService? _advancedReferenceFinder;
 
+    // Phase 3 services
+    private IArchitectureValidatorService? _architectureValidator;
+    private IDuplicateCodeDetectorService? _duplicateCodeDetector;
+    private ISqlMigrationAnalyzerService? _sqlMigrationAnalyzer;
+    private ILargeFileOptimizerService? _largeFileOptimizer;
+
     // Phase 2 services (optional)
     private readonly IWorkflowAnalyzerService? _workflowAnalyzer;
     private readonly IConfigAnalyzerService? _configAnalyzer;
@@ -41,6 +51,9 @@ public class McpToolRegistry
     private readonly IProgressTracker? _progressTracker;
     private readonly ITempFileManager? _tempFileManager;
 
+    // Response processing for token limiting
+    private readonly ResponseProcessor _responseProcessor;
+
     public McpToolRegistry(
         ProjectContextManager projectContext,
         RoslynWorkspace? workspace = null,
@@ -51,7 +64,10 @@ public class McpToolRegistry
         IBulkEditService? bulkEditService = null,
         IStreamingFileProcessor? streamingProcessor = null,
         IProgressTracker? progressTracker = null,
-        ITempFileManager? tempFileManager = null)
+        ITempFileManager? tempFileManager = null,
+        ISqlMigrationAnalyzerService? sqlMigrationAnalyzer = null,
+        ILargeFileOptimizerService? largeFileOptimizer = null,
+        ILoggerFactory? loggerFactory = null)
     {
         _projectContext = projectContext;
         _workspace = workspace;
@@ -63,6 +79,14 @@ public class McpToolRegistry
         _streamingProcessor = streamingProcessor;
         _progressTracker = progressTracker;
         _tempFileManager = tempFileManager;
+        _sqlMigrationAnalyzer = sqlMigrationAnalyzer;
+        _largeFileOptimizer = largeFileOptimizer;
+
+        // Initialize response processor with configuration
+        var responseConfig = ResponseConfiguration.LoadFromEnvironment();
+        var responseLogger = loggerFactory?.CreateLogger<ResponseProcessor>();
+        _responseProcessor = new ResponseProcessor(responseConfig, responseLogger);
+
         _tools = RegisterTools();
     }
 
@@ -78,7 +102,7 @@ public class McpToolRegistry
     {
         try
         {
-            return request.Name switch
+            var result = request.Name switch
             {
                 "project_open" => await ExecuteProjectOpen(request.Arguments),
                 "project_info" => ExecuteProjectInfo(),
@@ -134,12 +158,104 @@ public class McpToolRegistry
                 "cleanup_stream_operations" => await ExecuteCleanupStreamOperations(request.Arguments),
                 "get_available_processors" => await ExecuteGetAvailableProcessors(request.Arguments),
                 "estimate_stream_processing" => await ExecuteEstimateStreamProcessing(request.Arguments),
+                // Phase 3 architecture validation tools
+                "validate_architecture" => await ExecuteValidateArchitecture(request.Arguments, ct),
+                "detect_layer_violations" => await ExecuteDetectLayerViolations(request.Arguments, ct),
+                "analyze_dependencies" => await ExecuteAnalyzeDependencies(request.Arguments, ct),
+                "get_architecture_report" => await ExecuteGetArchitectureReport(request.Arguments, ct),
+                "define_custom_architecture" => await ExecuteDefineCustomArchitecture(request.Arguments, ct),
+                "analyze_circular_dependencies" => await ExecuteAnalyzeCircularDependencies(request.Arguments, ct),
+                "generate_architecture_diagram" => await ExecuteGenerateArchitectureDiagram(request.Arguments, ct),
+                "get_architecture_recommendations" => await ExecuteGetArchitectureRecommendations(request.Arguments, ct),
+                "check_type_compliance" => await ExecuteCheckTypeCompliance(request.Arguments, ct),
+                "get_predefined_architectures" => await ExecuteGetPredefinedArchitectures(request.Arguments, ct),
+                // Duplicate Code Detection Tools
+                "detect_duplicates" => await ExecuteDetectDuplicates(request.Arguments, ct),
+                "find_exact_duplicates" => await ExecuteFindExactDuplicates(request.Arguments, ct),
+                "find_near_duplicates" => await ExecuteFindNearDuplicates(request.Arguments, ct),
+                "analyze_duplication_metrics" => await ExecuteAnalyzeDuplicationMetrics(request.Arguments, ct),
+                "get_refactoring_suggestions" => await ExecuteGetRefactoringSuggestions(request.Arguments, ct),
+                "get_duplicate_hotspots" => await ExecuteGetDuplicateHotspots(request.Arguments, ct),
+                "compare_code_blocks" => await ExecuteCompareCodeBlocks(request.Arguments, ct),
+                "validate_refactoring" => await ExecuteValidateRefactoring(request.Arguments, ct),
+                // SQL Migration Analyzer Tools (Phase 3 - Coming Soon)
+                "analyze_migrations" => await ExecutePhase3Placeholder(request.Arguments, ct, "analyze_migrations"),
+                "detect_breaking_changes" => await ExecutePhase3Placeholder(request.Arguments, ct, "detect_breaking_changes"),
+                "get_migration_history" => await ExecutePhase3Placeholder(request.Arguments, ct, "get_migration_history"),
+                "get_migration_dependencies" => await ExecutePhase3Placeholder(request.Arguments, ct, "get_migration_dependencies"),
+                "generate_migration_report" => await ExecutePhase3Placeholder(request.Arguments, ct, "generate_migration_report"),
+                "validate_migrations" => await ExecutePhase3Placeholder(request.Arguments, ct, "validate_migrations"),
+                // Large File Optimization Tools (Phase 3 - Coming Soon)
+                "analyze_large_files" => await ExecutePhase3Placeholder(request.Arguments, ct, "analyze_large_files"),
+                "optimize_large_class" => await ExecutePhase3Placeholder(request.Arguments, ct, "optimize_large_class"),
+                "optimize_large_method" => await ExecutePhase3Placeholder(request.Arguments, ct, "optimize_large_method"),
+                "get_complexity_metrics" => await ExecutePhase3Placeholder(request.Arguments, ct, "get_complexity_metrics"),
+                "generate_optimization_plan" => await ExecutePhase3Placeholder(request.Arguments, ct, "generate_optimization_plan"),
+                "detect_god_classes" => await ExecutePhase3Placeholder(request.Arguments, ct, "detect_god_classes"),
+                "detect_god_methods" => await ExecutePhase3Placeholder(request.Arguments, ct, "detect_god_methods"),
+                "analyze_code_smells" => await ExecutePhase3Placeholder(request.Arguments, ct, "analyze_code_smells"),
+                "get_optimization_recommendations" => await ExecutePhase3Placeholder(request.Arguments, ct, "get_optimization_recommendations"),
                 _ => new ToolCallResult
                 {
                     Success = false,
                     Error = $"Unknown tool: {request.Name}"
                 }
             };
+
+            // Process successful responses to respect token limits
+            if (result.Success && result.Result != null)
+            {
+                var processedResponse = _responseProcessor.ProcessResponse(result.Result, request.Name);
+
+                // Create enhanced result with metadata if needed
+                if (processedResponse.WasTruncated || processedResponse.Warning != null)
+                {
+                    var metadata = new Dictionary<string, object>
+                    {
+                        ["processed"] = true,
+                        ["toolName"] = request.Name
+                    };
+
+                    if (processedResponse.WasTruncated)
+                    {
+                        metadata["truncated"] = true;
+                        metadata["originalTokens"] = processedResponse.OriginalTokenCount;
+                        metadata["processedTokens"] = processedResponse.EstimatedTokenCount;
+                    }
+
+                    if (processedResponse.Warning != null)
+                    {
+                        metadata["warning"] = processedResponse.Warning;
+                    }
+
+                    // Add any additional metadata from the processor
+                    foreach (var kvp in processedResponse.Metadata)
+                    {
+                        metadata[kvp.Key] = kvp.Value;
+                    }
+
+                    result = new ToolCallResult
+                    {
+                        Success = true,
+                        Result = new
+                        {
+                            content = processedResponse.Content,
+                            metadata = metadata.Count > 1 ? metadata : null // Only include metadata if we have something to show
+                        }
+                    };
+                }
+                else
+                {
+                    // Response wasn't truncated, just return the processed content
+                    result = new ToolCallResult
+                    {
+                        Success = true,
+                        Result = processedResponse.Content
+                    };
+                }
+            }
+
+            return result;
         }
         catch (Exception ex)
         {
@@ -1430,6 +1546,381 @@ public class McpToolRegistry
                         Default = 65536
                     }
                 )
+            },
+            // ===== Phase 3 Architecture Validation Tools =====
+            new McpTool
+            {
+                Name = "validate_architecture",
+                Description = "Validate project architecture against defined rules",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "definition",
+                        Type = "object",
+                        Description = "Optional custom architecture definition",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "detect_layer_violations",
+                Description = "Find all architectural layer violations in a project",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "definition",
+                        Type = "object",
+                        Description = "Optional custom architecture definition",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "analyze_dependencies",
+                Description = "Analyze dependency graph and relationships between layers",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "definition",
+                        Type = "object",
+                        Description = "Optional custom architecture definition",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "get_architecture_report",
+                Description = "Generate comprehensive architecture compliance report",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "definition",
+                        Type = "object",
+                        Description = "Optional custom architecture definition",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "define_custom_architecture",
+                Description = "Define or update custom architecture definition",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "definition",
+                        Type = "object",
+                        Description = "Architecture definition with layers and rules",
+                        Required = true
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "analyze_circular_dependencies",
+                Description = "Analyze circular dependencies between layers and components",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "definition",
+                        Type = "object",
+                        Description = "Optional custom architecture definition",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "generate_architecture_diagram",
+                Description = "Generate architecture diagram data for visualization",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "definition",
+                        Type = "object",
+                        Description = "Optional custom architecture definition",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "get_architecture_recommendations",
+                Description = "Get recommended fixes for architectural violations",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "violations",
+                        Type = "array",
+                        Description = "List of violations to get recommendations for",
+                        Required = true,
+                        Items = new Dictionary<string, object> { ["type"] = "object" }
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "check_type_compliance",
+                Description = "Check if a specific type follows architectural rules",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "typeName",
+                        Type = "string",
+                        Description = "Name of the type to check",
+                        Required = true
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "definition",
+                        Type = "object",
+                        Description = "Architecture definition to check against",
+                        Required = true
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "get_predefined_architectures",
+                Description = "Get predefined architecture templates (Clean Architecture, Onion, N-Tier, Hexagonal)",
+                InputSchema = JsonSchemaHelper.CreateSchema()
+            },
+            // ===== Phase 3 Duplicate Code Detection Tools =====
+            new McpTool
+            {
+                Name = "detect_duplicates",
+                Description = "Detect duplicate code blocks in the project with comprehensive analysis",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "options",
+                        Type = "object",
+                        Description = "Options for duplicate detection",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "find_exact_duplicates",
+                Description = "Find exact duplicate code blocks (100% identical)",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "options",
+                        Type = "object",
+                        Description = "Options for detection",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "find_near_duplicates",
+                Description = "Find near-miss duplicate code blocks with configurable similarity threshold",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "similarityThreshold",
+                        Type = "number",
+                        Description = "Similarity threshold (0.0-1.0)",
+                        Required = false,
+                        Default = 0.8
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "options",
+                        Type = "object",
+                        Description = "Options for detection",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "analyze_duplication_metrics",
+                Description = "Analyze duplication metrics and statistics for the project",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "options",
+                        Type = "object",
+                        Description = "Options for analysis",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "get_refactoring_suggestions",
+                Description = "Get refactoring suggestions for detected duplicate code",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "duplicates",
+                        Type = "array",
+                        Description = "List of duplicate groups to analyze",
+                        Required = false,
+                        Items = new Dictionary<string, object> { ["type"] = "object" }
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "options",
+                        Type = "object",
+                        Description = "Options for refactoring suggestions",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "get_duplicate_hotspots",
+                Description = "Get a summary of duplicate code hotspots in the project",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "options",
+                        Type = "object",
+                        Description = "Options for analysis",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "compare_code_blocks",
+                Description = "Compare two specific code blocks for similarity",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "codeBlock1",
+                        Type = "object",
+                        Description = "First code block to compare",
+                        Required = true
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "codeBlock2",
+                        Type = "object",
+                        Description = "Second code block to compare",
+                        Required = true
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "options",
+                        Type = "object",
+                        Description = "Options for comparison",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "validate_refactoring",
+                Description = "Validate potential refactoring by checking if it would break dependencies",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "suggestion",
+                        Type = "object",
+                        Description = "Refactoring suggestion to validate",
+                        Required = true
+                    }
+                )
             }
         };
     }
@@ -1458,6 +1949,11 @@ public class McpToolRegistry
                 _callChain = new CallChainService(_workspace, _symbolQuery, _callerAnalysis);
                 _typeUsage = new TypeUsageService(_workspace, _symbolQuery);
                 _advancedReferenceFinder = new AdvancedReferenceFinderService(_workspace, _symbolQuery, _callerAnalysis, _callChain, _typeUsage);
+
+                // Initialize Phase 3 services
+                _architectureValidator = new ArchitectureValidatorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage);
+                _duplicateCodeDetector = new DuplicateCodeDetectorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage,
+                    LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<DuplicateCodeDetectorService>());
             }
         }
     }
@@ -1488,6 +1984,16 @@ public class McpToolRegistry
                 _semanticEdit = new SemanticEditService(_workspace, _classStructure);
                 _referenceFinder = new ReferenceFinderService(_workspace);
                 _projectParser = new ProjectParserService();
+
+                // Initialize advanced reverse search services for project opening
+                _callerAnalysis = new CallerAnalysisService(_workspace, _symbolQuery);
+                _callChain = new CallChainService(_workspace, _symbolQuery, _callerAnalysis);
+                _typeUsage = new TypeUsageService(_workspace, _symbolQuery);
+
+                // Initialize Phase 3 services
+                _architectureValidator = new ArchitectureValidatorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage);
+                _duplicateCodeDetector = new DuplicateCodeDetectorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage,
+                    LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<DuplicateCodeDetectorService>());
             }
 
             var context = _projectContext.GetProjectContext();
@@ -3741,5 +4247,1274 @@ public class McpToolRegistry
         if (timeSpan.TotalHours < 24)
             return $"{timeSpan.TotalHours:F1} hours";
         return $"{timeSpan.TotalDays:F1} days";
+    }
+
+    // ===== Phase 3 Architecture Validation Tool Execution Methods =====
+
+    private async Task<ToolCallResult> ExecuteValidateArchitecture(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_architectureValidator == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Architecture validation service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments);
+            var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
+            ArchitectureDefinition? definition = null;
+
+            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            {
+                // Parse architecture definition from JSON
+                definition = JsonSerializer.Deserialize<ArchitectureDefinition>(definitionElement.Value.GetRawText());
+            }
+
+            var result = await _architectureValidator.ValidateArchitectureAsync(projectPath, definition, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["isValid"] = result.IsValid,
+                    ["compliancePercentage"] = result.CompliancePercentage,
+                    ["totalTypesAnalyzed"] = result.TotalTypesAnalyzed,
+                    ["compliantTypes"] = result.CompliantTypes,
+                    ["violations"] = result.Violations,
+                    ["warnings"] = result.Warnings,
+                    ["layerStatistics"] = result.LayerStatistics,
+                    ["analysisDuration"] = result.AnalysisDuration.TotalMilliseconds,
+                    ["analyzedFiles"] = result.AnalyzedFiles
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error validating architecture: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteDetectLayerViolations(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_architectureValidator == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Architecture validation service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments);
+            var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
+            ArchitectureDefinition? definition = null;
+
+            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            {
+                definition = JsonSerializer.Deserialize<ArchitectureDefinition>(definitionElement.Value.GetRawText());
+            }
+
+            var violations = await _architectureValidator.DetectLayerViolationsAsync(projectPath, definition, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["violations"] = violations,
+                    ["totalViolations"] = violations.Count,
+                    ["criticalViolations"] = violations.Count(v => v.Severity == ViolationSeverity.Critical),
+                    ["majorViolations"] = violations.Count(v => v.Severity == ViolationSeverity.Major),
+                    ["minorViolations"] = violations.Count(v => v.Severity == ViolationSeverity.Minor)
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error detecting layer violations: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteAnalyzeDependencies(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_architectureValidator == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Architecture validation service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments);
+            var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
+            ArchitectureDefinition? definition = null;
+
+            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            {
+                definition = JsonSerializer.Deserialize<ArchitectureDefinition>(definitionElement.Value.GetRawText());
+            }
+
+            var analysis = await _architectureValidator.AnalyzeDependenciesAsync(projectPath, definition, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["nodes"] = analysis.Nodes,
+                    ["edges"] = analysis.Edges,
+                    ["circularDependencies"] = analysis.CircularDependencies,
+                    ["layerDependencies"] = analysis.LayerDependencies,
+                    ["dependencyMetrics"] = analysis.DependencyMetrics,
+                    ["analysisDuration"] = analysis.AnalysisDuration.TotalMilliseconds
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error analyzing dependencies: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetArchitectureReport(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_architectureValidator == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Architecture validation service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments);
+            var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
+            ArchitectureDefinition? definition = null;
+
+            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            {
+                definition = JsonSerializer.Deserialize<ArchitectureDefinition>(definitionElement.Value.GetRawText());
+            }
+
+            var report = await _architectureValidator.GetArchitectureReportAsync(projectPath, definition, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["summary"] = report.Summary,
+                    ["validationResult"] = report.ValidationResult,
+                    ["dependencyAnalysis"] = report.DependencyAnalysis,
+                    ["recommendations"] = report.Recommendations,
+                    ["architectureUsed"] = report.ArchitectureUsed,
+                    ["generatedAt"] = report.GeneratedAt,
+                    ["projectPath"] = report.ProjectPath
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error generating architecture report: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteDefineCustomArchitecture(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_architectureValidator == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Architecture validation service is not available"
+            };
+        }
+
+        try
+        {
+            var definitionElement = arguments.RootElement.GetProperty("definition");
+            var definition = JsonSerializer.Deserialize<ArchitectureDefinition>(definitionElement.GetRawText());
+
+            if (definition == null)
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Invalid architecture definition provided"
+                };
+            }
+
+            var result = await _architectureValidator.DefineCustomArchitectureAsync(definition, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["architecture"] = result
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error defining custom architecture: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteAnalyzeCircularDependencies(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_architectureValidator == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Architecture validation service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments);
+            var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
+            ArchitectureDefinition? definition = null;
+
+            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            {
+                definition = JsonSerializer.Deserialize<ArchitectureDefinition>(definitionElement.Value.GetRawText());
+            }
+
+            var circularDependencies = await _architectureValidator.AnalyzeCircularDependenciesAsync(projectPath, definition, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["circularDependencies"] = circularDependencies,
+                    ["totalCycles"] = circularDependencies.Count,
+                    ["criticalCycles"] = circularDependencies.Count(c => c.Severity == ViolationSeverity.Critical),
+                    ["majorCycles"] = circularDependencies.Count(c => c.Severity == ViolationSeverity.Major)
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error analyzing circular dependencies: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGenerateArchitectureDiagram(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_architectureValidator == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Architecture validation service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments);
+            var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
+            ArchitectureDefinition? definition = null;
+
+            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            {
+                definition = JsonSerializer.Deserialize<ArchitectureDefinition>(definitionElement.Value.GetRawText());
+            }
+
+            var diagram = await _architectureValidator.GenerateArchitectureDiagramAsync(projectPath, definition, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["diagram"] = diagram
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error generating architecture diagram: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetArchitectureRecommendations(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_architectureValidator == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Architecture validation service is not available"
+            };
+        }
+
+        try
+        {
+            var violationsElement = arguments.RootElement.GetProperty("violations");
+            var violations = JsonSerializer.Deserialize<List<LayerViolation>>(violationsElement.GetRawText());
+
+            if (violations == null)
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Invalid violations list provided"
+                };
+            }
+
+            var recommendations = await _architectureValidator.GetRecommendationsAsync(violations, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["recommendations"] = recommendations,
+                    ["totalRecommendations"] = recommendations.Count,
+                    ["highPriorityRecommendations"] = recommendations.Count(r => r.Priority == RecommendationPriority.High || r.Priority == RecommendationPriority.Critical),
+                    ["effortScore"] = recommendations.Sum(r => r.Effort),
+                    ["impactScore"] = recommendations.Sum(r => r.Impact)
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error getting architecture recommendations: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteCheckTypeCompliance(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_architectureValidator == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Architecture validation service is not available"
+            };
+        }
+
+        try
+        {
+            var typeName = arguments.RootElement.GetProperty("typeName").GetString();
+            var definitionElement = arguments.RootElement.GetProperty("definition");
+            var definition = JsonSerializer.Deserialize<ArchitectureDefinition>(definitionElement.GetRawText());
+
+            if (string.IsNullOrEmpty(typeName) || definition == null)
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Both typeName and definition are required"
+                };
+            }
+
+            var compliance = await _architectureValidator.CheckTypeComplianceAsync(typeName, definition, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["typeName"] = compliance.TypeName,
+                    ["layer"] = compliance.Layer,
+                    ["isCompliant"] = compliance.IsCompliant,
+                    ["violations"] = compliance.Violations,
+                    ["warnings"] = compliance.Warnings,
+                    ["dependencies"] = compliance.Dependencies
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error checking type compliance: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetPredefinedArchitectures(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_architectureValidator == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Architecture validation service is not available"
+            };
+        }
+
+        try
+        {
+            var architectures = await _architectureValidator.GetPredefinedArchitecturesAsync(ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["architectures"] = architectures,
+                    ["totalArchitectures"] = architectures.Count
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error getting predefined architectures: {ex.Message}"
+            };
+        }
+    }
+
+    // ===== Duplicate Code Detection Execution Methods =====
+
+    private async Task<ToolCallResult> ExecuteDetectDuplicates(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_duplicateCodeDetector == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Duplicate code detection service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments) ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
+            var options = ParseDuplicateDetectionOptions(arguments);
+
+            var result = await _duplicateCodeDetector.DetectDuplicatesAsync(projectPath, options, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["duplicateGroups"] = result.DuplicateGroups,
+                    ["metrics"] = result.Metrics,
+                    ["refactoringSuggestions"] = result.RefactoringSuggestions,
+                    ["hotspots"] = result.Hotspots,
+                    ["analysisDuration"] = result.AnalysisDuration.TotalMilliseconds,
+                    ["filesAnalyzed"] = result.FilesAnalyzed,
+                    ["warnings"] = result.Warnings
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error detecting duplicates: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteFindExactDuplicates(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_duplicateCodeDetector == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Duplicate code detection service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments) ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
+            var options = ParseDuplicateDetectionOptions(arguments);
+
+            var result = await _duplicateCodeDetector.FindExactDuplicatesAsync(projectPath, options, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["duplicateGroups"] = result,
+                    ["totalGroups"] = result.Count,
+                    ["totalDuplicates"] = result.Sum(g => g.CodeBlocks.Count)
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error finding exact duplicates: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteFindNearDuplicates(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_duplicateCodeDetector == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Duplicate code detection service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments) ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
+            var similarityThreshold = GetDoubleFromArguments(arguments, "similarityThreshold", 0.8);
+            var options = ParseDuplicateDetectionOptions(arguments);
+
+            var result = await _duplicateCodeDetector.FindNearDuplicatesAsync(projectPath, similarityThreshold, options, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["duplicateGroups"] = result,
+                    ["totalGroups"] = result.Count,
+                    ["totalDuplicates"] = result.Sum(g => g.CodeBlocks.Count),
+                    ["similarityThreshold"] = similarityThreshold,
+                    ["averageSimilarity"] = result.Any() ? result.Average(g => g.SimilarityScore) : 0.0
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error finding near duplicates: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteAnalyzeDuplicationMetrics(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_duplicateCodeDetector == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Duplicate code detection service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments) ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
+            var options = ParseDuplicateDetectionOptions(arguments);
+
+            var result = await _duplicateCodeDetector.AnalyzeDuplicationMetricsAsync(projectPath, options, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["metrics"] = result,
+                    ["summary"] = new Dictionary<string, object>
+                    {
+                        ["totalDuplicateGroups"] = result.TotalDuplicateGroups,
+                        ["exactDuplicates"] = result.ExactDuplicateGroups,
+                        ["nearMissDuplicates"] = result.NearMissDuplicateGroups,
+                        ["totalDuplicateLines"] = result.TotalDuplicateLines,
+                        ["duplicationPercentage"] = result.DuplicationPercentage,
+                        ["filesWithDuplicates"] = result.FilesWithDuplicates,
+                        ["estimatedMaintenanceCost"] = result.EstimatedMaintenanceCost,
+                        ["estimatedRefactoringSavings"] = result.EstimatedRefactoringSavings
+                    }
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error analyzing duplication metrics: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetRefactoringSuggestions(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_duplicateCodeDetector == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Duplicate code detection service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments) ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
+            var duplicatesElement = GetPropertyFromArguments(arguments, "duplicates");
+            var options = ParseRefactoringOptions(arguments);
+
+            List<DuplicateGroup> duplicates;
+
+            if (duplicatesElement.HasValue && duplicatesElement.Value.ValueKind == JsonValueKind.Array)
+            {
+                // Parse provided duplicates
+                duplicates = JsonSerializer.Deserialize<List<DuplicateGroup>>(duplicatesElement.Value.GetRawText()) ?? new List<DuplicateGroup>();
+            }
+            else
+            {
+                // Detect duplicates first
+                var detectionOptions = ParseDuplicateDetectionOptions(arguments);
+                var detectionResult = await _duplicateCodeDetector.DetectDuplicatesAsync(projectPath, detectionOptions, ct);
+                duplicates = detectionResult.DuplicateGroups.ToList();
+            }
+
+            var result = await _duplicateCodeDetector.GetRefactoringSuggestionsAsync(projectPath, duplicates, options, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["suggestions"] = result,
+                    ["totalSuggestions"] = result.Count,
+                    ["highPrioritySuggestions"] = result.Count(s => s.Priority == RefactoringPriority.High || s.Priority == RefactoringPriority.Critical),
+                    ["breakingChanges"] = result.Count(s => s.IsBreakingChange),
+                    ["estimatedTotalEffort"] = result.Sum(s => s.EstimatedEffort),
+                    ["estimatedTotalBenefit"] = result.Sum(s => s.EstimatedBenefit)
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error getting refactoring suggestions: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetDuplicateHotspots(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_duplicateCodeDetector == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Duplicate code detection service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments) ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
+            var options = ParseDuplicateDetectionOptions(arguments);
+
+            var result = await _duplicateCodeDetector.GetDuplicateHotspotsAsync(projectPath, options, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["hotspots"] = result,
+                    ["summary"] = new Dictionary<string, object>
+                    {
+                        ["fileHotspots"] = result.FileHotspots.Count,
+                        ["classHotspots"] = result.ClassHotspots.Count,
+                        ["methodHotspots"] = result.MethodHotspots.Count,
+                        ["directoryHotspots"] = result.DirectoryHotspots.Count,
+                        ["criticalFileHotspots"] = result.FileHotspots.Count(f => f.RiskLevel == HotspotRiskLevel.Critical),
+                        ["criticalMethodHotspots"] = result.MethodHotspots.Count(m => m.RiskLevel == HotspotRiskLevel.Critical)
+                    }
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error getting duplicate hotspots: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteCompareCodeBlocks(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_duplicateCodeDetector == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Duplicate code detection service is not available"
+            };
+        }
+
+        try
+        {
+            var block1Element = GetPropertyFromArguments(arguments, "codeBlock1");
+            var block2Element = GetPropertyFromArguments(arguments, "codeBlock2");
+            var options = ParseCodeComparisonOptions(arguments);
+
+            if (block1Element == null || block2Element == null)
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Both codeBlock1 and codeBlock2 are required"
+                };
+            }
+
+            var block1 = ParseCodeBlockDefinition(block1Element.Value);
+            var block2 = ParseCodeBlockDefinition(block2Element.Value);
+
+            if (block1 == null || block2 == null)
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Invalid code block definitions. Each block must include filePath, startLine, and endLine."
+                };
+            }
+
+            var result = await _duplicateCodeDetector.CompareCodeBlocksAsync(block1, block2, options, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["similarity"] = new Dictionary<string, object>
+                    {
+                        ["overall"] = result.OverallSimilarity,
+                        ["structural"] = result.StructuralSimilarity,
+                        ["token"] = result.TokenSimilarity,
+                        ["semantic"] = result.SemanticSimilarity
+                    },
+                    ["isDuplicate"] = result.IsDuplicate,
+                    ["duplicateType"] = result.DuplicateType?.ToString() ?? "None",
+                    ["differences"] = result.Differences,
+                    ["commonPatterns"] = result.CommonPatterns,
+                    ["summary"] = new Dictionary<string, object>
+                    {
+                        ["similarityPercentage"] = Math.Round(result.OverallSimilarity * 100, 2),
+                        ["differenceCount"] = result.Differences.Count,
+                        ["commonPatternCount"] = result.CommonPatterns.Count,
+                        ["recommendation"] = result.IsDuplicate ? "Consider refactoring to eliminate duplication" : "Code blocks are sufficiently different"
+                    }
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error comparing code blocks: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteValidateRefactoring(JsonDocument arguments, CancellationToken ct)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        if (_duplicateCodeDetector == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Duplicate code detection service is not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = GetProjectPathFromArguments(arguments) ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
+            var suggestionElement = GetPropertyFromArguments(arguments, "suggestion");
+
+            if (suggestionElement == null)
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Refactoring suggestion is required"
+                };
+            }
+
+            var suggestion = JsonSerializer.Deserialize<RefactoringSuggestion>(suggestionElement.Value.GetRawText());
+            if (suggestion == null)
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Invalid refactoring suggestion format"
+                };
+            }
+
+            var result = await _duplicateCodeDetector.ValidateRefactoringAsync(projectPath, suggestion, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["isValid"] = result.IsValid,
+                    ["overallRisk"] = result.OverallRisk.ToString(),
+                    ["issues"] = result.Issues,
+                    ["dependencyImpacts"] = result.DependencyImpacts,
+                    ["recommendations"] = result.Recommendations,
+                    ["summary"] = new Dictionary<string, object>
+                    {
+                        ["criticalIssues"] = result.Issues.Count(i => i.Severity == ValidationSeverity.Critical),
+                        ["errorIssues"] = result.Issues.Count(i => i.Severity == ValidationSeverity.Error),
+                        ["warningIssues"] = result.Issues.Count(i => i.Severity == ValidationSeverity.Warning),
+                        ["breakingChanges"] = result.DependencyImpacts.Count(d => d.IsBreakingChange),
+                        ["actionRequired"] = !result.IsValid || result.Issues.Any(i => i.Severity >= ValidationSeverity.Error)
+                    }
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error validating refactoring: {ex.Message}"
+            };
+        }
+    }
+
+    #region Helper Methods for Duplicate Code Detection
+
+    private DuplicateDetectionOptions ParseDuplicateDetectionOptions(JsonDocument arguments)
+    {
+        var optionsElement = GetPropertyFromArguments(arguments, "options");
+
+        var options = new DuplicateDetectionOptions();
+
+        if (optionsElement.HasValue && optionsElement.Value.ValueKind == JsonValueKind.Object)
+        {
+            var optionsObj = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsElement.Value.GetRawText());
+
+            if (optionsObj != null)
+            {
+                if (optionsObj.TryGetValue("minBlockSize", out var minBlockSize) && minBlockSize is int minBlock)
+                    options = options with { MinBlockSize = minBlock };
+
+                if (optionsObj.TryGetValue("maxBlockSize", out var maxBlockSize) && maxBlockSize is int maxBlock)
+                    options = options with { MaxBlockSize = maxBlock };
+
+                if (optionsObj.TryGetValue("similarityThreshold", out var similarityThreshold) && similarityThreshold is double similarity)
+                    options = options with { SimilarityThreshold = similarity };
+
+                if (optionsObj.TryGetValue("ignoreGeneratedCode", out var ignoreGenerated) && ignoreGenerated is bool ignoreGen)
+                    options = options with { IgnoreGeneratedCode = ignoreGen };
+
+                if (optionsObj.TryGetValue("ignoreTestCode", out var ignoreTest) && ignoreTest is bool ignoreTestCode)
+                    options = options with { IgnoreTestCode = ignoreTestCode };
+
+                if (optionsObj.TryGetValue("ignoreTrivialDifferences", out var ignoreTrivial) && ignoreTrivial is bool ignoreTrivialDifferences)
+                    options = options with { IgnoreTrivialDifferences = ignoreTrivialDifferences };
+
+                if (optionsObj.TryGetValue("detectionTypes", out var detectionTypes) && detectionTypes is JsonElement typesElement && typesElement.ValueKind == JsonValueKind.Array)
+                {
+                    var typeStrings = JsonSerializer.Deserialize<string[]>(typesElement.GetRawText());
+                    if (typeStrings != null)
+                    {
+                        var types = DuplicateDetectionTypes.None;
+                        foreach (var typeString in typeStrings)
+                        {
+                            if (Enum.TryParse<DuplicateDetectionTypes>(typeString, true, out var type))
+                                types |= type;
+                        }
+                        options = options with { DetectionTypes = types };
+                    }
+                }
+            }
+        }
+
+        return options;
+    }
+
+    private RefactoringOptions ParseRefactoringOptions(JsonDocument arguments)
+    {
+        var optionsElement = GetPropertyFromArguments(arguments, "options");
+
+        var options = new RefactoringOptions();
+
+        if (optionsElement.HasValue && optionsElement.Value.ValueKind == JsonValueKind.Object)
+        {
+            var optionsObj = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsElement.Value.GetRawText());
+
+            if (optionsObj != null)
+            {
+                if (optionsObj.TryGetValue("maxSuggestions", out var maxSuggestions) && maxSuggestions is int maxSugg)
+                    options = options with { MaxSuggestions = maxSugg };
+
+                if (optionsObj.TryGetValue("prioritizeBreakingChanges", out var prioritizeBreaking) && prioritizeBreaking is bool prioritize)
+                    options = options with { PrioritizeBreakingChanges = prioritize };
+
+                if (optionsObj.TryGetValue("refactoringTypes", out var refactoringTypes) && refactoringTypes is JsonElement typesElement && typesElement.ValueKind == JsonValueKind.Array)
+                {
+                    var typeStrings = JsonSerializer.Deserialize<string[]>(typesElement.GetRawText());
+                    if (typeStrings != null)
+                    {
+                        var types = RefactoringTypes.None;
+                        foreach (var typeString in typeStrings)
+                        {
+                            if (Enum.TryParse<RefactoringTypes>(typeString, true, out var type))
+                                types |= type;
+                        }
+                        options = options with { RefactoringTypes = types };
+                    }
+                }
+            }
+        }
+
+        return options;
+    }
+
+    private CodeComparisonOptions ParseCodeComparisonOptions(JsonDocument arguments)
+    {
+        var optionsElement = GetPropertyFromArguments(arguments, "options");
+
+        var options = new CodeComparisonOptions();
+
+        if (optionsElement.HasValue && optionsElement.Value.ValueKind == JsonValueKind.Object)
+        {
+            var optionsObj = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsElement.Value.GetRawText());
+
+            if (optionsObj != null)
+            {
+                if (optionsObj.TryGetValue("ignoreWhitespace", out var ignoreWhitespace) && ignoreWhitespace is bool ignoreWs)
+                    options = options with { IgnoreWhitespace = ignoreWs };
+
+                if (optionsObj.TryGetValue("ignoreComments", out var ignoreComments) && ignoreComments is bool ignoreComm)
+                    options = options with { IgnoreComments = ignoreComm };
+
+                if (optionsObj.TryGetValue("ignoreIdentifiers", out var ignoreIdentifiers) && ignoreIdentifiers is bool ignoreIds)
+                    options = options with { IgnoreIdentifiers = ignoreIds };
+
+                if (optionsObj.TryGetValue("ignoreStringLiterals", out var ignoreStrings) && ignoreStrings is bool ignoreStr)
+                    options = options with { IgnoreStringLiterals = ignoreStr };
+
+                if (optionsObj.TryGetValue("ignoreNumericLiterals", out var ignoreNumbers) && ignoreNumbers is bool ignoreNum)
+                    options = options with { IgnoreNumericLiterals = ignoreNum };
+            }
+        }
+
+        return options;
+    }
+
+    private CodeBlock? ParseCodeBlockDefinition(JsonElement blockElement)
+    {
+        try
+        {
+            var blockObj = JsonSerializer.Deserialize<Dictionary<string, object>>(blockElement.GetRawText());
+            if (blockObj == null) return null;
+
+            if (!blockObj.TryGetValue("filePath", out var filePathObj) ||
+                !blockObj.TryGetValue("startLine", out var startLineObj) ||
+                !blockObj.TryGetValue("endLine", out var endLineObj))
+            {
+                return null;
+            }
+
+            var filePath = filePathObj.ToString();
+            if (!int.TryParse(startLineObj.ToString(), out var startLine) ||
+                !int.TryParse(endLineObj.ToString(), out var endLine))
+            {
+                return null;
+            }
+
+            // Create a basic code block definition
+            // In a real implementation, we would need to read the actual source code and extract details
+            return new CodeBlock
+            {
+                FilePath = filePath,
+                StartLine = startLine,
+                EndLine = endLine,
+                StartColumn = 1,
+                EndColumn = 100, // Placeholder
+                SourceCode = $"// Code from {filePath}:{startLine}-{endLine}", // Placeholder
+                NormalizedCode = $"// Code from {filePath}:{startLine}-{endLine}", // Placeholder
+                CodeHash = ComputeHash($"{filePath}:{startLine}:{endLine}"),
+                ElementType = CodeElementType.CodeBlock,
+                ElementName = $"Block_{startLine}_{endLine}",
+                Accessibility = Accessibility.Private,
+                IsGenerated = false,
+                IsTestCode = false,
+                Complexity = new ComplexityMetrics
+                {
+                    CyclomaticComplexity = 1,
+                    CognitiveComplexity = 1,
+                    LinesOfCode = endLine - startLine + 1,
+                    LogicalLinesOfCode = endLine - startLine + 1,
+                    ParameterCount = 0,
+                    NestingDepth = 1,
+                    OverallScore = 1.0
+                },
+                Tokens = new List<CodeToken>(),
+                AstStructure = new AstStructure
+                {
+                    StructuralHash = ComputeHash($"structure_{filePath}_{startLine}_{endLine}"),
+                    NodeTypes = new List<string> { "Block" },
+                    Depth = 1,
+                    NodeCount = 1,
+                    StructuralComplexity = 1.0,
+                    ControlFlowPatterns = new List<ControlFlowPattern>(),
+                    DataFlowPatterns = new List<DataFlowPattern>()
+                }
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    #endregion
+
+    private string GetProjectPathFromArguments(JsonDocument arguments)
+    {
+        var context = _projectContext.GetProjectContext();
+        if (arguments.RootElement.TryGetProperty("projectPath", out var projectPathElement) &&
+            !string.IsNullOrEmpty(projectPathElement.GetString()))
+        {
+            return projectPathElement.GetString()!;
+        }
+        return context?.RootPath ?? Environment.CurrentDirectory;
+    }
+
+    #region Additional Helper Methods for Duplicate Code Detection
+
+    private JsonElement? GetPropertyFromArguments(JsonDocument arguments, string propertyName)
+    {
+        if (arguments.RootElement.TryGetProperty(propertyName, out var propertyElement))
+        {
+            return propertyElement;
+        }
+        return null;
+    }
+
+    private double GetDoubleFromArguments(JsonDocument arguments, string propertyName, double defaultValue)
+    {
+        if (arguments.RootElement.TryGetProperty(propertyName, out var propertyElement) &&
+            propertyElement.ValueKind == JsonValueKind.Number &&
+            propertyElement.TryGetDouble(out var value))
+        {
+            return value;
+        }
+        return defaultValue;
+    }
+
+    private string ComputeHash(string input)
+    {
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(input);
+        var hash = sha256.ComputeHash(bytes);
+        return Convert.ToBase64String(hash);
+    }
+
+      #endregion
+
+    #region Phase 3 Placeholder Tools
+
+    private async Task<ToolCallResult> ExecutePhase3Placeholder(JsonDocument arguments, CancellationToken ct, string toolName)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        try
+        {
+            // Extract any relevant arguments for context
+            var projectPath = GetProjectPathFromArguments(arguments) ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["message"] = $"Phase 3 tool '{toolName}' is coming soon!",
+                    ["status"] = "placeholder",
+                    ["toolName"] = toolName,
+                    ["projectPath"] = projectPath,
+                    ["description"] = GetToolDescription(toolName),
+                    ["capabilities"] = GetToolCapabilities(toolName)
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error in Phase 3 placeholder for '{toolName}': {ex.Message}"
+            };
+        }
+    }
+
+    private string GetToolDescription(string toolName)
+    {
+        return toolName switch
+        {
+            "analyze_migrations" => "Analyze Entity Framework migrations and provide insights about database schema changes.",
+            "detect_breaking_changes" => "Detect potentially breaking changes in database migrations.",
+            "get_migration_history" => "Get the history of applied database migrations.",
+            "get_migration_dependencies" => "Analyze dependencies between migrations and detect circular dependencies.",
+            "generate_migration_report" => "Generate a comprehensive report of migration status and issues.",
+            "validate_migrations" => "Validate migration files for potential issues and errors.",
+            "analyze_large_files" => "Identify large source files that may need refactoring for better maintainability.",
+            "optimize_large_class" => "Analyze large classes and suggest refactoring strategies to improve design.",
+            "optimize_large_method" => "Identify complex methods and suggest decomposition strategies.",
+            "get_complexity_metrics" => "Calculate cyclomatic and cognitive complexity metrics for code.",
+            "generate_optimization_plan" => "Create a prioritized optimization plan for improving code quality.",
+            "detect_god_classes" => "Identify classes that have too many responsibilities and violate SRP.",
+            "detect_god_methods" => "Find methods that are doing too many things and need decomposition.",
+            "analyze_code_smells" => "Detect various code smells that indicate design issues.",
+            "get_optimization_recommendations" => "Provide specific refactoring recommendations to improve code quality.",
+            _ => $"A Phase 3 analysis tool: {toolName}"
+        };
+    }
+
+    private Dictionary<string, object> GetToolCapabilities(string toolName)
+    {
+        return new Dictionary<string, object>
+        {
+            ["status"] = "coming_soon",
+            ["phase"] = "phase_3",
+            ["category"] = GetToolCategory(toolName),
+            ["estimatedAvailability"] = "Future release",
+            ["features"] = GetToolFeatures(toolName)
+        };
+    }
+
+    private string GetToolCategory(string toolName)
+    {
+        if (toolName.StartsWith("analyze_migrations") || toolName.StartsWith("detect_") || toolName.StartsWith("get_migration") || toolName.StartsWith("generate_migration") || toolName.StartsWith("validate_migrations"))
+            return "sql_migration_analyzer";
+
+        if (toolName.StartsWith("analyze_large") || toolName.StartsWith("optimize_") || toolName.StartsWith("get_complexity") || toolName.StartsWith("generate_optimization") || toolName.StartsWith("detect_god") || toolName.StartsWith("analyze_code") || toolName.StartsWith("get_optimization"))
+            return "large_file_optimizer";
+
+        return "phase_3";
+    }
+
+    private List<string> GetToolFeatures(string toolName)
+    {
+        return toolName switch
+        {
+            "analyze_migrations" => new List<string> { "Migration parsing", "Dependency analysis", "Change detection" },
+            "detect_breaking_changes" => new List<string> { "Schema analysis", "Breaking change detection", "Impact assessment" },
+            "analyze_large_files" => new List<string> { "File size analysis", "Complexity scoring", "Issue detection" },
+            "optimize_large_class" => new List<string> { "Class analysis", "Refactoring suggestions", "Code generation" },
+            "optimize_large_method" => new List<string> { "Method decomposition", "Complexity reduction", "Code restructuring" },
+            _ => new List<string> { "Advanced analysis", "Pattern detection", "Optimization suggestions" }
+        };
+    }
+
+    #endregion
+}
+
+/// <summary>
+/// Extension methods for JsonElement
+/// </summary>
+internal static class JsonElementExtensions
+{
+    public static JsonElement? GetPropertyOrNull(this JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value) ? value : null;
     }
 }

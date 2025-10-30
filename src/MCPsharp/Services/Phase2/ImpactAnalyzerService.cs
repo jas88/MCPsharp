@@ -306,7 +306,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
             "delete" => "breaking_change",
             "signature_change" => "breaking_change",
             "rename" => "breaking_change",
-            _ when symbol.DeclaredAccessibility == Accessibility.Public => "reference",
+            _ when symbol.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public => "reference",
             _ => "reference"
         };
     }

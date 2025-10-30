@@ -1,4 +1,5 @@
 using MCPsharp.Services;
+using MCPsharp.Services.Phase2;
 using MCPsharp.Services.Roslyn;
 using Microsoft.Extensions.Logging;
 
@@ -37,10 +38,35 @@ class Program
             var projectManager = new ProjectContextManager();
             var roslynWorkspace = new RoslynWorkspace();
 
-            // Create tool registry with core services
+            // Phase 2 services that can be instantiated immediately
+            var configAnalyzer = new MCPsharp.Services.Phase2.ConfigAnalyzerService();
+            var workflowAnalyzer = new MCPsharp.Services.Phase2.WorkflowAnalyzerService();
+
+            // Supporting services
+            var bulkEditService = new BulkEditService(loggerFactory?.CreateLogger<BulkEditService>());
+            var progressTracker = new ProgressTrackerService(loggerFactory?.CreateLogger<ProgressTrackerService>() ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ProgressTrackerService>.Instance);
+            var tempFileManager = new TempFileManagerService();
+            var streamingProcessor = new StreamingFileProcessor(
+                loggerFactory?.CreateLogger<StreamingFileProcessor>() ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<StreamingFileProcessor>.Instance,
+                progressTracker,
+                tempFileManager
+            );
+
+            // Create tool registry with all Phase 2 services
+            // Note: ImpactAnalyzerService and FeatureTracerService require runtime dependencies
+            // and will be instantiated lazily by the McpToolRegistry
             var toolRegistry = new McpToolRegistry(
                 projectManager,
-                roslynWorkspace
+                roslynWorkspace,
+                workflowAnalyzer: workflowAnalyzer,
+                configAnalyzer: configAnalyzer,
+                impactAnalyzer: null, // Will be created lazily due to ReferenceFinderService dependency
+                featureTracer: null, // Will be created lazily due to FileOperationsService dependency
+                bulkEditService: bulkEditService,
+                streamingProcessor: streamingProcessor,
+                progressTracker: progressTracker,
+                tempFileManager: tempFileManager,
+                loggerFactory: loggerFactory
             );
 
             logger.LogInformation("MCPsharp initialized with {ToolCount} tools", toolRegistry.GetTools().Count);
