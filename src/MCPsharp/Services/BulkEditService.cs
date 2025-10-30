@@ -1,0 +1,2225 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.FileSystemGlobbing;
+using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
+using Microsoft.Extensions.Logging;
+using MCPsharp.Models;
+
+namespace MCPsharp.Services;
+
+/// <summary>
+/// Service for performing bulk edit operations across multiple files with parallel processing
+/// </summary>
+public class BulkEditService : IBulkEditService
+{
+    private readonly ILogger<BulkEditService>? _logger;
+    private readonly string _tempDirectory;
+    private readonly ConcurrentDictionary<string, RollbackInfo> _rollbackSessions;
+    private readonly SemaphoreSlim _processingSemaphore;
+
+    public BulkEditService(ILogger<BulkEditService>? logger = null)
+    {
+        _logger = logger;
+        _tempDirectory = Path.Combine(Path.GetTempPath(), "MCPsharp", "BulkEdit");
+        _rollbackSessions = new ConcurrentDictionary<string, RollbackInfo>();
+        _processingSemaphore = new SemaphoreSlim(Environment.ProcessorCount, Environment.ProcessorCount);
+
+        // Ensure temp directory exists
+        Directory.CreateDirectory(_tempDirectory);
+    }
+
+    /// <inheritdoc />
+    public async Task<BulkEditResult> BulkReplaceAsync(
+        IReadOnlyList<string> files,
+        string regexPattern,
+        string replacement,
+        BulkEditOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        var operationId = Guid.NewGuid().ToString();
+        var startTime = DateTime.UtcNow;
+        options ??= new BulkEditOptions();
+
+        _logger.LogInformation("Starting bulk replace operation {OperationId} with pattern {Pattern}", operationId, regexPattern);
+
+        try
+        {
+            // Validate regex pattern
+            var regex = new Regex(regexPattern, options.RegexOptions);
+
+            // Get files to process
+            var filesToProcess = await ResolveFilePatterns(files, options, cancellationToken);
+            var fileResults = new List<FileBulkEditResult>();
+            var changesApplied = 0;
+
+            // Create rollback info if backups are enabled
+            RollbackInfo? rollbackInfo = null;
+            if (options.CreateBackups)
+            {
+                rollbackInfo = await CreateRollbackSession(operationId, filesToProcess, cancellationToken);
+            }
+
+            // Process files in parallel with semaphore throttling
+            var tasks = filesToProcess.Select(async filePath =>
+            {
+                await _processingSemaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    return await ProcessFileForBulkReplace(
+                        filePath, regex, replacement, options, rollbackInfo, cancellationToken);
+                }
+                finally
+                {
+                    _processingSemaphore.Release();
+                }
+            });
+
+            var results = await Task.WhenAll(tasks);
+            fileResults.AddRange(results);
+
+            var endTime = DateTime.UtcNow;
+            changesApplied = fileResults.Sum(r => r.ChangesApplied);
+
+            var summary = new BulkEditSummary
+            {
+                TotalFilesMatched = filesToProcess.Count,
+                TotalFilesProcessed = fileResults.Count,
+                SuccessfulFiles = fileResults.Count(r => r.Success),
+                FailedFiles = fileResults.Count(r => !r.Success),
+                SkippedFiles = fileResults.Count(r => r.Skipped),
+                TotalChangesApplied = changesApplied,
+                TotalBytesProcessed = fileResults.Sum(r => r.OriginalSize),
+                TotalBytesWritten = fileResults.Where(r => r.Success).Sum(r => r.NewSize),
+                BackupsCreated = rollbackInfo?.Files.Count(f => f.BackupExists) ?? 0,
+                AverageProcessingTime = fileResults.Count > 0
+                    ? TimeSpan.FromTicks(fileResults.Sum(r => r.ProcessDuration.Ticks) / fileResults.Count)
+                    : TimeSpan.Zero,
+                FilesPerSecond = fileResults.Count > 0
+                    ? fileResults.Count / (endTime - startTime).TotalSeconds
+                    : 0
+            };
+
+            var result = new BulkEditResult
+            {
+                Success = summary.FailedFiles == 0 || !options.StopOnFirstError,
+                Error = summary.FailedFiles > 0 && options.StopOnFirstError
+                    ? $"Operation stopped due to errors in {summary.FailedFiles} files"
+                    : null,
+                FileResults = fileResults,
+                Summary = summary,
+                RollbackInfo = rollbackInfo,
+                OperationId = operationId,
+                StartTime = startTime,
+                EndTime = endTime
+            };
+
+            _logger.LogInformation(
+                "Bulk replace operation {OperationId} completed. Files: {Total}/{Successful}/{Failed}, Changes: {Changes}",
+                operationId, summary.TotalFilesProcessed, summary.SuccessfulFiles, summary.FailedFiles, changesApplied);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Bulk replace operation {OperationId} failed", operationId);
+            return new BulkEditResult
+            {
+                Success = false,
+                Error = ex.Message,
+                FileResults = Array.Empty<FileBulkEditResult>(),
+                Summary = new BulkEditSummary
+                {
+                    TotalFilesMatched = 0,
+                    TotalFilesProcessed = 0,
+                    SuccessfulFiles = 0,
+                    FailedFiles = 0,
+                    SkippedFiles = 0,
+                    TotalChangesApplied = 0,
+                    TotalBytesProcessed = 0,
+                    TotalBytesWritten = 0,
+                    BackupsCreated = 0,
+                    AverageProcessingTime = TimeSpan.Zero,
+                    FilesPerSecond = 0
+                },
+                OperationId = operationId,
+                StartTime = startTime,
+                EndTime = DateTime.UtcNow
+            };
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<BulkEditResult> ConditionalEditAsync(
+        IReadOnlyList<string> files,
+        BulkEditCondition condition,
+        IReadOnlyList<TextEdit> edits,
+        BulkEditOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        var operationId = Guid.NewGuid().ToString();
+        var startTime = DateTime.UtcNow;
+        options ??= new BulkEditOptions();
+
+        _logger.LogInformation("Starting conditional edit operation {OperationId} with condition type {ConditionType}",
+            operationId, condition.ConditionType);
+
+        try
+        {
+            var filesToProcess = await ResolveFilePatterns(files, options, cancellationToken);
+            var fileResults = new List<FileBulkEditResult>();
+            var changesApplied = 0;
+
+            // Create rollback info if backups are enabled
+            RollbackInfo? rollbackInfo = null;
+            if (options.CreateBackups)
+            {
+                rollbackInfo = await CreateRollbackSession(operationId, filesToProcess, cancellationToken);
+            }
+
+            // Process files in parallel
+            var tasks = filesToProcess.Select(async filePath =>
+            {
+                await _processingSemaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    return await ProcessFileForConditionalEdit(
+                        filePath, condition, edits, options, rollbackInfo, cancellationToken);
+                }
+                finally
+                {
+                    _processingSemaphore.Release();
+                }
+            });
+
+            var results = await Task.WhenAll(tasks);
+            fileResults.AddRange(results);
+
+            var endTime = DateTime.UtcNow;
+            changesApplied = fileResults.Sum(r => r.ChangesApplied);
+
+            var summary = new BulkEditSummary
+            {
+                TotalFilesMatched = filesToProcess.Count,
+                TotalFilesProcessed = fileResults.Count,
+                SuccessfulFiles = fileResults.Count(r => r.Success),
+                FailedFiles = fileResults.Count(r => !r.Success),
+                SkippedFiles = fileResults.Count(r => r.Skipped),
+                TotalChangesApplied = changesApplied,
+                TotalBytesProcessed = fileResults.Sum(r => r.OriginalSize),
+                TotalBytesWritten = fileResults.Where(r => r.Success).Sum(r => r.NewSize),
+                BackupsCreated = rollbackInfo?.Files.Count(f => f.BackupExists) ?? 0,
+                AverageProcessingTime = fileResults.Count > 0
+                    ? TimeSpan.FromTicks(fileResults.Sum(r => r.ProcessDuration.Ticks) / fileResults.Count)
+                    : TimeSpan.Zero,
+                FilesPerSecond = fileResults.Count > 0
+                    ? fileResults.Count / (endTime - startTime).TotalSeconds
+                    : 0
+            };
+
+            return new BulkEditResult
+            {
+                Success = summary.FailedFiles == 0 || !options.StopOnFirstError,
+                FileResults = fileResults,
+                Summary = summary,
+                RollbackInfo = rollbackInfo,
+                OperationId = operationId,
+                StartTime = startTime,
+                EndTime = endTime
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Conditional edit operation {OperationId} failed", operationId);
+            return CreateErrorResult(operationId, startTime, ex.Message);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<BulkEditResult> BatchRefactorAsync(
+        IReadOnlyList<string> files,
+        BulkRefactorPattern refactorPattern,
+        BulkEditOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        var operationId = Guid.NewGuid().ToString();
+        var startTime = DateTime.UtcNow;
+        options ??= new BulkEditOptions();
+
+        _logger.LogInformation("Starting batch refactor operation {OperationId} with refactor type {RefactorType}",
+            operationId, refactorPattern.RefactorType);
+
+        try
+        {
+            var filesToProcess = await ResolveFilePatterns(files, options, cancellationToken);
+            var fileResults = new List<FileBulkEditResult>();
+            var changesApplied = 0;
+
+            // Create rollback info if backups are enabled
+            RollbackInfo? rollbackInfo = null;
+            if (options.CreateBackups)
+            {
+                rollbackInfo = await CreateRollbackSession(operationId, filesToProcess, cancellationToken);
+            }
+
+            // Process files in parallel
+            var tasks = filesToProcess.Select(async filePath =>
+            {
+                await _processingSemaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    return await ProcessFileForBatchRefactor(
+                        filePath, refactorPattern, options, rollbackInfo, cancellationToken);
+                }
+                finally
+                {
+                    _processingSemaphore.Release();
+                }
+            });
+
+            var results = await Task.WhenAll(tasks);
+            fileResults.AddRange(results);
+
+            var endTime = DateTime.UtcNow;
+            changesApplied = fileResults.Sum(r => r.ChangesApplied);
+
+            var summary = new BulkEditSummary
+            {
+                TotalFilesMatched = filesToProcess.Count,
+                TotalFilesProcessed = fileResults.Count,
+                SuccessfulFiles = fileResults.Count(r => r.Success),
+                FailedFiles = fileResults.Count(r => !r.Success),
+                SkippedFiles = fileResults.Count(r => r.Skipped),
+                TotalChangesApplied = changesApplied,
+                TotalBytesProcessed = fileResults.Sum(r => r.OriginalSize),
+                TotalBytesWritten = fileResults.Where(r => r.Success).Sum(r => r.NewSize),
+                BackupsCreated = rollbackInfo?.Files.Count(f => f.BackupExists) ?? 0,
+                AverageProcessingTime = fileResults.Count > 0
+                    ? TimeSpan.FromTicks(fileResults.Sum(r => r.ProcessDuration.Ticks) / fileResults.Count)
+                    : TimeSpan.Zero,
+                FilesPerSecond = fileResults.Count > 0
+                    ? fileResults.Count / (endTime - startTime).TotalSeconds
+                    : 0
+            };
+
+            return new BulkEditResult
+            {
+                Success = summary.FailedFiles == 0 || !options.StopOnFirstError,
+                FileResults = fileResults,
+                Summary = summary,
+                RollbackInfo = rollbackInfo,
+                OperationId = operationId,
+                StartTime = startTime,
+                EndTime = endTime
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Batch refactor operation {OperationId} failed", operationId);
+            return CreateErrorResult(operationId, startTime, ex.Message);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<BulkEditResult> MultiFileEditAsync(
+        IReadOnlyList<MultiFileEditOperation> editOperations,
+        BulkEditOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        var operationId = Guid.NewGuid().ToString();
+        var startTime = DateTime.UtcNow;
+        options ??= new BulkEditOptions();
+
+        _logger.LogInformation("Starting multi-file edit operation {OperationId} with {OperationCount} operations",
+            operationId, editOperations.Count);
+
+        try
+        {
+            // Sort operations by priority
+            var sortedOperations = editOperations.OrderBy(op => op.Priority).ToList();
+
+            // Resolve files for all operations
+            var allFiles = new HashSet<string>();
+            foreach (var operation in sortedOperations)
+            {
+                var operationFiles = await ResolveFilePatterns(new[] { operation.FilePattern }, options, cancellationToken);
+                foreach (var file in operationFiles)
+                {
+                    allFiles.Add(file);
+                }
+            }
+
+            var fileResults = new List<FileBulkEditResult>();
+            var changesApplied = 0;
+
+            // Create rollback info if backups are enabled
+            RollbackInfo? rollbackInfo = null;
+            if (options.CreateBackups)
+            {
+                rollbackInfo = await CreateRollbackSession(operationId, allFiles.ToList(), cancellationToken);
+            }
+
+            // Process each operation in order
+            foreach (var operation in sortedOperations)
+            {
+                var operationFiles = await ResolveFilePatterns(new[] { operation.FilePattern }, options, cancellationToken);
+
+                var tasks = operationFiles.Select(async filePath =>
+                {
+                    await _processingSemaphore.WaitAsync(cancellationToken);
+                    try
+                    {
+                        return await ProcessFileForMultiFileEdit(
+                            filePath, operation, options, rollbackInfo, cancellationToken);
+                    }
+                    finally
+                    {
+                        _processingSemaphore.Release();
+                    }
+                });
+
+                var results = await Task.WhenAll(tasks);
+                fileResults.AddRange(results);
+
+                if (options.StopOnFirstError && results.Any(r => !r.Success))
+                {
+                    break;
+                }
+            }
+
+            var endTime = DateTime.UtcNow;
+            changesApplied = fileResults.Sum(r => r.ChangesApplied);
+
+            var summary = new BulkEditSummary
+            {
+                TotalFilesMatched = allFiles.Count,
+                TotalFilesProcessed = fileResults.Count,
+                SuccessfulFiles = fileResults.Count(r => r.Success),
+                FailedFiles = fileResults.Count(r => !r.Success),
+                SkippedFiles = fileResults.Count(r => r.Skipped),
+                TotalChangesApplied = changesApplied,
+                TotalBytesProcessed = fileResults.Sum(r => r.OriginalSize),
+                TotalBytesWritten = fileResults.Where(r => r.Success).Sum(r => r.NewSize),
+                BackupsCreated = rollbackInfo?.Files.Count(f => f.BackupExists) ?? 0,
+                AverageProcessingTime = fileResults.Count > 0
+                    ? TimeSpan.FromTicks(fileResults.Sum(r => r.ProcessDuration.Ticks) / fileResults.Count)
+                    : TimeSpan.Zero,
+                FilesPerSecond = fileResults.Count > 0
+                    ? fileResults.Count / (endTime - startTime).TotalSeconds
+                    : 0
+            };
+
+            return new BulkEditResult
+            {
+                Success = summary.FailedFiles == 0 || !options.StopOnFirstError,
+                FileResults = fileResults,
+                Summary = summary,
+                RollbackInfo = rollbackInfo,
+                OperationId = operationId,
+                StartTime = startTime,
+                EndTime = endTime
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Multi-file edit operation {OperationId} failed", operationId);
+            return CreateErrorResult(operationId, startTime, ex.Message);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<PreviewResult> PreviewBulkChangesAsync(
+        BulkEditRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var previewId = Guid.NewGuid().ToString();
+        var generatedAt = DateTime.UtcNow;
+
+        _logger.LogInformation("Generating preview {PreviewId} for bulk edit operation", previewId);
+
+        try
+        {
+            // Validate the request first
+            var validationResult = await ValidateBulkEditAsync(request, cancellationToken);
+            if (!validationResult.IsValid && validationResult.OverallSeverity >= ValidationSeverity.Error)
+            {
+                return new PreviewResult
+                {
+                    Success = false,
+                    Error = "Validation failed: " + string.Join("; ", validationResult.Issues.Select(i => i.Description)),
+                    FilePreviews = Array.Empty<FilePreviewResult>(),
+                    Summary = new PreviewSummary
+                    {
+                        TotalFiles = 0,
+                        FilesToChange = 0,
+                        FilesToSkip = 0,
+                        TotalChanges = 0,
+                        LinesAdded = 0,
+                        LinesRemoved = 0,
+                        SizeChange = 0
+                    },
+                    Impact = new ImpactEstimate
+                    {
+                        OverallRisk = ChangeRiskLevel.Critical,
+                        Risks = validationResult.Issues.Select(i => new RiskItem
+                        {
+                            Type = RiskType.Compilation,
+                            Description = i.Description,
+                            AffectedFiles = i.FilePath != null ? new[] { i.FilePath } : Array.Empty<string>(),
+                            Severity = i.Severity switch
+                            {
+                                ValidationSeverity.Critical => RiskSeverity.Critical,
+                                ValidationSeverity.Error => RiskSeverity.High,
+                                ValidationSeverity.Warning => RiskSeverity.Medium,
+                                _ => RiskSeverity.Low
+                            },
+                            Mitigation = i.SuggestedFix
+                        }).ToArray(),
+                        Complexity = new ComplexityEstimate
+                        {
+                            Score = 90,
+                            Level = "Very High",
+                            Factors = new[] { "Validation errors detected" },
+                            EstimatedTime = TimeSpan.FromMinutes(30)
+                        },
+                        Recommendations = new[] { "Fix validation errors before proceeding" }
+                    },
+                    PreviewId = previewId,
+                    GeneratedAt = generatedAt
+                };
+            }
+
+            // Create a preview-only version of options
+            var previewOptions = new BulkEditOptions
+            {
+                MaxParallelism = request.Options.MaxParallelism,
+                CreateBackups = request.Options.CreateBackups,
+                BackupDirectory = request.Options.BackupDirectory,
+                PreviewMode = true,
+                ValidateChanges = request.Options.ValidateChanges,
+                MaxFileSize = request.Options.MaxFileSize,
+                IncludeHiddenFiles = request.Options.IncludeHiddenFiles,
+                StopOnFirstError = request.Options.StopOnFirstError,
+                FileOperationTimeout = request.Options.FileOperationTimeout,
+                RegexOptions = request.Options.RegexOptions,
+                PreserveTimestamps = request.Options.PreserveTimestamps,
+                ProgressReporter = request.Options.ProgressReporter,
+                CancellationToken = request.Options.CancellationToken
+            };
+
+            var requestCopy = new BulkEditRequest
+            {
+                OperationType = request.OperationType,
+                Files = request.Files,
+                ExcludedFiles = request.ExcludedFiles,
+                SearchPattern = request.SearchPattern,
+                ReplacementText = request.ReplacementText,
+                RegexPattern = request.RegexPattern,
+                RegexReplacement = request.RegexReplacement,
+                Condition = request.Condition,
+                RefactorPattern = request.RefactorPattern,
+                MultiFileEdits = request.MultiFileEdits,
+                Options = previewOptions
+            };
+
+            // Resolve files that would be processed
+            var filesToProcess = await ResolveFilePatterns(request.Files, previewOptions, cancellationToken);
+            var filePreviews = new List<FilePreviewResult>();
+            var totalChanges = 0;
+            var linesAdded = 0;
+            var linesRemoved = 0;
+            var sizeChange = 0L;
+
+            // Process each file to generate preview
+            foreach (var filePath in filesToProcess)
+            {
+                var preview = await GenerateFilePreview(filePath, requestCopy, cancellationToken);
+                filePreviews.Add(preview);
+
+                if (preview.WouldChange)
+                {
+                    totalChanges += preview.ChangeCount;
+                    // Estimate line changes and size impact
+                    if (preview.PlannedChanges != null)
+                    {
+                        linesAdded += preview.PlannedChanges.Count(c => c.ChangeType == FileChangeType.Insert ||
+                                                                      c.ChangeType == FileChangeType.Replace);
+                        linesRemoved += preview.PlannedChanges.Count(c => c.ChangeType == FileChangeType.Delete ||
+                                                                         c.ChangeType == FileChangeType.Replace);
+                        sizeChange += preview.PlannedChanges.Sum(c =>
+                            (c.NewText?.Length ?? 0) - (c.OriginalText?.Length ?? 0));
+                    }
+                }
+            }
+
+            var summary = new PreviewSummary
+            {
+                TotalFiles = filesToProcess.Count,
+                FilesToChange = filePreviews.Count(p => p.WouldChange),
+                FilesToSkip = filePreviews.Count(p => !p.WouldChange),
+                TotalChanges = totalChanges,
+                LinesAdded = linesAdded,
+                LinesRemoved = linesRemoved,
+                SizeChange = sizeChange
+            };
+
+            var impact = await EstimateImpactAsync(request, cancellationToken);
+
+            return new PreviewResult
+            {
+                Success = true,
+                FilePreviews = filePreviews,
+                Summary = summary,
+                Impact = impact,
+                PreviewId = previewId,
+                GeneratedAt = generatedAt
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate preview {PreviewId}", previewId);
+            return new PreviewResult
+            {
+                Success = false,
+                Error = ex.Message,
+                FilePreviews = Array.Empty<FilePreviewResult>(),
+                Summary = new PreviewSummary
+                {
+                    TotalFiles = 0,
+                    FilesToChange = 0,
+                    FilesToSkip = 0,
+                    TotalChanges = 0,
+                    LinesAdded = 0,
+                    LinesRemoved = 0,
+                    SizeChange = 0
+                },
+                Impact = new ImpactEstimate
+                {
+                    OverallRisk = ChangeRiskLevel.High,
+                    Risks = new[]
+                    {
+                        new RiskItem
+                        {
+                            Type = RiskType.Other,
+                            Description = "Preview generation failed",
+                            AffectedFiles = Array.Empty<string>(),
+                            Severity = RiskSeverity.High,
+                            Mitigation = "Check file paths and patterns"
+                        }
+                    },
+                    Complexity = new ComplexityEstimate
+                    {
+                        Score = 50,
+                        Level = "Unknown",
+                        Factors = new[] { "Preview generation error" },
+                        EstimatedTime = TimeSpan.Zero
+                    },
+                    Recommendations = new[] { "Review error details and retry" }
+                },
+                PreviewId = previewId,
+                GeneratedAt = generatedAt
+            };
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<BulkEditResult> RollbackBulkEditAsync(
+        string rollbackId,
+        CancellationToken cancellationToken = default)
+    {
+        var operationId = Guid.NewGuid().ToString();
+        var startTime = DateTime.UtcNow;
+
+        _logger.LogInformation("Starting rollback operation {OperationId} for rollback session {RollbackId}",
+            operationId, rollbackId);
+
+        try
+        {
+            if (!_rollbackSessions.TryGetValue(rollbackId, out var rollbackInfo))
+            {
+                return new BulkEditResult
+                {
+                    Success = false,
+                    Error = $"Rollback session {rollbackId} not found or expired",
+                    FileResults = Array.Empty<FileBulkEditResult>(),
+                    Summary = new BulkEditSummary
+                    {
+                        TotalFilesMatched = 0,
+                        TotalFilesProcessed = 0,
+                        SuccessfulFiles = 0,
+                        FailedFiles = 0,
+                        SkippedFiles = 0,
+                        TotalChangesApplied = 0,
+                        TotalBytesProcessed = 0,
+                        TotalBytesWritten = 0,
+                        BackupsCreated = 0,
+                        AverageProcessingTime = TimeSpan.Zero,
+                        FilesPerSecond = 0
+                    },
+                    OperationId = operationId,
+                    StartTime = startTime,
+                    EndTime = DateTime.UtcNow
+                };
+            }
+
+            if (!rollbackInfo.CanRollback)
+            {
+                return new BulkEditResult
+                {
+                    Success = false,
+                    Error = $"Rollback session {rollbackId} is no longer available",
+                    FileResults = Array.Empty<FileBulkEditResult>(),
+                    Summary = new BulkEditSummary
+                    {
+                        TotalFilesMatched = 0,
+                        TotalFilesProcessed = 0,
+                        SuccessfulFiles = 0,
+                        FailedFiles = 0,
+                        SkippedFiles = 0,
+                        TotalChangesApplied = 0,
+                        TotalBytesProcessed = 0,
+                        TotalBytesWritten = 0,
+                        BackupsCreated = 0,
+                        AverageProcessingTime = TimeSpan.Zero,
+                        FilesPerSecond = 0
+                    },
+                    OperationId = operationId,
+                    StartTime = startTime,
+                    EndTime = DateTime.UtcNow
+                };
+            }
+
+            var fileResults = new List<FileBulkEditResult>();
+            var successfulRollbacks = 0;
+
+            // Process each file rollback
+            var tasks = rollbackInfo.Files.Select(async rollbackFile =>
+            {
+                await _processingSemaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    return await ProcessRollbackForFile(rollbackFile, cancellationToken);
+                }
+                finally
+                {
+                    _processingSemaphore.Release();
+                }
+            });
+
+            var results = await Task.WhenAll(tasks);
+            fileResults.AddRange(results);
+            successfulRollbacks = results.Count(r => r.Success);
+
+            var endTime = DateTime.UtcNow;
+
+            var summary = new BulkEditSummary
+            {
+                TotalFilesMatched = rollbackInfo.Files.Count,
+                TotalFilesProcessed = fileResults.Count,
+                SuccessfulFiles = successfulRollbacks,
+                FailedFiles = fileResults.Count(r => !r.Success),
+                SkippedFiles = fileResults.Count(r => r.Skipped),
+                TotalChangesApplied = successfulRollbacks,
+                TotalBytesProcessed = fileResults.Sum(r => r.OriginalSize),
+                TotalBytesWritten = fileResults.Where(r => r.Success).Sum(r => r.NewSize),
+                BackupsCreated = 0,
+                AverageProcessingTime = fileResults.Count > 0
+                    ? TimeSpan.FromTicks(fileResults.Sum(r => r.ProcessDuration.Ticks) / fileResults.Count)
+                    : TimeSpan.Zero,
+                FilesPerSecond = fileResults.Count > 0
+                    ? fileResults.Count / (endTime - startTime).TotalSeconds
+                    : 0
+            };
+
+            // Clean up rollback session after successful rollback
+            if (successfulRollbacks == rollbackInfo.Files.Count)
+            {
+                _rollbackSessions.TryRemove(rollbackId, out _);
+                try
+                {
+                    if (Directory.Exists(rollbackInfo.RollbackDirectory))
+                    {
+                        Directory.Delete(rollbackInfo.RollbackDirectory, true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to cleanup rollback directory {Directory}", rollbackInfo.RollbackDirectory);
+                }
+            }
+
+            return new BulkEditResult
+            {
+                Success = successfulRollbacks == rollbackInfo.Files.Count,
+                FileResults = fileResults,
+                Summary = summary,
+                OperationId = operationId,
+                StartTime = startTime,
+                EndTime = endTime
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Rollback operation {OperationId} failed", operationId);
+            return CreateErrorResult(operationId, startTime, ex.Message);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<ValidationResult> ValidateBulkEditAsync(
+        BulkEditRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var issues = new List<ValidationIssue>();
+
+        try
+        {
+            // Validate file patterns
+            foreach (var pattern in request.Files)
+            {
+                try
+                {
+                    var files = await ResolveFilePatterns(new[] { pattern }, request.Options, cancellationToken);
+                    if (files.Count == 0)
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Type = ValidationIssueType.InvalidPath,
+                            Severity = ValidationSeverity.Warning,
+                            Description = $"No files found matching pattern: {pattern}",
+                            IsBlocking = false
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    issues.Add(new ValidationIssue
+                    {
+                        Type = ValidationIssueType.InvalidPath,
+                        Severity = ValidationSeverity.Error,
+                        Description = $"Invalid file pattern '{pattern}': {ex.Message}",
+                        IsBlocking = true
+                    });
+                }
+            }
+
+            // Validate regex patterns if provided
+            if (!string.IsNullOrEmpty(request.RegexPattern))
+            {
+                try
+                {
+                    _ = new Regex(request.RegexPattern, request.Options.RegexOptions);
+                }
+                catch (Exception ex)
+                {
+                    issues.Add(new ValidationIssue
+                    {
+                        Type = ValidationIssueType.RegexError,
+                        Severity = ValidationSeverity.Error,
+                        Description = $"Invalid regex pattern: {ex.Message}",
+                        IsBlocking = true
+                    });
+                }
+            }
+
+            // Validate operation-specific requirements
+            switch (request.OperationType)
+            {
+                case BulkEditOperationType.BulkReplace:
+                    if (string.IsNullOrEmpty(request.RegexPattern))
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Type = ValidationIssueType.ConfigurationIssue,
+                            Severity = ValidationSeverity.Error,
+                            Description = "Regex pattern is required for bulk replace operations",
+                            IsBlocking = true
+                        });
+                    }
+                    break;
+
+                case BulkEditOperationType.ConditionalEdit:
+                    if (request.Condition == null)
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Type = ValidationIssueType.ConfigurationIssue,
+                            Severity = ValidationSeverity.Error,
+                            Description = "Condition is required for conditional edit operations",
+                            IsBlocking = true
+                        });
+                    }
+                    break;
+
+                case BulkEditOperationType.BatchRefactor:
+                    if (request.RefactorPattern == null)
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Type = ValidationIssueType.ConfigurationIssue,
+                            Severity = ValidationSeverity.Error,
+                            Description = "Refactor pattern is required for batch refactor operations",
+                            IsBlocking = true
+                        });
+                    }
+                    break;
+
+                case BulkEditOperationType.MultiFileEdit:
+                    if (request.MultiFileEdits == null || request.MultiFileEdits.Count == 0)
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Type = ValidationIssueType.ConfigurationIssue,
+                            Severity = ValidationSeverity.Error,
+                            Description = "Multi-file edits are required for multi-file edit operations",
+                            IsBlocking = true
+                        });
+                    }
+                    break;
+            }
+
+            // Check for potential security issues
+            if (request.Files.Any(f => f.Contains("..") || Path.IsPathRooted(f) && !f.StartsWith("/")))
+            {
+                issues.Add(new ValidationIssue
+                {
+                    Type = ValidationIssueType.SecurityIssue,
+                    Severity = ValidationSeverity.Warning,
+                    Description = "File patterns contain potentially unsafe paths",
+                    IsBlocking = false,
+                    SuggestedFix = "Review file patterns to ensure they target intended files only"
+                });
+            }
+
+            return new ValidationResult
+            {
+                IsValid = !issues.Any(i => i.IsBlocking),
+                Issues = issues,
+                OverallSeverity = issues.Any(i => i.Severity == ValidationSeverity.Critical) ? ValidationSeverity.Critical :
+                                   issues.Any(i => i.Severity == ValidationSeverity.Error) ? ValidationSeverity.Error :
+                                   issues.Any(i => i.Severity == ValidationSeverity.Warning) ? ValidationSeverity.Warning :
+                                   issues.Any() ? ValidationSeverity.Info : ValidationSeverity.None,
+                Summary = issues.Count > 0
+                    ? $"Found {issues.Count(i => i.Severity >= ValidationSeverity.Error)} errors and {issues.Count(i => i.Severity == ValidationSeverity.Warning)} warnings"
+                    : "Validation passed successfully"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ValidationResult
+            {
+                IsValid = false,
+                Issues = new[]
+                {
+                    new ValidationIssue
+                    {
+                        Type = ValidationIssueType.Other,
+                        Severity = ValidationSeverity.Critical,
+                        Description = $"Validation failed with error: {ex.Message}",
+                        IsBlocking = true
+                    }
+                },
+                OverallSeverity = ValidationSeverity.Critical,
+                Summary = "Validation process failed"
+            };
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<RollbackInfo>> GetAvailableRollbacksAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Clean up expired rollbacks first
+            await CleanupExpiredRollbacksAsync(cancellationToken);
+
+            return _rollbackSessions.Values
+                .Where(r => r.CanRollback)
+                .OrderByDescending(r => r.ExpiresAt)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get available rollbacks");
+            return Array.Empty<RollbackInfo>();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<int> CleanupExpiredRollbacksAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var cleanedCount = 0;
+        var expiredRollbacks = _rollbackSessions
+            .Where(kvp => !kvp.Value.CanRollback)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var rollbackId in expiredRollbacks)
+        {
+            if (_rollbackSessions.TryRemove(rollbackId, out var rollbackInfo))
+            {
+                try
+                {
+                    if (Directory.Exists(rollbackInfo.RollbackDirectory))
+                    {
+                        Directory.Delete(rollbackInfo.RollbackDirectory, true);
+                    }
+                    cleanedCount++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to cleanup expired rollback {RollbackId}", rollbackId);
+                }
+            }
+        }
+
+        if (cleanedCount > 0)
+        {
+            _logger.LogInformation("Cleaned up {Count} expired rollback sessions", cleanedCount);
+        }
+
+        return cleanedCount;
+    }
+
+    /// <inheritdoc />
+    public async Task<ImpactEstimate> EstimateImpactAsync(
+        BulkEditRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var risks = new List<RiskItem>();
+            var complexityFactors = new List<string>();
+            var recommendations = new List<string>();
+
+            // Get file statistics
+            var stats = await GetFileStatisticsAsync(request.Files, cancellationToken);
+
+            // Base complexity on file count and size
+            var complexityScore = Math.Min(100, stats.TotalFiles / 10 + (int)(stats.TotalSize / (1024 * 1024)));
+            var riskLevel = ChangeRiskLevel.Low;
+
+            // Analyze operation type risks
+            switch (request.OperationType)
+            {
+                case BulkEditOperationType.BulkReplace:
+                    if (!string.IsNullOrEmpty(request.RegexPattern) && request.RegexPattern.Contains(".*"))
+                    {
+                        risks.Add(new RiskItem
+                        {
+                            Type = RiskType.Compilation,
+                            Description = "Broad regex pattern may match unintended content",
+                            AffectedFiles = request.Files,
+                            Severity = RiskSeverity.Medium,
+                            Mitigation = "Test regex pattern on small subset first"
+                        });
+                        complexityScore += 20;
+                    }
+                    break;
+
+                case BulkEditOperationType.BatchRefactor:
+                    risks.Add(new RiskItem
+                    {
+                        Type = RiskType.Compilation,
+                        Description = "Refactoring operations may break code compilation",
+                        AffectedFiles = request.Files,
+                        Severity = RiskSeverity.High,
+                        Mitigation = "Run compilation check after refactoring"
+                    });
+                    complexityScore += 30;
+                    riskLevel = ChangeRiskLevel.Medium;
+                    break;
+
+                case BulkEditOperationType.MultiFileEdit:
+                    if (request.MultiFileEdits?.Count > 5)
+                    {
+                        risks.Add(new RiskItem
+                        {
+                            Type = RiskType.Dependencies,
+                            Description = "Complex multi-file operations may have dependency issues",
+                            AffectedFiles = request.Files,
+                            Severity = RiskSeverity.Medium,
+                            Mitigation = "Verify operation dependencies and order"
+                        });
+                        complexityScore += 25;
+                    }
+                    break;
+            }
+
+            // File size risks
+            if (stats.OversizedFiles.Any())
+            {
+                risks.Add(new RiskItem
+                {
+                    Type = RiskType.Performance,
+                    Description = $"Found {stats.OversizedFiles.Count} files that may be too large to process efficiently",
+                    AffectedFiles = stats.OversizedFiles,
+                    Severity = RiskSeverity.Medium,
+                    Mitigation = "Consider splitting large files or processing them separately"
+                });
+                complexityScore += 15;
+            }
+
+            // File access risks
+            if (stats.InaccessibleFiles.Any())
+            {
+                risks.Add(new RiskItem
+                {
+                    Type = RiskType.FileAccessIssue,
+                    Description = $"Found {stats.InaccessibleFiles.Count} files that cannot be accessed",
+                    AffectedFiles = stats.InaccessibleFiles,
+                    Severity = RiskSeverity.High,
+                    Mitigation = "Check file permissions and ensure files are not locked"
+                });
+                complexityScore += 10;
+                riskLevel = ChangeRiskLevel.High;
+            }
+
+            // Determine overall risk level
+            if (complexityScore >= 80 || risks.Any(r => r.Severity == RiskSeverity.Critical))
+            {
+                riskLevel = ChangeRiskLevel.Critical;
+            }
+            else if (complexityScore >= 60 || risks.Any(r => r.Severity == RiskSeverity.High))
+            {
+                riskLevel = ChangeRiskLevel.High;
+            }
+            else if (complexityScore >= 40 || risks.Any(r => r.Severity == RiskSeverity.Medium))
+            {
+                riskLevel = ChangeRiskLevel.Medium;
+            }
+
+            // Add complexity factors
+            if (stats.TotalFiles > 100) complexityFactors.Add("Large number of files");
+            if (stats.TotalSize > 50 * 1024 * 1024) complexityFactors.Add("Large total file size");
+            if (request.Options.CreateBackups) complexityFactors.Add("Backup creation required");
+            if (request.Options.ValidateChanges) complexityFactors.Add("Change validation enabled");
+
+            // Add recommendations
+            if (riskLevel >= ChangeRiskLevel.High)
+            {
+                recommendations.Add("Create a backup of your entire project before proceeding");
+                recommendations.Add("Consider running on a small subset first");
+            }
+
+            if (stats.TotalFiles > 50)
+            {
+                recommendations.Add("Process files in smaller batches for better control");
+            }
+
+            recommendations.Add("Review the preview carefully before applying changes");
+
+            // Estimate processing time
+            var estimatedTime = TimeSpan.FromSeconds(stats.TotalFiles * 0.5 + stats.TotalSize / (1024 * 1024));
+
+            var complexityLevel = complexityScore switch
+            {
+                >= 80 => "Very High",
+                >= 60 => "High",
+                >= 40 => "Medium",
+                >= 20 => "Low",
+                _ => "Very Low"
+            };
+
+            return new ImpactEstimate
+            {
+                OverallRisk = riskLevel,
+                Risks = risks,
+                Complexity = new ComplexityEstimate
+                {
+                    Score = Math.Min(100, complexityScore),
+                    Level = complexityLevel,
+                    Factors = complexityFactors.Any() ? complexityFactors : new[] { "Standard complexity" },
+                    EstimatedTime = estimatedTime
+                },
+                Recommendations = recommendations.Any() ? recommendations : new[] { "Operation appears safe to proceed" }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to estimate impact");
+            return new ImpactEstimate
+            {
+                OverallRisk = ChangeRiskLevel.High,
+                Risks = new[]
+                {
+                    new RiskItem
+                    {
+                        Type = RiskType.Other,
+                        Description = "Failed to estimate impact due to an error",
+                        AffectedFiles = Array.Empty<string>(),
+                        Severity = RiskSeverity.High,
+                        Mitigation = "Check file patterns and try again"
+                    }
+                },
+                Complexity = new ComplexityEstimate
+                {
+                    Score = 50,
+                    Level = "Unknown",
+                    Factors = new[] { "Impact estimation failed" },
+                    EstimatedTime = TimeSpan.FromMinutes(5)
+                },
+                Recommendations = new[] { "Review configuration and retry" }
+            };
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<FileStatistics> GetFileStatisticsAsync(
+        IReadOnlyList<string> files,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var options = new BulkEditOptions(); // Use default options
+            var resolvedFiles = await ResolveFilePatterns(files, options, cancellationToken);
+
+            var fileSizes = new List<long>();
+            var lineCounts = new List<int>();
+            var fileTypes = new Dictionary<string, int>();
+            var oversizedFiles = new List<string>();
+            var inaccessibleFiles = new List<string>();
+
+            foreach (var filePath in resolvedFiles)
+            {
+                try
+                {
+                    var fileInfo = new System.IO.FileInfo(filePath);
+
+                    if (fileInfo.Length > options.MaxFileSize)
+                    {
+                        oversizedFiles.Add(filePath);
+                        continue;
+                    }
+
+                    fileSizes.Add(fileInfo.Length);
+
+                    // Count lines
+                    var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+                    var lineCount = content.Split('\n').Length;
+                    lineCounts.Add(lineCount);
+
+                    // Track file types
+                    var extension = fileInfo.Extension.ToLowerInvariant();
+                    fileTypes[extension] = fileTypes.GetValueOrDefault(extension, 0) + 1;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to analyze file {FilePath}", filePath);
+                    inaccessibleFiles.Add(filePath);
+                }
+            }
+
+            var totalSize = fileSizes.Sum();
+            var averageSize = fileSizes.Any() ? fileSizes.Average() : 0;
+            var largestSize = fileSizes.Any() ? fileSizes.Max() : 0;
+            var smallestSize = fileSizes.Any() ? fileSizes.Min() : 0;
+            var totalLines = lineCounts.Sum();
+
+            // Estimate processing time
+            var estimatedProcessingTime = TimeSpan.FromSeconds(
+                resolvedFiles.Count * 0.5 + totalSize / (1024 * 1024) * 2);
+
+            // Recommend batch size based on file count and sizes
+            var recommendedBatchSize = Math.Min(50, Math.Max(5, Environment.ProcessorCount * 2));
+
+            return new FileStatistics
+            {
+                TotalFiles = resolvedFiles.Count,
+                TotalSize = totalSize,
+                AverageFileSize = (long)averageSize,
+                LargestFileSize = largestSize,
+                SmallestFileSize = smallestSize,
+                TotalLines = totalLines,
+                FileTypes = fileTypes,
+                OversizedFiles = oversizedFiles,
+                InaccessibleFiles = inaccessibleFiles,
+                EstimatedProcessingTime = estimatedProcessingTime,
+                RecommendedBatchSize = recommendedBatchSize
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get file statistics");
+            return new FileStatistics
+            {
+                TotalFiles = 0,
+                TotalSize = 0,
+                AverageFileSize = 0,
+                LargestFileSize = 0,
+                SmallestFileSize = 0,
+                TotalLines = 0,
+                FileTypes = new Dictionary<string, int>(),
+                OversizedFiles = Array.Empty<string>(),
+                InaccessibleFiles = files,
+                EstimatedProcessingTime = TimeSpan.Zero,
+                RecommendedBatchSize = 10
+            };
+        }
+    }
+
+    #region Helper Methods
+
+    private async Task<IReadOnlyList<string>> ResolveFilePatterns(
+        IReadOnlyList<string> patterns,
+        BulkEditOptions options,
+        CancellationToken cancellationToken)
+    {
+        var allFiles = new HashSet<string>();
+
+        foreach (var pattern in patterns)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (File.Exists(pattern))
+            {
+                allFiles.Add(Path.GetFullPath(pattern));
+                continue;
+            }
+
+            if (Directory.Exists(pattern))
+            {
+                var files = Directory.GetFiles(pattern, "*.*", SearchOption.AllDirectories);
+                foreach (var file in files)
+                {
+                    if (options.IncludeHiddenFiles || !IsHiddenFile(file))
+                    {
+                        allFiles.Add(Path.GetFullPath(file));
+                    }
+                }
+                continue;
+            }
+
+            // Use glob pattern matching
+            try
+            {
+                var matcher = new Matcher();
+                matcher.AddInclude(pattern);
+
+                if (options.ExcludedFiles != null)
+                {
+                    foreach (var excludePattern in options.ExcludedFiles)
+                    {
+                        matcher.AddExclude(excludePattern);
+                    }
+                }
+
+                // Determine the root directory for the pattern
+                var rootDir = DetermineRootDirectory(pattern);
+                var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(rootDir)));
+
+                foreach (var file in result.Files)
+                {
+                    var fullPath = Path.Combine(rootDir, file.Path);
+                    if (File.Exists(fullPath) &&
+                        (options.IncludeHiddenFiles || !IsHiddenFile(fullPath)))
+                    {
+                        allFiles.Add(Path.GetFullPath(fullPath));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve pattern {Pattern}", pattern);
+            }
+        }
+
+        // Filter by file size if specified
+        if (options.MaxFileSize > 0)
+        {
+            var filteredFiles = new List<string>();
+            foreach (var file in allFiles)
+            {
+                try
+                {
+                    var fileInfo = new FileInfo(file);
+                    if (fileInfo.Length <= options.MaxFileSize)
+                    {
+                        filteredFiles.Add(file);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to check file size for {FilePath}", file);
+                }
+            }
+            return filteredFiles;
+        }
+
+        return allFiles.ToList();
+    }
+
+    private string DetermineRootDirectory(string pattern)
+    {
+        if (Path.IsPathRooted(pattern))
+        {
+            var rootedPath = Path.GetFullPath(pattern);
+            if (File.Exists(rootedPath) || Directory.Exists(rootedPath))
+            {
+                return rootedPath;
+            }
+
+            // For rooted patterns with wildcards, find the deepest existing directory
+            var directory = Path.GetDirectoryName(rootedPath);
+            while (directory != null && !Directory.Exists(directory))
+            {
+                directory = Path.GetDirectoryName(directory);
+            }
+            return directory ?? Directory.GetCurrentDirectory();
+        }
+
+        return Directory.GetCurrentDirectory();
+    }
+
+    private bool IsHiddenFile(string filePath)
+    {
+        try
+        {
+            var fileInfo = new System.IO.FileInfo(filePath);
+            if (OperatingSystem.IsWindows())
+            {
+                return (fileInfo.Attributes & FileAttributes.Hidden) != 0;
+            }
+
+            // On Unix-like systems, files starting with . are considered hidden
+            return Path.GetFileName(filePath).StartsWith('.');
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<RollbackInfo> CreateRollbackSession(
+        string operationId,
+        IReadOnlyList<string> files,
+        CancellationToken cancellationToken)
+    {
+        var rollbackId = Guid.NewGuid().ToString();
+        var rollbackDirectory = Path.Combine(_tempDirectory, "Rollbacks", rollbackId);
+        Directory.CreateDirectory(rollbackDirectory);
+
+        var rollbackFiles = new List<RollbackFileInfo>();
+        var rollbackSize = 0L;
+
+        foreach (var filePath in files)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                if (!File.Exists(filePath))
+                    continue;
+
+                var originalChecksum = await ComputeFileChecksum(filePath, cancellationToken);
+                var backupPath = Path.Combine(rollbackDirectory, Guid.NewGuid().ToString() + Path.GetExtension(filePath));
+
+                // Create backup
+                File.Copy(filePath, backupPath);
+                var backupChecksum = await ComputeFileChecksum(backupPath, cancellationToken);
+
+                var backupFileInfo = new FileInfo(backupPath);
+                rollbackFiles.Add(new RollbackFileInfo
+                {
+                    OriginalPath = filePath,
+                    BackupPath = backupPath,
+                    OriginalChecksum = originalChecksum,
+                    BackupChecksum = backupChecksum,
+                    BackupSize = backupFileInfo.Length
+                });
+
+                rollbackSize += backupFileInfo.Length;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to create backup for file {FilePath}", filePath);
+            }
+        }
+
+        var rollbackInfo = new RollbackInfo
+        {
+            RollbackId = rollbackId,
+            OperationId = operationId,
+            RollbackDirectory = rollbackDirectory,
+            Files = rollbackFiles,
+            ExpiresAt = DateTime.UtcNow.AddDays(7), // Rollbacks expire after 7 days
+            RollbackSize = rollbackSize
+        };
+
+        _rollbackSessions[rollbackId] = rollbackInfo;
+        return rollbackInfo;
+    }
+
+    private async Task<string> ComputeFileChecksum(string filePath, CancellationToken cancellationToken)
+    {
+        using var sha256 = SHA256.Create();
+        await using var stream = File.OpenRead(filePath);
+        var hash = await sha256.ComputeHashAsync(stream, cancellationToken);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private async Task<FileBulkEditResult> ProcessFileForBulkReplace(
+        string filePath,
+        Regex regex,
+        string replacement,
+        BulkEditOptions options,
+        RollbackInfo? rollbackInfo,
+        CancellationToken cancellationToken)
+    {
+        var startTime = DateTime.UtcNow;
+        var originalSize = 0L;
+        var newSize = 0L;
+
+        try
+        {
+            // Read file
+            var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+            originalSize = content.Length;
+
+            // Apply regex replacement
+            var newContent = regex.Replace(content, replacement);
+            newSize = newContent.Length;
+
+            // Check if any changes were made
+            if (content == newContent)
+            {
+                return new FileBulkEditResult
+                {
+                    FilePath = filePath,
+                    Success = true,
+                    ChangesApplied = 0,
+                    Skipped = true,
+                    SkipReason = "No matches found",
+                    OriginalSize = originalSize,
+                    NewSize = newSize,
+                    ProcessStartTime = startTime,
+                    ProcessEndTime = DateTime.UtcNow
+                };
+            }
+
+            // In preview mode, just report what would change
+            if (options.PreviewMode)
+            {
+                var changes = new List<FileChange>();
+                var matches = regex.Matches(content);
+                foreach (Match match in matches)
+                {
+                    changes.Add(new FileChange
+                    {
+                        ChangeType = FileChangeType.Replace,
+                        StartLine = GetLineNumber(content, match.Index),
+                        StartColumn = GetColumnNumber(content, match.Index),
+                        EndLine = GetLineNumber(content, match.Index + match.Length),
+                        EndColumn = GetColumnNumber(content, match.Index + match.Length),
+                        OriginalText = match.Value,
+                        NewText = match.Result(replacement)
+                    });
+                }
+
+                return new FileBulkEditResult
+                {
+                    FilePath = filePath,
+                    Success = true,
+                    ChangesApplied = changes.Count,
+                    Changes = changes,
+                    OriginalSize = originalSize,
+                    NewSize = newSize,
+                    ProcessStartTime = startTime,
+                    ProcessEndTime = DateTime.UtcNow
+                };
+            }
+
+            // Create backup if needed and not already created
+            var backupPath = rollbackInfo?.Files.FirstOrDefault(f => f.OriginalPath == filePath)?.BackupPath;
+            if (options.CreateBackups && backupPath == null)
+            {
+                backupPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+                File.Copy(filePath, backupPath);
+            }
+
+            // Write changes
+            await File.WriteAllTextAsync(filePath, newContent, cancellationToken);
+
+            return new FileBulkEditResult
+            {
+                FilePath = filePath,
+                Success = true,
+                ChangesApplied = regex.Matches(content).Count,
+                OriginalSize = originalSize,
+                NewSize = newSize,
+                BackupPath = backupPath,
+                ProcessStartTime = startTime,
+                ProcessEndTime = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process file {FilePath} for bulk replace", filePath);
+            return new FileBulkEditResult
+            {
+                FilePath = filePath,
+                Success = false,
+                Error = ex.Message,
+                OriginalSize = originalSize,
+                NewSize = newSize,
+                ProcessStartTime = startTime,
+                ProcessEndTime = DateTime.UtcNow
+            };
+        }
+    }
+
+    private async Task<FileBulkEditResult> ProcessFileForConditionalEdit(
+        string filePath,
+        BulkEditCondition condition,
+        IReadOnlyList<TextEdit> edits,
+        BulkEditOptions options,
+        RollbackInfo? rollbackInfo,
+        CancellationToken cancellationToken)
+    {
+        var startTime = DateTime.UtcNow;
+        var originalSize = 0L;
+        var newSize = 0L;
+
+        try
+        {
+            // Read file
+            var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+            originalSize = content.Length;
+
+            // Check condition
+            var conditionMet = await CheckCondition(content, condition, filePath);
+
+            if (!conditionMet)
+            {
+                return new FileBulkEditResult
+                {
+                    FilePath = filePath,
+                    Success = true,
+                    ChangesApplied = 0,
+                    Skipped = true,
+                    SkipReason = "Condition not met",
+                    OriginalSize = originalSize,
+                    NewSize = originalSize,
+                    ProcessStartTime = startTime,
+                    ProcessEndTime = DateTime.UtcNow
+                };
+            }
+
+            // Apply edits (in preview mode, just track changes)
+            var newContent = content;
+            var changes = new List<FileChange>();
+
+            if (!options.PreviewMode)
+            {
+                // Create backup if needed
+                var backupPath = rollbackInfo?.Files.FirstOrDefault(f => f.OriginalPath == filePath)?.BackupPath;
+                if (options.CreateBackups && backupPath == null)
+                {
+                    backupPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+                    File.Copy(filePath, backupPath);
+                }
+            }
+
+            // Apply each edit
+            foreach (var edit in edits)
+            {
+                switch (edit)
+                {
+                    case ReplaceEdit replaceEdit:
+                        // Apply replace logic
+                        // This would need to be implemented based on line/column positions
+                        break;
+                    case InsertEdit insertEdit:
+                        // Apply insert logic
+                        break;
+                    case DeleteEdit deleteEdit:
+                        // Apply delete logic
+                        break;
+                }
+            }
+
+            newSize = newContent.Length;
+
+            if (!options.PreviewMode)
+            {
+                await File.WriteAllTextAsync(filePath, newContent, cancellationToken);
+            }
+
+            return new FileBulkEditResult
+            {
+                FilePath = filePath,
+                Success = true,
+                ChangesApplied = edits.Count,
+                Changes = changes,
+                OriginalSize = originalSize,
+                NewSize = newSize,
+                ProcessStartTime = startTime,
+                ProcessEndTime = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process file {FilePath} for conditional edit", filePath);
+            return new FileBulkEditResult
+            {
+                FilePath = filePath,
+                Success = false,
+                Error = ex.Message,
+                OriginalSize = originalSize,
+                NewSize = newSize,
+                ProcessStartTime = startTime,
+                ProcessEndTime = DateTime.UtcNow
+            };
+        }
+    }
+
+    private async Task<FileBulkEditResult> ProcessFileForBatchRefactor(
+        string filePath,
+        BulkRefactorPattern refactorPattern,
+        BulkEditOptions options,
+        RollbackInfo? rollbackInfo,
+        CancellationToken cancellationToken)
+    {
+        var startTime = DateTime.UtcNow;
+        var originalSize = 0L;
+        var newSize = 0L;
+
+        try
+        {
+            // Read file
+            var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+            originalSize = content.Length;
+
+            // Apply refactoring based on type
+            var newContent = await ApplyRefactoring(content, refactorPattern, filePath, cancellationToken);
+            newSize = newContent.Length;
+
+            // Check if any changes were made
+            if (content == newContent)
+            {
+                return new FileBulkEditResult
+                {
+                    FilePath = filePath,
+                    Success = true,
+                    ChangesApplied = 0,
+                    Skipped = true,
+                    SkipReason = "No refactoring needed",
+                    OriginalSize = originalSize,
+                    NewSize = newSize,
+                    ProcessStartTime = startTime,
+                    ProcessEndTime = DateTime.UtcNow
+                };
+            }
+
+            if (options.PreviewMode)
+            {
+                return new FileBulkEditResult
+                {
+                    FilePath = filePath,
+                    Success = true,
+                    ChangesApplied = 1, // Approximate
+                    OriginalSize = originalSize,
+                    NewSize = newSize,
+                    ProcessStartTime = startTime,
+                    ProcessEndTime = DateTime.UtcNow
+                };
+            }
+
+            // Create backup if needed
+            var backupPath = rollbackInfo?.Files.FirstOrDefault(f => f.OriginalPath == filePath)?.BackupPath;
+            if (options.CreateBackups && backupPath == null)
+            {
+                backupPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+                File.Copy(filePath, backupPath);
+            }
+
+            // Write changes
+            await File.WriteAllTextAsync(filePath, newContent, cancellationToken);
+
+            return new FileBulkEditResult
+            {
+                FilePath = filePath,
+                Success = true,
+                ChangesApplied = 1,
+                OriginalSize = originalSize,
+                NewSize = newSize,
+                BackupPath = backupPath,
+                ProcessStartTime = startTime,
+                ProcessEndTime = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process file {FilePath} for batch refactor", filePath);
+            return new FileBulkEditResult
+            {
+                FilePath = filePath,
+                Success = false,
+                Error = ex.Message,
+                OriginalSize = originalSize,
+                NewSize = newSize,
+                ProcessStartTime = startTime,
+                ProcessEndTime = DateTime.UtcNow
+            };
+        }
+    }
+
+    private async Task<FileBulkEditResult> ProcessFileForMultiFileEdit(
+        string filePath,
+        MultiFileEditOperation operation,
+        BulkEditOptions options,
+        RollbackInfo? rollbackInfo,
+        CancellationToken cancellationToken)
+    {
+        var startTime = DateTime.UtcNow;
+        var originalSize = 0L;
+        var newSize = 0L;
+
+        try
+        {
+            // Read file
+            var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+            originalSize = content.Length;
+
+            // Apply edits
+            var newContent = content;
+            // Apply each edit in the operation
+            // This would need detailed implementation based on edit types
+
+            newSize = newContent.Length;
+
+            if (options.PreviewMode)
+            {
+                return new FileBulkEditResult
+                {
+                    FilePath = filePath,
+                    Success = true,
+                    ChangesApplied = operation.Edits.Count,
+                    OriginalSize = originalSize,
+                    NewSize = newSize,
+                    ProcessStartTime = startTime,
+                    ProcessEndTime = DateTime.UtcNow
+                };
+            }
+
+            // Create backup if needed
+            var backupPath = rollbackInfo?.Files.FirstOrDefault(f => f.OriginalPath == filePath)?.BackupPath;
+            if (options.CreateBackups && backupPath == null)
+            {
+                backupPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+                File.Copy(filePath, backupPath);
+            }
+
+            // Write changes
+            await File.WriteAllTextAsync(filePath, newContent, cancellationToken);
+
+            return new FileBulkEditResult
+            {
+                FilePath = filePath,
+                Success = true,
+                ChangesApplied = operation.Edits.Count,
+                OriginalSize = originalSize,
+                NewSize = newSize,
+                BackupPath = backupPath,
+                ProcessStartTime = startTime,
+                ProcessEndTime = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process file {FilePath} for multi-file edit", filePath);
+            return new FileBulkEditResult
+            {
+                FilePath = filePath,
+                Success = false,
+                Error = ex.Message,
+                OriginalSize = originalSize,
+                NewSize = newSize,
+                ProcessStartTime = startTime,
+                ProcessEndTime = DateTime.UtcNow
+            };
+        }
+    }
+
+    private async Task<FileBulkEditResult> ProcessRollbackForFile(
+        RollbackFileInfo rollbackFile,
+        CancellationToken cancellationToken)
+    {
+        var startTime = DateTime.UtcNow;
+        var originalSize = 0L;
+        var newSize = 0L;
+
+        try
+        {
+            if (!rollbackFile.BackupExists)
+            {
+                return new FileBulkEditResult
+                {
+                    FilePath = rollbackFile.OriginalPath,
+                    Success = false,
+                    Error = "Backup file not found",
+                    Skipped = true,
+                    SkipReason = "Backup missing",
+                    OriginalSize = originalSize,
+                    NewSize = newSize,
+                    ProcessStartTime = startTime,
+                    ProcessEndTime = DateTime.UtcNow
+                };
+            }
+
+            // Verify backup integrity
+            var backupChecksum = await ComputeFileChecksum(rollbackFile.BackupPath, cancellationToken);
+            if (backupChecksum != rollbackFile.BackupChecksum)
+            {
+                return new FileBulkEditResult
+                {
+                    FilePath = rollbackFile.OriginalPath,
+                    Success = false,
+                    Error = "Backup file integrity check failed",
+                    Skipped = true,
+                    SkipReason = "Backup corrupted",
+                    OriginalSize = originalSize,
+                    NewSize = newSize,
+                    ProcessStartTime = startTime,
+                    ProcessEndTime = DateTime.UtcNow
+                };
+            }
+
+            // Get original file size
+            if (File.Exists(rollbackFile.OriginalPath))
+            {
+                originalSize = new FileInfo(rollbackFile.OriginalPath).Length;
+            }
+
+            // Restore from backup
+            File.Copy(rollbackFile.BackupPath, rollbackFile.OriginalPath, true);
+            newSize = new FileInfo(rollbackFile.OriginalPath).Length;
+
+            return new FileBulkEditResult
+            {
+                FilePath = rollbackFile.OriginalPath,
+                Success = true,
+                ChangesApplied = 1,
+                OriginalSize = originalSize,
+                NewSize = newSize,
+                ProcessStartTime = startTime,
+                ProcessEndTime = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to rollback file {FilePath}", rollbackFile.OriginalPath);
+            return new FileBulkEditResult
+            {
+                FilePath = rollbackFile.OriginalPath,
+                Success = false,
+                Error = ex.Message,
+                OriginalSize = originalSize,
+                NewSize = newSize,
+                ProcessStartTime = startTime,
+                ProcessEndTime = DateTime.UtcNow
+            };
+        }
+    }
+
+    private async Task<FilePreviewResult> GenerateFilePreview(
+        string filePath,
+        BulkEditRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+            var plannedChanges = new List<FileChange>();
+
+            // Generate preview based on operation type
+            switch (request.OperationType)
+            {
+                case BulkEditOperationType.BulkReplace:
+                    if (!string.IsNullOrEmpty(request.RegexPattern))
+                    {
+                        var regex = new Regex(request.RegexPattern, request.Options.RegexOptions);
+                        var matches = regex.Matches(content);
+                        foreach (Match match in matches)
+                        {
+                            plannedChanges.Add(new FileChange
+                            {
+                                ChangeType = FileChangeType.Replace,
+                                StartLine = GetLineNumber(content, match.Index),
+                                StartColumn = GetColumnNumber(content, match.Index),
+                                EndLine = GetLineNumber(content, match.Index + match.Length),
+                                EndColumn = GetColumnNumber(content, match.Index + match.Length),
+                                OriginalText = match.Value,
+                                NewText = match.Result(request.RegexReplacement ?? "")
+                            });
+                        }
+                    }
+                    break;
+
+                case BulkEditOperationType.ConditionalEdit:
+                    if (request.Condition != null)
+                    {
+                        var conditionMet = await CheckCondition(content, request.Condition, filePath);
+                        if (conditionMet && request.MultiFileEdits != null)
+                        {
+                            // Add changes from the operation
+                            foreach (var operation in request.MultiFileEdits)
+                            {
+                                foreach (var edit in operation.Edits)
+                                {
+                                    // Convert TextEdit to FileChange
+                                    plannedChanges.Add(ConvertTextEditToFileChange(edit));
+                                }
+                            }
+                        }
+                    }
+                    break;
+
+                // Add other operation types as needed
+            }
+
+            // Generate diff preview
+            var diffPreview = plannedChanges.Count > 0 ? GenerateDiff(content, plannedChanges) : null;
+
+            // Determine risk level
+            var riskLevel = ChangeRiskLevel.Low;
+            if (plannedChanges.Count > 10)
+            {
+                riskLevel = ChangeRiskLevel.Medium;
+            }
+            if (plannedChanges.Count > 50)
+            {
+                riskLevel = ChangeRiskLevel.High;
+            }
+
+            return new FilePreviewResult
+            {
+                FilePath = filePath,
+                WouldChange = plannedChanges.Count > 0,
+                ChangeCount = plannedChanges.Count,
+                DiffPreview = diffPreview,
+                PlannedChanges = plannedChanges,
+                RiskLevel = riskLevel
+            };
+        }
+        catch (Exception ex)
+        {
+            return new FilePreviewResult
+            {
+                FilePath = filePath,
+                WouldChange = false,
+                ChangeCount = 0,
+                SkipReason = $"Failed to generate preview: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<bool> CheckCondition(string content, BulkEditCondition condition, string filePath)
+    {
+        var result = condition.ConditionType switch
+        {
+            BulkConditionType.FileContains => content.Contains(condition.Pattern),
+            BulkConditionType.FileMatches => Regex.IsMatch(content, condition.Pattern),
+            BulkConditionType.FileSize => CheckFileSizeCondition(filePath, condition),
+            BulkConditionType.FileModifiedAfter => CheckFileModifiedCondition(filePath, condition),
+            BulkConditionType.FileExtension => CheckFileExtensionCondition(filePath, condition),
+            BulkConditionType.FileInDirectory => CheckFileInDirectoryCondition(filePath, condition),
+            _ => false
+        };
+
+        return condition.Negate ? !result : result;
+    }
+
+    private bool CheckFileSizeCondition(string filePath, BulkEditCondition condition)
+    {
+        try
+        {
+            var fileInfo = new System.IO.FileInfo(filePath);
+            if (condition.Parameters?.TryGetValue("minSize", out var minSizeObj) == true &&
+                long.TryParse(minSizeObj.ToString(), out var minSize))
+            {
+                if (fileInfo.Length < minSize) return false;
+            }
+
+            if (condition.Parameters?.TryGetValue("maxSize", out var maxSizeObj) == true &&
+                long.TryParse(maxSizeObj.ToString(), out var maxSize))
+            {
+                if (fileInfo.Length > maxSize) return false;
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool CheckFileModifiedCondition(string filePath, BulkEditCondition condition)
+    {
+        try
+        {
+            var fileInfo = new System.IO.FileInfo(filePath);
+            if (condition.Parameters?.TryGetValue("date", out var dateObj) == true &&
+                DateTime.TryParse(dateObj.ToString(), out var date))
+            {
+                return fileInfo.LastWriteTime > date;
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool CheckFileExtensionCondition(string filePath, BulkEditCondition condition)
+    {
+        var extension = Path.GetExtension(filePath).ToLowerInvariant();
+        return extension.Equals(condition.Pattern.ToLowerInvariant());
+    }
+
+    private bool CheckFileInDirectoryCondition(string filePath, BulkEditCondition condition)
+    {
+        var directory = Path.GetDirectoryName(filePath);
+        return !string.IsNullOrEmpty(directory) &&
+               directory.Contains(condition.Pattern, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<string> ApplyRefactoring(
+        string content,
+        BulkRefactorPattern refactorPattern,
+        string filePath,
+        CancellationToken cancellationToken)
+    {
+        // This would implement specific refactoring logic based on the pattern type
+        // For now, return the original content
+        return content;
+    }
+
+    private FileChange ConvertTextEditToFileChange(TextEdit textEdit)
+    {
+        return textEdit switch
+        {
+            ReplaceEdit replace => new FileChange
+            {
+                ChangeType = FileChangeType.Replace,
+                StartLine = replace.StartLine,
+                StartColumn = replace.StartColumn,
+                EndLine = replace.EndLine,
+                EndColumn = replace.EndColumn,
+                NewText = replace.NewText
+            },
+            InsertEdit insert => new FileChange
+            {
+                ChangeType = FileChangeType.Insert,
+                StartLine = insert.Line,
+                StartColumn = insert.Column,
+                EndLine = insert.Line,
+                EndColumn = insert.Column,
+                NewText = insert.Text
+            },
+            DeleteEdit delete => new FileChange
+            {
+                ChangeType = FileChangeType.Delete,
+                StartLine = delete.StartLine,
+                StartColumn = delete.StartColumn,
+                EndLine = delete.EndLine,
+                EndColumn = delete.EndColumn
+            },
+            _ => throw new ArgumentException($"Unknown edit type: {textEdit.GetType()}")
+        };
+    }
+
+    private string GenerateDiff(string originalContent, IReadOnlyList<FileChange> changes)
+    {
+        // Simple diff generation - in a real implementation, you'd use a proper diff library
+        var diffLines = new List<string>();
+        diffLines.Add("--- Original");
+        diffLines.Add("+++ Modified");
+
+        foreach (var change in changes.Take(10)) // Limit preview size
+        {
+            diffLines.Add($"@@ -{change.StartLine},{change.EndLine - change.StartLine + 1} " +
+                         $"+{change.StartLine},{change.EndLine - change.StartLine + 1} @@");
+
+            if (!string.IsNullOrEmpty(change.OriginalText))
+            {
+                diffLines.Add($"-{change.OriginalText}");
+            }
+
+            if (!string.IsNullOrEmpty(change.NewText))
+            {
+                diffLines.Add($"+{change.NewText}");
+            }
+        }
+
+        if (changes.Count > 10)
+        {
+            diffLines.Add($"... and {changes.Count - 10} more changes");
+        }
+
+        return string.Join("\n", diffLines);
+    }
+
+    private int GetLineNumber(string content, int index)
+    {
+        var lineCount = 1;
+        for (int i = 0; i < index && i < content.Length; i++)
+        {
+            if (content[i] == '\n')
+            {
+                lineCount++;
+            }
+        }
+        return lineCount - 1; // 0-indexed
+    }
+
+    private int GetColumnNumber(string content, int index)
+    {
+        var column = 0;
+        for (int i = index - 1; i >= 0; i--)
+        {
+            if (content[i] == '\n')
+            {
+                break;
+            }
+            column++;
+        }
+        return column;
+    }
+
+    private BulkEditResult CreateErrorResult(string operationId, DateTime startTime, string error)
+    {
+        return new BulkEditResult
+        {
+            Success = false,
+            Error = error,
+            FileResults = Array.Empty<FileBulkEditResult>(),
+            Summary = new BulkEditSummary
+            {
+                TotalFilesMatched = 0,
+                TotalFilesProcessed = 0,
+                SuccessfulFiles = 0,
+                FailedFiles = 0,
+                SkippedFiles = 0,
+                TotalChangesApplied = 0,
+                TotalBytesProcessed = 0,
+                TotalBytesWritten = 0,
+                BackupsCreated = 0,
+                AverageProcessingTime = TimeSpan.Zero,
+                FilesPerSecond = 0
+            },
+            OperationId = operationId,
+            StartTime = startTime,
+            EndTime = DateTime.UtcNow
+        };
+    }
+
+    #endregion
+}

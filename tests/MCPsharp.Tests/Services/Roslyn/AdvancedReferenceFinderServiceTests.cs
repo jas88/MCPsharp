@@ -1,0 +1,899 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using NSubstitute;
+using NUnit.Framework;
+using MCPsharp.Services.Roslyn;
+using MCPsharp.Models.Roslyn;
+using MCPsharp.Tests.TestData;
+
+namespace MCPsharp.Tests.Services.Roslyn;
+
+[TestFixture]
+[Category("Unit")]
+[Category("ReverseSearch")]
+public class AdvancedReferenceFinderServiceTests : TestBase
+{
+    private RoslynWorkspace _mockWorkspace = null!;
+    private SymbolQueryService _mockSymbolQuery = null!;
+    private ICallerAnalysisService _mockCallerAnalysis = null!;
+    private ICallChainService _mockCallChain = null!;
+    private ITypeUsageService _mockTypeUsage = null!;
+    private AdvancedReferenceFinderService _service = null!;
+
+    [SetUp]
+    public void Setup()
+    {
+        _mockWorkspace = Substitute.For<RoslynWorkspace>();
+        _mockSymbolQuery = Substitute.For<SymbolQueryService>(_mockWorkspace);
+        _mockCallerAnalysis = Substitute.For<ICallerAnalysisService>();
+        _mockCallChain = Substitute.For<ICallChainService>();
+        _mockTypeUsage = Substitute.For<ITypeUsageService>();
+
+        _service = new AdvancedReferenceFinderService(
+            _mockWorkspace,
+            _mockSymbolQuery,
+            _mockCallerAnalysis,
+            _mockCallChain,
+            _mockTypeUsage);
+    }
+
+    [Test]
+    public void Constructor_WithNullDependencies_ShouldThrowArgumentNullException()
+    {
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => new AdvancedReferenceFinderService(
+            null!, _mockSymbolQuery, _mockCallerAnalysis, _mockCallChain, _mockTypeUsage));
+
+        Assert.Throws<ArgumentNullException>(() => new AdvancedReferenceFinderService(
+            _mockWorkspace, null!, _mockCallerAnalysis, _mockCallChain, _mockTypeUsage));
+
+        Assert.Throws<ArgumentNullException>(() => new AdvancedReferenceFinderService(
+            _mockWorkspace, _mockSymbolQuery, null!, _mockCallChain, _mockTypeUsage));
+
+        Assert.Throws<ArgumentNullException>(() => new AdvancedReferenceFinderService(
+            _mockWorkspace, _mockSymbolQuery, _mockCallerAnalysis, null!, _mockTypeUsage));
+
+        Assert.Throws<ArgumentNullException>(() => new AdvancedReferenceFinderService(
+            _mockWorkspace, _mockSymbolQuery, _mockCallerAnalysis, _mockCallChain, null!));
+    }
+
+    [Test]
+    public async Task FindCallersAsync_WithValidParameters_ShouldReturnCallerResult()
+    {
+        // Arrange
+        var methodName = "ProcessData";
+        var containingType = "SampleService";
+        var expected = new CallerResult
+        {
+            MethodName = methodName,
+            ContainingType = containingType,
+            TotalCallers = 5
+        };
+
+        _mockCallerAnalysis.FindCallersAsync(methodName, containingType, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindCallersAsync(methodName, containingType, true);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MethodName, Is.EqualTo(methodName));
+        Assert.That(result.ContainingType, Is.EqualTo(containingType));
+        Assert.That(result.TotalCallers, Is.EqualTo(5));
+
+        await _mockCallerAnalysis.Received(1).FindCallersAsync(methodName, containingType, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task FindCallersAsync_WithIndirectParameter_ShouldCallCorrectService(bool includeIndirect)
+    {
+        // Arrange
+        var methodName = "TestMethod";
+        var expected = new CallerResult { TotalCallers = 3 };
+
+        if (includeIndirect)
+        {
+            _mockCallerAnalysis.FindCallersAsync(methodName, null, Arg.Any<CancellationToken>())
+                .Returns(expected);
+        }
+        else
+        {
+            _mockCallerAnalysis.FindDirectCallersAsync(methodName, null, Arg.Any<CancellationToken>())
+                .Returns(expected);
+        }
+
+        // Act
+        var result = await _service.FindCallersAsync(methodName, null, includeIndirect);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+
+        if (includeIndirect)
+        {
+            await _mockCallerAnalysis.Received(1).FindCallersAsync(methodName, null, Arg.Any<CancellationToken>());
+            await _mockCallerAnalysis.DidNotReceive().FindDirectCallersAsync(methodName, null, Arg.Any<CancellationToken>());
+        }
+        else
+        {
+            await _mockCallerAnalysis.Received(1).FindDirectCallersAsync(methodName, null, Arg.Any<CancellationToken>());
+            await _mockCallerAnalysis.DidNotReceive().FindCallersAsync(methodName, null, Arg.Any<CancellationToken>());
+        }
+    }
+
+    [Test]
+    public async Task FindCallersAtLocationAsync_WithValidLocation_ShouldReturnCallerResult()
+    {
+        // Arrange
+        var filePath = "/test/SampleService.cs";
+        var line = 15;
+        var column = 10;
+        var expected = new CallerResult
+        {
+            MethodName = "ProcessData",
+            TotalCallers = 3,
+            DirectCallers = new(),
+            IndirectCallers = new()
+        };
+
+        _mockCallerAnalysis.FindCallersAtLocationAsync(filePath, line, column, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindCallersAtLocationAsync(filePath, line, column, false);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MethodName, Is.EqualTo("ProcessData"));
+
+        await _mockCallerAnalysis.Received(1).FindCallersAtLocationAsync(filePath, line, column, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindCallersAtLocationAsync_WithIndirectFalse_ShouldFilterToDirectCallers()
+    {
+        // Arrange
+        var filePath = "/test/SampleService.cs";
+        var line = 15;
+        var column = 10;
+        var mockCallers = new List<CallerInfo>
+        {
+            new() { MethodName = "DirectCaller", IsDirect = true },
+            new() { MethodName = "IndirectCaller", IsDirect = false }
+        };
+
+        var expected = new CallerResult
+        {
+            MethodName = "ProcessData",
+            DirectCallers = mockCallers,
+            IndirectCallers = new()
+        };
+
+        _mockCallerAnalysis.FindCallersAtLocationAsync(filePath, line, column, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindCallersAtLocationAsync(filePath, line, column, false);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Callers.Count, Is.EqualTo(1));
+        Assert.That(result.Callers[0].MethodName, Is.EqualTo("DirectCaller"));
+    }
+
+    [Test]
+    public async Task FindCallChainsAsync_WithValidParameters_ShouldReturnCallChains()
+    {
+        // Arrange
+        var methodName = "ProcessData";
+        var containingType = "SampleService";
+        var direction = CallDirection.Backward;
+        var maxDepth = 5;
+        var expected = new CallChainResult
+        {
+            MethodName = methodName,
+            Direction = direction,
+            TotalPaths = 3
+        };
+
+        _mockCallChain.FindCallChainsAsync(methodName, containingType, direction, maxDepth, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindCallChainsAsync(methodName, containingType, direction, maxDepth);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MethodName, Is.EqualTo(methodName));
+        Assert.That(result.Direction, Is.EqualTo(direction));
+        Assert.That(result.TotalPaths, Is.EqualTo(3));
+
+        await _mockCallChain.Received(1).FindCallChainsAsync(methodName, containingType, direction, maxDepth, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [TestCase(CallDirection.Backward, 1)]
+    [TestCase(CallDirection.Forward, 10)]
+    [TestCase(CallDirection.Backward, 0)]
+    [TestCase(CallDirection.Forward, 100)]
+    public async Task FindCallChainsAsync_WithVariousParameters_ShouldPassThroughCorrectly(CallDirection direction, int maxDepth)
+    {
+        // Arrange
+        var methodName = "TestMethod";
+        var expected = new CallChainResult { TotalPaths = 1 };
+
+        _mockCallChain.FindCallChainsAsync(methodName, null, direction, maxDepth, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindCallChainsAsync(methodName, null, direction, maxDepth);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        await _mockCallChain.Received(1).FindCallChainsAsync(methodName, null, direction, maxDepth, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindCallChainsAtLocationAsync_WithValidLocation_ShouldReturnCallChains()
+    {
+        // Arrange
+        var filePath = "/test/SampleService.cs";
+        var line = 20;
+        var column = 5;
+        var expected = new CallChainResult { TotalPaths = 2 };
+
+        _mockCallChain.FindCallChainsAtLocationAsync(filePath, line, column, Arg.Any<CallDirection>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindCallChainsAtLocationAsync(filePath, line, column);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalPaths, Is.EqualTo(2));
+
+        await _mockCallChain.Received(1).FindCallChainsAtLocationAsync(filePath, line, column, Arg.Any<CallDirection>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindTypeUsagesAsync_WithValidTypeName_ShouldReturnUsages()
+    {
+        // Arrange
+        var typeName = "SampleService";
+        var expected = new TypeUsageResult
+        {
+            TypeName = typeName,
+            TotalUsages = 8,
+            Instantiations = new(),
+            TypeReferences = new()
+        };
+
+        _mockTypeUsage.FindTypeUsagesAsync(typeName, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindTypeUsagesAsync(typeName);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TypeName, Is.EqualTo(typeName));
+        Assert.That(result.TotalUsages, Is.EqualTo(8));
+
+        await _mockTypeUsage.Received(1).FindTypeUsagesAsync(typeName, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindTypeUsagesAtLocationAsync_WithValidLocation_ShouldReturnUsages()
+    {
+        // Arrange
+        var filePath = "/test/SampleService.cs";
+        var line = 10;
+        var column = 15;
+        var expected = new TypeUsageResult { TotalUsages = 3 };
+
+        _mockTypeUsage.FindTypeUsagesAtLocationAsync(filePath, line, column, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindTypeUsagesAtLocationAsync(filePath, line, column);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalUsages, Is.EqualTo(3));
+
+        await _mockTypeUsage.Received(1).FindTypeUsagesAtLocationAsync(filePath, line, column, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AnalyzeCallPatternsAsync_WithValidMethod_ShouldReturnAnalysis()
+    {
+        // Arrange
+        var methodName = "TestMethod";
+        var containingType = "TestClass";
+        var expected = new CallPatternAnalysis
+        {
+            MethodName = methodName,
+            ContainingType = containingType,
+            TotalCallers = 5
+        };
+
+        _mockCallerAnalysis.AnalyzeCallPatternsAsync(methodName, containingType, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.AnalyzeCallPatternsAsync(methodName, containingType);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MethodName, Is.EqualTo(methodName));
+        Assert.That(result.ContainingType, Is.EqualTo(containingType));
+
+        await _mockCallerAnalysis.Received(1).AnalyzeCallPatternsAsync(methodName, containingType, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindCallChainsBetweenAsync_WithValidMethods_ShouldReturnChains()
+    {
+        // Arrange
+        var fromMethod = TestDataFixtures.SampleMethodSignature;
+        var toMethod = new MethodSignature
+        {
+            Name = "TargetMethod",
+            ContainingType = "TargetClass"
+        };
+        var expected = new List<CallChainPath>
+        {
+            new() { PathLength = 3, IsValid = true }
+        };
+
+        _mockCallChain.FindCallChainsBetweenAsync(fromMethod, toMethod, 10, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindCallChainsBetweenAsync(fromMethod, toMethod);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Count, Is.EqualTo(1));
+        Assert.That(result[0].PathLength, Is.EqualTo(3));
+
+        await _mockCallChain.Received(1).FindCallChainsBetweenAsync(fromMethod, toMethod, 10, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindRecursiveCallChainsAsync_WithValidMethod_ShouldReturnRecursiveChains()
+    {
+        // Arrange
+        var methodName = "RecursiveMethod";
+        var containingType = "TestClass";
+        var expected = new List<CallChainPath>
+        {
+            new() { IsRecursive = true, PathLength = 5 }
+        };
+
+        _mockCallChain.FindRecursiveCallChainsAsync(methodName, containingType, 20, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindRecursiveCallChainsAsync(methodName, containingType);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Count, Is.EqualTo(1));
+        Assert.That(result[0].IsRecursive, Is.True);
+
+        await _mockCallChain.Received(1).FindRecursiveCallChainsAsync(methodName, containingType, 20, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AnalyzeInheritanceAsync_WithValidType_ShouldReturnInheritanceAnalysis()
+    {
+        // Arrange
+        var typeName = "DerivedClass";
+        var expected = new InheritanceAnalysis
+        {
+            TypeName = typeName,
+            BaseClasses = new(),
+            DerivedClasses = new(),
+            InterfaceImplementations = new()
+        };
+
+        _mockTypeUsage.AnalyzeInheritanceAsync(typeName, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.AnalyzeInheritanceAsync(typeName);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TypeName, Is.EqualTo(typeName));
+
+        await _mockTypeUsage.Received(1).AnalyzeInheritanceAsync(typeName, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindUnusedMethodsAsync_WithNamespaceFilter_ShouldReturnUnusedMethods()
+    {
+        // Arrange
+        var namespaceFilter = "TestProject.Services";
+        var expected = new List<MethodSignature>
+        {
+            new() { Name = "UnusedMethod1" },
+            new() { Name = "UnusedMethod2" }
+        };
+
+        _mockCallerAnalysis.FindUnusedMethodsAsync(namespaceFilter, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindUnusedMethodsAsync(namespaceFilter);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Count, Is.EqualTo(2));
+        Assert.That(result[0].Name, Is.EqualTo("UnusedMethod1"));
+
+        await _mockCallerAnalysis.Received(1).FindUnusedMethodsAsync(namespaceFilter, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindTestOnlyMethodsAsync_ShouldReturnTestOnlyMethods()
+    {
+        // Arrange
+        var expected = new List<MethodSignature>
+        {
+            new() { Name = "TestMethod" }
+        };
+
+        _mockCallerAnalysis.FindTestOnlyMethodsAsync(Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindTestOnlyMethodsAsync();
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Count, Is.EqualTo(1));
+        Assert.That(result[0].Name, Is.EqualTo("TestMethod"));
+
+        await _mockCallerAnalysis.Received(1).FindTestOnlyMethodsAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AnalyzeCallGraphAsync_WithTypeFilter_ShouldReturnCallGraphAnalysis()
+    {
+        // Arrange
+        var typeName = "SampleService";
+        var expected = new CallGraphAnalysis
+        {
+            TargetType = typeName,
+            TotalNodes = 15,
+            TotalEdges = 25
+        };
+
+        _mockCallChain.AnalyzeCallGraphAsync(typeName, null, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.AnalyzeCallGraphAsync(typeName);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TargetType, Is.EqualTo(typeName));
+        Assert.That(result.TotalNodes, Is.EqualTo(15));
+
+        await _mockCallChain.Received(1).AnalyzeCallGraphAsync(typeName, null, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindCircularDependenciesAsync_WithNamespaceFilter_ShouldReturnDependencies()
+    {
+        // Arrange
+        var namespaceFilter = "TestProject";
+        var expected = new List<CircularDependency>
+        {
+            new() { Severity = DependencySeverity.High, Description = "Circular reference detected" }
+        };
+
+        _mockCallChain.FindCircularDependenciesAsync(namespaceFilter, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindCircularDependenciesAsync(namespaceFilter);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Count, Is.EqualTo(1));
+        Assert.That(result[0].Severity, Is.EqualTo(DependencySeverity.High));
+
+        await _mockCallChain.Received(1).FindCircularDependenciesAsync(namespaceFilter, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindShortestPathAsync_WithValidMethods_ShouldReturnShortestPath()
+    {
+        // Arrange
+        var fromMethod = TestDataFixtures.SampleMethodSignature;
+        var toMethod = new MethodSignature { Name = "TargetMethod" };
+        var expected = new CallChainPath { PathLength = 2, IsValid = true };
+
+        _mockCallChain.FindShortestPathAsync(fromMethod, toMethod, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindShortestPathAsync(fromMethod, toMethod);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.PathLength, Is.EqualTo(2));
+
+        await _mockCallChain.Received(1).FindShortestPathAsync(fromMethod, toMethod, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindReachableMethodsAsync_WithValidParameters_ShouldReturnReachabilityAnalysis()
+    {
+        // Arrange
+        var methodName = "StartMethod";
+        var containingType = "WorkflowClass";
+        var expected = new ReachabilityAnalysis
+        {
+            MethodName = methodName,
+            ContainingType = containingType,
+            TotalReachableMethods = 12
+        };
+
+        _mockCallChain.FindReachableMethodsAsync(methodName, containingType, 10, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindReachableMethodsAsync(methodName, containingType, 10);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalReachableMethods, Is.EqualTo(12));
+
+        await _mockCallChain.Received(1).FindReachableMethodsAsync(methodName, containingType, 10, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AnalyzeTypeDependenciesAsync_WithValidType_ShouldReturnDependencyAnalysis()
+    {
+        // Arrange
+        var typeName = "ComplexService";
+        var expected = new TypeDependencyAnalysis
+        {
+            TypeName = typeName,
+            TotalDependencies = 8
+        };
+
+        _mockTypeUsage.AnalyzeTypeDependenciesAsync(typeName, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.AnalyzeTypeDependenciesAsync(typeName);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TypeName, Is.EqualTo(typeName));
+        Assert.That(result.TotalDependencies, Is.EqualTo(8));
+
+        await _mockTypeUsage.Received(1).AnalyzeTypeDependenciesAsync(typeName, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AnalyzeUsagePatternsAsync_WithNamespaceFilter_ShouldReturnPatternAnalysis()
+    {
+        // Arrange
+        var namespaceFilter = "TestProject.Models";
+        var expected = new TypeUsagePatternAnalysis
+        {
+            AnalyzedNamespace = namespaceFilter,
+            TotalTypes = 15,
+            CommonPatterns = new()
+        };
+
+        _mockTypeUsage.AnalyzeUsagePatternsAsync(namespaceFilter, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.AnalyzeUsagePatternsAsync(namespaceFilter);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.AnalyzedNamespace, Is.EqualTo(namespaceFilter));
+
+        await _mockTypeUsage.Received(1).AnalyzeUsagePatternsAsync(namespaceFilter, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindRefactoringOpportunitiesAsync_WithNamespaceFilter_ShouldReturnOpportunities()
+    {
+        // Arrange
+        var namespaceFilter = "TestProject.OldCode";
+        var expected = new TypeRefactoringOpportunities
+        {
+            AnalyzedNamespace = namespaceFilter,
+            TotalOpportunities = 5
+        };
+
+        _mockTypeUsage.FindRefactoringOpportunitiesAsync(namespaceFilter, Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        // Act
+        var result = await _service.FindRefactoringOpportunitiesAsync(namespaceFilter);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.AnalyzedNamespace, Is.EqualTo(namespaceFilter));
+        Assert.That(result.TotalOpportunities, Is.EqualTo(5));
+
+        await _mockTypeUsage.Received(1).FindRefactoringOpportunitiesAsync(namespaceFilter, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AnalyzeMethodComprehensivelyAsync_WithValidMethod_ShouldReturnComprehensiveAnalysis()
+    {
+        // Arrange
+        var methodName = "ComplexMethod";
+        var containingType = "AnalysisService";
+
+        var mockCallers = new CallerResult
+        {
+            MethodName = methodName,
+            TotalCallers = 3,
+            DirectCallers = new(),
+            IndirectCallers = new()
+        };
+
+        var mockBackwardChains = new CallChainResult
+        {
+            MethodName = methodName,
+            TotalPaths = 5
+        };
+
+        var mockForwardChains = new CallChainResult
+        {
+            MethodName = methodName,
+            TotalPaths = 2
+        };
+
+        var mockCallPatterns = new CallPatternAnalysis
+        {
+            MethodName = methodName,
+            TotalCallers = 3
+        };
+
+        var mockRecursiveChains = new List<CallChainPath>
+        {
+            new() { IsRecursive = true }
+        };
+
+        _mockCallerAnalysis.FindCallersAsync(methodName, containingType, Arg.Any<CancellationToken>())
+            .Returns(mockCallers);
+        _mockCallChain.FindCallChainsAsync(methodName, containingType, CallDirection.Backward, 5, Arg.Any<CancellationToken>())
+            .Returns(mockBackwardChains);
+        _mockCallChain.FindCallChainsAsync(methodName, containingType, CallDirection.Forward, 5, Arg.Any<CancellationToken>())
+            .Returns(mockForwardChains);
+        _mockCallerAnalysis.AnalyzeCallPatternsAsync(methodName, containingType, Arg.Any<CancellationToken>())
+            .Returns(mockCallPatterns);
+        _mockCallChain.FindRecursiveCallChainsAsync(methodName, containingType, 10, Arg.Any<CancellationToken>())
+            .Returns(mockRecursiveChains);
+
+        // Act
+        var result = await _service.AnalyzeMethodComprehensivelyAsync(methodName, containingType);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MethodName, Is.EqualTo(methodName));
+        Assert.That(result.ContainingType, Is.EqualTo(containingType));
+        Assert.That(result.TotalDirectCallers, Is.EqualTo(3));
+        Assert.That(result.TotalBackwardPaths, Is.EqualTo(5));
+        Assert.That(result.TotalForwardPaths, Is.EqualTo(2));
+        Assert.That(result.HasRecursiveCalls, Is.True);
+        Assert.That(result.AnalysisTime, Is.LessThanOrEqualTo(DateTime.UtcNow));
+    }
+
+    [Test]
+    public async Task AnalyzeTypeComprehensivelyAsync_WithValidType_ShouldReturnComprehensiveAnalysis()
+    {
+        // Arrange
+        var typeName = "ComplexType";
+
+        var mockTypeUsages = new TypeUsageResult
+        {
+            TypeName = typeName,
+            TotalUsages = 10,
+            Instantiations = new(),
+            TypeReferences = new()
+        };
+
+        var mockInheritance = new InheritanceAnalysis
+        {
+            TypeName = typeName,
+            DerivedClasses = new(),
+            InterfaceImplementations = new()
+        };
+
+        var mockDependencies = new TypeDependencyAnalysis
+        {
+            TypeName = typeName,
+            TotalDependencies = 5
+        };
+
+        var mockGenericUsages = new List<TypeUsageInfo>
+        {
+            new() { TypeName = typeName }
+        };
+
+        _mockTypeUsage.FindTypeUsagesAsync(typeName, Arg.Any<CancellationToken>())
+            .Returns(mockTypeUsages);
+        _mockTypeUsage.AnalyzeInheritanceAsync(typeName, Arg.Any<CancellationToken>())
+            .Returns(mockInheritance);
+        _mockTypeUsage.AnalyzeTypeDependenciesAsync(typeName, Arg.Any<CancellationToken>())
+            .Returns(mockDependencies);
+        _mockTypeUsage.FindGenericUsagesAsync(typeName, Arg.Any<CancellationToken>())
+            .Returns(mockGenericUsages);
+
+        // Act
+        var result = await _service.AnalyzeTypeComprehensivelyAsync(typeName);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TypeName, Is.EqualTo(typeName));
+        Assert.That(result.TotalUsages, Is.EqualTo(10));
+        Assert.That(result.DependencyCount, Is.EqualTo(5));
+        Assert.That(result.GenericUsageCount, Is.EqualTo(1));
+        Assert.That(result.AnalysisTime, Is.LessThanOrEqualTo(DateTime.UtcNow));
+    }
+
+    [Test]
+    public async Task FindMethodsBySignatureAsync_WithExactMatch_ShouldReturnMatchingMethods()
+    {
+        // Arrange
+        var signature = TestDataFixtures.SampleMethodSignature;
+        var mockSymbols = new List<SymbolResult>
+        {
+            new() { File = "/test/SampleService.cs", Line = 15 }
+        };
+
+        _mockSymbolQuery.FindSymbolsAsync(signature.Name, "method")
+            .Returns(mockSymbols);
+
+        // Mock the workspace compilation for method symbol resolution
+        var mockCompilation = Substitute.For<Microsoft.CodeAnalysis.Compilation>();
+        var mockSyntaxTree = Substitute.For<Microsoft.CodeAnalysis.SyntaxTree>();
+        var mockSemanticModel = Substitute.For<Microsoft.CodeAnalysis.SemanticModel>();
+        var mockMethodSymbol = Substitute.For<Microsoft.CodeAnalysis.IMethodSymbol>();
+
+        _mockWorkspace.GetCompilation().Returns(mockCompilation);
+        mockCompilation.SyntaxTrees.Returns(new[] { mockSyntaxTree });
+        mockCompilation.GetSemanticModel(mockSyntaxTree).Returns(mockSemanticModel);
+        mockMethodSymbol.Name.Returns(signature.Name);
+        mockMethodSymbol.ReturnType.Returns(Substitute.For<Microsoft.CodeAnalysis.ITypeSymbol>());
+        mockMethodSymbol.ReturnType.ToDisplayString().Returns(signature.ReturnType);
+
+        // Act
+        var result = await _service.FindMethodsBySignatureAsync(signature, true);
+
+        // Assert
+        await _mockSymbolQuery.Received(1).FindSymbolsAsync(signature.Name, "method");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task FindSimilarMethodsAsync_WithThreshold_ShouldReturnSimilarMethods()
+    {
+        // Arrange
+        var methodName = "ProcessData";
+        var threshold = 0.8;
+        var mockAllMethods = new List<MethodSignature>
+        {
+            new() { Name = "ProcessDataAsync" },
+            new() { Name = "ProcessInformation" },
+            new() { Name = "HandleData" }
+        };
+
+        // We need to mock the workspace and compilation
+        var mockCompilation = Substitute.For<Microsoft.CodeAnalysis.Compilation>();
+        var mockSyntaxTree = Substitute.For<Microsoft.CodeAnalysis.SyntaxTree>();
+        _mockWorkspace.GetCompilation().Returns(mockCompilation);
+        mockCompilation.SyntaxTrees.Returns(new[] { mockSyntaxTree });
+
+        // Act
+        var result = await _service.FindSimilarMethodsAsync(methodName, threshold);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        // The exact result depends on the similarity calculation implementation
+    }
+
+    [Test]
+    public async Task GetCapabilitiesAsync_WithReadyWorkspace_ShouldReturnCapabilities()
+    {
+        // Arrange
+        var mockCompilation = Substitute.For<Microsoft.CodeAnalysis.Compilation>();
+        var mockSyntaxTree1 = Substitute.For<Microsoft.CodeAnalysis.SyntaxTree>();
+        var mockSyntaxTree2 = Substitute.For<Microsoft.CodeAnalysis.SyntaxTree>();
+        var mockSyntaxTree3 = Substitute.For<Microsoft.CodeAnalysis.SyntaxTree>();
+
+        _mockWorkspace.GetCompilation().Returns(mockCompilation);
+        mockCompilation.SyntaxTrees.Returns(new[] { mockSyntaxTree1, mockSyntaxTree2, mockSyntaxTree3 });
+
+        // Act
+        var result = await _service.GetCapabilitiesAsync();
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsWorkspaceReady, Is.True);
+        Assert.That(result.TotalFiles, Is.EqualTo(3));
+        Assert.That(result.SupportedAnalyses, Is.Not.Empty);
+        Assert.That(result.SupportedAnalyses.Contains("Caller Analysis"), Is.True);
+        Assert.That(result.SupportedAnalyses.Contains("Call Chain Analysis"), Is.True);
+        Assert.That(result.SupportedAnalyses.Contains("Type Usage Analysis"), Is.True);
+    }
+
+    [Test]
+    public async Task GetCapabilitiesAsync_WithNullCompilation_ShouldReturnNotReady()
+    {
+        // Arrange
+        _mockWorkspace.GetCompilation().Returns((Microsoft.CodeAnalysis.Compilation?)null);
+
+        // Act
+        var result = await _service.GetCapabilitiesAsync();
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsWorkspaceReady, Is.False);
+        Assert.That(result.TotalFiles, Is.EqualTo(0));
+        Assert.That(result.TotalTypes, Is.EqualTo(0));
+        Assert.That(result.TotalMethods, Is.EqualTo(0));
+        Assert.That(result.SupportedAnalyses, Is.Empty);
+    }
+
+    [Test]
+    public async Task Cancellation_ShouldRespectCancellationToken()
+    {
+        // Arrange
+        var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var methodName = "TestMethod";
+
+        // Act & Assert
+        Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await _service.FindCallersAsync(methodName, null, true, cts.Token));
+
+        Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await _service.FindTypeUsagesAsync("TestType", cts.Token));
+
+        Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await _service.AnalyzeCallPatternsAsync("TestMethod", null, cts.Token));
+    }
+
+    [Test]
+    [Repeat(10)] // Test multiple times to check for consistency
+    public async Task LevenshteinDistanceCalculation_ShouldBeConsistent()
+    {
+        // Arrange
+        var methodName = "ProcessData";
+        var threshold = 0.8;
+
+        // We need to mock the workspace to return some methods
+        var mockCompilation = Substitute.For<Microsoft.CodeAnalysis.Compilation>();
+        var mockSyntaxTree = Substitute.For<Microsoft.CodeAnalysis.SyntaxTree>();
+        _mockWorkspace.GetCompilation().Returns(mockCompilation);
+        mockCompilation.SyntaxTrees.Returns(new[] { mockSyntaxTree });
+
+        // Act
+        var result1 = await _service.FindSimilarMethodsAsync(methodName, threshold);
+        var result2 = await _service.FindSimilarMethodsAsync(methodName, threshold);
+
+        // Assert
+        Assert.That(result1.Count, Is.EqualTo(result2.Count));
+    }
+}
