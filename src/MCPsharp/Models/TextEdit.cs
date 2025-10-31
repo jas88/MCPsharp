@@ -8,32 +8,32 @@ public abstract class TextEdit
     /// <summary>
     /// The file path this edit applies to
     /// </summary>
-    public string? FilePath { get; init; }
+    public string? FilePath { get; set; }
 
     /// <summary>
     /// Starting line (0-indexed)
     /// </summary>
-    public required int StartLine { get; init; }
+    public required int StartLine { get; set; }
 
     /// <summary>
     /// Starting column (0-indexed)
     /// </summary>
-    public required int StartColumn { get; init; }
+    public required int StartColumn { get; set; }
 
     /// <summary>
     /// Ending line (0-indexed)
     /// </summary>
-    public required int EndLine { get; init; }
+    public required int EndLine { get; set; }
 
     /// <summary>
     /// Ending column (0-indexed)
     /// </summary>
-    public required int EndColumn { get; init; }
+    public required int EndColumn { get; set; }
 
     /// <summary>
     /// New text to replace the range
     /// </summary>
-    public required string NewText { get; init; }
+    public required string NewText { get; set; }
 
     /// <summary>
     /// The type of edit operation

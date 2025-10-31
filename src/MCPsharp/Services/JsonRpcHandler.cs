@@ -110,7 +110,7 @@ public class JsonRpcHandler
             return new JsonRpcResponse
             {
                 Jsonrpc = "2.0",
-                Id = request.Id,
+                Id = request.Id ?? string.Empty,
                 Result = result
             };
         }

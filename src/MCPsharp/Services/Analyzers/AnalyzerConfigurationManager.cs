@@ -164,7 +164,7 @@ public class AnalyzerConfigurationManager
     /// <summary>
     /// Discover configuration files in a directory
     /// </summary>
-    public async Task<ImmutableArray<string>> DiscoverConfigurationFilesAsync(string directoryPath)
+    public Task<ImmutableArray<string>> DiscoverConfigurationFilesAsync(string directoryPath)
     {
         try
         {
@@ -183,12 +183,12 @@ public class AnalyzerConfigurationManager
                 configFiles.AddRange(files);
             }
 
-            return configFiles.Distinct().ToImmutableArray();
+            return Task.FromResult(configFiles.Distinct().ToImmutableArray());
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error discovering configuration files in directory: {DirectoryPath}", directoryPath);
-            return ImmutableArray<string>.Empty;
+            return Task.FromResult(ImmutableArray<string>.Empty);
         }
     }
 
@@ -252,7 +252,7 @@ public class AnalyzerConfigurationManager
     /// <summary>
     /// Export configuration to a portable format
     /// </summary>
-    public async Task<string> ExportConfigurationAsync(string analyzerId, string projectPath)
+    public Task<string> ExportConfigurationAsync(string analyzerId, string projectPath)
     {
         try
         {
@@ -266,11 +266,13 @@ public class AnalyzerConfigurationManager
                 configuration = config
             };
 
-            return JsonSerializer.Serialize(exportData, new JsonSerializerOptions
+            var result = JsonSerializer.Serialize(exportData, new JsonSerializerOptions
             {
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             });
+
+            return Task.FromResult(result);
         }
         catch (Exception ex)
         {

@@ -472,8 +472,8 @@ public partial class McpToolRegistry
                     Files = files,
                     Condition = new BulkEditCondition
                     {
-                        ConditionType = Enum.Parse<BulkConditionType>(conditionType),
-                        Pattern = pattern
+                        ConditionType = Enum.Parse<BulkConditionType>(conditionType ?? "FileContains"),
+                        Pattern = pattern ?? string.Empty
                     },
                     Options = new BulkEditOptions { PreviewMode = true }
                 };
@@ -691,8 +691,8 @@ public partial class McpToolRegistry
                     Files = files,
                     Condition = new BulkEditCondition
                     {
-                        ConditionType = Enum.Parse<BulkConditionType>(conditionType),
-                        Pattern = pattern
+                        ConditionType = Enum.Parse<BulkConditionType>(conditionType ?? "FileContains"),
+                        Pattern = pattern ?? string.Empty
                     },
                     Options = new BulkEditOptions()
                 };

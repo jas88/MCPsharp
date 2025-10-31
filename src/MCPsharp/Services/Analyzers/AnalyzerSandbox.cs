@@ -213,6 +213,25 @@ public class AnalyzerSandbox : IAnalyzerSandbox
 
     private async Task ProcessAnalysisAsync(SandboxOperation operation)
     {
+        // Validate required parameters
+        if (operation.Analyzer == null)
+        {
+            operation.TaskCompletionSource.SetException(new ArgumentNullException(nameof(operation.Analyzer), "Analyzer cannot be null"));
+            return;
+        }
+
+        if (operation.FilePath == null)
+        {
+            operation.TaskCompletionSource.SetException(new ArgumentNullException(nameof(operation.FilePath), "FilePath cannot be null"));
+            return;
+        }
+
+        if (operation.Content == null)
+        {
+            operation.TaskCompletionSource.SetException(new ArgumentNullException(nameof(operation.Content), "Content cannot be null"));
+            return;
+        }
+
         // Check permissions
         var canRead = await _securityManager.IsOperationAllowedAsync(operation.AnalyzerId, "ReadFile", operation.FilePath);
         if (!canRead)
@@ -235,7 +254,7 @@ public class AnalyzerSandbox : IAnalyzerSandbox
 
         try
         {
-            var result = await operation.Analyzer!.AnalyzeAsync(operation.FilePath, operation.Content!, timeoutCts.Token);
+            var result = await operation.Analyzer.AnalyzeAsync(operation.FilePath, operation.Content, timeoutCts.Token);
             operation.TaskCompletionSource.SetResult(result);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)

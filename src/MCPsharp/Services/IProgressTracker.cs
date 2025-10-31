@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MCPsharp.Models.Streaming;
+using MCPsharp.Models.Consolidated;
 
 namespace MCPsharp.Services;
 
@@ -59,4 +61,19 @@ public interface IProgressTracker
     /// Report progress for file processing operations
     /// </summary>
     void ReportProgress(FileProcessingProgress progress);
+
+    /// <summary>
+    /// Start tracking a new operation with detailed progress information
+    /// </summary>
+    Task<string> StartTrackingAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default);
+
+    /// <summary>
+    /// Complete tracking for an operation with results
+    /// </summary>
+    Task CompleteTrackingAsync(string progressId, ProgressResult result, CancellationToken ct = default);
+
+    /// <summary>
+    /// Update progress with detailed progress information
+    /// </summary>
+    Task UpdateProgressAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default);
 }

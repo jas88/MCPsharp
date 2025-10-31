@@ -45,7 +45,7 @@ public class BulkEditService : IBulkEditService
         var startTime = DateTime.UtcNow;
         options ??= new BulkEditOptions();
 
-        _logger.LogInformation("Starting bulk replace operation {OperationId} with pattern {Pattern}", operationId, regexPattern);
+        _logger?.LogInformation("Starting bulk replace operation {OperationId} with pattern {Pattern}", operationId, regexPattern);
 
         try
         {
@@ -137,7 +137,7 @@ public class BulkEditService : IBulkEditService
                 RollbackInfo = rollbackInfo
             };
 
-            _logger.LogInformation(
+            _logger?.LogInformation(
                 "Bulk replace operation {OperationId} completed. Files: {Total}/{Successful}/{Failed}, Changes: {Changes}",
                 operationId, summary.TotalFilesProcessed, summary.SuccessfulFiles, summary.FailedFiles, changesApplied);
 
@@ -145,7 +145,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Bulk replace operation {OperationId} failed", operationId);
+            _logger?.LogError(ex, "Bulk replace operation {OperationId} failed", operationId);
             var errors = new List<BulkEditError>
             {
                 new BulkEditError
@@ -188,7 +188,7 @@ public class BulkEditService : IBulkEditService
         var startTime = DateTime.UtcNow;
         options ??= new BulkEditOptions();
 
-        _logger.LogInformation("Starting conditional edit operation {OperationId} with condition type {ConditionType}",
+        _logger?.LogInformation("Starting conditional edit operation {OperationId} with condition type {ConditionType}",
             operationId, condition.ConditionType);
 
         try
@@ -274,7 +274,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Conditional edit operation {OperationId} failed", operationId);
+            _logger?.LogError(ex, "Conditional edit operation {OperationId} failed", operationId);
             return CreateErrorResult(operationId, startTime, ex.Message);
         }
     }
@@ -290,7 +290,7 @@ public class BulkEditService : IBulkEditService
         var startTime = DateTime.UtcNow;
         options ??= new BulkEditOptions();
 
-        _logger.LogInformation("Starting batch refactor operation {OperationId} with refactor type {RefactorType}",
+        _logger?.LogInformation("Starting batch refactor operation {OperationId} with refactor type {RefactorType}",
             operationId, refactorPattern.RefactorType);
 
         try
@@ -376,7 +376,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Batch refactor operation {OperationId} failed", operationId);
+            _logger?.LogError(ex, "Batch refactor operation {OperationId} failed", operationId);
             return CreateErrorResult(operationId, startTime, ex.Message);
         }
     }
@@ -391,7 +391,7 @@ public class BulkEditService : IBulkEditService
         var startTime = DateTime.UtcNow;
         options ??= new BulkEditOptions();
 
-        _logger.LogInformation("Starting multi-file edit operation {OperationId} with {OperationCount} operations",
+        _logger?.LogInformation("Starting multi-file edit operation {OperationId} with {OperationCount} operations",
             operationId, editOperations.Count);
 
         try
@@ -500,7 +500,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Multi-file edit operation {OperationId} failed", operationId);
+            _logger?.LogError(ex, "Multi-file edit operation {OperationId} failed", operationId);
             return CreateErrorResult(operationId, startTime, ex.Message);
         }
     }
@@ -513,7 +513,7 @@ public class BulkEditService : IBulkEditService
         var previewId = Guid.NewGuid().ToString();
         var generatedAt = DateTime.UtcNow;
 
-        _logger.LogInformation("Generating preview {PreviewId} for bulk edit operation", previewId);
+        _logger?.LogInformation("Generating preview {PreviewId} for bulk edit operation", previewId);
 
         try
         {
@@ -638,7 +638,7 @@ public class BulkEditService : IBulkEditService
             {
                 Success = true,
                 FilePreviews = filePreviews,
-                Summary = summary.ToString(),
+                Summary = summary?.ToString() ?? string.Empty,
                 Impact = impact,
                 PreviewId = previewId,
                 GeneratedAt = generatedAt
@@ -646,7 +646,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to generate preview {PreviewId}", previewId);
+            _logger?.LogError(ex, "Failed to generate preview {PreviewId}", previewId);
             return new PreviewResult
             {
                 Success = false,
@@ -690,7 +690,7 @@ public class BulkEditService : IBulkEditService
         var operationId = Guid.NewGuid().ToString();
         var startTime = DateTime.UtcNow;
 
-        _logger.LogInformation("Starting rollback operation {OperationId} for rollback session {RollbackId}",
+        _logger?.LogInformation("Starting rollback operation {OperationId} for rollback session {RollbackId}",
             operationId, rollbackId);
 
         try
@@ -811,7 +811,7 @@ public class BulkEditService : IBulkEditService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to cleanup rollback directory {Directory}", rollbackInfo.RollbackDirectory);
+                    _logger?.LogWarning(ex, "Failed to cleanup rollback directory {Directory}", rollbackInfo.RollbackDirectory);
                 }
             }
 
@@ -845,7 +845,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Rollback operation {OperationId} failed", operationId);
+            _logger?.LogError(ex, "Rollback operation {OperationId} failed", operationId);
             return CreateErrorResult(operationId, startTime, ex.Message);
         }
     }
@@ -1026,7 +1026,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get available rollbacks");
+            _logger?.LogError(ex, "Failed to get available rollbacks");
             return Array.Empty<RollbackInfo>();
         }
     }
@@ -1055,14 +1055,14 @@ public class BulkEditService : IBulkEditService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to cleanup expired rollback {RollbackId}", rollbackId);
+                    _logger?.LogWarning(ex, "Failed to cleanup expired rollback {RollbackId}", rollbackId);
                 }
             }
         }
 
         if (cleanedCount > 0)
         {
-            _logger.LogInformation("Cleaned up {Count} expired rollback sessions", cleanedCount);
+            _logger?.LogInformation("Cleaned up {Count} expired rollback sessions", cleanedCount);
         }
 
         return cleanedCount;
@@ -1224,7 +1224,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to estimate impact");
+            _logger?.LogError(ex, "Failed to estimate impact");
             return new ImpactEstimate
             {
                 OverallRisk = ChangeRiskLevel.High,
@@ -1292,7 +1292,7 @@ public class BulkEditService : IBulkEditService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to analyze file {FilePath}", filePath);
+                    _logger?.LogWarning(ex, "Failed to analyze file {FilePath}", filePath);
                     inaccessibleFiles.Add(filePath);
                 }
             }
@@ -1327,7 +1327,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get file statistics");
+            _logger?.LogError(ex, "Failed to get file statistics");
             return new FileStatistics
             {
                 TotalFiles = 0,
@@ -1407,7 +1407,7 @@ public class BulkEditService : IBulkEditService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to resolve pattern {Pattern}", pattern);
+                _logger?.LogWarning(ex, "Failed to resolve pattern {Pattern}", pattern);
             }
         }
 
@@ -1427,7 +1427,7 @@ public class BulkEditService : IBulkEditService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to check file size for {FilePath}", file);
+                    _logger?.LogWarning(ex, "Failed to check file size for {FilePath}", file);
                 }
             }
             return filteredFiles;
@@ -1521,7 +1521,7 @@ public class BulkEditService : IBulkEditService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to create backup for file {FilePath}", filePath);
+                _logger?.LogWarning(ex, "Failed to create backup for file {FilePath}", filePath);
             }
         }
 
@@ -1659,7 +1659,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to process file {FilePath} for bulk replace", filePath);
+            _logger?.LogError(ex, "Failed to process file {FilePath} for bulk replace", filePath);
             return new FileBulkEditResult
             {
                 FilePath = filePath,
@@ -1776,7 +1776,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to process file {FilePath} for conditional edit", filePath);
+            _logger?.LogError(ex, "Failed to process file {FilePath} for conditional edit", filePath);
             return new FileBulkEditResult
             {
                 FilePath = filePath,
@@ -1883,7 +1883,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to process file {FilePath} for batch refactor", filePath);
+            _logger?.LogError(ex, "Failed to process file {FilePath} for batch refactor", filePath);
             return new FileBulkEditResult
             {
                 FilePath = filePath,
@@ -1973,7 +1973,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to process file {FilePath} for multi-file edit", filePath);
+            _logger?.LogError(ex, "Failed to process file {FilePath} for multi-file edit", filePath);
             return new FileBulkEditResult
             {
                 FilePath = filePath,
@@ -2071,7 +2071,7 @@ public class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to rollback file {FilePath}", rollbackFile.OriginalPath);
+            _logger?.LogError(ex, "Failed to rollback file {FilePath}", rollbackFile.OriginalPath);
             return new FileBulkEditResult
             {
                 FilePath = rollbackFile.OriginalPath,

@@ -107,6 +107,11 @@ public class CallChainStep
     /// Location of the call
     /// </summary>
     public string Location => $"{Path.GetFileName(File)}:{Line + 1}:{Column + 1}";
+
+    // Additional properties for compatibility
+    public string? ToMethod_Name => ToMethod.Name;
+    public string? MethodName => ToMethod.Name;
+    public string Location_ReadOnly => Location;
 }
 
 /// <summary>

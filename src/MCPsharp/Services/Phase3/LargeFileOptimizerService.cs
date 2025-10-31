@@ -82,7 +82,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         // Analyze each syntax tree
         foreach (var syntaxTree in compilation.SyntaxTrees)
         {
-            if (!syntaxTree.FilePath?.EndsWith(".cs") == true || !IsFileInProject(syntaxTree.FilePath, projectPath))
+            if (string.IsNullOrEmpty(syntaxTree.FilePath) || !syntaxTree.FilePath.EndsWith(".cs") || !IsFileInProject(syntaxTree.FilePath, projectPath))
                 continue;
 
             filesAnalyzed++;
@@ -140,6 +140,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (syntaxTree == null || semanticModel == null) return null;
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         // Find the largest class in the file
@@ -196,6 +197,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (syntaxTree == null || semanticModel == null) return null;
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         // Find the target method
@@ -248,6 +250,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (syntaxTree == null || semanticModel == null) return null!;
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         if (!string.IsNullOrEmpty(methodName))

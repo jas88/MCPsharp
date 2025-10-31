@@ -51,7 +51,7 @@ public class SecurityManager : ISecurityManager
             // Check signature
             var signatureResult = await CheckSignatureAsync(assemblyPath, cancellationToken);
             var isSigned = signatureResult.IsValid;
-            var isTrusted = isSigned && await IsSignerTrustedAsync(signatureResult.Signer, cancellationToken);
+            var isTrusted = isSigned && IsSignerTrustedAsync(signatureResult.Signer, cancellationToken).GetAwaiter().GetResult();
 
             var result = new SecurityValidationResult
             {
@@ -65,7 +65,7 @@ public class SecurityManager : ISecurityManager
                 ValidatedAt = DateTime.UtcNow
             };
 
-            await LogSecurityEventAsync(new SecurityEvent
+            _ = LogSecurityEventAsync(new SecurityEvent
             {
                 AnalyzerId = Path.GetFileNameWithoutExtension(assemblyPath),
                 EventType = SecurityEventType.AssemblyValidation,
@@ -87,7 +87,7 @@ public class SecurityManager : ISecurityManager
         {
             _logger.LogError(ex, "Error validating assembly: {AssemblyPath}", assemblyPath);
 
-            await LogSecurityEventAsync(new SecurityEvent
+            _ = LogSecurityEventAsync(new SecurityEvent
             {
                 AnalyzerId = Path.GetFileNameWithoutExtension(assemblyPath),
                 EventType = SecurityEventType.AssemblyValidation,
@@ -106,7 +106,7 @@ public class SecurityManager : ISecurityManager
         }
     }
 
-    public async Task<bool> IsOperationAllowedAsync(string analyzerId, string operation, string? targetPath = null)
+    public Task<bool> IsOperationAllowedAsync(string analyzerId, string operation, string? targetPath = null)
     {
         try
         {
@@ -133,7 +133,7 @@ public class SecurityManager : ISecurityManager
                 allowed = IsPathAllowed(analyzerId, targetPath);
             }
 
-            await LogSecurityEventAsync(new SecurityEvent
+            _ = LogSecurityEventAsync(new SecurityEvent
             {
                 AnalyzerId = analyzerId,
                 EventType = SecurityEventType.PermissionCheck,
@@ -143,16 +143,16 @@ public class SecurityManager : ISecurityManager
                 Details = $"Operation {operation} {(allowed ? "allowed" : "denied")} for analyzer {analyzerId}"
             });
 
-            return allowed;
+            return Task.FromResult(allowed);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error checking operation permission for analyzer: {AnalyzerId}, operation: {Operation}", analyzerId, operation);
-            return false;
+            return Task.FromResult(false);
         }
     }
 
-    public async Task LogSecurityEventAsync(SecurityEvent securityEvent)
+    public Task LogSecurityEventAsync(SecurityEvent securityEvent)
     {
         try
         {
@@ -179,20 +179,24 @@ public class SecurityManager : ISecurityManager
         {
             _logger.LogError(ex, "Error logging security event");
         }
+
+        return Task.CompletedTask;
     }
 
-    public async Task<AnalyzerPermissions> GetPermissionsAsync(string analyzerId)
+    public Task<AnalyzerPermissions> GetPermissionsAsync(string analyzerId)
     {
-        return _permissions.TryGetValue(analyzerId, out var permissions)
+        var result = _permissions.TryGetValue(analyzerId, out var permissions)
             ? permissions
             : new AnalyzerPermissions();
+
+        return Task.FromResult(result);
     }
 
-    public async Task SetPermissionsAsync(string analyzerId, AnalyzerPermissions permissions)
+    public Task SetPermissionsAsync(string analyzerId, AnalyzerPermissions permissions)
     {
         _permissions[analyzerId] = permissions;
 
-        await LogSecurityEventAsync(new SecurityEvent
+        _ = LogSecurityEventAsync(new SecurityEvent
         {
             AnalyzerId = analyzerId,
             EventType = SecurityEventType.PermissionCheck,
@@ -207,6 +211,8 @@ public class SecurityManager : ISecurityManager
                 ["CanAccessNetwork"] = permissions.CanAccessNetwork
             }.ToImmutableDictionary()
         });
+
+        return Task.CompletedTask;
     }
 
     public bool IsPathAllowed(string analyzerId, string path)
@@ -252,13 +258,15 @@ public class SecurityManager : ISecurityManager
         return _trustedCertificates.ToImmutableArray();
     }
 
-    public async Task AddTrustedCertificateAsync(X509Certificate2 certificate)
+    public Task AddTrustedCertificateAsync(X509Certificate2 certificate)
     {
         _trustedCertificates.Add(certificate);
         _logger.LogInformation("Added trusted certificate: {Thumbprint}", certificate.Thumbprint);
+
+        return Task.CompletedTask;
     }
 
-    public async Task RemoveTrustedCertificateAsync(string thumbprint)
+    public Task RemoveTrustedCertificateAsync(string thumbprint)
     {
         var cert = _trustedCertificates.FirstOrDefault(c => c.Thumbprint == thumbprint);
         if (cert != null)
@@ -266,6 +274,8 @@ public class SecurityManager : ISecurityManager
             _trustedCertificates.Remove(cert);
             _logger.LogInformation("Removed trusted certificate: {Thumbprint}", thumbprint);
         }
+
+        return Task.CompletedTask;
     }
 
     private async Task<string?> ComputeChecksumAsync(string filePath, CancellationToken cancellationToken = default)
@@ -284,32 +294,34 @@ public class SecurityManager : ISecurityManager
         }
     }
 
-    private async Task<(bool IsValid, string? Signer)> CheckSignatureAsync(string assemblyPath, CancellationToken cancellationToken = default)
+    private Task<(bool IsValid, string? Signer)> CheckSignatureAsync(string assemblyPath, CancellationToken cancellationToken = default)
     {
         string? signer = null;
         try
         {
-            var certificate = X509Certificate2.CreateFromSignedFile(assemblyPath);
+            var certificate = X509CertificateLoader.LoadCertificateFromFile(assemblyPath);
             if (certificate != null)
             {
                 signer = certificate.Subject;
-                return (true, signer);
+                return Task.FromResult<(bool, string?)>((true, signer));
             }
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Assembly is not signed: {AssemblyPath}", assemblyPath);
         }
-        return (false, signer);
+        return Task.FromResult<(bool, string?)>((false, signer));
     }
 
-    private async Task<bool> IsSignerTrustedAsync(string? signer, CancellationToken cancellationToken = default)
+    private Task<bool> IsSignerTrustedAsync(string? signer, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(signer))
-            return false;
+            return Task.FromResult(false);
 
-        return _trustedCertificates.Any(cert =>
+        var result = _trustedCertificates.Any(cert =>
             cert.Subject.Contains(signer, StringComparison.OrdinalIgnoreCase));
+
+        return Task.FromResult(result);
     }
 
     private async Task<List<string>> ScanForMaliciousPatternsAsync(string assemblyPath, CancellationToken cancellationToken = default)

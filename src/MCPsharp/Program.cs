@@ -1,5 +1,7 @@
 using MCPsharp.Services;
 using MCPsharp.Services.Phase2;
+using MCPsharp.Services.Phase3;
+using MCPsharp.Services.Consolidated;
 using MCPsharp.Services.Roslyn;
 using Microsoft.Extensions.Logging;
 
@@ -38,6 +40,9 @@ class Program
             var projectManager = new ProjectContextManager();
             var roslynWorkspace = new RoslynWorkspace();
 
+            // Initialize core file operations service first (needed by consolidated services)
+            var fileOperations = new FileOperationsService(workspaceRoot);
+
             // Phase 2 services that can be instantiated immediately
             var configAnalyzer = new MCPsharp.Services.ConfigAnalyzerService(
               loggerFactory?.CreateLogger<MCPsharp.Services.ConfigAnalyzerService>() ??
@@ -54,7 +59,35 @@ class Program
                 tempFileManager
             );
 
-            // Create tool registry with all Phase 2 services
+            // Initialize consolidated services
+            var universalFileOps = new UniversalFileOperations(
+                workspaceRoot,
+                fileOperations,
+                bulkEditService,
+                loggerFactory?.CreateLogger<UniversalFileOperations>()
+            );
+
+            var unifiedAnalysis = new UnifiedAnalysisService(
+                workspace: roslynWorkspace,
+                logger: loggerFactory?.CreateLogger<UnifiedAnalysisService>()
+            );
+
+            var bulkOperationsHub = new BulkOperationsHub(
+                bulkEditService: bulkEditService,
+                fileOps: universalFileOps,
+                progressTracker: progressTracker,
+                tempFileManager: tempFileManager,
+                logger: loggerFactory?.CreateLogger<BulkOperationsHub>()
+            );
+
+            var streamController = new StreamProcessingController(
+                streamingProcessor: streamingProcessor,
+                progressTracker: progressTracker,
+                tempFileManager: tempFileManager,
+                logger: loggerFactory?.CreateLogger<StreamProcessingController>()
+            );
+
+            // Create tool registry with all Phase 2 services and consolidated services
             // Note: ImpactAnalyzerService and FeatureTracerService require runtime dependencies
             // and will be instantiated lazily by the McpToolRegistry
             var toolRegistry = new McpToolRegistry(
@@ -68,6 +101,11 @@ class Program
                 streamingProcessor: streamingProcessor,
                 progressTracker: progressTracker,
                 tempFileManager: tempFileManager,
+                fileOperationsService: fileOperations,
+                universalFileOps: universalFileOps,
+                unifiedAnalysis: unifiedAnalysis,
+                bulkOperationsHub: bulkOperationsHub,
+                streamController: streamController,
                 loggerFactory: loggerFactory
             );
 

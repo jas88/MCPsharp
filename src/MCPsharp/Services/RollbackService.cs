@@ -63,7 +63,7 @@ public class RollbackService : IRollbackService
             var sessionDirectory = Path.Combine(_rollbackDirectory, rollbackId);
             Directory.CreateDirectory(sessionDirectory);
 
-            _logger.LogInformation("Creating backup session {RollbackId} for operation {OperationId} with {FileCount} files",
+            _logger?.LogInformation("Creating backup session {RollbackId} for operation {OperationId} with {FileCount} files",
                 rollbackId, operationId, files.Count);
 
             var rollbackFiles = new List<RollbackFileInfo>();
@@ -79,7 +79,7 @@ public class RollbackService : IRollbackService
                 {
                     if (!File.Exists(filePath))
                     {
-                        _logger.LogWarning("File not found during backup creation: {FilePath}", filePath);
+                        _logger?.LogWarning("File not found during backup creation: {FilePath}", filePath);
                         skippedFiles++;
                         continue;
                     }
@@ -116,11 +116,11 @@ public class RollbackService : IRollbackService
                     totalBackupSize += backupFileInfo.Length;
                     createdFiles++;
 
-                    _logger.LogDebug("Created backup for {FilePath} -> {BackupPath}", filePath, backupPath);
+                    _logger?.LogDebug("Created backup for {FilePath} -> {BackupPath}", filePath, backupPath);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to create backup for file {FilePath}", filePath);
+                    _logger?.LogError(ex, "Failed to create backup for file {FilePath}", filePath);
                     skippedFiles++;
                     
                     // Continue with other files even if one fails
@@ -149,7 +149,7 @@ public class RollbackService : IRollbackService
             // Add to active rollbacks
             _activeRollbacks[rollbackId] = rollbackInfo;
 
-            _logger.LogInformation(
+            _logger?.LogInformation(
                 "Backup session {RollbackId} created successfully. Files: {CreatedFiles}/{TotalFiles}, Size: {BackupSize} bytes",
                 rollbackId, createdFiles, files.Count, totalBackupSize);
 
@@ -157,7 +157,7 @@ public class RollbackService : IRollbackService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create backup session for operation {OperationId}", operationId);
+            _logger?.LogError(ex, "Failed to create backup session for operation {OperationId}", operationId);
             throw;
         }
         finally
@@ -177,7 +177,7 @@ public class RollbackService : IRollbackService
         await _operationSemaphore.WaitAsync(cancellationToken);
         try
         {
-            _logger.LogInformation("Starting rollback operation for session {RollbackId}", rollbackId);
+            _logger?.LogInformation("Starting rollback operation for session {RollbackId}", rollbackId);
 
             var rollbackInfo = await GetRollbackInfoAsync(rollbackId, cancellationToken);
             if (rollbackInfo == null)
@@ -253,7 +253,7 @@ public class RollbackService : IRollbackService
                 _ = Task.Run(async () => await DeleteRollbackAsync(rollbackId, cancellationToken));
             }
 
-            _logger.LogInformation(
+            _logger?.LogInformation(
                 "Rollback operation {RollbackId} completed. Success: {Success}, Files: {Successful}/{Total}",
                 rollbackId, overallSuccess, successfulRollbacks, rollbackInfo.Files.Count);
 
@@ -297,7 +297,7 @@ public class RollbackService : IRollbackService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Rollback operation {RollbackId} failed", rollbackId);
+            _logger?.LogError(ex, "Rollback operation {RollbackId} failed", rollbackId);
             return new Models.RollbackResult
             {
                 Success = false,
@@ -366,7 +366,7 @@ public class RollbackService : IRollbackService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get rollback info for {RollbackId}", rollbackId);
+            _logger?.LogError(ex, "Failed to get rollback info for {RollbackId}", rollbackId);
             return null;
         }
     }
@@ -398,7 +398,7 @@ public class RollbackService : IRollbackService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get available rollbacks");
+            _logger?.LogError(ex, "Failed to get available rollbacks");
             return Array.Empty<RollbackInfo>();
         }
     }
@@ -436,25 +436,25 @@ public class RollbackService : IRollbackService
                     if (await DeleteRollbackAsync(expiredRollback.RollbackId, cancellationToken))
                     {
                         cleanedCount++;
-                        _logger.LogDebug("Cleaned up expired rollback {RollbackId}", expiredRollback.RollbackId);
+                        _logger?.LogDebug("Cleaned up expired rollback {RollbackId}", expiredRollback.RollbackId);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to cleanup expired rollback {RollbackId}", expiredRollback.RollbackId);
+                    _logger?.LogWarning(ex, "Failed to cleanup expired rollback {RollbackId}", expiredRollback.RollbackId);
                 }
             }
 
             if (cleanedCount > 0)
             {
-                _logger.LogInformation("Cleaned up {Count} expired rollback sessions", cleanedCount);
+                _logger?.LogInformation("Cleaned up {Count} expired rollback sessions", cleanedCount);
             }
 
             return cleanedCount;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to cleanup expired rollbacks");
+            _logger?.LogError(ex, "Failed to cleanup expired rollbacks");
             return 0;
         }
     }
@@ -481,15 +481,15 @@ public class RollbackService : IRollbackService
             if (Directory.Exists(sessionDirectory))
             {
                 Directory.Delete(sessionDirectory, true);
-                _logger.LogDebug("Deleted rollback directory {Directory}", sessionDirectory);
+                _logger?.LogDebug("Deleted rollback directory {Directory}", sessionDirectory);
             }
 
-            _logger.LogInformation("Deleted rollback session {RollbackId}", rollbackId);
+            _logger?.LogInformation("Deleted rollback session {RollbackId}", rollbackId);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to delete rollback {RollbackId}", rollbackId);
+            _logger?.LogError(ex, "Failed to delete rollback {RollbackId}", rollbackId);
             return false;
         }
     }
@@ -584,7 +584,7 @@ public class RollbackService : IRollbackService
             var endTime = DateTime.UtcNow;
             var overallSuccess = corruptedFiles == 0 && missingFiles == 0;
 
-            _logger.LogInformation(
+            _logger?.LogInformation(
                 "Integrity verification for rollback {RollbackId} completed. Verified: {Verified}, Corrupted: {Corrupted}, Missing: {Missing}",
                 rollbackId, verifiedFiles, corruptedFiles, missingFiles);
 
@@ -601,7 +601,7 @@ public class RollbackService : IRollbackService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to verify rollback integrity for {RollbackId}", rollbackId);
+            _logger?.LogError(ex, "Failed to verify rollback integrity for {RollbackId}", rollbackId);
             return new RollbackVerificationResult
             {
                 Success = false,
@@ -673,7 +673,7 @@ public class RollbackService : IRollbackService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get rollback history");
+            _logger?.LogError(ex, "Failed to get rollback history");
             return new RollbackHistory
             {
                 AllRollbacks = Array.Empty<RollbackInfo>(),
@@ -701,7 +701,7 @@ public class RollbackService : IRollbackService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to check if rollback {RollbackId} is possible", rollbackId);
+            _logger?.LogError(ex, "Failed to check if rollback {RollbackId} is possible", rollbackId);
             return false;
         }
     }
@@ -732,7 +732,7 @@ public class RollbackService : IRollbackService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to get size for file {FilePath}", filePath);
+                    _logger?.LogWarning(ex, "Failed to get size for file {FilePath}", filePath);
                 }
             }
 
@@ -742,7 +742,7 @@ public class RollbackService : IRollbackService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to estimate backup space");
+            _logger?.LogError(ex, "Failed to estimate backup space");
             return 0;
         }
     }
@@ -776,12 +776,12 @@ public class RollbackService : IRollbackService
             var metadataJson = JsonSerializer.Serialize(rollbackInfo, _jsonOptions);
             await File.WriteAllTextAsync(exportPath, metadataJson, cancellationToken);
 
-            _logger.LogInformation("Exported rollback metadata for {RollbackId} to {ExportPath}", rollbackId, exportPath);
+            _logger?.LogInformation("Exported rollback metadata for {RollbackId} to {ExportPath}", rollbackId, exportPath);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to export rollback metadata for {RollbackId} to {ExportPath}", rollbackId, exportPath);
+            _logger?.LogError(ex, "Failed to export rollback metadata for {RollbackId} to {ExportPath}", rollbackId, exportPath);
             return false;
         }
     }
@@ -830,7 +830,7 @@ public class RollbackService : IRollbackService
                 await SaveRollbackMetadataAsync(newRollbackInfo, cancellationToken);
                 _activeRollbacks[newRollbackId] = newRollbackInfo;
 
-                _logger.LogInformation("Imported rollback metadata from {ImportPath} as {NewRollbackId}", importPath, newRollbackId);
+                _logger?.LogInformation("Imported rollback metadata from {ImportPath} as {NewRollbackId}", importPath, newRollbackId);
                 return newRollbackInfo;
             }
 
@@ -838,7 +838,7 @@ public class RollbackService : IRollbackService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to import rollback metadata from {ImportPath}", importPath);
+            _logger?.LogError(ex, "Failed to import rollback metadata from {ImportPath}", importPath);
             return null;
         }
     }
@@ -872,15 +872,15 @@ public class RollbackService : IRollbackService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to load rollback from directory {Directory}", directory);
+                    _logger?.LogWarning(ex, "Failed to load rollback from directory {Directory}", directory);
                 }
             }
 
-            _logger.LogInformation("Loaded {Count} existing rollback sessions", _activeRollbacks.Count);
+            _logger?.LogInformation("Loaded {Count} existing rollback sessions", _activeRollbacks.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load existing rollbacks");
+            _logger?.LogError(ex, "Failed to load existing rollbacks");
         }
     }
 
@@ -910,7 +910,7 @@ public class RollbackService : IRollbackService
             }
             catch (Exception ex) when (attempt < maxRetries)
             {
-                _logger.LogWarning(ex, "Failed to copy file {SourcePath} to {DestinationPath} (attempt {Attempt}/{MaxAttempts})", 
+                _logger?.LogWarning(ex, "Failed to copy file {SourcePath} to {DestinationPath} (attempt {Attempt}/{MaxAttempts})", 
                     sourcePath, destinationPath, attempt, maxRetries);
                 
                 await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken);
@@ -996,7 +996,7 @@ public class RollbackService : IRollbackService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to rollback file {FilePath}", rollbackFile.OriginalPath);
+            _logger?.LogError(ex, "Failed to rollback file {FilePath}", rollbackFile.OriginalPath);
             return new RollbackFileResult
             {
                 FilePath = rollbackFile.OriginalPath,

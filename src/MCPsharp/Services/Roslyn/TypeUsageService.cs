@@ -554,7 +554,9 @@ public class TypeUsageService : ITypeUsageService
         var node = root.FindNode(location.Location.SourceSpan);
 
         var text = await document.GetTextAsync(cancellationToken);
-        var lineText = text.Lines[lineSpan.StartLinePosition.Line].ToString();
+        var lineText = lineSpan.StartLinePosition.Line < text.Lines.Count
+            ? text.Lines[lineSpan.StartLinePosition.Line].ToString()
+            : string.Empty;
 
         var usageKind = DetermineUsageKind(node, typeSymbol);
         var confidence = DetermineUsageConfidence(node, typeSymbol);
@@ -599,7 +601,7 @@ public class TypeUsageService : ITypeUsageService
                 case MethodDeclarationSyntax methodDecl:
                     if (methodDecl.ReturnType.Contains(node))
                         return TypeUsageKind.ReturnType;
-                    if (methodDecl.ParameterList.Parameters.Any(p => p.Type.Contains(node)))
+                    if (methodDecl.ParameterList?.Parameters.Any(p => p.Type.Contains(node)) == true)
                         return TypeUsageKind.Parameter;
                     break;
 

@@ -111,7 +111,7 @@ public static class AnalyzerTools
         };
     }
 
-    private static async Task<ToolCallResult> ExecuteListAnalyzers(JsonDocument arguments, IAnalyzerHost analyzerHost)
+    private static Task<ToolCallResult> ExecuteListAnalyzers(JsonDocument arguments, IAnalyzerHost analyzerHost)
     {
         try
         {
@@ -155,19 +155,22 @@ public static class AnalyzerTools
                 })
             };
 
-            return new ToolCallResult
+            var toolResult = new ToolCallResult
             {
                 Success = true,
                 Result = JsonSerializer.Serialize(result)
             };
+
+            return Task.FromResult(toolResult);
         }
         catch (Exception ex)
         {
-            return new ToolCallResult
+            var errorResult = new ToolCallResult
             {
                 Success = false,
                 Error = ex.Message
             };
+            return Task.FromResult(errorResult);
         }
     }
 

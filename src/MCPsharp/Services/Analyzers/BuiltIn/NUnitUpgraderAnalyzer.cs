@@ -131,12 +131,13 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         };
     }
 
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         // No initialization needed for this analyzer
+        return Task.CompletedTask;
     }
 
-    public async Task<AnalysisResult> AnalyzeAsync(string filePath, string content, CancellationToken cancellationToken = default)
+    public Task<AnalysisResult> AnalyzeAsync(string filePath, string content, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -182,7 +183,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
                 }
             }
 
-            return new AnalysisResult
+            var result = new AnalysisResult
             {
                 FilePath = filePath,
                 AnalyzerId = Id,
@@ -196,10 +197,12 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
                     ["RulesApplied"] = Rules.Count(r => IsRuleEnabled(r.Id))
                 }.ToImmutableDictionary()
             };
+
+            return Task.FromResult(result);
         }
         catch (Exception ex)
         {
-            return new AnalysisResult
+            var errorResult = new AnalysisResult
             {
                 FilePath = filePath,
                 AnalyzerId = Id,
@@ -209,6 +212,8 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
                 ErrorMessage = ex.Message,
                 Issues = ImmutableArray<AnalyzerIssue>.Empty
             };
+
+            return Task.FromResult(errorResult);
         }
     }
 
@@ -248,9 +253,10 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         };
     }
 
-    public async Task DisposeAsync()
+    public Task DisposeAsync()
     {
         // No disposal needed
+        return Task.CompletedTask;
     }
 
     private bool IsRuleEnabled(string ruleId)

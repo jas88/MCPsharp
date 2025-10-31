@@ -766,7 +766,7 @@ public class FixEngine : IFixEngine
 
                 if (result.Success)
                 {
-                    modifiedFiles.Add(edit.FilePath);
+                    modifiedFiles.Add(editFilePath);
                 }
                 else
                 {

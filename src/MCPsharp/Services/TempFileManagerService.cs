@@ -86,7 +86,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
         return filePath;
     }
 
-    public async Task<string> CreateTempDirectoryAsync(string? prefix = null, string? operationId = null)
+    public Task<string> CreateTempDirectoryAsync(string? prefix = null, string? operationId = null)
     {
         prefix ??= "mcp";
 
@@ -105,7 +105,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
         _fileCreationTimes[dirPath] = DateTime.UtcNow;
 
         _logger.LogDebug("Created temporary directory: {DirPath}", dirPath);
-        return dirPath;
+        return Task.FromResult(dirPath);
     }
 
     public string GetTempFilePath(string? prefix = null, string? extension = null, string? operationId = null)
@@ -117,7 +117,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
         return Path.Combine(_tempBasePath, fileName);
     }
 
-    public async Task RegisterTempFileAsync(string filePath, string? operationId = null)
+    public Task RegisterTempFileAsync(string filePath, string? operationId = null)
     {
         if (!string.IsNullOrEmpty(operationId))
         {
@@ -129,24 +129,26 @@ public class TempFileManagerService : ITempFileManager, IDisposable
         _fileCreationTimes[filePath] = DateTime.UtcNow;
 
         _logger.LogDebug("Registered temporary file: {FilePath} for operation: {OperationId}", filePath, operationId);
+        return Task.CompletedTask;
     }
 
-    public async Task<bool> IsTempFileAsync(string filePath)
+    public Task<bool> IsTempFileAsync(string filePath)
     {
-        return filePath.StartsWith(_tempBasePath, StringComparison.OrdinalIgnoreCase) &&
+        var result = filePath.StartsWith(_tempBasePath, StringComparison.OrdinalIgnoreCase) &&
                _fileCreationTimes.ContainsKey(filePath);
+        return Task.FromResult(result);
     }
 
-    public async Task<List<string>> GetTempFilesAsync(string operationId)
+    public Task<List<string>> GetTempFilesAsync(string operationId)
     {
         if (_operationFiles.TryGetValue(operationId, out var files))
         {
-            return files.ToList();
+            return Task.FromResult(files.ToList());
         }
-        return new List<string>();
+        return Task.FromResult(new List<string>());
     }
 
-    public async Task<bool> DeleteTempFileAsync(string filePath)
+    public Task<bool> DeleteTempFileAsync(string filePath)
     {
         try
         {
@@ -170,12 +172,12 @@ public class TempFileManagerService : ITempFileManager, IDisposable
                 kvp.Value.Remove(filePath);
             }
 
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting temporary file: {FilePath}", filePath);
-            return false;
+            return Task.FromResult(false);
         }
     }
 
@@ -210,7 +212,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
         }
     }
 
-    public async Task<long> GetTempFileSizeAsync()
+    public Task<long> GetTempFileSizeAsync()
     {
         long totalSize = 0;
 
@@ -234,7 +236,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
             }
         }
 
-        return totalSize;
+        return Task.FromResult(totalSize);
     }
 
     public async Task<TempFileStats> GetStatsAsync()

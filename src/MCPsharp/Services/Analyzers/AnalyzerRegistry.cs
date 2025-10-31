@@ -77,7 +77,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
         }
     }
 
-    public async Task<bool> UnregisterAnalyzerAsync(string analyzerId, CancellationToken cancellationToken = default)
+    public Task<bool> UnregisterAnalyzerAsync(string analyzerId, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -86,7 +86,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
                 if (!_analyzers.ContainsKey(analyzerId))
                 {
                     _logger.LogWarning("Analyzer {AnalyzerId} is not registered", analyzerId);
-                    return false;
+                    return Task.FromResult(false);
                 }
 
                 var analyzer = _analyzers[analyzerId];
@@ -110,12 +110,12 @@ public class AnalyzerRegistry : IAnalyzerRegistry
             _logger.LogInformation("Unregistered analyzer: {AnalyzerId}", analyzerId);
             AnalyzerUnregistered?.Invoke(this, new AnalyzerUnregisteredEventArgs(analyzerId));
 
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error unregistering analyzer: {AnalyzerId}", analyzerId);
-            return false;
+            return Task.FromResult(false);
         }
     }
 
@@ -228,17 +228,17 @@ public class AnalyzerRegistry : IAnalyzerRegistry
         }
     }
 
-    public async Task<CompatibilityResult> ValidateCompatibilityAsync(string assemblyPath, CancellationToken cancellationToken = default)
+    public Task<CompatibilityResult> ValidateCompatibilityAsync(string assemblyPath, CancellationToken cancellationToken = default)
     {
         try
         {
             if (!File.Exists(assemblyPath))
             {
-                return new CompatibilityResult
+                return Task.FromResult(new CompatibilityResult
                 {
                     IsCompatible = false,
                     ErrorMessage = $"Assembly not found: {assemblyPath}"
-                };
+                });
             }
 
             var assemblyContext = new AssemblyLoadContext(assemblyPath, isCollectible: true);
@@ -258,11 +258,11 @@ public class AnalyzerRegistry : IAnalyzerRegistry
 
             if (!analyzerTypes.Any())
             {
-                return new CompatibilityResult
+                return Task.FromResult(new CompatibilityResult
                 {
                     IsCompatible = false,
                     ErrorMessage = "No analyzer types found in assembly"
-                };
+                });
             }
 
             // Check dependencies
@@ -280,7 +280,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
 
             var isCompatible = assemblyVersion >= requiredVersion && !missingDependencies.Any();
 
-            return new CompatibilityResult
+            var result = new CompatibilityResult
             {
                 IsCompatible = isCompatible,
                 RequiredVersion = requiredVersion,
@@ -290,19 +290,21 @@ public class AnalyzerRegistry : IAnalyzerRegistry
                 Warnings = warnings.ToImmutableArray(),
                 ErrorMessage = !isCompatible ? "Assembly is not compatible" : null
             };
+
+            return Task.FromResult(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error validating assembly compatibility: {AssemblyPath}", assemblyPath);
-            return new CompatibilityResult
+            return Task.FromResult(new CompatibilityResult
             {
                 IsCompatible = false,
                 ErrorMessage = ex.Message
-            };
+            });
         }
     }
 
-    public async Task<ImmutableArray<AnalyzerDependency>> GetDependenciesAsync(string analyzerId, CancellationToken cancellationToken = default)
+    public Task<ImmutableArray<AnalyzerDependency>> GetDependenciesAsync(string analyzerId, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -310,18 +312,18 @@ public class AnalyzerRegistry : IAnalyzerRegistry
             {
                 if (!_analyzerInfos.TryGetValue(analyzerId, out var info))
                 {
-                    return ImmutableArray<AnalyzerDependency>.Empty;
+                    return Task.FromResult(ImmutableArray<AnalyzerDependency>.Empty);
                 }
             }
 
             // This would typically read dependency information from analyzer metadata
             // For now, return empty dependencies
-            return ImmutableArray<AnalyzerDependency>.Empty;
+            return Task.FromResult(ImmutableArray<AnalyzerDependency>.Empty);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting dependencies for analyzer: {AnalyzerId}", analyzerId);
-            return ImmutableArray<AnalyzerDependency>.Empty;
+            return Task.FromResult(ImmutableArray<AnalyzerDependency>.Empty);
         }
     }
 
@@ -349,7 +351,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
         }
     }
 
-    private async Task<List<AnalyzerInfo>> LoadAnalyzersFromAssemblyAsync(string assemblyPath, CancellationToken cancellationToken)
+    private Task<List<AnalyzerInfo>> LoadAnalyzersFromAssemblyAsync(string assemblyPath, CancellationToken cancellationToken)
     {
         var analyzerInfos = new List<AnalyzerInfo>();
 
@@ -392,20 +394,20 @@ public class AnalyzerRegistry : IAnalyzerRegistry
             }
         }
 
-        return analyzerInfos;
+        return Task.FromResult(analyzerInfos);
     }
 
-    private async Task<bool> IsDependencyAvailableAsync(AnalyzerDependency dependency)
+    private Task<bool> IsDependencyAvailableAsync(AnalyzerDependency dependency)
     {
         try
         {
             // Simple check - try to load the assembly
             Assembly.Load(dependency.Name);
-            return true;
+            return Task.FromResult(true);
         }
         catch
         {
-            return false;
+            return Task.FromResult(false);
         }
     }
 }

@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using MCPsharp.Models.Streaming;
+using MCPsharp.Models.Consolidated;
 
 namespace MCPsharp.Services;
 
@@ -214,6 +215,98 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
 
         _logger.LogDebug("Reported progress for operation {OperationId}: {ProgressPercentage:F1}%",
             progress.OperationId, progress.ProgressPercentage);
+    }
+
+    public async Task<string> StartTrackingAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default)
+    {
+        var progress = new StreamProgress
+        {
+            TotalBytes = 0, // Will be updated as processing progresses
+            CurrentPhase = progressInfo.Title,
+            LastUpdated = DateTime.UtcNow,
+            Metadata = new Dictionary<string, object>
+            {
+                ["TotalSteps"] = progressInfo.TotalSteps,
+                ["CurrentStep"] = progressInfo.CurrentStep,
+                ["CurrentItem"] = progressInfo.CurrentItem ?? string.Empty,
+                ["Message"] = progressInfo.Message ?? string.Empty
+            }
+        };
+
+        _progressTracker.TryAdd(operationId, progress);
+
+        _logger.LogInformation("Started progress tracking for operation {OperationId}: {Title} ({CurrentStep}/{TotalSteps})",
+            operationId, progressInfo.Title, progressInfo.CurrentStep, progressInfo.TotalSteps);
+
+        return operationId;
+    }
+
+    public async Task CompleteTrackingAsync(string progressId, ProgressResult result, CancellationToken ct = default)
+    {
+        if (_progressTracker.TryGetValue(progressId, out var progress))
+        {
+            lock (progress)
+            {
+                progress.CurrentPhase = result.Success ? "Completed" : "Failed";
+                progress.LastUpdated = DateTime.UtcNow;
+
+                // Add result metrics to metadata
+                foreach (var metric in result.Metrics)
+                {
+                    progress.Metadata[$"Result_{metric.Key}"] = metric.Value;
+                }
+
+                progress.Metadata["Result_Success"] = result.Success;
+                progress.Metadata["Result_Message"] = result.Message;
+
+                if (result.Warnings?.Any() == true)
+                {
+                    progress.Metadata["Result_Warnings"] = result.Warnings;
+                }
+
+                if (result.Errors?.Any() == true)
+                {
+                    progress.Metadata["Result_Errors"] = result.Errors;
+                }
+            }
+
+            _logger.LogInformation("Completed progress tracking for operation {ProgressId}: Success={Success}, Message={Message}",
+                progressId, result.Success, result.Message);
+        }
+    }
+
+    public async Task UpdateProgressAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default)
+    {
+        if (_progressTracker.TryGetValue(operationId, out var progress))
+        {
+            lock (progress)
+            {
+                progress.LastUpdated = DateTime.UtcNow;
+
+                // Update metadata with progress info
+                progress.Metadata["TotalSteps"] = progressInfo.TotalSteps;
+                progress.Metadata["CurrentStep"] = progressInfo.CurrentStep;
+
+                if (!string.IsNullOrEmpty(progressInfo.CurrentItem))
+                {
+                    progress.Metadata["CurrentItem"] = progressInfo.CurrentItem;
+                }
+
+                if (!string.IsNullOrEmpty(progressInfo.Message))
+                {
+                    progress.Metadata["Message"] = progressInfo.Message;
+                }
+
+                // Calculate percentage complete
+                if (progressInfo.TotalSteps > 0)
+                {
+                    progress.Metadata["PercentComplete"] = (double)progressInfo.CurrentStep / progressInfo.TotalSteps * 100;
+                }
+            }
+
+            _logger.LogDebug("Updated progress for operation {OperationId}: Step {CurrentStep}/{TotalSteps}",
+                operationId, progressInfo.CurrentStep, progressInfo.TotalSteps);
+        }
     }
 
     public void Dispose()
