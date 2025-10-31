@@ -440,3 +440,12 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+# Claude Code related files
+.claude/
+*.claude
+claude-*.md
+claude_*.md
+*claude*
+temp_*.cs
+src/temp_*.cs
