@@ -11,6 +11,7 @@ namespace MCPsharp.Services.Phase3.LargeFileOptimization;
 /// </summary>
 internal class RefactoringGenerator
 {
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<RefactoringSuggestion?> GenerateRefactoringSuggestion(
         CodeSmell codeSmell,
         SyntaxNode root,
@@ -46,6 +47,7 @@ internal class RefactoringGenerator
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<List<RefactoringSuggestion>> GenerateClassRefactoringSuggestions(
         ClassDeclarationSyntax classDecl,
         SemanticModel semanticModel,

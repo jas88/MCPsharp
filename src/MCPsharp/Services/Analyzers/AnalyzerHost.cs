@@ -20,7 +20,9 @@ public class AnalyzerHost : IAnalyzerHost
     private readonly object _lock = new();
 
     public event EventHandler<AnalyzerLoadedEventArgs>? AnalyzerLoaded;
+    #pragma warning disable CS0067 // Event is part of IAnalyzerHost interface contract, will be raised in future implementation
     public event EventHandler<AnalyzerUnloadedEventArgs>? AnalyzerUnloaded;
+    #pragma warning restore CS0067
     public event EventHandler<AnalyzerUnregisteredEventArgs>? AnalyzerUnregistered;
     public event EventHandler<AnalysisCompletedEventArgs>? AnalysisCompleted;
 
@@ -575,6 +577,7 @@ public class AnalyzerHost : IAnalyzerHost
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<ImmutableArray<AnalyzerHealthStatus>> GetHealthStatusAsync(CancellationToken cancellationToken = default)
     {
         try
@@ -623,6 +626,7 @@ public class AnalyzerHost : IAnalyzerHost
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<IAnalyzer?> CreateAnalyzerInstanceAsync(AnalyzerInfo info, string assemblyPath, CancellationToken cancellationToken)
     {
         try
@@ -663,6 +667,7 @@ public class AnalyzerHost : IAnalyzerHost
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task GenerateFixesAsync(AnalysisSessionResult sessionResult, CancellationToken cancellationToken)
     {
         try
@@ -848,6 +853,7 @@ public class AnalyzerHost : IAnalyzerHost
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<AnalyzerCapabilities?> GetAnalyzerCapabilitiesAsync(string analyzerId, CancellationToken cancellationToken = default)
     {
         try

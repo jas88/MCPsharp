@@ -30,6 +30,7 @@ public class ArchitectureAnalyzer
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ArchitectureAnalyzer>.Instance;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<ConsolidatedArchitectureDefinition> GetDefaultArchitectureDefinitionAsync(CancellationToken ct)
     {
         try
@@ -168,7 +169,7 @@ public class ArchitectureAnalyzer
         return new List<ArchitectureRecommendation>();
     }
 
-    public async Task<ArchitectureMetrics?> CalculateArchitectureMetricsAsync(
+    public Task<ArchitectureMetrics?> CalculateArchitectureMetricsAsync(
         string scope,
         MCPsharp.Models.Architecture.ArchitectureDefinition definition,
         CancellationToken ct)
@@ -177,20 +178,19 @@ public class ArchitectureAnalyzer
         {
             var layerCount = definition.Layers.Count;
 
-            return new ArchitectureMetrics
+            return Task.FromResult<ArchitectureMetrics?>(new ArchitectureMetrics
             {
                 TotalLayers = layerCount,
                 TotalViolations = 0,
                 Compliance = 100.0,
                 LayerMetrics = new Dictionary<string, int>()
-            };
+            });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error calculating architecture metrics for {Scope}", scope);
+            return Task.FromResult<ArchitectureMetrics?>(null);
         }
-
-        return null;
     }
 
     private static MCPsharp.Models.Architecture.ArchitectureDefinition ConvertToArchitectureDefinition(ConsolidatedArchitectureDefinition consolidatedDef)
@@ -198,7 +198,7 @@ public class ArchitectureAnalyzer
         return new MCPsharp.Models.Architecture.ArchitectureDefinition
         {
             Name = consolidatedDef.Name,
-            Description = consolidatedDef.Description,
+            Description = consolidatedDef.Description ?? string.Empty,
             Type = MCPsharp.Models.Architecture.ArchitectureType.Layered,
             Layers = consolidatedDef.Layers.Select(l => new MCPsharp.Models.Architecture.ArchitecturalLayer
             {

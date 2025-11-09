@@ -183,6 +183,7 @@ public class RenameSymbolService
         return candidates.FirstOrDefault();
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<RenameConflict>> DetectConflictsAsync(
         ISymbol symbol,
         string newName,
@@ -287,6 +288,8 @@ public class RenameSymbolService
         var optionSet = solution.Options;
 
         // Configure rename options
+        // Note: Using OptionSet approach as older API, newer code should use SymbolRenameOptions
+        #pragma warning disable CS0618
         if (request.RenameInComments)
         {
             optionSet = optionSet.WithChangedOption(RenameOptions.RenameInComments, true);
@@ -301,6 +304,7 @@ public class RenameSymbolService
         {
             optionSet = optionSet.WithChangedOption(RenameOptions.RenameOverloads, true);
         }
+        #pragma warning restore CS0618
 
         // Track modified files
         var modifiedFiles = new HashSet<string>();
@@ -309,12 +313,14 @@ public class RenameSymbolService
         try
         {
             // Use Roslyn's Renamer API for the actual rename
+            #pragma warning disable CS0618
             var newSolution = await Renamer.RenameSymbolAsync(
                 solution,
                 symbol,
                 request.NewName,
                 optionSet,
                 ct);
+            #pragma warning restore CS0618
 
             // Calculate changes
             var changes = newSolution.GetChanges(solution);

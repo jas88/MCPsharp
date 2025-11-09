@@ -200,6 +200,7 @@ public partial class BulkEditService
     }
 
     /// <inheritdoc />
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<int> CleanupExpiredRollbacksAsync(
         CancellationToken cancellationToken = default)
     {

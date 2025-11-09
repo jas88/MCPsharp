@@ -225,6 +225,7 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
             progress.OperationId, progress.ProgressPercentage);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<string> StartTrackingAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default)
     {
         var progress = new StreamProgress
@@ -249,6 +250,7 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
         return operationId;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task CompleteTrackingAsync(string progressId, ProgressResult result, CancellationToken ct = default)
     {
         if (_progressTracker.TryGetValue(progressId, out var progress))
@@ -283,6 +285,7 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task UpdateProgressAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default)
     {
         if (_progressTracker.TryGetValue(operationId, out var progress))

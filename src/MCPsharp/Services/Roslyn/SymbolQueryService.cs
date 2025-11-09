@@ -53,6 +53,7 @@ public class SymbolQueryService
     /// <summary>
     /// Find symbols by name and optional kind filter
     /// </summary>
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<List<SymbolResult>> FindSymbolsAsync(string name, string? kind = null)
     {
         var compilation = _workspace.GetCompilation();
@@ -300,6 +301,7 @@ public class SymbolQueryService
     /// <summary>
     /// Get symbols in a specific namespace
     /// </summary>
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<List<SymbolResult>> GetSymbolsInNamespaceAsync(string namespaceName)
     {
         var compilation = _workspace.GetCompilation();

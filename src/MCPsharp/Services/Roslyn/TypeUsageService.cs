@@ -307,6 +307,7 @@ public class TypeUsageService : ITypeUsageService
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<List<MethodSignature>> FindSimilarTypesAsync(string typeName, CancellationToken cancellationToken = default)
     {
         // This is a placeholder implementation

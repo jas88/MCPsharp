@@ -28,7 +28,7 @@ public partial class McpToolRegistry
             var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
             MCPsharp.Models.Architecture.ArchitectureDefinition? definition = null;
 
-            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
                 // Parse architecture definition from JSON
                 definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
@@ -82,7 +82,7 @@ public partial class McpToolRegistry
             var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
             MCPsharp.Models.Architecture.ArchitectureDefinition? definition = null;
 
-            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
                 definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
             }
@@ -131,7 +131,7 @@ public partial class McpToolRegistry
             var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
             MCPsharp.Models.Architecture.ArchitectureDefinition? definition = null;
 
-            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
                 definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
             }
@@ -181,7 +181,7 @@ public partial class McpToolRegistry
             var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
             MCPsharp.Models.Architecture.ArchitectureDefinition? definition = null;
 
-            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
                 definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
             }
@@ -280,7 +280,7 @@ public partial class McpToolRegistry
             var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
             MCPsharp.Models.Architecture.ArchitectureDefinition? definition = null;
 
-            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
                 definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
             }
@@ -328,7 +328,7 @@ public partial class McpToolRegistry
             var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
             MCPsharp.Models.Architecture.ArchitectureDefinition? definition = null;
 
-            if (definitionElement?.ValueKind != JsonValueKind.Null)
+            if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
                 definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
             }

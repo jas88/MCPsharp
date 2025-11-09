@@ -15,6 +15,7 @@ internal class DependencyAnalyzer
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task AnalyzeDependenciesAsync(List<MigrationInfo> migrations, CancellationToken cancellationToken = default)
     {
         // Build dependency graph based on migration timestamps and operations

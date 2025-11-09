@@ -448,6 +448,7 @@ public class BulkOperationsHub
 
     #region Private Helper Methods
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkValidationResult> ValidateBulkOperationRequestAsync(BulkOperationRequest request, CancellationToken ct)
     {
         // Check if we have the necessary services
@@ -847,6 +848,7 @@ public class BulkOperationsHub
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkImpactAnalysis> AnalyzeBulkImpactAsync(List<BulkOperationResult> results, CancellationToken ct)
     {
         return new BulkImpactAnalysis
@@ -859,6 +861,7 @@ public class BulkOperationsHub
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkRiskAssessment> AssessBulkRisksAsync(List<BulkOperationResult> results, CancellationToken ct)
     {
         var riskLevel = MCPsharp.Models.BulkEdit.RiskLevel.Low;
@@ -923,6 +926,7 @@ public class BulkOperationsHub
         return baseTime + (perFileTime * totalFiles) + (perChangeTime * totalChanges);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<BulkOperationInfo>> ListActiveOperationsAsync(CancellationToken ct)
     {
         List<BulkOperationInfo> operations;
@@ -943,6 +947,7 @@ public class BulkOperationsHub
         return operations;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkCancelResult> CancelBulkOperationAsync(string operationId, CancellationToken ct)
     {
         // Implementation for canceling operations
@@ -953,6 +958,7 @@ public class BulkOperationsHub
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkPauseResult> PauseBulkOperationAsync(string operationId, CancellationToken ct)
     {
         // Implementation for pausing operations
@@ -963,6 +969,7 @@ public class BulkOperationsHub
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkResumeResult> ResumeBulkOperationAsync(string operationId, CancellationToken ct)
     {
         // Implementation for resuming operations
@@ -973,6 +980,7 @@ public class BulkOperationsHub
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkCleanupResult> CleanupBulkOperationsAsync(TimeSpan? maxAge, CancellationToken ct)
     {
         var cleanedCount = 0;
@@ -1000,6 +1008,7 @@ public class BulkOperationsHub
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkOperationStatusResult> GetBulkOperationStatusAsync(string operationId, CancellationToken ct)
     {
         BulkOperationContext? context;

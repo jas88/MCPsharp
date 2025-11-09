@@ -231,6 +231,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<ArchitectureDefinition> DefineCustomArchitectureAsync(ArchitectureDefinition definition, CancellationToken cancellationToken = default)
     {
         // Validate the definition
@@ -255,6 +256,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return CreateArchitectureDiagram(dependencyAnalysis, architecture);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<List<ArchitectureRecommendation>> GetRecommendationsAsync(List<LayerViolation> violations, CancellationToken cancellationToken = default)
     {
         var recommendations = new List<ArchitectureRecommendation>();
@@ -341,6 +343,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<Dictionary<string, ArchitectureDefinition>> GetPredefinedArchitecturesAsync(CancellationToken cancellationToken = default)
     {
         return new Dictionary<string, ArchitectureDefinition>(_predefinedArchitectures);
@@ -536,6 +539,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return violations;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<ArchitectureWarning>> AnalyzeTypeWarningsAsync(INamedTypeSymbol symbol, string layer, ArchitectureDefinition architecture, string filePath, CancellationToken cancellationToken)
     {
         var warnings = new List<ArchitectureWarning>();
@@ -556,6 +560,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return warnings;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<DependencyEdge>> AnalyzeTypeDependencies(INamedTypeSymbol symbol, SemanticModel semanticModel, ArchitectureDefinition architecture, string filePath, CancellationToken cancellationToken)
     {
         var dependencies = new List<DependencyEdge>();

@@ -926,6 +926,7 @@ public class NavigationService : INavigationService
         return location;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<NavigationLocation>> GetAlternativeLocationsAsync(
         IEnumerable<ISymbol> symbols)
     {

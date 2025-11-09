@@ -35,6 +35,7 @@ public class LineStreamProcessor : IStreamProcessor
     {
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
@@ -67,6 +68,7 @@ public class LineStreamProcessor : IStreamProcessor
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try
@@ -217,6 +219,7 @@ public class RegexStreamProcessor : IStreamProcessor
     {
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
@@ -269,6 +272,7 @@ public class RegexStreamProcessor : IStreamProcessor
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try
@@ -330,6 +334,7 @@ public class CsvStreamProcessor : IStreamProcessor
     {
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
@@ -397,6 +402,7 @@ public class CsvStreamProcessor : IStreamProcessor
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try
@@ -502,6 +508,7 @@ public class BinaryStreamProcessor : IStreamProcessor
     {
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
@@ -539,6 +546,7 @@ public class BinaryStreamProcessor : IStreamProcessor
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try

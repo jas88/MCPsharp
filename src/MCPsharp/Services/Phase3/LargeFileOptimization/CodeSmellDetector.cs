@@ -36,6 +36,7 @@ internal class CodeSmellDetector
         return codeSmells.OrderByDescending(cs => cs.ImpactScore).ToList();
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectLongParameterListSmells(
         SyntaxNode root,
         SemanticModel semanticModel,
@@ -80,6 +81,7 @@ internal class CodeSmellDetector
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectLongMethodSmells(
         SyntaxNode root,
         SemanticModel semanticModel,
@@ -125,6 +127,7 @@ internal class CodeSmellDetector
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectLargeClassSmells(
         SyntaxNode root,
         SemanticModel semanticModel,
@@ -170,6 +173,7 @@ internal class CodeSmellDetector
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectComplexConditionalSmells(
         SyntaxNode root,
         SemanticModel semanticModel,
@@ -184,6 +188,7 @@ internal class CodeSmellDetector
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectDuplicateCodeSmells(
         SyntaxNode root,
         SemanticModel semanticModel,
@@ -198,6 +203,7 @@ internal class CodeSmellDetector
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectMagicNumberSmells(
         SyntaxNode root,
         SemanticModel semanticModel,
@@ -212,6 +218,7 @@ internal class CodeSmellDetector
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectFeatureEnvySmells(
         SyntaxNode root,
         SemanticModel semanticModel,
@@ -226,6 +233,7 @@ internal class CodeSmellDetector
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectDataClumpsSmells(
         SyntaxNode root,
         SemanticModel semanticModel,

@@ -12,7 +12,7 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class BulkEditService
 {
-    private async Task<IReadOnlyList<string>> ResolveFilePatterns(
+    private Task<IReadOnlyList<string>> ResolveFilePatterns(
         IReadOnlyList<string> patterns,
         BulkEditOptions options,
         CancellationToken cancellationToken)
@@ -95,10 +95,10 @@ public partial class BulkEditService
                     _logger?.LogWarning(ex, "Failed to check file size for {FilePath}", file);
                 }
             }
-            return filteredFiles;
+            return Task.FromResult<IReadOnlyList<string>>(filteredFiles);
         }
 
-        return allFiles.ToList();
+        return Task.FromResult<IReadOnlyList<string>>(allFiles.ToList());
     }
 
     private static string DetermineRootDirectory(string pattern)
@@ -142,7 +142,7 @@ public partial class BulkEditService
         }
     }
 
-    private async Task<bool> CheckCondition(string content, BulkEditCondition condition, string filePath)
+    private Task<bool> CheckCondition(string content, BulkEditCondition condition, string filePath)
     {
         var result = condition.ConditionType switch
         {
@@ -155,7 +155,7 @@ public partial class BulkEditService
             _ => false
         };
 
-        return condition.Negate ? !result : result;
+        return Task.FromResult(condition.Negate ? !result : result);
     }
 
     private static bool CheckFileSizeCondition(string filePath, BulkEditCondition condition)
@@ -214,7 +214,7 @@ public partial class BulkEditService
                directory.Contains(condition.Pattern, StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task<string> ApplyRefactoring(
+    private Task<string> ApplyRefactoring(
         string content,
         BulkRefactorPattern refactorPattern,
         string filePath,
@@ -222,7 +222,7 @@ public partial class BulkEditService
     {
         // This would implement specific refactoring logic based on the pattern type
         // For now, return the original content
-        return content;
+        return Task.FromResult(content);
     }
 
     private FileChange ConvertTextEditToFileChange(TextEdit textEdit)

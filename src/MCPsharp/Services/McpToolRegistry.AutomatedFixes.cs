@@ -153,7 +153,7 @@ public partial class McpToolRegistry
                     var compilation = semanticModel.Compilation;
                     var analyzers = ImmutableArray.Create(analyzer);
 
-                    var compilationWithAnalyzers = compilation.WithAnalyzers(analyzers, options: null, cancellationToken: ct);
+                    var compilationWithAnalyzers = compilation.WithAnalyzers(analyzers, options: null);
                     var diagnostics = await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync(ct);
 
                     // Filter to diagnostics from this document

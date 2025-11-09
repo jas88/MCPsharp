@@ -255,6 +255,7 @@ public class ExtractMethodService
         return (true, null, null, containingMethod);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<DataFlowAnalysisResult> AnalyzeDataFlowAsync(
         List<StatementSyntax> statements,
         SemanticModel semanticModel,

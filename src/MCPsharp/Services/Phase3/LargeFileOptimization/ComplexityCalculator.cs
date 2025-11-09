@@ -65,6 +65,7 @@ internal class ComplexityCalculator
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<ComplexityMetrics> CalculateMethodComplexity(
         MethodDeclarationSyntax method,
         SemanticModel semanticModel,

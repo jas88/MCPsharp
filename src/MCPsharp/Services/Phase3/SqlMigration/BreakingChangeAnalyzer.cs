@@ -15,6 +15,7 @@ internal class BreakingChangeAnalyzer
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<List<BreakingChange>> DetectBreakingChangesInMigrationsAsync(List<MigrationInfo> migrations, CancellationToken cancellationToken = default)
     {
         var breakingChanges = new List<BreakingChange>();

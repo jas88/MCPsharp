@@ -801,6 +801,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return codeBlocks;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<DuplicateGroup>> FindExactDuplicatesInternalAsync(
         List<CodeBlock> codeBlocks,
         DuplicateDetectionOptions options,
@@ -904,6 +905,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return duplicateGroups.OrderByDescending(g => g.SimilarityScore).ThenByDescending(g => g.Complexity).ToList();
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<double> CalculateSimilarityAsync(
         CodeBlock block1,
         CodeBlock block2,
@@ -1017,6 +1019,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return matrix[sequence1.Count, sequence2.Count];
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<double> CalculateStructuralSimilarityAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
@@ -1025,6 +1028,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return CalculateStructuralSimilarity(codeBlock1, codeBlock2);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<double> CalculateTokenSimilarityAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
@@ -1040,6 +1044,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return CalculateTokenSimilarity(codeBlock1, codeBlock2, detectionOptions);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<double> CalculateSemanticSimilarityAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
@@ -1060,6 +1065,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return 0.5;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeDifference>> FindCodeDifferencesAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
@@ -1088,6 +1094,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return differences;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CommonPattern>> FindCommonPatternsAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
@@ -1130,6 +1137,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return patterns;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<DuplicateType?> DetermineDuplicateTypeAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
@@ -1242,6 +1250,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<DuplicationMetrics> CalculateDuplicationMetricsAsync(
         List<DuplicateGroup> duplicateGroups,
         List<CodeBlock> allCodeBlocks,
@@ -1337,6 +1346,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                          .ToList();
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<RefactoringSuggestion>> GenerateSuggestionsForDuplicateGroup(
         DuplicateGroup group,
         RefactoringOptions options,
@@ -1767,6 +1777,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<DuplicateHotspotsResult> AnalyzeHotspotsAsync(
         List<DuplicateGroup> duplicateGroups,
         List<CodeBlock> allCodeBlocks,

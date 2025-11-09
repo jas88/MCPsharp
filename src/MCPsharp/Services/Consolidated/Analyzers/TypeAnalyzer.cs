@@ -182,9 +182,10 @@ public class TypeAnalyzer
 
             var members = allMembers.Select(m =>
             {
+                TypeMember? member = null;
                 if (m is PropertyStructure prop)
                 {
-                    return new TypeMember
+                    member = new TypeMember
                     {
                         Name = prop.Name,
                         Kind = "Property",
@@ -200,7 +201,7 @@ public class TypeAnalyzer
                 }
                 else if (m is MethodStructure method)
                 {
-                    return new TypeMember
+                    member = new TypeMember
                     {
                         Name = method.Name,
                         Kind = "Method",
@@ -216,7 +217,7 @@ public class TypeAnalyzer
                 }
                 else if (m is FieldStructure field)
                 {
-                    return new TypeMember
+                    member = new TypeMember
                     {
                         Name = field.Name,
                         Kind = "Field",
@@ -230,16 +231,16 @@ public class TypeAnalyzer
                         }
                     };
                 }
-                return null;
-            }).Where(m => m != null).ToList()!;
+                return member;
+            }).OfType<TypeMember>().ToList();
 
-            var publicMembers = members.Count(m => m?.Accessibility == "Public");
-            var privateMembers = members.Count(m => m?.Accessibility == "Private");
-            var staticMembers = members.Count(m => m?.IsStatic == true);
-            var abstractMembers = members.Count(m => m?.Accessibility == "Abstract" || m?.Accessibility == "Protected");
+            var publicMembers = members.Count(m => m.Accessibility == "Public");
+            var privateMembers = members.Count(m => m.Accessibility == "Private");
+            var staticMembers = members.Count(m => m.IsStatic == true);
+            var abstractMembers = members.Count(m => m.Accessibility == "Abstract" || m.Accessibility == "Protected");
 
             var complexMembers = members
-                .Where(m => m?.Kind == "Method" || m?.Kind == "Property")
+                .Where(m => m.Kind == "Method" || m.Kind == "Property")
                 .Take(5)
                 .ToList();
 

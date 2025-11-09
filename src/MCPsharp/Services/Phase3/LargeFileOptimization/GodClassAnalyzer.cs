@@ -15,6 +15,7 @@ internal class GodClassAnalyzer
     private const int MaxFieldCount = 20;
     private const int MaxResponsibilities = 5;
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<GodClassAnalysis> AnalyzeGodClass(
         ClassDeclarationSyntax classDecl,
         SemanticModel semanticModel,
@@ -49,6 +50,7 @@ internal class GodClassAnalyzer
         var tooManyFields = fields
             .Select(f => f.Declaration.Variables.FirstOrDefault()?.Identifier.Text)
             .Where(n => !string.IsNullOrEmpty(n))
+            .OfType<string>()
             .ToList();
 
         // Analyze coupling

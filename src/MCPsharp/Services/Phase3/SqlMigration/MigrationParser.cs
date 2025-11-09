@@ -109,6 +109,7 @@ internal class MigrationParser
         return migration;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<List<string>> GetMigrationFilesAsync(string projectPath, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Searching for migration files in: {ProjectPath}", projectPath);

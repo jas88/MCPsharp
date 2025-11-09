@@ -18,7 +18,7 @@ public class ProjectAnalyzer
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ProjectAnalyzer>.Instance;
     }
 
-    public async Task<ProjectStructure> GetProjectStructureAsync(string projectPath, CancellationToken ct)
+    public Task<ProjectStructure> GetProjectStructureAsync(string projectPath, CancellationToken ct)
     {
         try
         {
@@ -38,14 +38,14 @@ public class ProjectAnalyzer
                 structure.TargetFrameworks.Add("Unknown");
             }
 
-            return structure;
+            return Task.FromResult(structure);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting project structure for {Project}", projectPath);
         }
 
-        return new ProjectStructure { ProjectPath = projectPath, ProjectType = "Unknown" };
+        return Task.FromResult(new ProjectStructure { ProjectPath = projectPath, ProjectType = "Unknown" });
     }
 
     public async Task<List<ProjectFile>> GetProjectFileInventoryAsync(string projectPath, ToolOptions? options, CancellationToken ct)

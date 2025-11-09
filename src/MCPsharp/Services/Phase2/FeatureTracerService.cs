@@ -546,6 +546,7 @@ public class FeatureTracerService : IFeatureTracerService
     /// <summary>
     /// Find related test files for components
     /// </summary>
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task FindRelatedTestFilesAsync(MutableFeatureComponents components, string featureName)
     {
         var testPatterns = new[]
@@ -645,6 +646,7 @@ public class FeatureTracerService : IFeatureTracerService
     /// <summary>
     /// Build dependency graph for found components
     /// </summary>
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<DependencyGraph> BuildDependencyGraphAsync(MutableFeatureComponents components)
     {
         var dependencies = new Dictionary<string, IReadOnlyList<string>>();

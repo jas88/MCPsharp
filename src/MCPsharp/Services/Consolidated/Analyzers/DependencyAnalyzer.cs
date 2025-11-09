@@ -169,7 +169,7 @@ public class DependencyAnalyzer
         return new List<CriticalPath>();
     }
 
-    public async Task<DependencyMetrics?> CalculateDependencyMetricsAsync(DependencyGraph graph, CancellationToken ct)
+    public Task<DependencyMetrics?> CalculateDependencyMetricsAsync(DependencyGraph graph, CancellationToken ct)
     {
         try
         {
@@ -177,7 +177,7 @@ public class DependencyAnalyzer
             var edgeCount = graph.Edges.Count;
             var density = nodeCount > 1 ? (double)edgeCount / (nodeCount * (nodeCount - 1)) : 0;
 
-            return new DependencyMetrics
+            return Task.FromResult<DependencyMetrics?>(new DependencyMetrics
             {
                 TotalNodes = nodeCount,
                 TotalEdges = edgeCount,
@@ -192,14 +192,13 @@ public class DependencyAnalyzer
                     Centrality = 0.5,
                     IsInCycle = false
                 }).ToList()
-            };
+            });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error calculating dependency metrics");
+            return Task.FromResult<DependencyMetrics?>(null);
         }
-
-        return null;
     }
 
     private static bool HasCycle(

@@ -349,6 +349,7 @@ public class FixEngine : IFixEngine
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<Models.Analyzers.RollbackResult> RollbackFixesAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         try
@@ -541,6 +542,7 @@ public class FixEngine : IFixEngine
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<ImmutableArray<FixSession>> GetFixHistoryAsync(int maxSessions = 50, CancellationToken cancellationToken = default)
     {
         return _sessions.Values
@@ -549,6 +551,7 @@ public class FixEngine : IFixEngine
             .ToImmutableArray();
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<FixStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
     {
         var sessions = _sessions.Values.ToList();
@@ -585,6 +588,7 @@ public class FixEngine : IFixEngine
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<FixPreview> GeneratePreviewAsync(
         AnalyzerFix fix,
         ImmutableArray<AnalyzerIssue> issues,
@@ -638,6 +642,7 @@ public class FixEngine : IFixEngine
         return CreateAsyncEnumerable(conflicts);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<FixConflict>> DetectFileConflictsAsync(
         string filePath,
         List<FixPreview> previews,
@@ -683,6 +688,7 @@ public class FixEngine : IFixEngine
                  end2.Item1 < pos1.Item1 || (end2.Item1 == pos1.Item1 && end2.Item2 < pos1.Item2));
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<ConflictResolution?> ResolveSingleConflictAsync(
         FixConflict conflict,
         ConflictResolutionStrategy strategy,
@@ -836,6 +842,7 @@ public class FixEngine : IFixEngine
         return string.Join('\n', lines);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<ValidationError>> ValidateCSharpSyntaxAsync(string content)
     {
         var errors = new List<ValidationError>();

@@ -449,6 +449,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return suggestions.OrderByDescending(s => s.Confidence).ToList();
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<OptimizationEstimate> EstimateOptimizationEffortAsync(OptimizationPlan optimizationPlan, CancellationToken cancellationToken = default)
     {
         var effortByType = new Dictionary<OptimizationActionType, int>();
@@ -644,6 +645,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<ComplexityMetrics> CalculateMethodComplexity(MethodDeclarationSyntax method, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var cyclomaticComplexity = 1; // Base complexity
@@ -958,6 +960,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region God Class Analysis
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<GodClassAnalysis> AnalyzeGodClass(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var className = classDecl.Identifier.Text;
@@ -988,6 +991,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         var tooManyFields = fields
             .Select(f => f.Declaration.Variables.FirstOrDefault()?.Identifier.Text)
             .Where(n => !string.IsNullOrEmpty(n))
+            .OfType<string>()
             .ToList();
 
         // Analyze coupling
@@ -1625,6 +1629,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Code Smell Detection
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectLongParameterListSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1666,6 +1671,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectLongMethodSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1708,6 +1714,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectLargeClassSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1750,6 +1757,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectComplexConditionalSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1760,6 +1768,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectDuplicateCodeSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1770,6 +1779,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectMagicNumberSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1780,6 +1790,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectFeatureEnvySmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1790,6 +1801,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectDataClumpsSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1814,6 +1826,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Refactoring Suggestion Generation
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<RefactoringSuggestion?> GenerateRefactoringSuggestion(CodeSmell codeSmell, SyntaxNode root, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         if (codeSmell.RefactoringPatterns.Count == 0)
@@ -1862,6 +1875,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<RefactoringSuggestion>> GenerateClassRefactoringSuggestions(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, ClassMetrics metrics, CancellationToken cancellationToken)
     {
         var suggestions = new List<RefactoringSuggestion>();

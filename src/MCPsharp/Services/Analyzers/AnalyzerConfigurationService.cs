@@ -296,6 +296,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<bool> DeleteConfigurationAsync(
         string analyzerId,
         string? projectPath = null,

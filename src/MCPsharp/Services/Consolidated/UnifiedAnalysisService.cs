@@ -1098,11 +1098,11 @@ public class UnifiedAnalysisService
             allMembers.AddRange(structure.Fields);
 
             // Convert to TypeMember format
-            var members = allMembers.Select(m =>
+            var members = allMembers.SelectMany(m =>
             {
                 if (m is MCPsharp.Models.Roslyn.PropertyStructure prop)
                 {
-                    return new TypeMember
+                    return new[] { new TypeMember
                     {
                         Name = prop.Name,
                         Kind = "Property",
@@ -1114,11 +1114,11 @@ public class UnifiedAnalysisService
                             Line = prop.Line,
                             Column = 0
                         }
-                    };
+                    } };
                 }
                 else if (m is MCPsharp.Models.Roslyn.MethodStructure method)
                 {
-                    return new TypeMember
+                    return new[] { new TypeMember
                     {
                         Name = method.Name,
                         Kind = "Method",
@@ -1130,11 +1130,11 @@ public class UnifiedAnalysisService
                             Line = method.Line,
                             Column = 0
                         }
-                    };
+                    } };
                 }
                 else if (m is MCPsharp.Models.Roslyn.FieldStructure field)
                 {
-                    return new TypeMember
+                    return new[] { new TypeMember
                     {
                         Name = field.Name,
                         Kind = "Field",
@@ -1146,19 +1146,19 @@ public class UnifiedAnalysisService
                             Line = field.Line,
                             Column = 0
                         }
-                    };
+                    } };
                 }
-                return null;
-            }).Where(m => m != null).ToList()!;
+                return Array.Empty<TypeMember>();
+            }).ToList();
 
-            var publicMembers = members.Count(m => m?.Accessibility == "Public");
-            var privateMembers = members.Count(m => m?.Accessibility == "Private");
-            var staticMembers = members.Count(m => m?.IsStatic == true);
-            var abstractMembers = members.Count(m => m?.Accessibility == "Abstract" || m?.Accessibility == "Protected");
+            var publicMembers = members.Count(m => m.Accessibility == "Public");
+            var privateMembers = members.Count(m => m.Accessibility == "Private");
+            var staticMembers = members.Count(m => m.IsStatic == true);
+            var abstractMembers = members.Count(m => m.Accessibility == "Abstract" || m.Accessibility == "Protected");
 
             // Identify complex members (methods with many parameters or large types)
             var complexMembers = members
-                .Where(m => m?.Kind == "Method" || m?.Kind == "Property")
+                .Where(m => m.Kind == "Method" || m.Kind == "Property")
                 .Take(5)
                 .ToList();
 
@@ -1595,6 +1595,7 @@ public class UnifiedAnalysisService
         return null;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<ProjectStructure> GetProjectStructureAsync(string projectPath, CancellationToken ct)
     {
         try
@@ -1791,6 +1792,7 @@ public class UnifiedAnalysisService
         return null;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<MCPsharp.Models.Consolidated.ArchitectureDefinition> GetDefaultArchitectureDefinitionAsync(CancellationToken ct)
     {
         try
@@ -1827,6 +1829,7 @@ public class UnifiedAnalysisService
             };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<ArchitectureMetrics?> CalculateArchitectureMetricsAsync(string scope, MCPsharp.Models.Architecture.ArchitectureDefinition definition, CancellationToken ct)
     {
         try
@@ -2004,6 +2007,7 @@ public class UnifiedAnalysisService
         return new List<CriticalPath>();
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<DependencyMetrics?> CalculateDependencyMetricsAsync(DependencyGraph graph, CancellationToken ct)
     {
         try
@@ -2153,6 +2157,7 @@ public class UnifiedAnalysisService
         return null;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<TestCoverageAnalysis?> AnalyzeTestCoverageAsync(string scope, CancellationToken ct)
     {
         try
@@ -2259,6 +2264,7 @@ public class UnifiedAnalysisService
         return new List<CodeSmell>();
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<QualityScore?> CalculateQualityScoreAsync(QualityAnalysisResponse analysis, CancellationToken ct)
     {
         try
@@ -2307,6 +2313,7 @@ public class UnifiedAnalysisService
         return null;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<QualityRecommendation>> GenerateQualityRecommendationsAsync(QualityAnalysisResponse analysis, CancellationToken ct)
     {
         try
@@ -2507,7 +2514,7 @@ public class UnifiedAnalysisService
         return new Models.Architecture.ArchitectureDefinition
         {
             Name = consolidatedDef.Name,
-            Description = consolidatedDef.Description,
+            Description = consolidatedDef.Description ?? string.Empty,
             Type = Models.Architecture.ArchitectureType.Layered,
             Layers = consolidatedDef.Layers.Select(l => new Models.Architecture.ArchitecturalLayer
             {

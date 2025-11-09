@@ -399,6 +399,7 @@ public class RoslynWorkspace : IDisposable
     /// <summary>
     /// Get semantic model for a syntax tree (legacy method)
     /// </summary>
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<SemanticModel?> GetSemanticModelAsync(
         SyntaxTree syntaxTree,
         CancellationToken ct = default)
