@@ -9,6 +9,7 @@ using MCPsharp.Services.Roslyn;
 using MCPsharp.Services.Phase3;
 using MCPsharp.Services.Consolidated;
 using MCPsharp.Services.Analyzers;
+using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;
@@ -84,10 +85,12 @@ public partial class McpToolRegistry
         BulkOperationsHub? bulkOperationsHub = null,
         StreamProcessingController? streamController = null,
         IRoslynAnalyzerService? roslynAnalyzerService = null,
+        BuiltInCodeFixRegistry? codeFixRegistry = null,
         ILoggerFactory? loggerFactory = null)
     {
         _projectContext = projectContext;
         _workspace = workspace;
+        _codeFixRegistry = codeFixRegistry;
         _workflowAnalyzer = workflowAnalyzer;
         _configAnalyzer = configAnalyzer;
         _impactAnalyzer = impactAnalyzer;
@@ -204,6 +207,10 @@ public partial class McpToolRegistry
                 "load_roslyn_analyzers" => await ExecuteLoadRoslynAnalyzers(request.Arguments, ct),
                 "run_roslyn_analyzers" => await ExecuteRunRoslynAnalyzers(request.Arguments, ct),
                 "list_roslyn_analyzers" => await ExecuteListRoslynAnalyzers(request.Arguments, ct),
+                // Automated Code Fix Tools
+                "code_quality_analyze" => await ExecuteCodeQualityAnalyze(request.Arguments, ct),
+                "code_quality_fix" => await ExecuteCodeQualityFix(request.Arguments, ct),
+                "code_quality_profiles" => await ExecuteCodeQualityProfiles(request.Arguments, ct),
                 // Roslyn Code Fix and Configuration Tools
                 "apply_roslyn_fixes" => await ExecuteApplyRoslynFixes(request.Arguments, ct),
                 "configure_analyzer" => await ExecuteConfigureAnalyzer(request.Arguments, ct),
@@ -1022,6 +1029,87 @@ public partial class McpToolRegistry
                         Required = true
                     }
                 )
+            },
+            // Automated Code Fix Tools
+            new McpTool
+            {
+                Name = "code_quality_analyze",
+                Description = "Analyze code for quality issues using built-in diagnostic analyzers",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "target_path",
+                        Type = "string",
+                        Description = "File or directory to analyze",
+                        Required = true
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "diagnostic_ids",
+                        Type = "array",
+                        Description = "Specific diagnostic IDs to check (e.g., [\"MCP001\", \"MCP002\"]). Optional - if not specified, all diagnostics for the profile are checked.",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "profile",
+                        Type = "string",
+                        Description = "Fix profile to use: Conservative, Balanced, or Aggressive (default: Balanced)",
+                        Required = false,
+                        Default = "Balanced"
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "code_quality_fix",
+                Description = "Apply automated code quality fixes to improve code",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "target_path",
+                        Type = "string",
+                        Description = "File or directory to fix",
+                        Required = true
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "diagnostic_ids",
+                        Type = "array",
+                        Description = "Specific diagnostic IDs to fix. Optional - if not specified, all safe fixes for the profile are applied.",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "profile",
+                        Type = "string",
+                        Description = "Fix profile to use: Conservative, Balanced, or Aggressive (default: Balanced)",
+                        Required = false,
+                        Default = "Balanced"
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "preview",
+                        Type = "boolean",
+                        Description = "Show preview without applying changes (default: true for safety)",
+                        Required = false,
+                        Default = true
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "create_backup",
+                        Type = "boolean",
+                        Description = "Create backup before fixing (default: true)",
+                        Required = false,
+                        Default = true
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "code_quality_profiles",
+                Description = "List available fix profiles and their capabilities",
+                InputSchema = JsonSchemaHelper.CreateSchema()
             }
         };
     }

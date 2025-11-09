@@ -38,6 +38,18 @@ public class BuiltInCodeFixRegistry
             RegisterProvider(new AsyncAwaitPatternProvider(
                 _loggerFactory.CreateLogger<AsyncAwaitPatternProvider>()));
 
+            // Register ExceptionLogging provider
+            RegisterProvider(new ExceptionLoggingProvider(
+                _loggerFactory.CreateLogger<ExceptionLoggingProvider>()));
+
+            // Register UnusedCode provider
+            RegisterProvider(new UnusedCodeProvider(
+                _loggerFactory.CreateLogger<UnusedCodeProvider>()));
+
+            // Register StaticMethod provider
+            RegisterProvider(new StaticMethodProvider(
+                _loggerFactory.CreateLogger<StaticMethodProvider>()));
+
             _logger.LogInformation("Registered {Count} built-in code fix providers", _providers.Count);
         }
         catch (Exception ex)
