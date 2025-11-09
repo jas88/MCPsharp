@@ -584,4 +584,9 @@ public partial class McpToolRegistry
             };
         }
     }
+
+    // Field to store analysis result for caching (currently not populated; TODO: implement result caching)
+    #pragma warning disable CS0649 // Field is never assigned - placeholder for future result caching implementation
+    private AnalyzerRunResult? analysisResult;
+    #pragma warning restore CS0649
 }
