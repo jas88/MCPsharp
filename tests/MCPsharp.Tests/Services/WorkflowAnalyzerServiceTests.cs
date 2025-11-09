@@ -90,7 +90,7 @@ public class WorkflowAnalyzerServiceTests
         var invalidPath = Path.Combine(_testDataPath, "invalid.yml");
 
         // Act & Assert
-        await Assert.ThrowsAsync<Exception>(
+        await Assert.ThrowsAsync<YamlDotNet.Core.SemanticErrorException>(
             async () => await _service.ParseWorkflowAsync(invalidPath));
     }
 
@@ -291,6 +291,11 @@ public class WorkflowAnalyzerServiceTests
                             Name = "Setup .NET",
                             Uses = "actions/setup-dotnet@v4",
                             With = new Dictionary<string, string> { { "dotnet-version", "9.0.x" } }
+                        },
+                        new WorkflowStep
+                        {
+                            Name = "Build",
+                            Run = "dotnet build"
                         }
                     }
                 }
@@ -321,7 +326,28 @@ public class WorkflowAnalyzerServiceTests
             Name = "Test",
             FilePath = "/test/workflow.yml",
             Environment = new Dictionary<string, string> { { "DOTNET_VERSION", "8.0.x" } },
-            Jobs = Array.Empty<WorkflowJob>()
+            Jobs = new[]
+            {
+                new WorkflowJob
+                {
+                    Name = "build",
+                    RunsOn = "ubuntu-latest",
+                    Steps = new[]
+                    {
+                        new WorkflowStep
+                        {
+                            Name = "Setup .NET",
+                            Uses = "actions/setup-dotnet@v4",
+                            With = new Dictionary<string, string> { { "dotnet-version", "8.0.x" } }
+                        },
+                        new WorkflowStep
+                        {
+                            Name = "Build",
+                            Run = "dotnet build"
+                        }
+                    }
+                }
+            }
         };
 
         var project = new CsprojInfo

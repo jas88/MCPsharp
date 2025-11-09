@@ -793,7 +793,7 @@ public class StreamProcessingController
                 StartedAt = ctx.StartedAt,
                 ProcessorType = ctx.ProcessorType,
                 BytesProcessed = ctx.BytesProcessed,
-                CurrentFile = ctx.CurrentFile
+                CurrentFile = ctx.CurrentFile ?? string.Empty
             }).ToList();
         }
 

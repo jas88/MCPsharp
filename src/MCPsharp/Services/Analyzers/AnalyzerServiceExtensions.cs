@@ -29,6 +29,7 @@ public static class AnalyzerServiceExtensions
 
         services.AddSingleton<IAnalyzerRegistry, AnalyzerRegistry>();
         services.AddSingleton<IFixEngine, FixEngine>();
+        services.AddSingleton<IAnalyzerSandboxFactory, DefaultAnalyzerSandboxFactory>();
 
         services.AddSingleton<IAnalyzerHost>(provider =>
             new AnalyzerHost(
@@ -36,7 +37,8 @@ public static class AnalyzerServiceExtensions
                 provider.GetRequiredService<ILoggerFactory>(),
                 provider.GetRequiredService<IAnalyzerRegistry>(),
                 provider.GetRequiredService<ISecurityManager>(),
-                provider.GetRequiredService<IFixEngine>()));
+                provider.GetRequiredService<IFixEngine>(),
+                provider.GetRequiredService<IAnalyzerSandboxFactory>()));
 
         services.AddSingleton<AnalyzerConfigurationManager>(provider =>
             new AnalyzerConfigurationManager(

@@ -115,7 +115,7 @@ class Program
             var handler = new JsonRpcHandler(Console.In, Console.Out, toolRegistry, logger);
 
             // Setup cancellation on Ctrl+C
-            var cts = new CancellationTokenSource();
+            using var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (s, e) =>
             {
                 e.Cancel = true;

@@ -72,7 +72,7 @@ public class SymbolQueryService
         }
 
         var syntaxTree = await document.GetSyntaxTreeAsync();
-        var semanticModel = await document.GetSemanticModelAsync();
+        var semanticModel = await _workspace.GetSemanticModelAsync(document);
         if (syntaxTree == null || semanticModel == null)
         {
             return null;

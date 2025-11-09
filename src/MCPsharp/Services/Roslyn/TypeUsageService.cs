@@ -128,25 +128,38 @@ public class TypeUsageService : ITypeUsageService
             inheritanceChain.Add(typeSymbol.BaseType.Name);
         }
 
-        // Find derived classes
-        var derivedSymbols = await SymbolFinder.FindDerivedClassesAsync(typeSymbol, _workspace.Solution, true);
-        foreach (var derived in derivedSymbols)
+        // Find derived classes - simplified approach
+        foreach (var document in _workspace.GetAllDocuments())
         {
-            var location = derived.Locations.FirstOrDefault();
-            if (location != null && location.IsInSource)
+            if (cancellationToken.IsCancellationRequested)
+                break;
+
+            var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
+            if (syntaxTree == null)
+                continue;
+
+            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var root = await syntaxTree.GetRootAsync(cancellationToken);
+
+            var classDeclarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
+            foreach (var classDecl in classDeclarations)
             {
-                var lineSpan = location.GetLineSpan();
-                derivedClasses.Add(new TypeUsageInfo
+                var classSymbol = semanticModel.GetDeclaredSymbol(classDecl);
+                if (classSymbol != null && InheritsFrom(classSymbol, typeSymbol))
                 {
-                    File = lineSpan.Path,
-                    Line = lineSpan.StartLinePosition.Line,
-                    Column = lineSpan.StartLinePosition.Character,
-                    UsageKind = TypeUsageKind.BaseClass,
-                    Context = $"class {derived.Name} : {typeSymbol.Name}",
-                    Confidence = ConfidenceLevel.High,
-                    MemberName = derived.Name,
-                    ContainerName = derived.ContainingNamespace?.ToDisplayString()
-                });
+                    var lineSpan = classDecl.Identifier.GetLocation().GetLineSpan();
+                    derivedClasses.Add(new TypeUsageInfo
+                    {
+                        File = document.FilePath ?? "",
+                        Line = lineSpan.StartLinePosition.Line,
+                        Column = lineSpan.StartLinePosition.Character,
+                        UsageKind = TypeUsageKind.BaseClass,
+                        Context = $"class {classSymbol.Name} : {typeSymbol.Name}",
+                        Confidence = ConfidenceLevel.High,
+                        MemberName = classSymbol.Name,
+                        ContainerName = classSymbol.ContainingNamespace?.ToDisplayString()
+                    });
+                }
             }
         }
 
@@ -156,27 +169,40 @@ public class TypeUsageService : ITypeUsageService
             implementedInterfaces.Add(CreateTypeUsageInfo(iface, TypeUsageKind.InterfaceImplementation));
         }
 
-        // Find classes that implement this interface
+        // Find classes that implement this interface - simplified approach
         if (typeSymbol.TypeKind == TypeKind.Interface)
         {
-            var implementations = await SymbolFinder.FindImplementationsAsync(typeSymbol, _workspace.Solution, true);
-            foreach (var impl in implementations)
+            foreach (var document in _workspace.GetAllDocuments())
             {
-                var location = impl.Locations.FirstOrDefault();
-                if (location != null && location.IsInSource)
+                if (cancellationToken.IsCancellationRequested)
+                    break;
+
+                var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
+                if (syntaxTree == null)
+                    continue;
+
+                var semanticModel = compilation.GetSemanticModel(syntaxTree);
+                var root = await syntaxTree.GetRootAsync(cancellationToken);
+
+                var classDeclarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
+                foreach (var classDecl in classDeclarations)
                 {
-                    var lineSpan = location.GetLineSpan();
-                    interfaceImplementations.Add(new TypeUsageInfo
+                    var classSymbol = semanticModel.GetDeclaredSymbol(classDecl);
+                    if (classSymbol != null && ImplementsInterface(classSymbol, typeSymbol))
                     {
-                        File = lineSpan.Path,
-                        Line = lineSpan.StartLinePosition.Line,
-                        Column = lineSpan.StartLinePosition.Character,
-                        UsageKind = TypeUsageKind.InterfaceImplementation,
-                        Context = $"class {impl.Name} : {typeSymbol.Name}",
-                        Confidence = ConfidenceLevel.High,
-                        MemberName = impl.Name,
-                        ContainerName = impl.ContainingNamespace?.ToDisplayString()
-                    });
+                        var lineSpan = classDecl.Identifier.GetLocation().GetLineSpan();
+                        interfaceImplementations.Add(new TypeUsageInfo
+                        {
+                            File = document.FilePath ?? "",
+                            Line = lineSpan.StartLinePosition.Line,
+                            Column = lineSpan.StartLinePosition.Character,
+                            UsageKind = TypeUsageKind.InterfaceImplementation,
+                            Context = $"class {classSymbol.Name} : {typeSymbol.Name}",
+                            Confidence = ConfidenceLevel.High,
+                            MemberName = classSymbol.Name,
+                            ContainerName = classSymbol.ContainingNamespace?.ToDisplayString()
+                        });
+                    }
                 }
             }
         }
@@ -475,34 +501,46 @@ public class TypeUsageService : ITypeUsageService
         var filesAnalyzed = 0;
         var typesAnalyzed = 0;
 
-        // Find all references to the type
-        var solution = _workspace.Solution;
-        var referencedSymbols = await SymbolFinder.FindReferencesAsync(typeSymbol, solution, cancellationToken);
+        // Simplified implementation that avoids SymbolFinder for now
+        // In a full implementation, you would use SymbolFinder to find all references
+        // For now, we'll just scan through documents to find type references
 
-        foreach (var referencedSymbol in referencedSymbols)
+        foreach (var document in _workspace.GetAllDocuments())
         {
-            foreach (var location in referencedSymbol.Locations)
+            if (cancellationToken.IsCancellationRequested)
+                break;
+
+            filesAnalyzed++;
+
+            var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
+            if (syntaxTree == null)
+                continue;
+
+            var root = await syntaxTree.GetRootAsync(cancellationToken);
+            var typeReferences = root.DescendantNodes()
+                .Where(n => IsTypeReference(n, typeSymbol));
+
+            foreach (var reference in typeReferences)
             {
-                var lineSpan = location.Location.GetLineSpan();
-                if (!lineSpan.Path?.EndsWith(".cs") == true)
-                    continue;
-
-                var document = location.Document;
-                if (document == null)
-                    continue;
-
-                filesAnalyzed++;
-                var symbolLocation = ConvertToSymbolLocation(location.Location);
-                var usageInfo = await AnalyzeTypeUsageLocation(symbolLocation, typeSymbol, cancellationToken);
-                if (usageInfo != null)
+                var lineSpan = reference.GetLocation().GetLineSpan();
+                var usageInfo = new TypeUsageInfo
                 {
-                    usages.Add(usageInfo);
-                    typesAnalyzed++;
-                }
+                    File = document.FilePath ?? "",
+                    Line = lineSpan.StartLinePosition.Line,
+                    Column = lineSpan.StartLinePosition.Character,
+                    UsageKind = DetermineUsageKindSimple(reference),
+                    Context = reference.ToString(),
+                    Confidence = ConfidenceLevel.Medium,
+                    MemberName = GetContainingMember(reference),
+                    ContainerName = GetContainingTypeSimple(reference)
+                };
+
+                usages.Add(usageInfo);
+                typesAnalyzed++;
             }
         }
 
-        // Also find type declarations
+        // Always add type declarations (these should be fast)
         var declarationLocations = typeSymbol.Locations.Where(l => l.IsInSource);
         foreach (var location in declarationLocations)
         {
@@ -549,13 +587,12 @@ public class TypeUsageService : ITypeUsageService
         if (syntaxTree == null || semanticModel == null)
             return null;
 
-        var lineSpan = location.Location.GetLineSpan();
         var root = await syntaxTree.GetRootAsync(cancellationToken);
-        var node = root.FindNode(location.Location.SourceSpan);
+        var node = root.FindNode(location.TextSpan ?? location.Location?.SourceSpan ?? default);
 
         var text = await document.GetTextAsync(cancellationToken);
-        var lineText = lineSpan.StartLinePosition.Line < text.Lines.Count
-            ? text.Lines[lineSpan.StartLinePosition.Line].ToString()
+        var lineText = location.Line < text.Lines.Count
+            ? text.Lines[location.Line].ToString()
             : string.Empty;
 
         var usageKind = DetermineUsageKind(node, typeSymbol);
@@ -575,9 +612,9 @@ public class TypeUsageService : ITypeUsageService
 
         return new TypeUsageInfo
         {
-            File = document.FilePath ?? "",
-            Line = lineSpan.StartLinePosition.Line,
-            Column = lineSpan.StartLinePosition.Character,
+            File = location.FilePath ?? document.FilePath ?? "",
+            Line = location.Line,
+            Column = location.Column,
             UsageKind = usageKind,
             Context = lineText.Trim(),
             Confidence = confidence,
@@ -736,6 +773,77 @@ public class TypeUsageService : ITypeUsageService
     {
         return filePath.Contains("test", StringComparison.OrdinalIgnoreCase) ||
                filePath.Contains("spec", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsTypeReference(SyntaxNode node, INamedTypeSymbol typeSymbol)
+    {
+        if (node is IdentifierNameSyntax identifier && identifier.Identifier.Text == typeSymbol.Name)
+        {
+            return true;
+        }
+
+        if (node is GenericNameSyntax genericName && genericName.Identifier.Text == typeSymbol.Name)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private TypeUsageKind DetermineUsageKindSimple(SyntaxNode node)
+    {
+        var parent = node.Parent;
+
+        while (parent != null)
+        {
+            switch (parent)
+            {
+                case ObjectCreationExpressionSyntax:
+                    return TypeUsageKind.Instantiation;
+                case MethodDeclarationSyntax method:
+                    if (method.ReturnType.Contains(node))
+                        return TypeUsageKind.ReturnType;
+                    if (method.ParameterList?.Parameters.Any(p => p.Type.Contains(node)) == true)
+                        return TypeUsageKind.Parameter;
+                    break;
+                case PropertyDeclarationSyntax property:
+                    if (property.Type.Contains(node))
+                        return TypeUsageKind.Property;
+                    break;
+                case FieldDeclarationSyntax field:
+                    if (field.Declaration.Type.Contains(node))
+                        return TypeUsageKind.Field;
+                    break;
+                case BaseListSyntax:
+                    return TypeUsageKind.BaseClass;
+            }
+            parent = parent.Parent;
+        }
+
+        return TypeUsageKind.Unknown;
+    }
+
+    private string? GetContainingTypeSimple(SyntaxNode node)
+    {
+        var typeNode = node.FirstAncestorOrSelf<BaseTypeDeclarationSyntax>();
+        return typeNode?.Identifier.Text;
+    }
+
+    private bool InheritsFrom(INamedTypeSymbol classSymbol, INamedTypeSymbol baseTypeSymbol)
+    {
+        var current = classSymbol.BaseType;
+        while (current != null && current.SpecialType != SpecialType.System_Object)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, baseTypeSymbol))
+                return true;
+            current = current.BaseType;
+        }
+        return false;
+    }
+
+    private bool ImplementsInterface(INamedTypeSymbol classSymbol, INamedTypeSymbol interfaceSymbol)
+    {
+        return classSymbol.AllInterfaces.Contains(interfaceSymbol);
     }
 
     /// <summary>

@@ -35,4 +35,10 @@
     <ProjectReference Include="..\..\src\MCPsharp\MCPsharp.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="TestData\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

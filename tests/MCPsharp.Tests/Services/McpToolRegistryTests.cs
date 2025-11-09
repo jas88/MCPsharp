@@ -31,14 +31,14 @@ public class McpToolRegistryTests : IDisposable
     }
 
     [Fact]
-    public void GetTools_ReturnsAllTwentyOneTools()
+    public void GetTools_ReturnsAllThirtyOneTools()
     {
         // Act
         var tools = _registry.GetTools();
 
         // Assert
         Assert.NotNull(tools);
-        Assert.Equal(21, tools.Count);
+        Assert.Equal(31, tools.Count);
 
         var toolNames = tools.Select(t => t.Name).ToList();
 
@@ -68,6 +68,18 @@ public class McpToolRegistryTests : IDisposable
         Assert.Contains("merge_configs", toolNames);
         Assert.Contains("analyze_impact", toolNames);
         Assert.Contains("trace_feature", toolNames);
+
+        // Advanced analysis tools (9)
+        Assert.Contains("find_callers", toolNames);
+        Assert.Contains("find_call_chains", toolNames);
+        Assert.Contains("find_type_usages", toolNames);
+        Assert.Contains("analyze_call_patterns", toolNames);
+        Assert.Contains("analyze_inheritance", toolNames);
+        Assert.Contains("find_circular_dependencies", toolNames);
+        Assert.Contains("find_unused_methods", toolNames);
+        Assert.Contains("analyze_call_graph", toolNames);
+        Assert.Contains("find_recursive_calls", toolNames);
+        Assert.Contains("analyze_type_dependencies", toolNames);
     }
 
     [Fact]

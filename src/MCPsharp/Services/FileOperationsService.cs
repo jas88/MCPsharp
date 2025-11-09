@@ -1,7 +1,9 @@
 using System.Text;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
+using Microsoft.Extensions.Logging;
 using MCPsharp.Models;
+using MCPsharp.Services.Roslyn;
 
 namespace MCPsharp.Services;
 
@@ -11,8 +13,10 @@ namespace MCPsharp.Services;
 public class FileOperationsService
 {
     private readonly string _rootPath;
+    private readonly RoslynWorkspace? _workspace;
+    private readonly ILogger<FileOperationsService>? _logger;
 
-    public FileOperationsService(string rootPath)
+    public FileOperationsService(string rootPath, RoslynWorkspace? workspace = null, ILogger<FileOperationsService>? logger = null)
     {
         if (!Directory.Exists(rootPath))
         {
@@ -20,6 +24,8 @@ public class FileOperationsService
         }
 
         _rootPath = Path.GetFullPath(rootPath);
+        _workspace = workspace;
+        _logger = logger;
     }
 
     /// <summary>
@@ -179,6 +185,21 @@ public class FileOperationsService
 
             await File.WriteAllTextAsync(fullPath, content, Encoding.UTF8, ct);
 
+            // Update Roslyn workspace incrementally if this is a C# file
+            if (_workspace != null && Path.GetExtension(relativePath).Equals(".cs", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    // AddDocumentAsync handles both new and existing documents
+                    await _workspace.AddDocumentAsync(fullPath);
+                }
+                catch (Exception workspaceEx)
+                {
+                    // Log workspace update error but don't fail the file operation
+                    _logger?.LogWarning("Failed to update Roslyn workspace for {RelativePath}: {ErrorMessage}", relativePath, workspaceEx.Message);
+                }
+            }
+
             var fileInfo = new System.IO.FileInfo(fullPath);
 
             return new FileWriteResult
@@ -246,6 +267,20 @@ public class FileOperationsService
             var newContent = string.Join('\n', lines);
             await File.WriteAllTextAsync(fullPath, newContent, Encoding.UTF8, ct);
 
+            // Update Roslyn workspace incrementally if this is a C# file
+            if (_workspace != null && Path.GetExtension(relativePath).Equals(".cs", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await _workspace.UpdateDocumentAsync(fullPath, newContent, ct);
+                }
+                catch (Exception workspaceEx)
+                {
+                    // Log workspace update error but don't fail the file operation
+                    _logger?.LogWarning("Failed to update Roslyn workspace for {RelativePath}: {ErrorMessage}", relativePath, workspaceEx.Message);
+                }
+            }
+
             return new FileEditResult
             {
                 Success = true,
@@ -256,17 +291,88 @@ public class FileOperationsService
         }
         catch (Exception ex)
         {
+            // Provide more detailed error message for validation errors
+            var errorMessage = ex.Message;
+            
+            if (ex is ArgumentOutOfRangeException || ex is ArgumentException)
+            {
+                // Add context for validation errors
+                errorMessage = $"Invalid edit position: {ex.Message} " +
+                             "Remember: MCPsharp uses 0-based indexing for both lines and columns. " +
+                             "Column 0 is before the first character.";
+            }
+            else
+            {
+                errorMessage = $"Failed to edit file: {ex.Message}";
+            }
+
             return new FileEditResult
             {
                 Success = false,
-                Error = $"Failed to edit file: {ex.Message}",
+                Error = errorMessage,
                 Path = relativePath
             };
         }
     }
 
+    /// <summary>
+    /// Validate that edit positions are within bounds
+    /// </summary>
+    private void ValidateEditPosition(List<string> lines, TextEdit edit)
+    {
+        var (startLine, startColumn, endLine, endColumn) = GetEditBounds(edit);
+        
+        // Validate line indices
+        if (startLine < 0 || startLine >= lines.Count)
+            throw new ArgumentOutOfRangeException(nameof(startLine), 
+                $"StartLine {startLine} is out of range. File has {lines.Count} lines (0-{lines.Count - 1}).");
+                
+        if (endLine < 0 || endLine >= lines.Count)
+            throw new ArgumentOutOfRangeException(nameof(endLine), 
+                $"EndLine {endLine} is out of range. File has {lines.Count} lines (0-{lines.Count - 1}).");
+        
+        // Get line lengths for validation
+        var startLineLength = lines[startLine].Length;
+        var endLineLength = lines[endLine].Length;
+        
+        // Validate column indices
+        if (startColumn < 0 || startColumn > startLineLength)
+            throw new ArgumentOutOfRangeException(nameof(startColumn),
+                $"StartColumn {startColumn} is out of range for line {startLine}. " +
+                $"Line {startLine} has {startLineLength} characters. Valid positions: 0-{startLineLength - 1} for replacements, 0-{startLineLength} for insertions. " +
+                $"Remember: MCPsharp uses 0-based indexing where column 0 is before the first character.");
+
+        if (endColumn < 0 || endColumn > endLineLength)
+            throw new ArgumentOutOfRangeException(nameof(endColumn),
+                $"EndColumn {endColumn} is out of range for line {endLine}. " +
+                $"Line {endLine} has {endLineLength} characters. Valid positions: 0-{endLineLength - 1} for replacements, 0-{endLineLength} for insertions. " +
+                $"Remember: MCPsharp uses 0-based indexing where column 0 is before the first character.");
+        
+        // Validate that start position comes before end position
+        if (startLine > endLine || (startLine == endLine && startColumn > endColumn))
+            throw new ArgumentException($"Invalid edit range: start position ({startLine},{startColumn}) " +
+                $"is after end position ({endLine},{endColumn}).");
+    }
+    
+    /// <summary>
+    /// Extract line and column bounds from any edit type
+    /// </summary>
+    private (int startLine, int startColumn, int endLine, int endColumn) GetEditBounds(TextEdit edit)
+    {
+        return edit switch
+        {
+            ReplaceEdit replace => (replace.StartLine, replace.StartColumn, replace.EndLine, replace.EndColumn),
+            InsertEdit insert => (insert.StartLine, insert.StartColumn, insert.StartLine, insert.StartColumn),
+            DeleteEdit delete => (delete.StartLine, delete.StartColumn, delete.EndLine, delete.EndColumn),
+            _ => throw new ArgumentException($"Unknown edit type: {edit.GetType().Name}")
+        };
+    }
+
     private void ApplyEdit(List<string> lines, TextEdit edit)
     {
+        // Validate edit position before applying
+        ValidateEditPosition(lines, edit);
+
         switch (edit)
         {
             case ReplaceEdit replace:

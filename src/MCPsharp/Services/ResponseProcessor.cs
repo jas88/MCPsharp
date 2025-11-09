@@ -188,20 +188,27 @@ public class ResponseProcessor
     /// </summary>
     private object TruncateWithEllipsis(string content)
     {
-        var targetLength = (int)(_config.TruncateLength / TokenToCharRatio);
+        const string suffix = "... [truncated]";
+
+        // Calculate target length from MaxTokens, then limit by TruncateLength if set
+        var tokenBasedLength = (int)(_config.MaxTokens / TokenToCharRatio);
+        var targetLength = _config.TruncateLength > 0 ? Math.Min(_config.TruncateLength, tokenBasedLength) : tokenBasedLength;
 
         if (content.Length <= targetLength)
             return content;
 
+        // Account for suffix length
+        var contentTargetLength = Math.Max(0, targetLength - suffix.Length);
+
         // Try to truncate at a word boundary
-        var truncated = content.Substring(0, targetLength);
+        var truncated = content.Substring(0, contentTargetLength);
         var lastSpace = truncated.LastIndexOf(' ');
-        if (lastSpace > targetLength * 0.8) // Only cut at word boundary if it's not too far back
+        if (lastSpace > contentTargetLength * 0.8) // Only cut at word boundary if it's not too far back
         {
             truncated = truncated.Substring(0, lastSpace);
         }
 
-        return $"{truncated}... [truncated]";
+        return $"{truncated}{suffix}";
     }
 
     /// <summary>
@@ -209,27 +216,43 @@ public class ResponseProcessor
     /// </summary>
     private object TruncateByParagraphs(string content)
     {
-        var paragraphs = content.Split(new[] { "\r\n\r\n", "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
-        var targetChars = (int)(_config.TruncateLength / TokenToCharRatio);
+        const string suffix = "\n\n... [truncated]";
+        var targetChars = (int)(_config.MaxTokens / TokenToCharRatio);
+
+        if (content.Length <= targetChars)
+            return content;
+
+        // Account for suffix length
+        var contentTargetLength = Math.Max(0, targetChars - suffix.Length);
+
+        // Unescape JSON to get actual newlines, then split by paragraphs
+        var unescapedContent = content.Replace("\\n", "\n");
+        var paragraphs = unescapedContent.Split(new[] { "\r\n\r\n", "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
         var currentLength = 0;
         var resultParagraphs = new List<string>();
 
         foreach (var paragraph in paragraphs)
         {
-            if (currentLength + paragraph.Length > targetChars && resultParagraphs.Count > 0)
+            // Calculate length in original JSON format (with escaped newlines)
+            var jsonLength = paragraph.Replace("\n", "\\n").Length;
+            if (currentLength + jsonLength > contentTargetLength && resultParagraphs.Count > 0)
                 break;
 
             resultParagraphs.Add(paragraph);
-            currentLength += paragraph.Length + 2; // +2 for paragraph break
+            currentLength += jsonLength + 4; // +4 for escaped paragraph break (\n\n becomes \\n\\n)
         }
 
         var result = string.Join("\n\n", resultParagraphs);
+
+        // Re-escape newlines for JSON output
+        var jsonResult = result.Replace("\n", "\\n");
+
         if (currentLength < content.Length)
         {
-            result += "\n\n... [truncated]";
+            jsonResult += suffix;
         }
 
-        return result;
+        return jsonResult;
     }
 
     /// <summary>
@@ -331,12 +354,15 @@ public class ResponseProcessor
     /// </summary>
     private string TruncateJsonString(string str, int targetTokens)
     {
+        const string suffix = "... [truncated]";
         var targetChars = (int)(targetTokens / TokenToCharRatio);
         if (str.Length <= targetChars)
             return str;
 
-        var truncated = str.Substring(0, targetChars);
-        return $"{truncated}... [truncated]";
+        // Account for suffix length
+        var contentTargetLength = Math.Max(0, targetChars - suffix.Length);
+        var truncated = str.Substring(0, contentTargetLength);
+        return $"{truncated}{suffix}";
     }
 
     /// <summary>
@@ -344,26 +370,42 @@ public class ResponseProcessor
     /// </summary>
     private object TruncateByLines(string content)
     {
-        var lines = LinePattern.Split(content);
-        var targetChars = (int)(_config.TruncateLength / TokenToCharRatio);
+        var suffix = Environment.NewLine + "... [truncated]";
+        var targetChars = (int)(_config.MaxTokens / TokenToCharRatio);
+
+        if (content.Length <= targetChars)
+            return content;
+
+        // Account for suffix length
+        var contentTargetLength = Math.Max(0, targetChars - suffix.Length);
+
+        // Unescape JSON to get actual newlines, then split by lines
+        var unescapedContent = content.Replace("\\n", "\n");
+        var lines = unescapedContent.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
         var currentLength = 0;
         var resultLines = new List<string>();
 
         foreach (var line in lines)
         {
-            if (currentLength + line.Length > targetChars && resultLines.Count > 0)
+            // Calculate length in original JSON format (with escaped newlines)
+            var jsonLength = line.Replace("\n", "\\n").Length;
+            if (currentLength + jsonLength > contentTargetLength && resultLines.Count > 0)
                 break;
 
             resultLines.Add(line);
-            currentLength += line.Length + 1; // +1 for newline
+            currentLength += jsonLength + 2; // +2 for escaped newline (\n becomes \\n)
         }
 
-        var result = string.Join(Environment.NewLine, resultLines);
+        var result = string.Join("\n", resultLines);
+
+        // Re-escape newlines for JSON output
+        var jsonResult = result.Replace("\n", "\\n");
+
         if (currentLength < content.Length)
         {
-            result += Environment.NewLine + "... [truncated]";
+            jsonResult += suffix;
         }
 
-        return result;
+        return jsonResult;
     }
 }

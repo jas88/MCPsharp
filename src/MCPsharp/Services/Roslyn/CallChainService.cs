@@ -521,50 +521,48 @@ public class CallChainService : ICallChainService
         if (compilation == null)
             return calledMethods;
 
-        var references = await SymbolFinder.FindReferencesAsync(methodSymbol, _workspace.Solution, cancellationToken);
-        foreach (var reference in references)
+        // Find the syntax nodes for this method
+        var syntaxReferences = methodSymbol.DeclaringSyntaxReferences;
+        foreach (var syntaxRef in syntaxReferences)
         {
-            foreach (var location in reference.Locations)
+            var syntaxNode = await syntaxRef.GetSyntaxAsync(cancellationToken);
+            if (syntaxNode == null)
+                continue;
+
+            // Get the semantic model for this syntax tree
+            var syntaxTree = syntaxNode.SyntaxTree;
+            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
+            // Find the method declaration
+            var methodDecl = syntaxNode.FirstAncestorOrSelf<MethodDeclarationSyntax>();
+            if (methodDecl == null)
+                continue;
+
+            // Find all invocation expressions within this method
+            var invocations = methodDecl.DescendantNodes()
+                .OfType<InvocationExpressionSyntax>();
+
+            foreach (var invocation in invocations)
             {
-                if (!location.Location.IsInSource)
-                    continue;
-
-                var document = location.Document;
-                if (document == null)
-                    continue;
-
-                var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
-                var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-                if (syntaxTree == null || semanticModel == null)
-                    continue;
-
-                var root = await syntaxTree.GetRootAsync(cancellationToken);
-                var node = root.FindNode(location.Location.SourceSpan);
-
-                // Find method calls within this method
-                var methodCalls = node.DescendantNodes()
-                    .OfType<InvocationExpressionSyntax>();
-
-                foreach (var call in methodCalls)
+                var callSymbol = semanticModel.GetSymbolInfo(invocation).Symbol;
+                if (callSymbol is IMethodSymbol calledMethodSymbol)
                 {
-                    var callSymbol = semanticModel.GetSymbolInfo(call).Symbol;
-                    if (callSymbol != null && callSymbol is IMethodSymbol calledMethodSymbol)
-                    {
-                        var lineSpan = call.GetLocation().GetLineSpan();
-                        var signature = CreateMethodSignature(calledMethodSymbol);
+                    var lineSpan = invocation.GetLocation().GetLineSpan();
+                    var signature = CreateMethodSignature(calledMethodSymbol);
 
-                        calledMethods.Add(new MethodCallInfo
-                        {
-                            Signature = signature,
-                            File = document.FilePath ?? "",
-                            Line = lineSpan.StartLinePosition.Line,
-                            Column = lineSpan.StartLinePosition.Character,
-                            CallType = DetermineCallType(call, calledMethodSymbol),
-                            Confidence = ConfidenceLevel.High,
-                            CallExpression = call.ToString(),
-                            Context = call.FirstAncestorOrSelf<MethodDeclarationSyntax>()?.ToString() ?? ""
-                        });
-                    }
+                    calledMethods.Add(new MethodCallInfo
+                    {
+                        Signature = signature,
+                        File = syntaxTree.FilePath ?? "",
+                        Line = lineSpan.StartLinePosition.Line,
+                        Column = lineSpan.StartLinePosition.Character,
+                        CallType = DetermineCallType(invocation, calledMethodSymbol),
+                        Confidence = ConfidenceLevel.High,
+                        CallExpression = invocation.ToString(),
+                        Context = invocation.Parent?.ToString() ?? ""
+                    });
                 }
             }
         }
@@ -798,29 +796,24 @@ public class CallChainService : ICallChainService
 
     private async Task<IMethodSymbol?> FindMethodSymbol(string methodName, string? containingType, CancellationToken cancellationToken)
     {
-        var symbols = await _symbolQuery.FindSymbolsAsync(methodName, "method");
+        var compilation = _workspace.GetCompilation();
+        if (compilation == null)
+            return null;
+
+        // Find all methods with the given name
+        var methodSymbols = compilation.GetSymbolsWithName(n => n == methodName, SymbolFilter.Member)
+            .OfType<IMethodSymbol>();
 
         if (string.IsNullOrEmpty(containingType))
-            return GetMethodSymbol(symbols.FirstOrDefault()?.File, symbols.FirstOrDefault()?.Line ?? 0);
+            return methodSymbols.FirstOrDefault();
 
-        var matchingSymbol = symbols.FirstOrDefault(s => s.ContainerName == containingType || s.ContainerName?.EndsWith(containingType) == true);
-        return GetMethodSymbol(matchingSymbol?.File, matchingSymbol?.Line ?? 0);
-    }
+        // Filter by containing type
+        var matchingSymbol = methodSymbols.FirstOrDefault(m =>
+            m.ContainingType?.Name == containingType ||
+            m.ContainingType?.ToDisplayString().EndsWith(containingType) == true ||
+            m.ContainingType?.ToDisplayString().Contains(containingType) == true);
 
-    private IMethodSymbol? GetMethodSymbol(string? filePath, int line)
-    {
-        if (string.IsNullOrEmpty(filePath))
-            return null;
-
-        var document = _workspace.GetDocument(filePath);
-        if (document == null)
-            return null;
-
-        var symbolInfo = _symbolQuery.GetSymbolAtLocationAsync(filePath, line, 0).Result;
-        if (symbolInfo?.Symbol == null)
-            return null;
-
-        return ConvertToMethodSymbol(symbolInfo.Symbol, filePath, line, 0, CancellationToken.None).Result;
+        return matchingSymbol;
     }
 
     private async Task<IMethodSymbol?> ConvertToMethodSymbol(ISymbol symbol, string filePath, int line, int column, CancellationToken cancellationToken)

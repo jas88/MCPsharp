@@ -24,11 +24,14 @@ public class CallChainServiceTests : IDisposable
         _callChain = new CallChainService(_workspace, _symbolQuery, _callerAnalysis);
 
         // Initialize workspace with test fixtures
-        InitializeWorkspace();
+        InitializeWorkspace().Wait();
     }
 
-    private void InitializeWorkspace()
+    private async Task InitializeWorkspace()
     {
+        // Initialize workspace for testing
+        await _workspace.InitializeTestWorkspaceAsync();
+
         // Create a more complex test scenario for call chains
         var testFiles = new[]
         {
@@ -119,11 +122,11 @@ public class DataEntity
 }")
         };
 
-        // Add files to workspace - methods no longer available
+        // Add files to workspace using the in-memory document method
         foreach (var (fileName, content) in testFiles)
         {
-            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "TestFixtures", fileName);
-            // _workspace.AddDocumentAsync(filePath).Wait(); // Method no longer available
+            var filePath = Path.Combine("TestFixtures", fileName);
+            await _workspace.AddInMemoryDocumentAsync(filePath, content);
         }
     }
 

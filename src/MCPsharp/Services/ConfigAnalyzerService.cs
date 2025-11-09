@@ -140,7 +140,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
                 {
                     if (mergedSettings.TryGetValue(kvp.Key, out var existingValue))
                     {
-                        // Conflict detected
+                        // Conflict detected - later configs override earlier ones
                         if (!AreValuesEqual(existingValue, kvp.Value))
                         {
                             conflicts.Add(new ConfigConflict
@@ -154,6 +154,9 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
 
                             _logger.LogDebug("Configuration conflict detected for key '{Key}' between files", kvp.Key);
                         }
+
+                        // Always update to the latest value (later configs override earlier ones)
+                        mergedSettings[kvp.Key] = kvp.Value;
                     }
                     else
                     {
@@ -337,7 +340,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Parses a JSON configuration file into a dictionary.
     /// </summary>
-    private async Task<Dictionary<string, object>> ParseJsonConfigAsync(string content, string filePath, CancellationToken ct)
+    private Task<Dictionary<string, object>> ParseJsonConfigAsync(string content, string filePath, CancellationToken ct)
     {
         try
         {
@@ -354,7 +357,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
             _logger.LogDebug("Successfully parsed JSON configuration with {RootPropertyCount} root properties",
                 result.Count);
 
-            return result;
+            return Task.FromResult(result);
         }
         catch (JsonException ex)
         {
@@ -366,7 +369,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Parses a YAML configuration file into a dictionary.
     /// </summary>
-    private async Task<Dictionary<string, object>> ParseYamlConfigAsync(string content, string filePath, CancellationToken ct)
+    private Task<Dictionary<string, object>> ParseYamlConfigAsync(string content, string filePath, CancellationToken ct)
     {
         try
         {
@@ -378,7 +381,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
             _logger.LogDebug("Successfully parsed YAML configuration with {RootPropertyCount} root properties",
                 result.Count);
 
-            return result;
+            return Task.FromResult(result);
         }
         catch (YamlDotNet.Core.YamlException ex)
         {
@@ -596,7 +599,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Finds all configuration files in the project.
     /// </summary>
-    private async Task<IReadOnlyList<string>> FindConfigurationFilesAsync(string projectRoot, CancellationToken ct)
+    private Task<IReadOnlyList<string>> FindConfigurationFilesAsync(string projectRoot, CancellationToken ct)
     {
         var configFiles = new List<string>();
         var searchPatterns = new[] { "*.json", "*.yml", "*.yaml" };
@@ -613,13 +616,13 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
         }
 
         _logger.LogDebug("Found {ConfigFileCount} configuration files", configFiles.Count);
-        return configFiles.Distinct().ToList();
+        return Task.FromResult<IReadOnlyList<string>>(configFiles.Distinct().ToList());
     }
 
     /// <summary>
     /// Validates a single configuration file for common issues.
     /// </summary>
-    private async Task ValidateSingleConfigurationFileAsync(string filePath, ConfigSchema schema, ConfigValidationResult result, CancellationToken ct)
+    private Task ValidateSingleConfigurationFileAsync(string filePath, ConfigSchema schema, ConfigValidationResult result, CancellationToken ct)
     {
         // Check for empty configuration files
         if (schema.Properties.Count == 0)
@@ -646,13 +649,13 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
         }
 
         // Check for common configuration patterns
-        await ValidateCommonConfigurationPatternsAsync(filePath, schema, result, ct);
+        return ValidateCommonConfigurationPatternsAsync(filePath, schema, result, ct);
     }
 
     /// <summary>
     /// Validates common configuration patterns and best practices.
     /// </summary>
-    private async Task ValidateCommonConfigurationPatternsAsync(string filePath, ConfigSchema schema, ConfigValidationResult result, CancellationToken ct)
+    private Task ValidateCommonConfigurationPatternsAsync(string filePath, ConfigSchema schema, ConfigValidationResult result, CancellationToken ct)
     {
         // Check for connection strings without encryption
         var connectionStringProps = schema.Properties
@@ -684,6 +687,8 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
                 FilePath = filePath
             });
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

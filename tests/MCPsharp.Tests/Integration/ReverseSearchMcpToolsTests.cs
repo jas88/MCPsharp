@@ -121,10 +121,15 @@ public class Consumer
         // Act
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_callers", Arguments = arguments });
 
+        // Debug - capture actual values
+        Console.WriteLine($"Success: {result.Success}");
+        Console.WriteLine($"Error: '{result.Error}'");
+        Console.WriteLine($"Result: {result.Result?.GetType().Name ?? "null"}");
+
         // Assert
-        Assert.True(result.Success);
+        Assert.True(result.Success, $"Expected success but got: {result.Error}");
         Assert.NotNull(result.Result);
-        Assert.False(string.IsNullOrEmpty(result.Error));
+        Assert.True(result.Error == null, $"Expected null error but got: '{result.Error}'");
     }
 
     [Fact]
@@ -145,7 +150,7 @@ public class Consumer
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Result);
-        Assert.False(string.IsNullOrEmpty(result.Error));
+        Assert.Null(result.Error);
     }
 
     [Fact]
@@ -163,7 +168,7 @@ public class Consumer
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Result);
-        Assert.False(string.IsNullOrEmpty(result.Error));
+        Assert.Null(result.Error);
     }
 
     [Fact]
@@ -182,7 +187,7 @@ public class Consumer
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Result);
-        Assert.False(string.IsNullOrEmpty(result.Error));
+        Assert.Null(result.Error);
     }
 
     [Fact]
@@ -200,7 +205,7 @@ public class Consumer
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Result);
-        Assert.False(string.IsNullOrEmpty(result.Error));
+        Assert.Null(result.Error);
     }
 
     [Fact]
@@ -218,7 +223,7 @@ public class Consumer
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Result);
-        Assert.False(string.IsNullOrEmpty(result.Error));
+        Assert.Null(result.Error);
     }
 
     [Fact]
@@ -236,7 +241,7 @@ public class Consumer
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Result);
-        Assert.False(string.IsNullOrEmpty(result.Error));
+        Assert.Null(result.Error);
     }
 
     [Fact]
@@ -254,7 +259,7 @@ public class Consumer
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Result);
-        Assert.False(string.IsNullOrEmpty(result.Error));
+        Assert.Null(result.Error);
     }
 
     [Fact]
@@ -274,7 +279,7 @@ public class Consumer
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Result);
-        Assert.False(string.IsNullOrEmpty(result.Error));
+        Assert.Null(result.Error);
     }
 
     [Fact]
@@ -292,7 +297,7 @@ public class Consumer
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Result);
-        Assert.False(string.IsNullOrEmpty(result.Error));
+        Assert.Null(result.Error);
     }
 
     [Fact]

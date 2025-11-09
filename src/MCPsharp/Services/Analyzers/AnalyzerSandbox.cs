@@ -157,24 +157,35 @@ public class AnalyzerSandbox : IAnalyzerSandbox
 
     public void Dispose()
     {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
         if (_disposed)
             return;
 
+        if (disposing)
+        {
+            // Dispose managed resources
+            _cancellationTokenSource.Cancel();
+            _operationWriter.Complete();
+
+            try
+            {
+                _processingTask.Wait(TimeSpan.FromSeconds(10));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error waiting for sandbox processing task to complete");
+            }
+
+            _cancellationTokenSource.Dispose();
+            _logger.LogDebug("Sandbox disposed");
+        }
+
         _disposed = true;
-        _cancellationTokenSource.Cancel();
-        _operationWriter.Complete();
-
-        try
-        {
-            _processingTask.Wait(TimeSpan.FromSeconds(10));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error waiting for sandbox processing task to complete");
-        }
-
-        _cancellationTokenSource.Dispose();
-        _logger.LogDebug("Sandbox disposed");
     }
 
     private async Task ProcessOperationsAsync()

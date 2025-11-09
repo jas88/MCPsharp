@@ -1047,7 +1047,7 @@ public class MaintainabilityAnalysis
     public string Scope { get; set; } = "Project";
     public double MaintainabilityIndex { get; set; }
     public double TechnicalDebt { get; set; }
-    public string CodeQuality { get; set; }
+    public string CodeQuality { get; set; } = "Unknown";
     public double RefactoringPriority { get; set; }
 }
 

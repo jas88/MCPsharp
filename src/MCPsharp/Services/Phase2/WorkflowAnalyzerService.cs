@@ -125,6 +125,33 @@ public class WorkflowAnalyzerService : IWorkflowAnalyzerService
                                 WorkflowFile = workflowPath
                             });
                         }
+                        else
+                        {
+                            // Check for version mismatch
+                            foreach (var csprojFile in csprojFiles)
+                            {
+                                try
+                                {
+                                    var csprojContent = await File.ReadAllTextAsync(csprojFile);
+                                    if (csprojContent.Contains("net8.0") && dotnetVersion?.Contains("6.0") == true)
+                                    {
+                                        issues.Add(new WorkflowValidationIssue
+                                        {
+                                            Type = "VersionMismatch",
+                                            Severity = "Warning",
+                                            Message = $"Workflow .NET version mismatch: specifies {dotnetVersion} but project targets .NET 8.0",
+                                            WorkflowFile = workflowPath,
+                                            ProjectFile = csprojFile
+                                        });
+                                        break; // Found version mismatch, no need to check more files
+                                    }
+                                }
+                                catch
+                                {
+                                    // Skip files we can't read
+                                }
+                            }
+                        }
                     }
                 }
             }

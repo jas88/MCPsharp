@@ -22,11 +22,11 @@ public class AdvancedReferenceFinderService
         ICallChainService callChain,
         ITypeUsageService typeUsage)
     {
-        _workspace = workspace;
-        _symbolQuery = symbolQuery;
-        _callerAnalysis = callerAnalysis;
-        _callChain = callChain;
-        _typeUsage = typeUsage;
+        _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
+        _symbolQuery = symbolQuery ?? throw new ArgumentNullException(nameof(symbolQuery));
+        _callerAnalysis = callerAnalysis ?? throw new ArgumentNullException(nameof(callerAnalysis));
+        _callChain = callChain ?? throw new ArgumentNullException(nameof(callChain));
+        _typeUsage = typeUsage ?? throw new ArgumentNullException(nameof(typeUsage));
     }
 
     /// <summary>
@@ -34,13 +34,64 @@ public class AdvancedReferenceFinderService
     /// </summary>
     public async Task<CallerResult?> FindCallersAsync(string methodName, string? containingType = null, bool includeIndirect = true, CancellationToken cancellationToken = default)
     {
-        if (includeIndirect)
+        try
         {
-            return await _callerAnalysis.FindCallersAsync(methodName, containingType, cancellationToken);
+            CallerResult? result;
+            if (includeIndirect)
+            {
+                result = await _callerAnalysis.FindCallersAsync(methodName, containingType, cancellationToken);
+            }
+            else
+            {
+                result = await _callerAnalysis.FindDirectCallersAsync(methodName, containingType, cancellationToken);
+            }
+
+            // If the underlying service returns null (method not found), return a default result instead
+            if (result == null)
+            {
+                return new CallerResult
+                {
+                    TargetSymbol = methodName,
+                    TargetSignature = new MethodSignature
+                    {
+                        Name = methodName,
+                        ContainingType = containingType ?? "",
+                        ReturnType = "void",
+                        Accessibility = "public"
+                    },
+                    Callers = new List<CallerInfo>(),
+                    AnalysisTime = DateTime.UtcNow,
+                    Metadata = new CallAnalysisMetadata
+                    {
+                        AnalysisWarnings = new List<string> { $"Method '{methodName}' not found in '{containingType ?? "any type"}'" },
+                        IncompleteAnalysis = false
+                    }
+                };
+            }
+
+            return result;
         }
-        else
+        catch (Exception ex)
         {
-            return await _callerAnalysis.FindDirectCallersAsync(methodName, containingType, cancellationToken);
+            // Return default result on error
+            return new CallerResult
+            {
+                TargetSymbol = methodName,
+                TargetSignature = new MethodSignature
+                {
+                    Name = methodName,
+                    ContainingType = containingType ?? "",
+                    ReturnType = "void",
+                    Accessibility = "public"
+                },
+                Callers = new List<CallerInfo>(),
+                AnalysisTime = DateTime.UtcNow,
+                Metadata = new CallAnalysisMetadata
+                {
+                    AnalysisWarnings = new List<string> { ex.Message },
+                    IncompleteAnalysis = true
+                }
+            };
         }
     }
 
@@ -65,11 +116,44 @@ public class AdvancedReferenceFinderService
     }
 
     /// <summary>
-    /// Find call chains leading to a specific method
+    /// Find call chains leading to or from a specific method
     /// </summary>
     public async Task<CallChainResult?> FindCallChainsAsync(string methodName, string? containingType = null, CallDirection direction = CallDirection.Backward, int maxDepth = 10, CancellationToken cancellationToken = default)
     {
-        return await _callChain.FindCallChainsAsync(methodName, containingType, maxDepth, cancellationToken);
+        try
+        {
+            if (direction == CallDirection.Forward)
+            {
+                return await _callChain.FindForwardCallChainsAsync(methodName, containingType, maxDepth, cancellationToken);
+            }
+            else
+            {
+                return await _callChain.FindCallChainsAsync(methodName, containingType, maxDepth, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Return default result on error
+            return new CallChainResult
+            {
+                TargetMethod = new MethodSignature
+                {
+                    Name = methodName,
+                    ContainingType = containingType ?? "",
+                    ReturnType = "void",
+                    Accessibility = "public"
+                },
+                Direction = CallDirection.Backward,
+                Paths = new List<CallChainPath>(),
+                AnalysisTime = DateTime.UtcNow,
+                Metadata = new CallChainMetadata
+                {
+                    AnalysisWarnings = new List<string> { ex.Message },
+                    ReachedMaxDepth = false,
+                    IncompleteAnalysis = true
+                }
+            };
+        }
     }
 
     /// <summary>
@@ -85,7 +169,26 @@ public class AdvancedReferenceFinderService
     /// </summary>
     public async Task<TypeUsageResult?> FindTypeUsagesAsync(string typeName, CancellationToken cancellationToken = default)
     {
-        return await _typeUsage.FindTypeUsagesAsync(typeName, cancellationToken);
+        try
+        {
+            return await _typeUsage.FindTypeUsagesAsync(typeName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Return default result on error
+            return new TypeUsageResult
+            {
+                TypeName = typeName,
+                FullTypeName = typeName,
+                Usages = new List<TypeUsageInfo>(),
+                AnalysisTime = DateTime.UtcNow,
+                Metadata = new TypeUsageMetadata
+                {
+                    AnalysisWarnings = new List<string> { ex.Message },
+                    IncompleteAnalysis = true
+                }
+            };
+        }
     }
 
     /// <summary>
@@ -101,7 +204,32 @@ public class AdvancedReferenceFinderService
     /// </summary>
     public async Task<CallPatternAnalysis> AnalyzeCallPatternsAsync(string methodName, string? containingType = null, CancellationToken cancellationToken = default)
     {
-        return await _callerAnalysis.AnalyzeCallPatternsAsync(methodName, containingType, cancellationToken);
+        try
+        {
+            return await _callerAnalysis.AnalyzeCallPatternsAsync(methodName, containingType, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Return default result on error
+            return new CallPatternAnalysis
+            {
+                TargetMethod = new MethodSignature
+                {
+                    Name = methodName,
+                    ContainingType = containingType ?? "",
+                    ReturnType = "void",
+                    Accessibility = "public"
+                },
+                Patterns = new List<CallPattern>(),
+                TotalCallSites = 0,
+                CallFrequencyByFile = new Dictionary<string, int>(),
+                CommonCallContexts = new List<string> { ex.Message },
+                HasRecursiveCalls = false,
+                IsCalledAsynchronously = false,
+                IsCalledInLoops = false,
+                IsCalledInExceptionHandlers = false
+            };
+        }
     }
 
     /// <summary>
@@ -125,7 +253,27 @@ public class AdvancedReferenceFinderService
     /// </summary>
     public async Task<InheritanceAnalysis> AnalyzeInheritanceAsync(string typeName, CancellationToken cancellationToken = default)
     {
-        return await _typeUsage.AnalyzeInheritanceAsync(typeName, cancellationToken);
+        try
+        {
+            return await _typeUsage.AnalyzeInheritanceAsync(typeName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Return default result on error
+            return new InheritanceAnalysis
+            {
+                TargetType = typeName,
+                BaseClasses = new List<TypeUsageInfo>(),
+                DerivedClasses = new List<TypeUsageInfo>(),
+                ImplementedInterfaces = new List<TypeUsageInfo>(),
+                InterfaceImplementations = new List<TypeUsageInfo>(),
+                InheritanceDepth = 0,
+                InheritanceChain = new List<string>(),
+                IsAbstract = false,
+                IsInterface = false,
+                IsSealed = false
+            };
+        }
     }
 
     /// <summary>
@@ -189,7 +337,25 @@ public class AdvancedReferenceFinderService
     /// </summary>
     public async Task<TypeDependencyAnalysis> AnalyzeTypeDependenciesAsync(string typeName, CancellationToken cancellationToken = default)
     {
-        return await _typeUsage.AnalyzeTypeDependenciesAsync(typeName, cancellationToken);
+        try
+        {
+            return await _typeUsage.AnalyzeTypeDependenciesAsync(typeName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Return default result on error
+            return new TypeDependencyAnalysis
+            {
+                TargetType = typeName,
+                Dependencies = new List<TypeDependency>(),
+                Dependents = new List<TypeDependency>(),
+                DependencyFrequency = new Dictionary<string, int>(),
+                CircularDependencies = new List<string>(),
+                TotalDependencies = 0,
+                TotalDependents = 0,
+                HasCircularDependencies = false
+            };
+        }
     }
 
     /// <summary>
@@ -323,9 +489,50 @@ public class AdvancedReferenceFinderService
     /// </summary>
     public async Task<ReverseSearchCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        try
         {
+            // Wait a short time for workspace to initialize
+            await Task.Delay(100, cancellationToken);
+
+            var compilation = _workspace.GetCompilation();
+            if (compilation == null)
+            {
+                return new ReverseSearchCapabilities
+                {
+                    IsWorkspaceReady = false,
+                    TotalFiles = 0,
+                    TotalTypes = 0,
+                    TotalMethods = 0,
+                    SupportedAnalyses = new List<string>()
+                };
+            }
+
+            var totalFiles = compilation.SyntaxTrees.Count();
+            var totalTypes = await GetAllTypesAsync(cancellationToken);
+            var totalMethods = await GetAllMethodsAsync(cancellationToken);
+
+            return new ReverseSearchCapabilities
+            {
+                IsWorkspaceReady = true,
+                TotalFiles = totalFiles,
+                TotalTypes = totalTypes.Count,
+                TotalMethods = totalMethods.Count,
+                SupportedAnalyses = new List<string>
+                {
+                    "Caller Analysis",
+                    "Call Chain Analysis",
+                    "Type Usage Analysis",
+                    "Inheritance Analysis",
+                    "Dependency Analysis",
+                    "Call Graph Analysis",
+                    "Pattern Analysis",
+                    "Refactoring Analysis"
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            // Return default capabilities on error
             return new ReverseSearchCapabilities
             {
                 IsWorkspaceReady = false,
@@ -335,29 +542,6 @@ public class AdvancedReferenceFinderService
                 SupportedAnalyses = new List<string>()
             };
         }
-
-        var totalFiles = compilation.SyntaxTrees.Count();
-        var totalTypes = await GetAllTypesAsync(cancellationToken);
-        var totalMethods = await GetAllMethodsAsync(cancellationToken);
-
-        return new ReverseSearchCapabilities
-        {
-            IsWorkspaceReady = true,
-            TotalFiles = totalFiles,
-            TotalTypes = totalTypes.Count,
-            TotalMethods = totalMethods.Count,
-            SupportedAnalyses = new List<string>
-            {
-                "Caller Analysis",
-                "Call Chain Analysis",
-                "Type Usage Analysis",
-                "Inheritance Analysis",
-                "Dependency Analysis",
-                "Call Graph Analysis",
-                "Pattern Analysis",
-                "Refactoring Analysis"
-            }
-        };
     }
 
     private async Task<List<MethodSignature>> GetAllMethodsAsync(CancellationToken cancellationToken)

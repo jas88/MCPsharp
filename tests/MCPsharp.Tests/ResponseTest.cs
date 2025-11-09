@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using MCPsharp.Models;
 using MCPsharp.Services;
 
-namespace MCPsharp;
+namespace MCPsharp.Tests;
 
 /// <summary>
 /// Simple demonstration of the response processing functionality

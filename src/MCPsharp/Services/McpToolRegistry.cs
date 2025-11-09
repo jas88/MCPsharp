@@ -8,6 +8,7 @@ using MCPsharp.Models.Consolidated;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Services.Phase3;
 using MCPsharp.Services.Consolidated;
+using MCPsharp.Services.Analyzers;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;
@@ -39,6 +40,9 @@ public partial class McpToolRegistry
     private ISqlMigrationAnalyzerService? _sqlMigrationAnalyzer;
     private ILargeFileOptimizerService? _largeFileOptimizer;
 
+    // Roslyn Analyzer service
+    private readonly IRoslynAnalyzerService? _roslynAnalyzerService;
+
     // Phase 2 services (optional)
     private readonly IWorkflowAnalyzerService? _workflowAnalyzer;
     private readonly IConfigAnalyzerService? _configAnalyzer;
@@ -62,6 +66,7 @@ public partial class McpToolRegistry
 
     // Response processing for token limiting
     private readonly ResponseProcessor _responseProcessor;
+    private readonly ILoggerFactory? _loggerFactory;
 
     public McpToolRegistry(
         ProjectContextManager projectContext,
@@ -81,6 +86,7 @@ public partial class McpToolRegistry
         UnifiedAnalysisService? unifiedAnalysis = null,
         BulkOperationsHub? bulkOperationsHub = null,
         StreamProcessingController? streamController = null,
+        IRoslynAnalyzerService? roslynAnalyzerService = null,
         ILoggerFactory? loggerFactory = null)
     {
         _projectContext = projectContext;
@@ -102,6 +108,8 @@ public partial class McpToolRegistry
         _unifiedAnalysis = unifiedAnalysis;
         _bulkOperationsHub = bulkOperationsHub;
         _streamController = streamController;
+        _roslynAnalyzerService = roslynAnalyzerService;
+        _loggerFactory = loggerFactory;
 
         // Initialize response processor with configuration
         var responseConfig = ResponseConfiguration.LoadFromEnvironment();
@@ -198,6 +206,16 @@ public partial class McpToolRegistry
                 "get_duplicate_hotspots" => await ExecuteGetDuplicateHotspots(request.Arguments, ct),
                 "compare_code_blocks" => await ExecuteCompareCodeBlocks(request.Arguments, ct),
                 "validate_refactoring" => await ExecuteValidateRefactoring(request.Arguments, ct),
+                // Roslyn Analyzer Tools
+                "load_roslyn_analyzers" => await ExecuteLoadRoslynAnalyzers(request.Arguments, ct),
+                "run_roslyn_analyzers" => await ExecuteRunRoslynAnalyzers(request.Arguments, ct),
+                "list_roslyn_analyzers" => await ExecuteListRoslynAnalyzers(request.Arguments, ct),
+                // Roslyn Code Fix and Configuration Tools
+                "apply_roslyn_fixes" => await ExecuteApplyRoslynFixes(request.Arguments, ct),
+                "configure_analyzer" => await ExecuteConfigureAnalyzer(request.Arguments, ct),
+                "get_analyzer_config" => await ExecuteGetAnalyzerConfig(request.Arguments, ct),
+                "reset_analyzer_config" => await ExecuteResetAnalyzerConfig(request.Arguments, ct),
+                "generate_analysis_report" => await ExecuteGenerateAnalysisReport(request.Arguments, ct),
                 // SQL Migration Analyzer Tools (Phase 3 - Coming Soon)
                 "analyze_migrations" => await ExecutePhase3Placeholder(request.Arguments, ct, "analyze_migrations"),
                 "detect_breaking_changes" => await ExecutePhase3Placeholder(request.Arguments, ct, "detect_breaking_changes"),
@@ -672,7 +690,138 @@ public partial class McpToolRegistry
                     }
                 )
             },
-            // ===== Advanced Reverse Search Tools =====
+            // ===== Phase 2 Tools =====
+            new McpTool
+            {
+                Name = "get_workflows",
+                Description = "Get all GitHub Actions workflows in a project",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "projectRoot",
+                        Type = "string",
+                        Description = "Root directory of the project",
+                        Required = true
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "parse_workflow",
+                Description = "Parse a GitHub Actions workflow file",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "workflowPath",
+                        Type = "string",
+                        Description = "Path to the workflow YAML file",
+                        Required = true
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "validate_workflow_consistency",
+                Description = "Validate GitHub Actions workflow against project configuration",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "workflowPath",
+                        Type = "string",
+                        Description = "Path to the workflow YAML file",
+                        Required = true
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "projectPath",
+                        Type = "string",
+                        Description = "Path to the project directory",
+                        Required = true
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "get_config_schema",
+                Description = "Get the schema of a configuration file (JSON/YAML)",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "configPath",
+                        Type = "string",
+                        Description = "Path to the configuration file",
+                        Required = true
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "merge_configs",
+                Description = "Merge multiple configuration files",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "configPaths",
+                        Type = "array",
+                        Description = "Array of configuration file paths to merge",
+                        Required = true,
+                        Items = new Dictionary<string, object>
+                        {
+                            ["type"] = "string"
+                        }
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "analyze_impact",
+                Description = "Analyze the impact of a code change across the project",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "filePath",
+                        Type = "string",
+                        Description = "Path to the file being changed",
+                        Required = true
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "changeType",
+                        Type = "string",
+                        Description = "Type of change (add, modify, delete, rename)",
+                        Required = true
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "symbolName",
+                        Type = "string",
+                        Description = "Optional symbol name being changed",
+                        Required = false
+                    }
+                )
+            },
+            new McpTool
+            {
+                Name = "trace_feature",
+                Description = "Trace a feature across multiple files in the project",
+                InputSchema = JsonSchemaHelper.CreateSchema(
+                    new PropertyDefinition
+                    {
+                        Name = "featureName",
+                        Type = "string",
+                        Description = "Name of the feature to trace (alternative to entryPoint)",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "entryPoint",
+                        Type = "string",
+                        Description = "Entry point to start feature discovery (alternative to featureName)",
+                        Required = false
+                    }
+                )
+            },
+            // Reverse search tools
             new McpTool
             {
                 Name = "find_callers",
@@ -879,1756 +1028,10 @@ public partial class McpToolRegistry
                         Required = true
                     }
                 )
-            },
-            // ===== Phase 2 Tools =====
-            new McpTool
-            {
-                Name = "get_workflows",
-                Description = "Get all GitHub Actions workflows in a project",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectRoot",
-                        Type = "string",
-                        Description = "Root directory of the project",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "parse_workflow",
-                Description = "Parse a GitHub Actions workflow file",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "workflowPath",
-                        Type = "string",
-                        Description = "Path to the workflow YAML file",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "validate_workflow_consistency",
-                Description = "Validate GitHub Actions workflow against project configuration",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "workflowPath",
-                        Type = "string",
-                        Description = "Path to the workflow YAML file",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_config_schema",
-                Description = "Get the schema of a configuration file (JSON/YAML)",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "configPath",
-                        Type = "string",
-                        Description = "Path to the configuration file",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "merge_configs",
-                Description = "Merge multiple configuration files",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "configPaths",
-                        Type = "array",
-                        Description = "Array of configuration file paths to merge",
-                        Required = true,
-                        Items = new Dictionary<string, object>
-                        {
-                            ["type"] = "string"
-                        }
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "analyze_impact",
-                Description = "Analyze the impact of a code change across the project",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "filePath",
-                        Type = "string",
-                        Description = "Path to the file being changed",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "changeType",
-                        Type = "string",
-                        Description = "Type of change (add, modify, delete, rename)",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "symbolName",
-                        Type = "string",
-                        Description = "Optional symbol name being changed",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "trace_feature",
-                Description = "Trace a feature across multiple files in the project",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "featureName",
-                        Type = "string",
-                        Description = "Name of the feature to trace (alternative to entryPoint)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "entryPoint",
-                        Type = "string",
-                        Description = "Entry point to start feature discovery (alternative to featureName)",
-                        Required = false
-                    }
-                )
-            },
-            // ===== Bulk Edit Tools =====
-            new McpTool
-            {
-                Name = "bulk_replace",
-                Description = "Perform regex search and replace across multiple files in parallel",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "files",
-                        Type = "array",
-                        Description = "Array of file patterns (glob patterns or absolute paths)",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "string" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "regexPattern",
-                        Type = "string",
-                        Description = "Regular expression pattern to search for",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "replacement",
-                        Type = "string",
-                        Description = "Replacement text or pattern (can use regex groups)",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "maxParallelism",
-                        Type = "integer",
-                        Description = "Maximum number of files to process in parallel",
-                        Required = false,
-                        Default = Environment.ProcessorCount
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "createBackups",
-                        Type = "boolean",
-                        Description = "Whether to create backups before editing",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "previewMode",
-                        Type = "boolean",
-                        Description = "Preview changes without applying them",
-                        Required = false,
-                        Default = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "excludedFiles",
-                        Type = "array",
-                        Description = "File patterns to exclude from processing",
-                        Required = false,
-                        Items = new Dictionary<string, object> { ["type"] = "string" }
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "conditional_edit",
-                Description = "Edit files based on content conditions (e.g., file contains specific text)",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "files",
-                        Type = "array",
-                        Description = "Array of file patterns (glob patterns or absolute paths)",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "string" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "conditionType",
-                        Type = "string",
-                        Description = "Type of condition to check (FileContains, FileMatches, FileSize, etc.)",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "pattern",
-                        Type = "string",
-                        Description = "Pattern to match against for the condition",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "edits",
-                        Type = "array",
-                        Description = "Array of edit operations to apply when condition is met",
-                        Required = true,
-                        Items = new Dictionary<string, object>
-                        {
-                            ["type"] = "object",
-                            ["properties"] = new Dictionary<string, object>
-                            {
-                                ["type"] = new Dictionary<string, object>
-                                {
-                                    ["type"] = "string",
-                                    ["enum"] = new[] { "replace", "insert", "delete" }
-                                }
-                            }
-                        }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "negate",
-                        Type = "boolean",
-                        Description = "Whether to negate the condition",
-                        Required = false,
-                        Default = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "batch_refactor",
-                Description = "Perform pattern-based code refactoring across multiple files",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "files",
-                        Type = "array",
-                        Description = "Array of file patterns (glob patterns or absolute paths)",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "string" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "refactorType",
-                        Type = "string",
-                        Description = "Type of refactoring (RenameSymbol, ChangeMethodSignature, ExtractMethod, etc.)",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "targetPattern",
-                        Type = "string",
-                        Description = "Target pattern to match for refactoring",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "replacementPattern",
-                        Type = "string",
-                        Description = "Replacement pattern for refactoring",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "multi_file_edit",
-                Description = "Perform coordinated edits across multiple files with dependency management",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operations",
-                        Type = "array",
-                        Description = "Array of multi-file edit operations",
-                        Required = true,
-                        Items = new Dictionary<string, object>
-                        {
-                            ["type"] = "object",
-                            ["properties"] = new Dictionary<string, object>
-                            {
-                                ["filePattern"] = new Dictionary<string, object> { ["type"] = "string" },
-                                ["priority"] = new Dictionary<string, object> { ["type"] = "integer" },
-                                ["edits"] = new Dictionary<string, object>
-                                {
-                                    ["type"] = "array",
-                                    ["items"] = new Dictionary<string, object> { ["type"] = "object" }
-                                }
-                            },
-                            ["required"] = new[] { "filePattern", "edits" }
-                        }
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "preview_bulk_changes",
-                Description = "Preview bulk edit changes without applying them, with impact analysis",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationType",
-                        Type = "string",
-                        Description = "Type of bulk operation to preview",
-                        Required = true,
-                        Enum = new[] { "bulk_replace", "conditional_edit", "batch_refactor", "multi_file_edit" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "files",
-                        Type = "array",
-                        Description = "Array of file patterns (glob patterns or absolute paths)",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "string" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "regexPattern",
-                        Type = "string",
-                        Description = "Regex pattern (for bulk_replace operations)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "replacement",
-                        Type = "string",
-                        Description = "Replacement text (for bulk_replace operations)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "conditionType",
-                        Type = "string",
-                        Description = "Condition type (for conditional_edit operations)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "pattern",
-                        Type = "string",
-                        Description = "Condition pattern (for conditional_edit operations)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "operations",
-                        Type = "array",
-                        Description = "Multi-file operations (for multi_file_edit operations)",
-                        Required = false,
-                        Items = new Dictionary<string, object> { ["type"] = "object" }
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "rollback_bulk_edit",
-                Description = "Rollback a previous bulk edit operation using created backups",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "rollbackId",
-                        Type = "string",
-                        Description = "ID of the rollback session to use",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "validate_bulk_edit",
-                Description = "Validate a bulk edit request before execution to identify potential issues",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationType",
-                        Type = "string",
-                        Description = "Type of bulk operation to validate",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "files",
-                        Type = "array",
-                        Description = "Array of file patterns (glob patterns or absolute paths)",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "string" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "regexPattern",
-                        Type = "string",
-                        Description = "Regex pattern to validate (for bulk_replace operations)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "conditionType",
-                        Type = "string",
-                        Description = "Condition type to validate (for conditional_edit operations)",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_available_rollbacks",
-                Description = "Get list of available rollback sessions that can be used to undo changes",
-                InputSchema = JsonSchemaHelper.CreateSchema()
-            },
-            new McpTool
-            {
-                Name = "estimate_bulk_impact",
-                Description = "Estimate the impact and complexity of a bulk edit operation before execution",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationType",
-                        Type = "string",
-                        Description = "Type of bulk operation to analyze",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "files",
-                        Type = "array",
-                        Description = "Array of file patterns (glob patterns or absolute paths)",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "string" }
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_bulk_file_statistics",
-                Description = "Get statistics about files for planning bulk operations (sizes, counts, types)",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "files",
-                        Type = "array",
-                        Description = "Array of file patterns (glob patterns or absolute paths)",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "string" }
-                    }
-                )
-            },
-            // Streaming processor tools
-            new McpTool
-            {
-                Name = "stream_process_file",
-                Description = "Process a file using streaming operations with configurable chunk size and progress tracking",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "filePath",
-                        Type = "string",
-                        Description = "Path to the input file to process",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "outputPath",
-                        Type = "string",
-                        Description = "Path for the output file",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "processorType",
-                        Type = "string",
-                        Description = "Type of processor to use (LineProcessor, RegexProcessor, CsvProcessor, BinaryProcessor)",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "processorOptions",
-                        Type = "object",
-                        Description = "Processor-specific configuration options",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "chunkSize",
-                        Type = "integer",
-                        Description = "Size of chunks in bytes (default: 65536)",
-                        Required = false,
-                        Default = 65536
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "createCheckpoint",
-                        Type = "boolean",
-                        Description = "Whether to create checkpoints for resume capability",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "enableCompression",
-                        Type = "boolean",
-                        Description = "Whether to enable compression for intermediate results",
-                        Required = false,
-                        Default = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "bulk_transform",
-                Description = "Transform multiple files in bulk with parallel processing",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "inputFiles",
-                        Type = "array",
-                        Description = "Array of input files or directories",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "string" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "outputDirectory",
-                        Type = "string",
-                        Description = "Directory for output files",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "processorType",
-                        Type = "string",
-                        Description = "Type of processor to use",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "processorOptions",
-                        Type = "object",
-                        Description = "Processor-specific configuration options",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "chunkSize",
-                        Type = "integer",
-                        Description = "Size of chunks in bytes",
-                        Required = false,
-                        Default = 65536
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "maxDegreeOfParallelism",
-                        Type = "integer",
-                        Description = "Maximum number of parallel operations",
-                        Required = false,
-                        Default = 4
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "preserveDirectoryStructure",
-                        Type = "boolean",
-                        Description = "Whether to preserve directory structure in output",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "filePattern",
-                        Type = "string",
-                        Description = "File pattern for directory processing (e.g., '*.csv')",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "recursive",
-                        Type = "boolean",
-                        Description = "Whether to process directories recursively",
-                        Required = false,
-                        Default = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_stream_progress",
-                Description = "Get progress information for a streaming operation",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationId",
-                        Type = "string",
-                        Description = "ID of the streaming operation",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "cancel_stream_operation",
-                Description = "Cancel a running streaming operation",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationId",
-                        Type = "string",
-                        Description = "ID of the operation to cancel",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "resume_stream_operation",
-                Description = "Resume a previously cancelled or failed operation from checkpoint",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationId",
-                        Type = "string",
-                        Description = "ID of the operation to resume",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "list_stream_operations",
-                Description = "List all active and recent streaming operations",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "maxCount",
-                        Type = "integer",
-                        Description = "Maximum number of operations to return",
-                        Required = false,
-                        Default = 50
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "cleanup_stream_operations",
-                Description = "Clean up temporary files and completed operations",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "olderThanHours",
-                        Type = "integer",
-                        Description = "Clean up operations older than this many hours (default: 24)",
-                        Required = false,
-                        Default = 24
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_available_processors",
-                Description = "Get list of available stream processors and their capabilities",
-                InputSchema = JsonSchemaHelper.CreateSchema()
-            },
-            new McpTool
-            {
-                Name = "estimate_stream_processing",
-                Description = "Estimate processing time for a file with given configuration",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "filePath",
-                        Type = "string",
-                        Description = "Path to the file to estimate processing for",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "processorType",
-                        Type = "string",
-                        Description = "Type of processor to use",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "processorOptions",
-                        Type = "object",
-                        Description = "Processor-specific configuration options",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "chunkSize",
-                        Type = "integer",
-                        Description = "Size of chunks in bytes",
-                        Required = false,
-                        Default = 65536
-                    }
-                )
-            },
-            // ===== Phase 3 Architecture Validation Tools =====
-            new McpTool
-            {
-                Name = "validate_architecture",
-                Description = "Validate project architecture against defined rules",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "definition",
-                        Type = "object",
-                        Description = "Optional custom architecture definition",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "detect_layer_violations",
-                Description = "Find all architectural layer violations in a project",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "definition",
-                        Type = "object",
-                        Description = "Optional custom architecture definition",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "analyze_dependencies",
-                Description = "Analyze dependency graph and relationships between layers",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "definition",
-                        Type = "object",
-                        Description = "Optional custom architecture definition",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_architecture_report",
-                Description = "Generate comprehensive architecture compliance report",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "definition",
-                        Type = "object",
-                        Description = "Optional custom architecture definition",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "define_custom_architecture",
-                Description = "Define or update custom architecture definition",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "definition",
-                        Type = "object",
-                        Description = "Architecture definition with layers and rules",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "analyze_circular_dependencies",
-                Description = "Analyze circular dependencies between layers and components",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "definition",
-                        Type = "object",
-                        Description = "Optional custom architecture definition",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "generate_architecture_diagram",
-                Description = "Generate architecture diagram data for visualization",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "definition",
-                        Type = "object",
-                        Description = "Optional custom architecture definition",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_architecture_recommendations",
-                Description = "Get recommended fixes for architectural violations",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "violations",
-                        Type = "array",
-                        Description = "List of violations to get recommendations for",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "object" }
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "check_type_compliance",
-                Description = "Check if a specific type follows architectural rules",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "typeName",
-                        Type = "string",
-                        Description = "Name of the type to check",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "definition",
-                        Type = "object",
-                        Description = "Architecture definition to check against",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_predefined_architectures",
-                Description = "Get predefined architecture templates (Clean Architecture, Onion, N-Tier, Hexagonal)",
-                InputSchema = JsonSchemaHelper.CreateSchema()
-            },
-            // ===== Phase 3 Duplicate Code Detection Tools =====
-            new McpTool
-            {
-                Name = "detect_duplicates",
-                Description = "Detect duplicate code blocks in the project with comprehensive analysis",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "options",
-                        Type = "object",
-                        Description = "Options for duplicate detection",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "find_exact_duplicates",
-                Description = "Find exact duplicate code blocks (100% identical)",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "options",
-                        Type = "object",
-                        Description = "Options for detection",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "find_near_duplicates",
-                Description = "Find near-miss duplicate code blocks with configurable similarity threshold",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "similarityThreshold",
-                        Type = "number",
-                        Description = "Similarity threshold (0.0-1.0)",
-                        Required = false,
-                        Default = 0.8
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "options",
-                        Type = "object",
-                        Description = "Options for detection",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "analyze_duplication_metrics",
-                Description = "Analyze duplication metrics and statistics for the project",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "options",
-                        Type = "object",
-                        Description = "Options for analysis",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_refactoring_suggestions",
-                Description = "Get refactoring suggestions for detected duplicate code",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "duplicates",
-                        Type = "array",
-                        Description = "List of duplicate groups to analyze",
-                        Required = false,
-                        Items = new Dictionary<string, object> { ["type"] = "object" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "options",
-                        Type = "object",
-                        Description = "Options for refactoring suggestions",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_duplicate_hotspots",
-                Description = "Get a summary of duplicate code hotspots in the project",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "options",
-                        Type = "object",
-                        Description = "Options for analysis",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "compare_code_blocks",
-                Description = "Compare two specific code blocks for similarity",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "codeBlock1",
-                        Type = "object",
-                        Description = "First code block to compare",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "codeBlock2",
-                        Type = "object",
-                        Description = "Second code block to compare",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "options",
-                        Type = "object",
-                        Description = "Options for comparison",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "validate_refactoring",
-                Description = "Validate potential refactoring by checking if it would break dependencies",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Path to the project directory",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "suggestion",
-                        Type = "object",
-                        Description = "Refactoring suggestion to validate",
-                        Required = true
-                    }
-                )
-            },
-
-            // ===== Consolidated Service Tools =====
-            // Universal File Operations Tools
-            new McpTool
-            {
-                Name = "get_file_info",
-                Description = "Get comprehensive file/directory information",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "path",
-                        Type = "string",
-                        Description = "File or directory path",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeMetadata",
-                        Type = "boolean",
-                        Description = "Include detailed metadata",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_file_content",
-                Description = "Get file content with advanced options",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "path",
-                        Type = "string",
-                        Description = "File path",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "encoding",
-                        Type = "string",
-                        Description = "Text encoding",
-                        Required = false,
-                        Default = "utf-8"
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "lineRange",
-                        Type = "object",
-                        Description = "Optional line range (start, end)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "execute_file_operation",
-                Description = "Execute file operations (copy, move, delete, create)",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operation",
-                        Type = "string",
-                        Description = "Operation type",
-                        Required = true,
-                        Enum = new[] { "copy", "move", "delete", "create_directory", "create_file" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "sourcePath",
-                        Type = "string",
-                        Description = "Source path",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "targetPath",
-                        Type = "string",
-                        Description = "Target path",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "content",
-                        Type = "string",
-                        Description = "Content for file creation",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "overwrite",
-                        Type = "boolean",
-                        Description = "Overwrite existing files",
-                        Required = false,
-                        Default = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "execute_batch",
-                Description = "Execute batch file operations",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operations",
-                        Type = "array",
-                        Description = "Array of file operations",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "object" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "continueOnError",
-                        Type = "boolean",
-                        Description = "Continue processing on errors",
-                        Required = false,
-                        Default = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-
-            // Unified Analysis Service Tools
-            new McpTool
-            {
-                Name = "analyze_symbol",
-                Description = "Comprehensive symbol analysis",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "symbolName",
-                        Type = "string",
-                        Description = "Symbol name",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "filePath",
-                        Type = "string",
-                        Description = "File path for context",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "line",
-                        Type = "number",
-                        Description = "Line number for context",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "column",
-                        Type = "number",
-                        Description = "Column number for context",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeReferences",
-                        Type = "boolean",
-                        Description = "Include symbol references",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "analyze_type",
-                Description = "Comprehensive type analysis",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "typeName",
-                        Type = "string",
-                        Description = "Type name",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeHierarchy",
-                        Type = "boolean",
-                        Description = "Include type hierarchy",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeMembers",
-                        Type = "boolean",
-                        Description = "Include type members",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "analyze_file",
-                Description = "Comprehensive file analysis",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "filePath",
-                        Type = "string",
-                        Description = "File path",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeStructure",
-                        Type = "boolean",
-                        Description = "Include file structure",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeSymbols",
-                        Type = "boolean",
-                        Description = "Include symbol analysis",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "analyze_project",
-                Description = "Comprehensive project analysis",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Project path (optional, uses current project if not specified)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeDependencies",
-                        Type = "boolean",
-                        Description = "Include dependency analysis",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeMetrics",
-                        Type = "boolean",
-                        Description = "Include project metrics",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "analyze_architecture",
-                Description = "Architecture analysis and validation",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Project path (optional, uses current project if not specified)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeViolations",
-                        Type = "boolean",
-                        Description = "Include architecture violations",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeRecommendations",
-                        Type = "boolean",
-                        Description = "Include improvement recommendations",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "analyze_dependencies",
-                Description = "Comprehensive dependency analysis",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "typeName",
-                        Type = "string",
-                        Description = "Type name for dependency analysis",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Project path for analysis",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeCircular",
-                        Type = "boolean",
-                        Description = "Include circular dependency analysis",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "analyze_quality",
-                Description = "Code quality analysis",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "filePath",
-                        Type = "string",
-                        Description = "File path for quality analysis",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "projectPath",
-                        Type = "string",
-                        Description = "Project path for quality analysis",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeMetrics",
-                        Type = "boolean",
-                        Description = "Include quality metrics",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-
-            // Bulk Operations Hub Tools
-            new McpTool
-            {
-                Name = "execute_bulk_operation",
-                Description = "Execute bulk operations with advanced features",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationType",
-                        Type = "string",
-                        Description = "Operation type",
-                        Required = true,
-                        Enum = new[] { "bulk_replace", "conditional_edit", "batch_refactor", "multi_file_edit" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "files",
-                        Type = "array",
-                        Description = "Files to process",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "string" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "operation",
-                        Type = "object",
-                        Description = "Operation details",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "options",
-                        Type = "object",
-                        Description = "Operation options",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "preview_bulk_operation",
-                Description = "Preview bulk operations without executing",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationType",
-                        Type = "string",
-                        Description = "Operation type",
-                        Required = true,
-                        Enum = new[] { "bulk_replace", "conditional_edit", "batch_refactor", "multi_file_edit" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "files",
-                        Type = "array",
-                        Description = "Files to preview",
-                        Required = true,
-                        Items = new Dictionary<string, object> { ["type"] = "string" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "operation",
-                        Type = "object",
-                        Description = "Operation details",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "maxPreviewFiles",
-                        Type = "number",
-                        Description = "Maximum files to preview",
-                        Required = false,
-                        Default = 10
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "get_bulk_progress",
-                Description = "Get progress of bulk operations",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationId",
-                        Type = "string",
-                        Description = "Operation ID",
-                        Required = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "manage_bulk_operation",
-                Description = "Manage bulk operations (cancel, pause, resume)",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationId",
-                        Type = "string",
-                        Description = "Operation ID",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "action",
-                        Type = "string",
-                        Description = "Management action",
-                        Required = true,
-                        Enum = new[] { "cancel", "pause", "resume", "retry" }
-                    }
-                )
-            },
-
-            // Stream Processing Controller Tools
-            new McpTool
-            {
-                Name = "process_stream",
-                Description = "Process large files with streaming",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "filePath",
-                        Type = "string",
-                        Description = "File path to process",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "processorType",
-                        Type = "string",
-                        Description = "Processor type",
-                        Required = true,
-                        Enum = new[] { "LineProcessor", "RegexProcessor", "CsvProcessor", "BinaryProcessor" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "outputPath",
-                        Type = "string",
-                        Description = "Output path",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "processorOptions",
-                        Type = "object",
-                        Description = "Processor-specific options",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "chunkSize",
-                        Type = "number",
-                        Description = "Chunk size in bytes",
-                        Required = false,
-                        Default = 65536
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "requestId",
-                        Type = "string",
-                        Description = "Optional request ID for tracking",
-                        Required = false
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "monitor_stream",
-                Description = "Monitor stream processing progress",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationId",
-                        Type = "string",
-                        Description = "Operation ID",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "includeDetails",
-                        Type = "boolean",
-                        Description = "Include detailed progress information",
-                        Required = false,
-                        Default = true
-                    }
-                )
-            },
-            new McpTool
-            {
-                Name = "manage_stream",
-                Description = "Manage stream processing operations",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "operationId",
-                        Type = "string",
-                        Description = "Operation ID",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "action",
-                        Type = "string",
-                        Description = "Management action",
-                        Required = false,
-                        Enum = new[] { "cancel", "pause", "resume", "cleanup" }
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "cleanupOlderThanHours",
-                        Type = "number",
-                        Description = "Cleanup operations older than specified hours",
-                        Required = false,
-                        Default = 24
-                    }
-                )
             }
         };
     }
 
-    /// <summary>
-    /// Ensure Roslyn workspace is initialized
-    /// </summary>
     private async Task EnsureWorkspaceInitializedAsync()
     {
         if (_workspace != null && _projectContext.GetProjectContext() != null)
@@ -2674,12 +1077,21 @@ public partial class McpToolRegistry
         try
         {
             _projectContext.OpenProject(path);
-            _fileOperations = new FileOperationsService(path);
 
             // Initialize workspace if available
             if (_workspace != null)
             {
                 await _workspace.InitializeAsync(path);
+                _fileOperations = new FileOperationsService(path, _workspace);
+            }
+            else
+            {
+                _fileOperations = new FileOperationsService(path);
+            }
+
+            // Initialize Roslyn services if workspace is available
+            if (_workspace != null)
+            {
                 _symbolQuery = new SymbolQueryService(_workspace);
                 _classStructure = new ClassStructureService(_workspace);
                 _semanticEdit = new SemanticEditService(_workspace, _classStructure);
@@ -3250,11 +1662,13 @@ public partial class McpToolRegistry
             };
         }
 
-        var methodName = arguments.RootElement.GetProperty("methodName").GetString();
-        if (string.IsNullOrEmpty(methodName))
+        if (!arguments.RootElement.TryGetProperty("methodName", out var methodNameElement) ||
+            string.IsNullOrEmpty(methodNameElement.GetString()))
         {
             return new ToolCallResult { Success = false, Error = "MethodName is required" };
         }
+
+        var methodName = methodNameElement.GetString()!;
 
         string? containingType = null;
         if (arguments.RootElement.TryGetProperty("containingType", out var typeElement))
@@ -3289,11 +1703,13 @@ public partial class McpToolRegistry
             };
         }
 
-        var methodName = arguments.RootElement.GetProperty("methodName").GetString();
-        if (string.IsNullOrEmpty(methodName))
+        if (!arguments.RootElement.TryGetProperty("methodName", out var methodNameElement) ||
+            string.IsNullOrEmpty(methodNameElement.GetString()))
         {
             return new ToolCallResult { Success = false, Error = "MethodName is required" };
         }
+
+        var methodName = methodNameElement.GetString()!;
 
         string? containingType = null;
         if (arguments.RootElement.TryGetProperty("containingType", out var typeElement))
@@ -3341,11 +1757,13 @@ public partial class McpToolRegistry
             };
         }
 
-        var typeName = arguments.RootElement.GetProperty("typeName").GetString();
-        if (string.IsNullOrEmpty(typeName))
+        if (!arguments.RootElement.TryGetProperty("typeName", out var typeNameElement) ||
+            string.IsNullOrEmpty(typeNameElement.GetString()))
         {
             return new ToolCallResult { Success = false, Error = "TypeName is required" };
         }
+
+        var typeName = typeNameElement.GetString()!;
 
         var result = await _advancedReferenceFinder.FindTypeUsagesAsync(typeName);
         if (result == null)
@@ -3368,11 +1786,13 @@ public partial class McpToolRegistry
             };
         }
 
-        var methodName = arguments.RootElement.GetProperty("methodName").GetString();
-        if (string.IsNullOrEmpty(methodName))
+        if (!arguments.RootElement.TryGetProperty("methodName", out var methodNameElement) ||
+            string.IsNullOrEmpty(methodNameElement.GetString()))
         {
             return new ToolCallResult { Success = false, Error = "MethodName is required" };
         }
+
+        var methodName = methodNameElement.GetString()!;
 
         string? containingType = null;
         if (arguments.RootElement.TryGetProperty("containingType", out var typeElement))
@@ -3396,11 +1816,13 @@ public partial class McpToolRegistry
             };
         }
 
-        var typeName = arguments.RootElement.GetProperty("typeName").GetString();
-        if (string.IsNullOrEmpty(typeName))
+        if (!arguments.RootElement.TryGetProperty("typeName", out var typeNameElement) ||
+            string.IsNullOrEmpty(typeNameElement.GetString()))
         {
             return new ToolCallResult { Success = false, Error = "TypeName is required" };
         }
+
+        var typeName = typeNameElement.GetString()!;
 
         var result = await _advancedReferenceFinder.AnalyzeInheritanceAsync(typeName);
         return new ToolCallResult { Success = true, Result = result };
@@ -3490,11 +1912,13 @@ public partial class McpToolRegistry
             };
         }
 
-        var methodName = arguments.RootElement.GetProperty("methodName").GetString();
-        if (string.IsNullOrEmpty(methodName))
+        if (!arguments.RootElement.TryGetProperty("methodName", out var methodNameElement) ||
+            string.IsNullOrEmpty(methodNameElement.GetString()))
         {
             return new ToolCallResult { Success = false, Error = "MethodName is required" };
         }
+
+        var methodName = methodNameElement.GetString()!;
 
         string? containingType = null;
         if (arguments.RootElement.TryGetProperty("containingType", out var typeElement))
@@ -3524,11 +1948,13 @@ public partial class McpToolRegistry
             };
         }
 
-        var typeName = arguments.RootElement.GetProperty("typeName").GetString();
-        if (string.IsNullOrEmpty(typeName))
+        if (!arguments.RootElement.TryGetProperty("typeName", out var typeNameElement) ||
+            string.IsNullOrEmpty(typeNameElement.GetString()))
         {
             return new ToolCallResult { Success = false, Error = "TypeName is required" };
         }
+
+        var typeName = typeNameElement.GetString()!;
 
         var result = await _advancedReferenceFinder.AnalyzeTypeDependenciesAsync(typeName);
         return new ToolCallResult { Success = true, Result = result };
@@ -6055,6 +4481,230 @@ public partial class McpToolRegistry
             {
                 Success = false,
                 Error = $"Failed to manage stream: {ex.Message}"
+            };
+        }
+    }
+
+    #endregion
+
+    #region Roslyn Analyzer Execution Methods
+
+    private async Task<ToolCallResult> ExecuteLoadRoslynAnalyzers(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_roslynAnalyzerService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Roslyn Analyzer service is not available"
+            };
+        }
+
+        try
+        {
+            var root = arguments.RootElement;
+
+            if (!root.TryGetProperty("path", out var pathElement))
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Missing required parameter 'path'"
+                };
+            }
+
+            var path = pathElement.GetString();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Parameter 'path' cannot be empty"
+                };
+            }
+
+            var recursive = true;
+            if (root.TryGetProperty("recursive", out var recursiveElement))
+            {
+                recursive = recursiveElement.GetBoolean();
+            }
+
+            // Check if path is a directory or file
+            var isDirectory = Directory.Exists(path);
+            var isFile = File.Exists(path);
+
+            if (!isDirectory && !isFile)
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = $"Path does not exist: {path}"
+                };
+            }
+
+            var analyzers = isDirectory
+                ? await _roslynAnalyzerService.LoadAnalyzersFromDirectoryAsync(path, ct)
+                : await _roslynAnalyzerService.LoadAnalyzersAsync(path, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new
+                {
+                    analyzersLoaded = analyzers.Length,
+                    analyzers = analyzers.Select(a => new
+                    {
+                        id = a.Id,
+                        name = a.Name,
+                        description = a.Description,
+                        version = a.Version.ToString(),
+                        author = a.Author,
+                        supportedExtensions = a.SupportedExtensions.ToArray(),
+                        isEnabled = a.IsEnabled
+                    }).ToList()
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to load Roslyn analyzers: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteRunRoslynAnalyzers(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_roslynAnalyzerService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Roslyn Analyzer service is not available"
+            };
+        }
+
+        try
+        {
+            var root = arguments.RootElement;
+
+            if (!root.TryGetProperty("target_path", out var targetPathElement))
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Missing required parameter 'target_path'"
+                };
+            }
+
+            var targetPath = targetPathElement.GetString();
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Parameter 'target_path' cannot be empty"
+                };
+            }
+
+            if (!Directory.Exists(targetPath) && !File.Exists(targetPath))
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = $"Target path does not exist: {targetPath}"
+                };
+            }
+
+            IEnumerable<string>? analyzerIds = null;
+            if (root.TryGetProperty("analyzer_ids", out var analyzerIdsElement) &&
+                analyzerIdsElement.ValueKind == JsonValueKind.Array)
+            {
+                analyzerIds = analyzerIdsElement.EnumerateArray()
+                    .Select(e => e.GetString())
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Cast<string>()
+                    .ToList();
+            }
+
+            var result = await _roslynAnalyzerService.RunAnalyzersAsync(targetPath, analyzerIds, ct);
+
+            return new ToolCallResult
+            {
+                Success = result.Success,
+                Result = result.Success ? new
+                {
+                    success = result.Success,
+                    analyzersRun = result.AnalyzersRun.ToArray(),
+                    totalIssuesFound = result.TotalIssuesFound,
+                    startTime = result.StartTime,
+                    endTime = result.EndTime,
+                    duration = (result.EndTime - result.StartTime).TotalSeconds,
+                    statistics = result.Statistics?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                } : null,
+                Error = result.Success ? null : result.ErrorMessage
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to run Roslyn analyzers: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteListRoslynAnalyzers(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_roslynAnalyzerService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Roslyn Analyzer service is not available"
+            };
+        }
+
+        try
+        {
+            var analyzers = _roslynAnalyzerService.GetLoadedAnalyzers();
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new
+                {
+                    totalAnalyzers = analyzers.Length,
+                    analyzers = analyzers.Select(a => new
+                    {
+                        id = a.Id,
+                        name = a.Name,
+                        description = a.Description,
+                        version = a.Version.ToString(),
+                        author = a.Author,
+                        supportedExtensions = a.SupportedExtensions.ToArray(),
+                        isEnabled = a.IsEnabled,
+                        rules = a.GetRules().Select(r => new
+                        {
+                            id = r.Id,
+                            category = r.Category,
+                            severity = r.DefaultSeverity.ToString(),
+                            title = r.Title,
+                            description = r.Description
+                        }).ToList()
+                    }).ToList()
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to list Roslyn analyzers: {ex.Message}"
             };
         }
     }

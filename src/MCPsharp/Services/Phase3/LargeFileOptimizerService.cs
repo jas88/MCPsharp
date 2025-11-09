@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 using MCPsharp.Models.LargeFileOptimization;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Models.Roslyn;
@@ -17,6 +18,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
     private readonly SymbolQueryService _symbolQuery;
     private readonly ICallerAnalysisService _callerAnalysis;
     private readonly ITypeUsageService _typeUsage;
+    private readonly ILogger<LargeFileOptimizerService>? _logger;
 
     // Configuration constants
     private const int DefaultMaxLines = 500;
@@ -30,12 +32,14 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         RoslynWorkspace workspace,
         SymbolQueryService symbolQuery,
         ICallerAnalysisService callerAnalysis,
-        ITypeUsageService typeUsage)
+        ITypeUsageService typeUsage,
+        ILogger<LargeFileOptimizerService>? logger = null)
     {
         _workspace = workspace;
         _symbolQuery = symbolQuery;
         _callerAnalysis = callerAnalysis;
         _typeUsage = typeUsage;
+        _logger = logger;
     }
 
     public async Task<LargeFileAnalysisResult> AnalyzeLargeFilesAsync(string projectPath, int? maxLines = null, CancellationToken cancellationToken = default)
@@ -140,7 +144,9 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (syntaxTree == null || semanticModel == null) return null;
+        if (syntaxTree == null || semanticModel == null)
+            throw new InvalidOperationException($"Unable to get syntax tree or semantic model for {filePath}");
+
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         // Find the largest class in the file
@@ -592,7 +598,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         catch (Exception ex)
         {
             // Log error and continue
-            Console.WriteLine($"Error analyzing file {filePath}: {ex.Message}");
+            _logger?.LogError(ex, "Error analyzing file {FilePath}: {ErrorMessage}", filePath, ex.Message);
             return null;
         }
     }

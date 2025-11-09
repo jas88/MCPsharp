@@ -168,42 +168,44 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
         return await _progressTracker.GetProgressAsync(operationId);
     }
 
-    public async Task<StreamOperation?> GetOperationAsync(string operationId)
+    public Task<StreamOperation?> GetOperationAsync(string operationId)
     {
         _operations.TryGetValue(operationId, out var operation);
-        return operation;
+        return Task.FromResult(operation);
     }
 
-    public async Task<List<StreamOperation>> ListOperationsAsync(int maxCount = 50, bool includeCompleted = true)
+    public Task<List<StreamOperation>> ListOperationsAsync(int maxCount = 50, bool includeCompleted = true)
     {
         var operations = _operations.Values.AsEnumerable();
 
         if (!includeCompleted)
         {
-            operations = operations.Where(op => 
-                op.Status != StreamOperationStatus.Completed && 
-                op.Status != StreamOperationStatus.Failed && 
+            operations = operations.Where(op =>
+                op.Status != StreamOperationStatus.Completed &&
+                op.Status != StreamOperationStatus.Failed &&
                 op.Status != StreamOperationStatus.Cancelled);
         }
 
-        return operations
+        var result = operations
             .OrderByDescending(op => op.CreatedAt)
             .Take(maxCount)
             .ToList();
+
+        return Task.FromResult(result);
     }
 
-    public async Task<bool> CancelOperationAsync(string operationId)
+    public Task<bool> CancelOperationAsync(string operationId)
     {
         if (!_operations.TryGetValue(operationId, out var operation))
         {
-            return false;
+            return Task.FromResult(false);
         }
 
-        if (operation.Status == StreamOperationStatus.Completed || 
-            operation.Status == StreamOperationStatus.Failed || 
+        if (operation.Status == StreamOperationStatus.Completed ||
+            operation.Status == StreamOperationStatus.Failed ||
             operation.Status == StreamOperationStatus.Cancelled)
         {
-            return false;
+            return Task.FromResult(false);
         }
 
         try
@@ -214,47 +216,47 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             operation.ErrorMessage = "Operation was cancelled by user request";
 
             _logger.LogInformation("Cancelled streaming operation {OperationId}", operationId);
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error cancelling operation {OperationId}", operationId);
-            return false;
+            return Task.FromResult(false);
         }
     }
 
-    public async Task<bool> PauseOperationAsync(string operationId)
+    public Task<bool> PauseOperationAsync(string operationId)
     {
         if (!_operations.TryGetValue(operationId, out var operation))
         {
-            return false;
+            return Task.FromResult(false);
         }
 
         if (operation.Status != StreamOperationStatus.Running)
         {
-            return false;
+            return Task.FromResult(false);
         }
 
         operation.Status = StreamOperationStatus.Paused;
         _logger.LogInformation("Paused streaming operation {OperationId}", operationId);
-        return true;
+        return Task.FromResult(true);
     }
 
-    public async Task<bool> ResumeOperationAsync(string operationId, CancellationToken cancellationToken = default)
+    public Task<bool> ResumeOperationAsync(string operationId, CancellationToken cancellationToken = default)
     {
         if (!_operations.TryGetValue(operationId, out var operation))
         {
-            return false;
+            return Task.FromResult(false);
         }
 
         if (operation.Status != StreamOperationStatus.Paused)
         {
-            return false;
+            return Task.FromResult(false);
         }
 
         operation.Status = StreamOperationStatus.Resumed;
         _logger.LogInformation("Resumed streaming operation {OperationId}", operationId);
-        return true;
+        return Task.FromResult(true);
     }
 
     public async Task<CheckpointData?> CreateCheckpointAsync(string operationId)
@@ -342,7 +344,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
         }
     }
 
-    public async Task<ProcessingStatistics> GetStatisticsAsync()
+    public Task<ProcessingStatistics> GetStatisticsAsync()
     {
         var operations = _operations.Values.ToList();
         var now = DateTime.UtcNow;
@@ -359,8 +361,8 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
 
         // Calculate average processing time
         var completedOperations = operations
-            .Where(op => op.Status == StreamOperationStatus.Completed && 
-                        op.StartedAt.HasValue && 
+            .Where(op => op.Status == StreamOperationStatus.Completed &&
+                        op.StartedAt.HasValue &&
                         op.CompletedAt.HasValue)
             .ToList();
 
@@ -370,7 +372,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
                 (long)completedOperations.Average(op => (op.CompletedAt!.Value - op.StartedAt!.Value).Ticks));
         }
 
-        return stats;
+        return Task.FromResult(stats);
     }
 
     public async Task<int> CleanupAsync(TimeSpan? olderThan = null, bool includeFailed = false)
@@ -441,24 +443,24 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
         return cleanedCount;
     }
 
-    public async Task<List<CheckpointData>> GetCheckpointsAsync(string operationId)
+    public Task<List<CheckpointData>> GetCheckpointsAsync(string operationId)
     {
         if (!_checkpoints.TryGetValue(operationId, out var checkpoints))
         {
-            return new List<CheckpointData>();
+            return Task.FromResult(new List<CheckpointData>());
         }
 
         lock (checkpoints)
         {
-            return checkpoints.OrderByDescending(c => c.CreatedAt).ToList();
+            return Task.FromResult(checkpoints.OrderByDescending(c => c.CreatedAt).ToList());
         }
     }
 
-    public async Task<bool> DeleteCheckpointAsync(string operationId, string checkpointId)
+    public Task<bool> DeleteCheckpointAsync(string operationId, string checkpointId)
     {
         if (!_checkpoints.TryGetValue(operationId, out var checkpoints))
         {
-            return false;
+            return Task.FromResult(false);
         }
 
         lock (checkpoints)
@@ -466,7 +468,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             var checkpoint = checkpoints.FirstOrDefault(c => c.CheckpointId == checkpointId);
             if (checkpoint == null)
             {
-                return false;
+                return Task.FromResult(false);
             }
 
             // Delete checkpoint file
@@ -479,22 +481,22 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deleting checkpoint file {FilePath}", 
+                _logger.LogError(ex, "Error deleting checkpoint file {FilePath}",
                     checkpoint.CheckpointFilePath);
             }
 
             // Remove from list
             checkpoints.Remove(checkpoint);
-            return true;
+            return Task.FromResult(true);
         }
     }
 
-    public async Task<bool> UpdateOperationStatusAsync(string operationId, StreamOperationStatus status, 
+    public Task<bool> UpdateOperationStatusAsync(string operationId, StreamOperationStatus status,
         string? errorMessage = null)
     {
         if (!_operations.TryGetValue(operationId, out var operation))
         {
-            return false;
+            return Task.FromResult(false);
         }
 
         operation.Status = status;
@@ -503,21 +505,21 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             operation.ErrorMessage = errorMessage;
         }
 
-        if (status == StreamOperationStatus.Completed || 
-            status == StreamOperationStatus.Failed || 
+        if (status == StreamOperationStatus.Completed ||
+            status == StreamOperationStatus.Failed ||
             status == StreamOperationStatus.Cancelled)
         {
             operation.CompletedAt = DateTime.UtcNow;
         }
 
-        return true;
+        return Task.FromResult(true);
     }
 
-    public async Task<bool> AddTemporaryFileAsync(string operationId, string filePath)
+    public Task<bool> AddTemporaryFileAsync(string operationId, string filePath)
     {
         if (!_operations.TryGetValue(operationId, out var operation))
         {
-            return false;
+            return Task.FromResult(false);
         }
 
         lock (operation.TemporaryFiles)
@@ -528,19 +530,19 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             }
         }
 
-        return true;
+        return Task.FromResult(true);
     }
 
-    public async Task<bool> RemoveTemporaryFileAsync(string operationId, string filePath)
+    public Task<bool> RemoveTemporaryFileAsync(string operationId, string filePath)
     {
         if (!_operations.TryGetValue(operationId, out var operation))
         {
-            return false;
+            return Task.FromResult(false);
         }
 
         lock (operation.TemporaryFiles)
         {
-            return operation.TemporaryFiles.Remove(filePath);
+            return Task.FromResult(operation.TemporaryFiles.Remove(filePath));
         }
     }
 
@@ -593,27 +595,37 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
 
     public void Dispose()
     {
-        _cleanupTimer?.Dispose();
-        _executionSemaphore?.Dispose();
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
 
-        // Cancel all running operations
-        foreach (var operation in _operations.Values)
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
         {
-            try
-            {
-                if (operation.Status == StreamOperationStatus.Running)
-                {
-                    operation.CancellationTokenSource.Cancel();
-                }
-                operation.CancellationTokenSource.Dispose();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error disposing operation {OperationId}", operation.OperationId);
-            }
-        }
+            // Dispose managed resources
+            _cleanupTimer?.Dispose();
+            _executionSemaphore?.Dispose();
 
-        _operations.Clear();
-        _checkpoints.Clear();
+            // Cancel all running operations
+            foreach (var operation in _operations.Values)
+            {
+                try
+                {
+                    if (operation.Status == StreamOperationStatus.Running)
+                    {
+                        operation.CancellationTokenSource.Cancel();
+                    }
+                    operation.CancellationTokenSource.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error disposing operation {OperationId}", operation.OperationId);
+                }
+            }
+
+            _operations.Clear();
+            _checkpoints.Clear();
+        }
     }
 }

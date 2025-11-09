@@ -23,6 +23,7 @@ public class StreamProcessRequest
     public bool CreateCheckpoint { get; set; } = true;
     public bool EnableCompression { get; set; } = false;
     public string? CheckpointDirectory { get; set; }
+    public long MaxFileSize { get; set; } = 100 * 1024 * 1024; // 100MB default
 }
 
 /// <summary>

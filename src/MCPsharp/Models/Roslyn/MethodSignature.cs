@@ -77,13 +77,26 @@ public class MethodSignature
 
     private static bool AreTypesCompatible(string type1, string type2)
     {
-        // Simple compatibility check - could be enhanced with full type system
-        var baseTypes = new[] { "object", "string", "int", "long", "double", "float", "bool", "decimal" };
-
+        // Exact match is always compatible
         if (type1 == type2) return true;
-        if (baseTypes.Contains(type1) && baseTypes.Contains(type2)) return true;
 
-        // Handle generic types
+        // object is compatible with all types
+        if (type1 == "object" || type2 == "object") return true;
+
+        // Built-in type conversions (implicit numeric conversions)
+        var numericConversions = new Dictionary<string, HashSet<string>>
+        {
+            ["int"] = new HashSet<string> { "long", "double", "float", "decimal" },
+            ["long"] = new HashSet<string> { "double", "float", "decimal" },
+            ["float"] = new HashSet<string> { "double" },
+            ["double"] = new HashSet<string>(), // Double is the largest numeric type
+            ["decimal"] = new HashSet<string>() // Decimal is separate from floating point
+        };
+
+        if (numericConversions.TryGetValue(type1, out var compatibleTypes) && compatibleTypes.Contains(type2))
+            return true;
+
+        // Handle generic types - they must have the same generic root
         if (type1.Contains("<") && type2.Contains("<"))
         {
             var generic1 = type1.Substring(0, type1.IndexOf('<'));

@@ -36,6 +36,11 @@ public class Phase2IntegrationTests : IDisposable
         _impactAnalyzer = new ImpactAnalyzerService(_workspace, _referenceFinder, _configAnalyzer, _workflowAnalyzer);
     }
 
+    private async Task InitializeWorkspaceForProject(string projectDir)
+    {
+        await _workspace.InitializeAsync(projectDir);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_testRoot))
@@ -77,17 +82,13 @@ jobs:
       - run: echo 'Deploying...'
 ");
 
-        // Act & Assert: Verify stub throws (will be replaced with actual test once implemented)
-        await Assert.ThrowsAsync<NotImplementedException>(async () =>
-        {
-            await _workflowAnalyzer.GetAllWorkflowsAsync(projectDir);
-        });
+        // Act: Get all workflows
+        var workflows = await _workflowAnalyzer.GetAllWorkflowsAsync(projectDir);
 
-        // TODO: Once implemented, verify:
-        // var workflows = await _workflowAnalyzer.GetAllWorkflowsAsync(projectDir);
-        // Assert.Equal(2, workflows.Count);
-        // Assert.Contains(workflows, w => w.Name == "CI");
-        // Assert.Contains(workflows, w => w.Name == "Deploy");
+        // Assert: Verify workflows are detected
+        Assert.Equal(2, workflows.Count);
+        Assert.Contains(workflows, w => w.Name == "CI");
+        Assert.Contains(workflows, w => w.Name == "Deploy");
     }
 
     [Fact]
@@ -122,19 +123,15 @@ jobs:
       - run: echo 'Deploying...'
 ");
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(async () =>
-        {
-            await _workflowAnalyzer.ParseWorkflowAsync(workflowPath);
-        });
+        // Act: Parse the workflow
+        var details = await _workflowAnalyzer.ParseWorkflowAsync(workflowPath);
 
-        // TODO: Once implemented, verify:
-        // var details = await _workflowAnalyzer.ParseWorkflowAsync(workflowPath);
-        // Assert.Equal("Complex Build", details.Name);
-        // Assert.Contains("push", details.Triggers);
-        // Assert.Contains("pull_request", details.Triggers);
-        // Assert.Contains("build", details.Jobs);
-        // Assert.Contains("deploy", details.Jobs);
+        // Assert: Verify workflow structure is extracted
+        Assert.Equal("Complex Build", details.Name);
+        Assert.Contains(details.Triggers, t => t == "push");
+        Assert.Contains(details.Triggers, t => t == "pull_request");
+        Assert.Contains(details.Jobs, j => j.Name == "build");
+        Assert.Contains(details.Jobs, j => j.Name == "deploy");
     }
 
     [Fact]
@@ -163,16 +160,12 @@ jobs:
       - run: dotnet build
 ");
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(async () =>
-        {
-            await _workflowAnalyzer.ValidateWorkflowConsistencyAsync(workflowPath, csprojPath);
-        });
+        // Act: Validate workflow consistency
+        var issues = await _workflowAnalyzer.ValidateWorkflowConsistencyAsync(workflowPath, projectDir);
 
-        // TODO: Once implemented, verify:
-        // var issues = await _workflowAnalyzer.ValidateWorkflowConsistencyAsync(workflowPath, csprojPath);
-        // Assert.NotEmpty(issues);
-        // Assert.Contains(issues, i => i.Severity == "warning" && i.Message.Contains("version mismatch"));
+        // Assert: Verify version mismatch is detected
+        Assert.NotEmpty(issues);
+        Assert.Contains(issues, i => i.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) && i.Message.Contains("version mismatch"));
     }
 
     #endregion
@@ -221,13 +214,30 @@ jobs:
             Path.Combine(projectDir, "appsettings.Staging.json")
         };
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(async () =>
-        {
-            await _configAnalyzer.MergeConfigsAsync(configPaths);
-        });
+        // Act: Merge configurations
+        var mergedConfig = await _configAnalyzer.MergeConfigsAsync(configPaths);
 
-        // TODO: Once implemented, verify merged config overrides
+        // Assert: Verify merged config hierarchy
+        Assert.NotNull(mergedConfig);
+        Assert.Equal(3, mergedConfig.SourceFiles.Count);
+
+        // Check that config merging worked (keys may be in different format)
+        Assert.True(mergedConfig.MergedSettings.Any());
+
+        // Look for keys that should exist after merging
+        var logLevelDefault = mergedConfig.MergedSettings.Keys.FirstOrDefault(k => k.Contains("Default") && k.Contains("Logging"));
+        var logLevelMicrosoft = mergedConfig.MergedSettings.Keys.FirstOrDefault(k => k.Contains("Microsoft") && k.Contains("Logging"));
+        var databaseConnection = mergedConfig.MergedSettings.Keys.FirstOrDefault(k => k.Contains("Database") && k.Contains("Connection"));
+
+        Assert.NotNull(logLevelDefault);
+        Assert.NotNull(logLevelMicrosoft);
+        Assert.NotNull(databaseConnection);
+
+        // Development config should override default log level to Debug
+        Assert.Equal("Debug", mergedConfig.MergedSettings[logLevelDefault]);
+
+        // Staging config should override connection string
+        Assert.Equal("Server=staging;", mergedConfig.MergedSettings[databaseConnection]);
     }
 
     [Fact]
@@ -258,13 +268,30 @@ jobs:
   }
 }");
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(async () =>
-        {
-            await _configAnalyzer.GetConfigSchemaAsync(configPath);
-        });
+        // Act: Extract configuration schema
+        var schema = await _configAnalyzer.GetConfigSchemaAsync(configPath);
 
-        // TODO: Once implemented, verify schema extraction with types
+        // Assert: Verify schema structure is extracted with types
+        Assert.NotNull(schema);
+        Assert.Equal(configPath, schema.FilePath);
+        Assert.True(schema.Properties.Count > 0);
+
+        // Verify nested structure extraction (handle potential double prefixing)
+        var dbConnectionString = schema.Properties.Keys.FirstOrDefault(k => k.Contains("ConnectionString"));
+        var dbMaxConnections = schema.Properties.Keys.FirstOrDefault(k => k.Contains("MaxConnections"));
+        var dbTimeout = schema.Properties.Keys.FirstOrDefault(k => k.Contains("Timeout"));
+        var dbEnableRetry = schema.Properties.Keys.FirstOrDefault(k => k.Contains("EnableRetry"));
+
+        Assert.NotNull(dbConnectionString);
+        Assert.NotNull(dbMaxConnections);
+        Assert.NotNull(dbTimeout);
+        Assert.NotNull(dbEnableRetry);
+
+        // Verify type detection
+        Assert.Equal("string", schema.Properties[dbConnectionString].Type);
+        Assert.Equal("integer", schema.Properties[dbMaxConnections].Type);
+        Assert.Equal("integer", schema.Properties[dbTimeout].Type);
+        Assert.Equal("boolean", schema.Properties[dbEnableRetry].Type);
     }
 
     #endregion
@@ -342,6 +369,9 @@ public class UserController
     public IActionResult GetAdults() => Ok(_service.GetAdults());
 }");
 
+        // Initialize workspace for C# files
+        await InitializeWorkspaceForProject(projectDir);
+
         var change = new CodeChange
         {
             FilePath = Path.Combine(srcDir, "User.cs"),
@@ -349,14 +379,18 @@ public class UserController
             SymbolName = "Age"
         };
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(async () =>
-        {
-            await _impactAnalyzer.AnalyzeImpactAsync(change);
-        });
+        // Act: Analyze impact of the change
+        var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
 
-        // TODO: Once implemented, verify all affected files detected
-        // Assert UserRepository.cs, UserService.cs, UserController.cs all impacted
+        // Assert: Verify all affected files are detected
+        Assert.NotNull(result);
+        Assert.True(result.TotalImpactedFiles > 0);
+
+        // Should detect impacts in related C# files
+        var csharpImpacts = result.CSharpImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
+        Assert.Contains("UserRepository.cs", csharpImpacts);
+        Assert.Contains("UserService.cs", csharpImpacts);
+        Assert.Contains("UserController.cs", csharpImpacts);
     }
 
     [Fact]
@@ -392,6 +426,9 @@ public class PaymentService
     public void MakePayment(decimal amount) => _processor.ProcessPayment(amount, ""USD"");
 }");
 
+        // Initialize workspace for C# files
+        await InitializeWorkspaceForProject(projectDir);
+
         var change = new CodeChange
         {
             FilePath = Path.Combine(srcDir, "IPaymentProcessor.cs"),
@@ -399,13 +436,19 @@ public class PaymentService
             SymbolName = "ProcessPayment"
         };
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(async () =>
-        {
-            await _impactAnalyzer.AnalyzeImpactAsync(change);
-        });
+        // Act: Analyze impact of the interface change
+        var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
 
-        // TODO: Verify both implementations and all callers detected
+        // Assert: Verify both implementations and callers are detected
+        Assert.NotNull(result);
+        Assert.True(result.TotalImpactedFiles > 0);
+
+        // Should detect both implementations
+        var csharpImpacts = result.CSharpImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
+
+        Assert.Contains("CreditCardProcessor.cs", csharpImpacts);
+        Assert.Contains("PayPalProcessor.cs", csharpImpacts);
+        Assert.Contains("PaymentService.cs", csharpImpacts);
     }
 
     [Fact]
@@ -436,6 +479,9 @@ public class EmailService
     }
 }");
 
+        // Initialize workspace for C# files
+        await InitializeWorkspaceForProject(projectDir);
+
         var change = new CodeChange
         {
             FilePath = Path.Combine(projectDir, "appsettings.json"),
@@ -443,13 +489,20 @@ public class EmailService
             SymbolName = "EmailService:SmtpServer"
         };
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(async () =>
-        {
-            await _impactAnalyzer.AnalyzeImpactAsync(change);
-        });
+        // Act: Analyze impact of the config change
+        var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
 
-        // TODO: Verify EmailService.cs detected as affected
+        // Assert: Verify EmailService.cs is detected as affected
+        Assert.NotNull(result);
+        Assert.True(result.TotalImpactedFiles > 0);
+
+        // Should detect config impacts
+        var configImpacts = result.ConfigImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
+        Assert.Contains("appsettings.json", configImpacts);
+
+        // Should detect code references to config
+        var csharpImpacts = result.CSharpImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
+        Assert.Contains("EmailService.cs", csharpImpacts);
     }
 
     #endregion
@@ -648,6 +701,9 @@ var payment = new Payment { Amount = 100, Currency = ""USD"" };
 service.ProcessPayment(payment);
 ```");
 
+        // Initialize workspace for C# files
+        await InitializeWorkspaceForProject(projectDir);
+
         var change = new CodeChange
         {
             FilePath = Path.Combine(srcDir, "Payment.cs"),
@@ -655,13 +711,29 @@ service.ProcessPayment(payment);
             SymbolName = "Currency"
         };
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(async () =>
-        {
-            await _impactAnalyzer.AnalyzeImpactAsync(change);
-        });
+        // Act: Analyze impact across all file types
+        var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
 
-        // TODO: Verify impact detected across .cs, .json, .yml, .md files
+        // Assert: Verify polyglot impact detection
+        Assert.NotNull(result);
+        Assert.True(result.TotalImpactedFiles > 0);
+
+        // Should detect impacts in C# files
+        var csharpFiles = result.CSharpImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
+        Assert.Contains("PaymentService.cs", csharpFiles);
+
+        // Should detect impacts in config files
+        var configFiles = result.ConfigImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
+        Console.WriteLine($"[TEST DEBUG] Config files found: [{string.Join(", ", configFiles)}]");
+        Assert.Contains("appsettings.json", configFiles);
+
+        // Should detect impacts in workflow files
+        var workflowFiles = result.WorkflowImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
+        Assert.Contains("payment-tests.yml", workflowFiles);
+
+        // Should detect impacts in documentation
+        var docFiles = result.DocumentationImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
+        Assert.Contains("Payments.md", docFiles);
     }
 
     [Fact]

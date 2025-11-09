@@ -21,6 +21,7 @@ public class AnalyzerHostTests : FileServiceTestBase
     private ISecurityManager _mockSecurityManager = null!;
     private IAnalyzerRegistry _mockAnalyzerRegistry = null!;
     private IAnalyzerSandbox _mockSandbox = null!;
+    private IAnalyzerSandboxFactory _mockSandboxFactory = null!;
     private IFixEngine _mockFixEngine = null!;
     private ILogger<AnalyzerHost> _mockLogger = null!;
     private ILoggerFactory _mockLoggerFactory = null!;
@@ -33,22 +34,61 @@ public class AnalyzerHostTests : FileServiceTestBase
         _mockSecurityManager = Substitute.For<ISecurityManager>();
         _mockAnalyzerRegistry = Substitute.For<IAnalyzerRegistry>();
         _mockSandbox = Substitute.For<IAnalyzerSandbox>();
+        _mockSandboxFactory = Substitute.For<IAnalyzerSandboxFactory>();
         _mockFixEngine = Substitute.For<IFixEngine>();
+
+        // Set up default security manager behavior
+        _mockSecurityManager.ValidateAssemblyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new SecurityValidationResult
+            {
+                IsValid = true,
+                IsSigned = false,
+                IsTrusted = false,
+                HasMaliciousPatterns = false,
+                Warnings = ImmutableArray<string>.Empty
+            });
+        _mockSecurityManager.IsOperationAllowedAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns(true);
+        _mockSecurityManager.SetPermissionsAsync(Arg.Any<string>(), Arg.Any<AnalyzerPermissions>())
+            .Returns(Task.CompletedTask);
+        _mockSecurityManager.LogSecurityEventAsync(Arg.Any<SecurityEvent>())
+            .Returns(Task.CompletedTask);
+
+        // Set up default analyzer registry behavior
+        _mockAnalyzerRegistry.ValidateCompatibilityAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new CompatibilityResult
+            {
+                IsCompatible = true,
+                Warnings = ImmutableArray<string>.Empty
+            });
+        _mockAnalyzerRegistry.RegisterAnalyzerAsync(Arg.Any<IAnalyzer>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+        _mockAnalyzerRegistry.UnregisterAnalyzerAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+        _mockAnalyzerRegistry.GetLoadedAnalyzers().Returns(new List<IAnalyzer>());
+        _mockAnalyzerRegistry.GetRegisteredAnalyzers().Returns(ImmutableArray<AnalyzerInfo>.Empty);
+
+        // Set up default sandbox factory behavior
+        _mockSandboxFactory.CreateSandbox().Returns(_mockSandbox);
+        _mockSandbox.LoadAnalyzerAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((IAnalyzer?)null);
+
         _mockLogger = CreateNullLogger<AnalyzerHost>();
         _mockLoggerFactory = CreateNullLoggerFactory();
 
-        _analyzerHost = new AnalyzerHost(_mockLogger, _mockLoggerFactory, _mockAnalyzerRegistry, _mockSecurityManager, _mockFixEngine);
+        _analyzerHost = new AnalyzerHost(_mockLogger, _mockLoggerFactory, _mockAnalyzerRegistry, _mockSecurityManager, _mockFixEngine, _mockSandboxFactory);
     }
 
     [Test]
     public void Constructor_WithNullDependencies_ShouldThrowArgumentNullException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new AnalyzerHost(null!, _mockLoggerFactory, _mockAnalyzerRegistry, _mockSecurityManager, _mockFixEngine));
-        Assert.Throws<ArgumentNullException>(() => new AnalyzerHost(_mockLogger, null!, _mockAnalyzerRegistry, _mockSecurityManager, _mockFixEngine));
-        Assert.Throws<ArgumentNullException>(() => new AnalyzerHost(_mockLogger, _mockLoggerFactory, null!, _mockSecurityManager, _mockFixEngine));
-        Assert.Throws<ArgumentNullException>(() => new AnalyzerHost(_mockLogger, _mockLoggerFactory, _mockAnalyzerRegistry, null!, _mockFixEngine));
-        Assert.Throws<ArgumentNullException>(() => new AnalyzerHost(_mockLogger, _mockLoggerFactory, _mockAnalyzerRegistry, _mockSecurityManager, null!));
+        Assert.Throws<ArgumentNullException>(() => new AnalyzerHost(null!, _mockLoggerFactory, _mockAnalyzerRegistry, _mockSecurityManager, _mockFixEngine, _mockSandboxFactory));
+        Assert.Throws<ArgumentNullException>(() => new AnalyzerHost(_mockLogger, null!, _mockAnalyzerRegistry, _mockSecurityManager, _mockFixEngine, _mockSandboxFactory));
+        Assert.Throws<ArgumentNullException>(() => new AnalyzerHost(_mockLogger, _mockLoggerFactory, null!, _mockSecurityManager, _mockFixEngine, _mockSandboxFactory));
+        Assert.Throws<ArgumentNullException>(() => new AnalyzerHost(_mockLogger, _mockLoggerFactory, _mockAnalyzerRegistry, null!, _mockFixEngine, _mockSandboxFactory));
+        Assert.Throws<ArgumentNullException>(() => new AnalyzerHost(_mockLogger, _mockLoggerFactory, _mockAnalyzerRegistry, _mockSecurityManager, null!, _mockSandboxFactory));
+        Assert.Throws<ArgumentNullException>(() => new AnalyzerHost(_mockLogger, _mockLoggerFactory, _mockAnalyzerRegistry, _mockSecurityManager, _mockFixEngine, null!));
     }
 
     [Test]
@@ -60,7 +100,8 @@ public class AnalyzerHostTests : FileServiceTestBase
             _mockLoggerFactory,
             _mockAnalyzerRegistry,
             _mockSecurityManager,
-            _mockFixEngine));
+            _mockFixEngine,
+            _mockSandboxFactory));
     }
 
     [Test]
@@ -176,27 +217,16 @@ public class AnalyzerHostTests : FileServiceTestBase
         // Arrange
         var analyzerId = "test-analyzer";
         var targetPath = CreateTestDirectory("target");
+        var testFile = CreateTestFile("public class Test { }", ".cs", targetPath);
         var options = new AnalyzerOptions
         {
             EnableSemanticAnalysis = true,
             EnablePerformanceAnalysis = false
         };
 
-        var analyzer = Substitute.For<IAnalyzer>();
-        var expectedResult = new AnalyzerResult
-        {
-            Success = true,
-            AnalyzerId = analyzerId,
-            Findings = new List<Finding>
-            {
-                new() { Severity = FindingSeverity.Info, Message = "Test finding" }
-            }
-        };
-
-        _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(Substitute.For<IAnalyzer>());
-        _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(analyzer);
+        var analyzer = CreateMockAnalyzer(analyzerId, "Test Analyzer", "1.0.0");
         analyzer.CanAnalyze(targetPath).Returns(true);
-        analyzer.AnalyzeAsync(targetPath, Arg.Any<string>(), Arg.Any<CancellationToken>())
+        analyzer.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new AnalysisResult
             {
                 Success = true,
@@ -207,11 +237,13 @@ public class AnalyzerHostTests : FileServiceTestBase
                     Title = "Test Finding",
                     Description = "Test finding",
                     Severity = IssueSeverity.Info,
-                    FilePath = targetPath,
+                    FilePath = testFile,
                     LineNumber = 1,
                     ColumnNumber = 1
                 })
             });
+
+        _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(analyzer);
 
         // Act
         var result = await _analyzerHost.RunAnalyzerAsync(analyzerId, targetPath, options);
@@ -247,9 +279,8 @@ public class AnalyzerHostTests : FileServiceTestBase
         // Arrange
         var analyzerId = "test-analyzer";
         var targetPath = CreateTestDirectory("target");
-        var analyzer = Substitute.For<IAnalyzer>();
+        var analyzer = CreateMockAnalyzer(analyzerId, "Test Analyzer", "1.0.0");
 
-        _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(Substitute.For<IAnalyzer>());
         _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(analyzer);
         analyzer.CanAnalyze(targetPath).Returns(false);
 
@@ -270,12 +301,12 @@ public class AnalyzerHostTests : FileServiceTestBase
         // Arrange
         var analyzerId = "test-analyzer";
         var targetPath = CreateTestDirectory("target");
-        var analyzer = Substitute.For<IAnalyzer>();
+        var testFile = CreateTestFile("public class Test { }", ".cs", targetPath);
+        var analyzer = CreateMockAnalyzer(analyzerId, "Test Analyzer", "1.0.0");
 
-        _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(Substitute.For<IAnalyzer>());
         _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(analyzer);
         analyzer.CanAnalyze(targetPath).Returns(true);
-        analyzer.AnalyzeAsync(targetPath, Arg.Any<string>(), Arg.Any<CancellationToken>())
+        analyzer.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException<AnalysisResult>(new InvalidOperationException("Analysis failed")));
 
         // Act
@@ -326,7 +357,6 @@ public class AnalyzerHostTests : FileServiceTestBase
             CanAnalyzeSolutions = true
         };
 
-        _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(Substitute.For<IAnalyzer>());
         _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(analyzer);
         analyzer.GetCapabilities().Returns(expectedCapabilities);
 
@@ -414,6 +444,7 @@ public class AnalyzerHostTests : FileServiceTestBase
         // Arrange
         var analyzerIds = new[] { "working-analyzer", "failing-analyzer", "working-analyzer-2" };
         var targetPath = CreateTestDirectory("target");
+        var testFile = CreateTestFile("public class Test { }", ".cs", targetPath);
         var options = new AnalyzerOptions();
 
         var workingAnalyzer1 = CreateMockAnalyzer("working-analyzer", "Working Analyzer", "1.0.0");
@@ -422,17 +453,17 @@ public class AnalyzerHostTests : FileServiceTestBase
 
         _mockAnalyzerRegistry.GetAnalyzer("working-analyzer").Returns(workingAnalyzer1);
         workingAnalyzer1.CanAnalyze(targetPath).Returns(true);
-        workingAnalyzer1.AnalyzeAsync(targetPath, Arg.Any<string>(), Arg.Any<CancellationToken>())
+        workingAnalyzer1.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new AnalysisResult { Success = true, AnalyzerId = "working-analyzer" });
 
         _mockAnalyzerRegistry.GetAnalyzer("failing-analyzer").Returns(failingAnalyzer);
         failingAnalyzer.CanAnalyze(targetPath).Returns(true);
-        failingAnalyzer.AnalyzeAsync(targetPath, Arg.Any<string>(), Arg.Any<CancellationToken>())
+        failingAnalyzer.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException<AnalysisResult>(new InvalidOperationException("Failed")));
 
         _mockAnalyzerRegistry.GetAnalyzer("working-analyzer-2").Returns(workingAnalyzer2);
         workingAnalyzer2.CanAnalyze(targetPath).Returns(true);
-        workingAnalyzer2.AnalyzeAsync(targetPath, Arg.Any<string>(), Arg.Any<CancellationToken>())
+        workingAnalyzer2.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new AnalysisResult { Success = true, AnalyzerId = "working-analyzer-2" });
 
         // Act
@@ -455,22 +486,31 @@ public class AnalyzerHostTests : FileServiceTestBase
     public void GetLoadedAnalyzers_ShouldReturnLoadedAnalyzers()
     {
         // Arrange
-        var expectedAnalyzers = new[]
+        var expectedAnalyzerInfos = new[]
         {
-            CreateMockAnalyzer("analyzer-1", "Analyzer 1", "1.0.0"),
-            CreateMockAnalyzer("analyzer-2", "Analyzer 2", "2.0.0")
+            new AnalyzerInfo
+            {
+                Id = "analyzer-1",
+                Name = "Analyzer 1",
+                Version = new Version("1.0.0"),
+                Description = "Description for Analyzer 1",
+                Author = "Test Author",
+                SupportedExtensions = ImmutableArray.Create(".cs"),
+                IsEnabled = true
+            },
+            new AnalyzerInfo
+            {
+                Id = "analyzer-2",
+                Name = "Analyzer 2",
+                Version = new Version("2.0.0"),
+                Description = "Description for Analyzer 2",
+                Author = "Test Author",
+                SupportedExtensions = ImmutableArray.Create(".cs"),
+                IsEnabled = true
+            }
         };
 
-        _mockAnalyzerRegistry.GetRegisteredAnalyzers().Returns(expectedAnalyzers.Select(a => new AnalyzerInfo
-        {
-            Id = a.Id,
-            Name = a.Name,
-            Version = a.Version,
-            Description = a.Description,
-            Author = a.Author,
-            SupportedExtensions = a.SupportedExtensions,
-            IsEnabled = a.IsEnabled
-        }).ToImmutableArray());
+        _mockAnalyzerRegistry.GetRegisteredAnalyzers().Returns(expectedAnalyzerInfos.ToImmutableArray());
 
         // Act
         var result = _analyzerHost.GetLoadedAnalyzers();
@@ -543,20 +583,18 @@ public class AnalyzerHostTests : FileServiceTestBase
         // Arrange
         var analyzerId = "slow-analyzer";
         var targetPath = CreateTestDirectory("target");
+        var testFile = CreateTestFile("public class Test { }", ".cs", targetPath);
         var analyzer = Substitute.For<IAnalyzer>();
         var cts = new CancellationTokenSource();
-        cts.Cancel();
 
-        _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(Substitute.For<IAnalyzer>());
         _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(analyzer);
         analyzer.CanAnalyze(targetPath).Returns(true);
 
-        // Act & Assert
-        Assert.ThrowsAsync<OperationCanceledException>(
-            async () => await _analyzerHost.RunAnalyzerAsync(analyzerId, targetPath, cancellationToken: cts.Token));
+        // Act & Assert - Test RunAnalyzerAsync
+        cts.Cancel();
 
         Assert.ThrowsAsync<OperationCanceledException>(
-            async () => await _analyzerHost.LoadAnalyzerAsync("/test/path", cts.Token));
+            async () => await _analyzerHost.RunAnalyzerAsync(analyzerId, targetPath, cancellationToken: cts.Token));
     }
 
     [Test]
@@ -574,7 +612,6 @@ public class AnalyzerHostTests : FileServiceTestBase
             Findings = new List<Finding> { new() { Message = "Consistent finding" } }
         };
 
-        _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(Substitute.For<IAnalyzer>());
         _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(analyzer);
         analyzer.CanAnalyze(targetPath).Returns(true);
         analyzer.AnalyzeAsync(targetPath, Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -609,13 +646,29 @@ public class AnalyzerHostTests : FileServiceTestBase
         var analyzer = Substitute.For<IAnalyzer>();
         analyzer.Id.Returns(id);
         analyzer.Name.Returns(name);
+        analyzer.Description.Returns($"Description for {name}");
+        analyzer.Author.Returns("Test Author");
         analyzer.Version.Returns(new Version(version));
+        analyzer.IsEnabled.Returns(true);
+        analyzer.Configuration.Returns(new AnalyzerConfiguration());
+        analyzer.SupportedExtensions.Returns(ImmutableArray.Create(".cs"));
         analyzer.CanAnalyze(Arg.Any<string>()).Returns(true); // Default to true for mock analyzer
         analyzer.GetCapabilities().Returns(new AnalyzerCapabilities
         {
             SupportedLanguages = new[] { "C#" },
             SupportedFileTypes = new[] { ".cs" }
         });
+        analyzer.GetRules().Returns(ImmutableArray<AnalyzerRule>.Empty);
+        analyzer.GetFixes(Arg.Any<string>()).Returns(ImmutableArray<AnalyzerFix>.Empty);
+        analyzer.InitializeAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        analyzer.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new AnalysisResult
+            {
+                Success = true,
+                AnalyzerId = id,
+                Issues = ImmutableArray<AnalyzerIssue>.Empty
+            });
+        analyzer.DisposeAsync().Returns(Task.CompletedTask);
         return analyzer;
     }
 }

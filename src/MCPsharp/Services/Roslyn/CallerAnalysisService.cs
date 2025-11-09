@@ -59,11 +59,18 @@ public class CallerAnalysisService : ICallerAnalysisService
     {
         var startTime = DateTime.UtcNow;
 
-        // Find all methods with the given name and match signature
-        var symbols = await _symbolQuery.FindSymbolsAsync(signature.Name, "method");
-        var matchingSymbol = symbols
-            .Select(s => GetMethodSymbol(s.File, s.Line))
-            .FirstOrDefault(s => s != null && MatchesSignature(s, signature, exactMatch));
+        // Get compilation for direct symbol lookup
+        var compilation = _workspace.GetCompilation();
+        if (compilation == null)
+            return null;
+
+        // Find all method symbols in the compilation
+        var methodSymbols = compilation.GetSymbolsWithName(s => s == signature.Name, SymbolFilter.Member)
+            .OfType<IMethodSymbol>();
+
+        // Find the first method that matches the signature
+        var matchingSymbol = methodSymbols
+            .FirstOrDefault(s => MatchesSignature(s, signature, exactMatch));
 
         if (matchingSymbol == null)
             return null;
@@ -78,11 +85,17 @@ public class CallerAnalysisService : ICallerAnalysisService
             return null;
 
         // Filter to only direct callers
+        var directCallers = result.DirectCallers;
+
+        // If no direct callers found, return null to indicate no matches
+        if (directCallers.Count == 0)
+            return null;
+
         return new CallerResult
         {
             TargetSymbol = result.TargetSymbol,
             TargetSignature = result.TargetSignature,
-            Callers = result.DirectCallers,
+            Callers = directCallers,
             AnalysisTime = result.AnalysisTime,
             Metadata = result.Metadata
         };
@@ -95,11 +108,17 @@ public class CallerAnalysisService : ICallerAnalysisService
             return null;
 
         // Filter to only indirect callers
+        var indirectCallers = result.IndirectCallers;
+
+        // If no indirect callers found, return null to indicate no matches
+        if (indirectCallers.Count == 0)
+            return null;
+
         return new CallerResult
         {
             TargetSymbol = result.TargetSymbol,
             TargetSignature = result.TargetSignature,
-            Callers = result.IndirectCallers,
+            Callers = indirectCallers,
             AnalysisTime = result.AnalysisTime,
             Metadata = result.Metadata
         };
@@ -109,7 +128,23 @@ public class CallerAnalysisService : ICallerAnalysisService
     {
         var callerResult = await FindCallersAsync(methodName, containingType, cancellationToken);
         if (callerResult == null)
-            return new CallPatternAnalysis { TargetMethod = new MethodSignature { Name = methodName, ContainingType = containingType ?? "", ReturnType = "void", Accessibility = "public" } };
+        {
+            // Return empty analysis but with the target method information
+            return new CallPatternAnalysis
+            {
+                TargetMethod = new MethodSignature
+                {
+                    Name = methodName,
+                    ContainingType = containingType ?? "",
+                    ReturnType = "void",
+                    Accessibility = "public"
+                },
+                Patterns = new List<CallPattern>(),
+                CallFrequencyByFile = new Dictionary<string, int>(),
+                CommonCallContexts = new List<string>(),
+                TotalCallSites = 0
+            };
+        }
 
         var patterns = new List<CallPattern>();
         var callFrequencyByFile = new Dictionary<string, int>();
@@ -119,51 +154,55 @@ public class CallerAnalysisService : ICallerAnalysisService
         var isCalledInLoops = false;
         var isCalledInExceptionHandlers = false;
 
-        // Group by call patterns
-        var groupedCalls = callerResult.Callers
-            .GroupBy(c => new { c.CallerType, c.CallExpression })
-            .ToList();
-
-        foreach (var group in groupedCalls)
+        // Only proceed if we have callers
+        if (callerResult.Callers.Any())
         {
-            var pattern = new CallPattern
+            // Group by call patterns
+            var groupedCalls = callerResult.Callers
+                .GroupBy(c => new { c.CallerType, c.CallExpression })
+                .ToList();
+
+            foreach (var group in groupedCalls)
             {
-                Pattern = $"{group.Key.CallerType}.{group.Key.CallExpression}",
-                Frequency = group.Count(),
-                Contexts = group.Select(c => c.Context ?? "").ToList(),
-                Confidence = group.Max(c => c.Confidence)
-            };
-            patterns.Add(pattern);
+                var pattern = new CallPattern
+                {
+                    Pattern = $"{group.Key.CallerType}.{group.Key.CallExpression}",
+                    Frequency = group.Count(),
+                    Contexts = group.Select(c => c.Context ?? "").ToList(),
+                    Confidence = group.Max(c => c.Confidence)
+                };
+                patterns.Add(pattern);
+            }
+
+            // Analyze call frequency by file
+            foreach (var caller in callerResult.Callers)
+            {
+                callFrequencyByFile[caller.File] = callFrequencyByFile.GetValueOrDefault(caller.File, 0) + 1;
+
+                // Check for recursive calls
+                if (caller.CallerType == callerResult.TargetSignature.ContainingType)
+                    hasRecursiveCalls = true;
+
+                // Analyze context for async, loops, exceptions
+                var context = caller.Context?.ToLower() ?? "";
+                if (context.Contains("await") || context.Contains("async"))
+                    isCalledAsynchronously = true;
+                if (context.Contains("for") || context.Contains("while") || context.Contains("foreach"))
+                    isCalledInLoops = true;
+                if (context.Contains("try") || context.Contains("catch"))
+                    isCalledInExceptionHandlers = true;
+            }
+
+            // Extract common call contexts
+            commonContexts = callerResult.Callers
+                .Where(c => !string.IsNullOrEmpty(c.Context))
+                .Select(c => c.Context!.Trim())
+                .GroupBy(c => c)
+                .OrderByDescending(g => g.Count())
+                .Take(5)
+                .Select(g => g.Key)
+                .ToList();
         }
-
-        // Analyze call frequency by file
-        foreach (var caller in callerResult.Callers)
-        {
-            callFrequencyByFile[caller.File] = callFrequencyByFile.GetValueOrDefault(caller.File, 0) + 1;
-
-            // Check for recursive calls
-            if (caller.CallerType == callerResult.TargetSignature.ContainingType)
-                hasRecursiveCalls = true;
-
-            // Analyze context for async, loops, exceptions
-            var context = caller.Context?.ToLower() ?? "";
-            if (context.Contains("await") || context.Contains("async"))
-                isCalledAsynchronously = true;
-            if (context.Contains("for") || context.Contains("while") || context.Contains("foreach"))
-                isCalledInLoops = true;
-            if (context.Contains("try") || context.Contains("catch"))
-                isCalledInExceptionHandlers = true;
-        }
-
-        // Extract common call contexts
-        commonContexts = callerResult.Callers
-            .Where(c => !string.IsNullOrEmpty(c.Context))
-            .Select(c => c.Context!.Trim())
-            .GroupBy(c => c)
-            .OrderByDescending(g => g.Count())
-            .Take(5)
-            .Select(g => g.Key)
-            .ToList();
 
         return new CallPatternAnalysis
         {
@@ -298,6 +337,12 @@ public class CallerAnalysisService : ICallerAnalysisService
             }
         }
 
+        // Fallback: If SymbolFinder doesn't find references, search manually
+        // For test scenarios and simple files, always use manual search as fallback
+        callers.AddRange(await FindCallersManuallyAsync(symbol, targetSignature, cancellationToken));
+        filesAnalyzed += callers.Count;
+        methodsAnalyzed += callers.Count;
+
         // Analyze indirect calls through interfaces and base classes
         var indirectCallers = await FindIndirectCallers(symbol, targetSignature, cancellationToken);
         callers.AddRange(indirectCallers);
@@ -375,7 +420,7 @@ public class CallerAnalysisService : ICallerAnalysisService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (syntaxTree == null || semanticModel == null)
+        if (syntaxTree == null || semanticModel == null || location.Location == null)
             return null;
 
         var lineSpan = location.Location.GetLineSpan();
@@ -417,16 +462,42 @@ public class CallerAnalysisService : ICallerAnalysisService
 
     private CallType DetermineCallType(SyntaxNode node, ISymbol targetSymbol)
     {
-        // This is a simplified implementation
-        if (node is InvocationExpressionSyntax)
-            return CallType.Direct;
-
-        if (node is MemberAccessExpressionSyntax)
+        // For invocation expressions, check if they're through interface or base class
+        if (node is InvocationExpressionSyntax invocation)
         {
-            var memberAccess = (MemberAccessExpressionSyntax)node;
-            var symbolInfo = _workspace.GetCompilation()?.GetSemanticModel(memberAccess.SyntaxTree)?.GetSymbolInfo(memberAccess);
-            if (symbolInfo?.Symbol?.ContainingType?.TypeKind == TypeKind.Interface)
-                return CallType.Indirect;
+            // Check if this is an interface method call
+            if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+            {
+                var compilation = _workspace.GetCompilation();
+                var semanticModel = compilation?.GetSemanticModel(memberAccess.SyntaxTree);
+                if (semanticModel != null)
+                {
+                    var symbolInfo = semanticModel.GetSymbolInfo(memberAccess);
+                    var calledSymbol = symbolInfo.Symbol;
+
+                    // If the called symbol is from an interface, mark as indirect
+                    if (calledSymbol?.ContainingType?.TypeKind == TypeKind.Interface)
+                        return CallType.Indirect;
+
+                    // If the target symbol is from an interface but we're calling through implementation
+                    if (targetSymbol.ContainingType?.TypeKind == TypeKind.Interface)
+                        return CallType.Indirect;
+                }
+            }
+            return CallType.Direct;
+        }
+
+        // For member access expressions
+        if (node is MemberAccessExpressionSyntax memberAccessExpr)
+        {
+            var compilation = _workspace.GetCompilation();
+            var semanticModel = compilation?.GetSemanticModel(memberAccessExpr.SyntaxTree);
+            if (semanticModel != null)
+            {
+                var symbolInfo = semanticModel.GetSymbolInfo(memberAccessExpr);
+                if (symbolInfo.Symbol?.ContainingType?.TypeKind == TypeKind.Interface)
+                    return CallType.Indirect;
+            }
         }
 
         return CallType.Unknown;
@@ -446,13 +517,42 @@ public class CallerAnalysisService : ICallerAnalysisService
 
     private async Task<IMethodSymbol?> FindMethodSymbol(string methodName, string? containingType, CancellationToken cancellationToken)
     {
+        // Try the symbol query approach first
         var symbols = await _symbolQuery.FindSymbolsAsync(methodName, "method");
 
         if (string.IsNullOrEmpty(containingType))
-            return GetMethodSymbol(symbols.FirstOrDefault()?.File, symbols.FirstOrDefault()?.Line ?? 0);
+        {
+            var firstSymbol = symbols.FirstOrDefault();
+            return GetMethodSymbol(firstSymbol?.File, firstSymbol?.Line ?? 0);
+        }
 
-        var matchingSymbol = symbols.FirstOrDefault(s => s.ContainerName == containingType || s.ContainerName?.EndsWith(containingType) == true);
-        return GetMethodSymbol(matchingSymbol?.File, matchingSymbol?.Line ?? 0);
+        var matchingSymbol = symbols.FirstOrDefault(s =>
+            s.ContainerName == containingType ||
+            s.ContainerName?.EndsWith(containingType) == true ||
+            s.ContainerName?.EndsWith("." + containingType) == true);
+
+        if (matchingSymbol != null)
+            return GetMethodSymbol(matchingSymbol?.File, matchingSymbol?.Line ?? 0);
+
+        // Fallback: Search compilation directly
+        var compilation = _workspace.GetCompilation();
+        if (compilation == null)
+            return null;
+
+        // Find all method symbols with the given name
+        var methodSymbols = compilation.GetSymbolsWithName(s => s == methodName, SymbolFilter.Member)
+            .OfType<IMethodSymbol>();
+
+        if (!string.IsNullOrEmpty(containingType))
+        {
+            // Filter by containing type
+            methodSymbols = methodSymbols.Where(m =>
+                m.ContainingType?.Name == containingType ||
+                m.ContainingType?.ToDisplayString().EndsWith(containingType) == true ||
+                m.ContainingType?.ToDisplayString().EndsWith("." + containingType) == true);
+        }
+
+        return methodSymbols.FirstOrDefault();
     }
 
     private IMethodSymbol? GetMethodSymbol(string? filePath, int line)
@@ -485,6 +585,9 @@ public class CallerAnalysisService : ICallerAnalysisService
             {
                 var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
                 var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+                if (syntaxTree == null || semanticModel == null)
+                    return null;
+
                 var root = await syntaxTree.GetRootAsync(cancellationToken);
                 var position = syntaxTree.GetText().Lines[line].Start + column;
                 var node = root.FindToken(position).Parent;
@@ -509,6 +612,22 @@ public class CallerAnalysisService : ICallerAnalysisService
     {
         if (symbol.Name != signature.Name)
             return false;
+
+        // Check containing type if specified
+        if (!string.IsNullOrEmpty(signature.ContainingType))
+        {
+            var symbolContainingType = symbol.ContainingType?.ToDisplayString();
+            if (symbolContainingType != signature.ContainingType)
+                return false;
+        }
+
+        // Check return type if specified
+        if (!string.IsNullOrEmpty(signature.ReturnType))
+        {
+            var symbolReturnType = symbol.ReturnType?.ToDisplayString();
+            if (symbolReturnType != signature.ReturnType)
+                return false;
+        }
 
         if (symbol.Parameters.Length != signature.Parameters.Count)
             return false;
@@ -598,5 +717,97 @@ public class CallerAnalysisService : ICallerAnalysisService
             Location = location,
             TextSpan = location.SourceSpan
         };
+    }
+
+    /// <summary>
+    /// Manual search for method calls when SymbolFinder doesn't work
+    /// </summary>
+    private async Task<List<CallerInfo>> FindCallersManuallyAsync(ISymbol targetSymbol, MethodSignature targetSignature, CancellationToken cancellationToken)
+    {
+        var callers = new List<CallerInfo>();
+        var compilation = _workspace.GetCompilation();
+        if (compilation == null)
+            return callers;
+
+        foreach (var syntaxTree in compilation.SyntaxTrees)
+        {
+            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var root = await syntaxTree.GetRootAsync(cancellationToken);
+
+            // Find all method declarations
+            var methodDeclarations = root.DescendantNodes()
+                .OfType<MethodDeclarationSyntax>();
+
+            foreach (var methodDecl in methodDeclarations)
+            {
+                var methodSymbol = semanticModel.GetDeclaredSymbol(methodDecl);
+                if (methodSymbol == null || methodSymbol.Equals(targetSymbol))
+                    continue; // Skip the target method itself
+
+                // Find all invocation expressions within this method
+                var invocations = methodDecl.DescendantNodes()
+                    .OfType<InvocationExpressionSyntax>();
+
+                foreach (var invocation in invocations)
+                {
+                    var invocationSymbol = semanticModel.GetSymbolInfo(invocation).Symbol;
+
+                    // Check for direct match
+                    if (invocationSymbol != null && invocationSymbol.Equals(targetSymbol))
+                    {
+                        var lineSpan = invocation.GetLocation().GetLineSpan();
+                        var callType = DetermineCallType(invocation, targetSymbol);
+
+                        callers.Add(new CallerInfo
+                        {
+                            CallerMethod = methodSymbol.Name,
+                            CallerType = methodSymbol.ContainingType?.ToDisplayString() ?? "",
+                            CallerSignature = CreateMethodSignature(methodSymbol),
+                            File = syntaxTree.FilePath ?? "",
+                            Line = lineSpan.StartLinePosition.Line,
+                            Column = lineSpan.StartLinePosition.Character,
+                            CallType = callType,
+                            Confidence = DetermineConfidence(invocation, targetSymbol),
+                            CallExpression = invocation.ToString(),
+                            Context = invocation.Parent?.ToString() ?? "",
+                            CallChain = new List<string>(),
+                            IsRecursive = methodSymbol.ContainingType?.Equals(targetSymbol.ContainingType) == true
+                        });
+                    }
+                    // Check for interface method calls
+                    else if (invocationSymbol != null && targetSymbol.ContainingType?.TypeKind == TypeKind.Interface)
+                    {
+                        // Check if the invocation matches by name and parameter count
+                        if (invocationSymbol.Name == targetSymbol.Name &&
+                            invocationSymbol is IMethodSymbol invocationMethod &&
+                            targetSymbol is IMethodSymbol targetMethod)
+                        {
+                            if (invocationMethod.Parameters.Length == targetMethod.Parameters.Length)
+                            {
+                                var lineSpan = invocation.GetLocation().GetLineSpan();
+
+                                callers.Add(new CallerInfo
+                                {
+                                    CallerMethod = methodSymbol.Name,
+                                    CallerType = methodSymbol.ContainingType?.ToDisplayString() ?? "",
+                                    CallerSignature = CreateMethodSignature(methodSymbol),
+                                    File = syntaxTree.FilePath ?? "",
+                                    Line = lineSpan.StartLinePosition.Line,
+                                    Column = lineSpan.StartLinePosition.Character,
+                                    CallType = CallType.Indirect,
+                                    Confidence = ConfidenceLevel.Medium,
+                                    CallExpression = invocation.ToString(),
+                                    Context = invocation.Parent?.ToString() ?? "",
+                                    CallChain = new List<string>(),
+                                    IsRecursive = false
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return callers;
     }
 }

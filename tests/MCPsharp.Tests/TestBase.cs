@@ -41,7 +41,7 @@ public abstract class TestBase
     {
         var dir = directory ?? CreateTempDirectory();
         var filePath = Path.Combine(dir, $"{Guid.NewGuid()}{extension}");
-        File.WriteAllText(filePath, content);
+        File.WriteAllText(filePath, content, System.Text.Encoding.UTF8);
         return filePath;
     }
 

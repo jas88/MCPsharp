@@ -67,7 +67,8 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         // Analyze each syntax tree
         foreach (var syntaxTree in compilation.SyntaxTrees)
         {
-            if (!syntaxTree.FilePath?.EndsWith(".cs") == true) continue;
+            if (string.IsNullOrEmpty(syntaxTree.FilePath) || !syntaxTree.FilePath.EndsWith(".cs"))
+                continue;
 
             analyzedFiles.Add(syntaxTree.FilePath);
             var semanticModel = compilation.GetSemanticModel(syntaxTree);
@@ -163,7 +164,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
             foreach (var typeDeclaration in typeDeclarations)
             {
                 var symbol = semanticModel.GetDeclaredSymbol(typeDeclaration);
-                if (symbol == null) continue;
+                if (symbol == null || syntaxTree.FilePath == null) continue;
 
                 var layer = IdentifyLayer(symbol, architecture);
                 var node = CreateDependencyNode(symbol, layer, syntaxTree.FilePath);

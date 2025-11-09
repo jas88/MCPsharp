@@ -325,16 +325,26 @@ public class TempFileManagerService : ITempFileManager, IDisposable
 
     public void Dispose()
     {
-        _cleanupTimer?.Dispose();
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
 
-        // Clean up all temp files on disposal
-        try
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
         {
-            CleanupAsync(TimeSpan.Zero).GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during disposal cleanup");
+            // Dispose managed resources
+            _cleanupTimer?.Dispose();
+
+            // Clean up all temp files on disposal
+            try
+            {
+                CleanupAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during disposal cleanup");
+            }
         }
     }
 }

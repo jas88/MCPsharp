@@ -29,7 +29,7 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
         _cleanupTimer = new Timer(PerformCleanup, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
     }
 
-    public async Task<string> CreateProgressAsync(string operationId, string name, long totalBytes)
+    public Task<string> CreateProgressAsync(string operationId, string name, long totalBytes)
     {
         var progress = new StreamProgress
         {
@@ -43,10 +43,10 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
         _logger.LogInformation("Created progress tracker for operation {OperationId} ({Name}) with {TotalBytes} bytes",
             operationId, name, totalBytes);
 
-        return operationId;
+        return Task.FromResult(operationId);
     }
 
-    public async Task UpdateProgressAsync(string operationId, long bytesProcessed, long chunksProcessed = 0, long linesProcessed = 0, long itemsProcessed = 0)
+    public Task UpdateProgressAsync(string operationId, long bytesProcessed, long chunksProcessed = 0, long linesProcessed = 0, long itemsProcessed = 0)
     {
         if (_progressTracker.TryGetValue(operationId, out var progress))
         {
@@ -78,12 +78,14 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
                 }
             }
         }
+
+        return Task.CompletedTask;
     }
 
-    public async Task<StreamProgress?> GetProgressAsync(string operationId)
+    public Task<StreamProgress?> GetProgressAsync(string operationId)
     {
         _progressTracker.TryGetValue(operationId, out var progress);
-        return progress;
+        return Task.FromResult(progress);
     }
 
     public async Task SetPhaseAsync(string operationId, string phase)
@@ -311,7 +313,17 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
 
     public void Dispose()
     {
-        _cleanupTimer?.Dispose();
-        _progressTracker.Clear();
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            // Dispose managed resources
+            _cleanupTimer?.Dispose();
+            _progressTracker.Clear();
+        }
     }
 }

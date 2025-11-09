@@ -211,7 +211,7 @@ public class StreamProcessSummary
     public required long TotalBytesProcessed { get; init; }
     public required long TotalRecordsProcessed { get; init; }
     public required TimeSpan ExecutionTime { get; init; }
-    public double ProcessingRate => TotalBytesProcessed / ExecutionTime.TotalSeconds;
+    public double ProcessingRate => ExecutionTime.TotalSeconds > 0 ? TotalBytesProcessed / ExecutionTime.TotalSeconds : 0;
 }
 
 /// <summary>

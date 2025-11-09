@@ -9,7 +9,7 @@ namespace MCPsharp.Tests.Services;
 /// <summary>
 /// Integration tests for AdvancedReferenceFinderService
 /// </summary>
-public class AdvancedReferenceFinderServiceTests : IDisposable
+public class AdvancedReferenceFinderServiceIntegrationTests : IDisposable
 {
     private readonly RoslynWorkspace _workspace;
     private readonly SymbolQueryService _symbolQuery;
@@ -18,7 +18,7 @@ public class AdvancedReferenceFinderServiceTests : IDisposable
     private readonly TypeUsageService _typeUsage;
     private readonly AdvancedReferenceFinderService _advancedReferenceFinder;
 
-    public AdvancedReferenceFinderServiceTests()
+    public AdvancedReferenceFinderServiceIntegrationTests()
     {
         _workspace = new RoslynWorkspace();
         _symbolQuery = new SymbolQueryService(_workspace);
@@ -28,11 +28,13 @@ public class AdvancedReferenceFinderServiceTests : IDisposable
         _advancedReferenceFinder = new AdvancedReferenceFinderService(_workspace, _symbolQuery, _callerAnalysis, _callChain, _typeUsage);
 
         // Initialize workspace with test fixtures
-        InitializeWorkspace();
+        InitializeWorkspace().Wait();
     }
 
-    private void InitializeWorkspace()
+    private async Task InitializeWorkspace()
     {
+        await _workspace.InitializeTestWorkspaceAsync();
+
         var testFiles = new[]
         {
             ("IService.cs", @"
@@ -106,11 +108,18 @@ public class RecursiveService
 }")
         };
 
-        // Add files to workspace - methods no longer available
+        // Add files to workspace using in-memory document method
         foreach (var (fileName, content) in testFiles)
         {
-            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "TestFixtures", fileName);
-            // _workspace.AddDocumentAsync(filePath).Wait(); // Method no longer available
+            var filePath = Path.Combine("TestFixtures", fileName);
+            await _workspace.AddInMemoryDocumentAsync(filePath, content);
+        }
+
+        // Ensure compilation is ready
+        var compilation = _workspace.GetCompilation();
+        if (compilation == null)
+        {
+            throw new InvalidOperationException("Failed to create compilation for test workspace");
         }
     }
 
@@ -499,6 +508,42 @@ public class RecursiveService
                     Line = 1,
                     Column = 1,
                     Context = "new Service()"
+                },
+                new()
+                {
+                    UsageKind = TypeUsageKind.Parameter,
+                    Confidence = ConfidenceLevel.High,
+                    File = "TestFile.cs",
+                    Line = 2,
+                    Column = 1,
+                    Context = "method parameter"
+                },
+                new()
+                {
+                    UsageKind = TypeUsageKind.ReturnType,
+                    Confidence = ConfidenceLevel.High,
+                    File = "TestFile.cs",
+                    Line = 3,
+                    Column = 1,
+                    Context = "return type"
+                },
+                new()
+                {
+                    UsageKind = TypeUsageKind.GenericArgument,
+                    Confidence = ConfidenceLevel.High,
+                    File = "TestFile.cs",
+                    Line = 4,
+                    Column = 1,
+                    Context = "generic argument"
+                },
+                new()
+                {
+                    UsageKind = TypeUsageKind.Property,
+                    Confidence = ConfidenceLevel.High,
+                    File = "TestFile.cs",
+                    Line = 5,
+                    Column = 1,
+                    Context = "property type"
                 }
             }
         };
@@ -532,6 +577,7 @@ public class RecursiveService
             InheritanceAnalysis = inheritanceAnalysis,
             InstantiationCount = 1,
             InterfaceImplementationCount = 1,
+            TotalUsages = typeUsages.Usages.Count, // Only count direct usages, not interface implementations
             AnalysisTime = DateTime.UtcNow
         };
 

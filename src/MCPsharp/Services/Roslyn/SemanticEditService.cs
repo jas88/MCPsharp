@@ -325,7 +325,7 @@ public class SemanticEditService
             ? string.Join(", ", parameters.Select(p => $"{p.Type} {p.Name}"))
             : "";
 
-        var methodBody = body ?? (isVoid ? "// TODO: Implement" : "throw new NotImplementedException();");
+        var methodBody = body ?? (isVoid ? "// TODO: Implement method body" : "throw new NotImplementedException();");
 
         return $"{indentation}{accessibility} {returnType} {name}({paramList})\n" +
                $"{indentation}{{\n" +

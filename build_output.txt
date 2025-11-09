@@ -1,0 +1,15 @@
+  Determining projects to restore...
+/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/MCPsharp.csproj : warning NU1603: mcpsharp depends on SonarAnalyzer.CSharp (>= 10.5.0.91895) but SonarAnalyzer.CSharp 10.5.0.91895 was not found. SonarAnalyzer.CSharp 10.5.0.109200 was resolved instead. [/Users/jas88/Developer/Github/MCPsharp/MCPsharp.sln]
+  All projects are up-to-date for restore.
+/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/MCPsharp.csproj : warning NU1603: mcpsharp depends on SonarAnalyzer.CSharp (>= 10.5.0.91895) but SonarAnalyzer.CSharp 10.5.0.91895 was not found. SonarAnalyzer.CSharp 10.5.0.109200 was resolved instead.
+  MCPsharp -> /Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/bin/Debug/net9.0/osx-arm64/mcpsharp.dll
+  MCPsharp.Tests -> /Users/jas88/Developer/Github/MCPsharp/tests/MCPsharp.Tests/bin/Debug/net9.0/MCPsharp.Tests.dll
+
+Build succeeded.
+
+/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/MCPsharp.csproj : warning NU1603: mcpsharp depends on SonarAnalyzer.CSharp (>= 10.5.0.91895) but SonarAnalyzer.CSharp 10.5.0.91895 was not found. SonarAnalyzer.CSharp 10.5.0.109200 was resolved instead. [/Users/jas88/Developer/Github/MCPsharp/MCPsharp.sln]
+/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/MCPsharp.csproj : warning NU1603: mcpsharp depends on SonarAnalyzer.CSharp (>= 10.5.0.91895) but SonarAnalyzer.CSharp 10.5.0.91895 was not found. SonarAnalyzer.CSharp 10.5.0.109200 was resolved instead.
+    2 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.04
