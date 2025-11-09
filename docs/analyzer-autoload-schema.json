@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Analyzer Auto-Load Configuration",
+  "description": "Configuration for automatic loading of Roslyn analyzers in MCPsharp",
+  "type": "object",
+  "properties": {
+    "autoLoadEnabled": {
+      "type": "boolean",
+      "description": "Enable automatic loading of analyzers",
+      "default": true
+    },
+    "loadOnStartup": {
+      "type": "boolean",
+      "description": "Load analyzers on MCPsharp startup (true) or on first use (false)",
+      "default": false
+    },
+    "analyzerSources": {
+      "type": "array",
+      "description": "Sources to scan for analyzers",
+      "items": {
+        "type": "string",
+        "enum": [
+          "nuget_cache",
+          "builtin_providers"
+        ]
+      },
+      "default": [
+        "nuget_cache",
+        "builtin_providers"
+      ]
+    },
+    "excludeAnalyzers": {
+      "type": "array",
+      "description": "Analyzer IDs to exclude from auto-loading",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "customAnalyzerPaths": {
+      "type": "array",
+      "description": "Custom directories or DLL files to load analyzers from",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    }
+  }
+}

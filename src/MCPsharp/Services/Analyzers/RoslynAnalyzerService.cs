@@ -21,17 +21,20 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
     private readonly RoslynAnalyzerLoader _loader;
     private readonly IAnalyzerHost _analyzerHost;
     private readonly ILogger<RoslynAnalyzerService> _logger;
+    private readonly AnalyzerAutoLoadService? _autoLoadService;
     private readonly Dictionary<string, IAnalyzer> _loadedAnalyzers = new();
     private readonly object _lock = new();
 
     public RoslynAnalyzerService(
         RoslynAnalyzerLoader loader,
         IAnalyzerHost analyzerHost,
-        ILogger<RoslynAnalyzerService> logger)
+        ILogger<RoslynAnalyzerService> logger,
+        AnalyzerAutoLoadService? autoLoadService = null)
     {
         _loader = loader ?? throw new ArgumentNullException(nameof(loader));
         _analyzerHost = analyzerHost ?? throw new ArgumentNullException(nameof(analyzerHost));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _autoLoadService = autoLoadService;
     }
 
     public async Task<ImmutableArray<IAnalyzer>> LoadAnalyzersAsync(
@@ -105,6 +108,9 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
         {
             _logger.LogInformation("Running analyzers on {TargetPath}", targetPath);
 
+            // Auto-load analyzers if not already loaded
+            await EnsureAnalyzersAutoLoadedAsync(cancellationToken);
+
             // Determine which analyzers to run
             ImmutableArray<IAnalyzer> analyzersToRun;
 
@@ -130,7 +136,7 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
                 return new AnalyzerRunResult
                 {
                     Success = false,
-                    ErrorMessage = "No analyzers loaded or specified",
+                    ErrorMessage = "No analyzers loaded or specified. Auto-load may have failed - check logs.",
                     StartTime = startTime,
                     EndTime = DateTime.UtcNow
                 };
@@ -273,6 +279,52 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
         lock (_lock)
         {
             return _loadedAnalyzers.TryGetValue(analyzerId, out var analyzer) ? analyzer : null;
+        }
+    }
+
+    /// <summary>
+    /// Ensure analyzers are auto-loaded if auto-load service is available
+    /// </summary>
+    private async Task EnsureAnalyzersAutoLoadedAsync(CancellationToken cancellationToken = default)
+    {
+        if (_autoLoadService == null)
+        {
+            _logger.LogDebug("Auto-load service not available, skipping auto-load");
+            return;
+        }
+
+        try
+        {
+            var result = await _autoLoadService.EnsureAnalyzersLoadedAsync(cancellationToken);
+
+            if (result.Success && !result.AlreadyLoaded)
+            {
+                // Register auto-loaded analyzers with this service
+                lock (_lock)
+                {
+                    foreach (var analyzer in result.LoadedAnalyzers)
+                    {
+                        if (!_loadedAnalyzers.ContainsKey(analyzer.Id))
+                        {
+                            _loadedAnalyzers[analyzer.Id] = analyzer;
+                        }
+                    }
+                }
+
+                _logger.LogInformation("Auto-loaded {Count} analyzers in {Duration}ms",
+                    result.LoadedAnalyzers.Length,
+                    result.LoadDuration.TotalMilliseconds);
+            }
+            else if (!result.Success)
+            {
+                _logger.LogWarning("Auto-load failed: {Message}. Errors: {Errors}",
+                    result.Message,
+                    string.Join("; ", result.Errors));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during analyzer auto-load");
         }
     }
 }

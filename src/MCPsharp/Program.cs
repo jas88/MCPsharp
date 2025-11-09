@@ -43,6 +43,62 @@ class Program
             // Initialize core file operations service first (needed by consolidated services)
             var fileOperations = new FileOperationsService(workspaceRoot);
 
+            // Initialize Roslyn Analyzer infrastructure
+            var analyzerLoader = new MCPsharp.Services.Analyzers.RoslynAnalyzerLoader(
+                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerLoader>() ??
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerLoader>.Instance,
+                loggerFactory);
+
+            var analyzerRegistry = new MCPsharp.Services.Analyzers.AnalyzerRegistry(
+                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerRegistry>() ??
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.AnalyzerRegistry>.Instance);
+
+            // Initialize auto-load service with default configuration
+            var autoLoadService = new MCPsharp.Services.Analyzers.AnalyzerAutoLoadService(
+                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerAutoLoadService>() ??
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.AnalyzerAutoLoadService>.Instance,
+                analyzerLoader,
+                analyzerRegistry);
+
+            // Initialize built-in code fix registry (auto-registers built-in providers)
+            var codeFixRegistry = new MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry.BuiltInCodeFixRegistry(
+                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry.BuiltInCodeFixRegistry>() ??
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry.BuiltInCodeFixRegistry>.Instance,
+                loggerFactory);
+
+            // Initialize analyzer host dependencies
+            var securityManager = new MCPsharp.Services.Analyzers.SecurityManager(
+                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.SecurityManager>() ??
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.SecurityManager>.Instance,
+                workspaceRoot);
+
+            var fixEngine = new MCPsharp.Services.Analyzers.Fixes.FixEngine(
+                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.Fixes.FixEngine>() ??
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.Fixes.FixEngine>.Instance,
+                fileOperations);
+
+            var sandboxFactory = new MCPsharp.Services.Analyzers.DefaultAnalyzerSandboxFactory(
+                loggerFactory,
+                securityManager);
+
+            // Initialize analyzer host
+            var analyzerHost = new MCPsharp.Services.Analyzers.AnalyzerHost(
+                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerHost>() ??
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.AnalyzerHost>.Instance,
+                loggerFactory,
+                analyzerRegistry,
+                securityManager,
+                fixEngine,
+                sandboxFactory);
+
+            // Initialize RoslynAnalyzerService with auto-load support
+            var roslynAnalyzerService = new MCPsharp.Services.Analyzers.RoslynAnalyzerService(
+                analyzerLoader,
+                analyzerHost,
+                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerService>() ??
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerService>.Instance,
+                autoLoadService);
+
             // Phase 2 services that can be instantiated immediately
             var configAnalyzer = new MCPsharp.Services.ConfigAnalyzerService(
               loggerFactory?.CreateLogger<MCPsharp.Services.ConfigAnalyzerService>() ??
@@ -106,6 +162,8 @@ class Program
                 unifiedAnalysis: unifiedAnalysis,
                 bulkOperationsHub: bulkOperationsHub,
                 streamController: streamController,
+                roslynAnalyzerService: roslynAnalyzerService,
+                codeFixRegistry: codeFixRegistry,
                 loggerFactory: loggerFactory
             );
 

@@ -34,7 +34,6 @@ public partial class McpToolRegistry
     private ICallChainService? _callChain;
     private ITypeUsageService? _typeUsage;
     private AdvancedReferenceFinderService? _advancedReferenceFinder;
-    private RenameSymbolService? _renameSymbol;
 
     // Phase 3 services
     private IArchitectureValidatorService? _architectureValidator;
@@ -157,7 +156,6 @@ public partial class McpToolRegistry
                 "find_references" => await ExecuteFindReferences(request.Arguments),
                 "find_implementations" => await ExecuteFindImplementations(request.Arguments),
                 "parse_project" => await ExecuteParseProject(request.Arguments),
-                "rename_symbol" => await ExecuteRenameSymbol(request.Arguments, ct),
                 // Advanced reverse search tools
                 "find_callers" => await ExecuteFindCallers(request.Arguments),
                 "find_call_chains" => await ExecuteFindCallChains(request.Arguments),
@@ -231,25 +229,23 @@ public partial class McpToolRegistry
                 "get_analyzer_config" => await ExecuteGetAnalyzerConfig(request.Arguments, ct),
                 "reset_analyzer_config" => await ExecuteResetAnalyzerConfig(request.Arguments, ct),
                 "generate_analysis_report" => await ExecuteGenerateAnalysisReport(request.Arguments, ct),
-                // SQL Migration Analyzer Tools (Phase 3)
-                "analyze_migrations" => await ExecuteAnalyzeMigrations(request.Arguments, ct),
-                "detect_breaking_changes" => await ExecuteDetectBreakingChanges(request.Arguments, ct),
-                "get_migration_history" => await ExecuteGetMigrationHistory(request.Arguments, ct),
-                "get_migration_dependencies" => await ExecuteGetMigrationDependencies(request.Arguments, ct),
-                "generate_migration_report" => await ExecuteGenerateMigrationReport(request.Arguments, ct),
-                "validate_migrations" => await ExecuteValidateMigrations(request.Arguments, ct),
-                // Large File Optimization Tools (Phase 3)
-                "analyze_large_files" => await ExecuteAnalyzeLargeFiles(request.Arguments, ct),
-                "optimize_large_class" => await ExecuteOptimizeLargeClass(request.Arguments, ct),
-                "optimize_large_method" => await ExecuteOptimizeLargeMethod(request.Arguments, ct),
-                "get_complexity_metrics" => await ExecuteGetComplexityMetrics(request.Arguments, ct),
-                "generate_optimization_plan" => await ExecuteGenerateOptimizationPlan(request.Arguments, ct),
-                "detect_god_classes" => await ExecuteDetectGodClasses(request.Arguments, ct),
-                "detect_god_methods" => await ExecuteDetectGodMethods(request.Arguments, ct),
-                "analyze_code_smells" => await ExecuteAnalyzeCodeSmells(request.Arguments, ct),
-                // Refactoring tools
-                "extract_method" => await ExecuteExtractMethod(request.Arguments, ct),
-                "get_optimization_recommendations" => await ExecuteGetOptimizationRecommendations(request.Arguments, ct),
+                // SQL Migration Analyzer Tools (Phase 3 - Coming Soon)
+                "analyze_migrations" => await ExecutePhase3Placeholder(request.Arguments, ct, "analyze_migrations"),
+                "detect_breaking_changes" => await ExecutePhase3Placeholder(request.Arguments, ct, "detect_breaking_changes"),
+                "get_migration_history" => await ExecutePhase3Placeholder(request.Arguments, ct, "get_migration_history"),
+                "get_migration_dependencies" => await ExecutePhase3Placeholder(request.Arguments, ct, "get_migration_dependencies"),
+                "generate_migration_report" => await ExecutePhase3Placeholder(request.Arguments, ct, "generate_migration_report"),
+                "validate_migrations" => await ExecutePhase3Placeholder(request.Arguments, ct, "validate_migrations"),
+                // Large File Optimization Tools (Phase 3 - Coming Soon)
+                "analyze_large_files" => await ExecutePhase3Placeholder(request.Arguments, ct, "analyze_large_files"),
+                "optimize_large_class" => await ExecutePhase3Placeholder(request.Arguments, ct, "optimize_large_class"),
+                "optimize_large_method" => await ExecutePhase3Placeholder(request.Arguments, ct, "optimize_large_method"),
+                "get_complexity_metrics" => await ExecutePhase3Placeholder(request.Arguments, ct, "get_complexity_metrics"),
+                "generate_optimization_plan" => await ExecutePhase3Placeholder(request.Arguments, ct, "generate_optimization_plan"),
+                "detect_god_classes" => await ExecutePhase3Placeholder(request.Arguments, ct, "detect_god_classes"),
+                "detect_god_methods" => await ExecutePhase3Placeholder(request.Arguments, ct, "detect_god_methods"),
+                "analyze_code_smells" => await ExecutePhase3Placeholder(request.Arguments, ct, "analyze_code_smells"),
+                "get_optimization_recommendations" => await ExecutePhase3Placeholder(request.Arguments, ct, "get_optimization_recommendations"),
 
             // Consolidated Service Tool Routes
             // Universal File Operations Tools
@@ -913,111 +909,6 @@ public partial class McpToolRegistry
                     }
                 )
             },
-            new McpTool
-            {
-                Name = "rename_symbol",
-                Description = "Rename a symbol across all files in the project with conflict detection and preview mode",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "file_path",
-                        Type = "string",
-                        Description = "File containing the symbol (helps locate the symbol precisely)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "line",
-                        Type = "integer",
-                        Description = "Line number of the symbol (1-based)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "column",
-                        Type = "integer",
-                        Description = "Column position of the symbol (0-based)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "symbol_name",
-                        Type = "string",
-                        Description = "Current name of the symbol to rename",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "new_name",
-                        Type = "string",
-                        Description = "New name for the symbol",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "symbol_kind",
-                        Type = "string",
-                        Description = "Type of symbol (class, interface, method, property, field, parameter, namespace, local, type_parameter, any)",
-                        Required = false,
-                        Default = "any"
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "containing_type",
-                        Type = "string",
-                        Description = "For members, the containing type name (helps disambiguate)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "rename_in_comments",
-                        Type = "boolean",
-                        Description = "Also rename occurrences in comments",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "rename_in_strings",
-                        Type = "boolean",
-                        Description = "Also rename occurrences in string literals (use with caution)",
-                        Required = false,
-                        Default = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "rename_overloads",
-                        Type = "boolean",
-                        Description = "For methods, rename all overloads with the same name",
-                        Required = false,
-                        Default = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "preview",
-                        Type = "boolean",
-                        Description = "Preview changes without applying them",
-                        Required = false,
-                        Default = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "force_public_api_change",
-                        Type = "boolean",
-                        Description = "Allow renaming public API symbols (breaking change)",
-                        Required = false,
-                        Default = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "handle_conflicts",
-                        Type = "string",
-                        Description = "How to handle conflicts (abort, prompt, auto_resolve)",
-                        Required = false,
-                        Default = "abort"
-                    }
-                )
-            },
             // Reverse search tools
             new McpTool
             {
@@ -1306,58 +1197,6 @@ public partial class McpToolRegistry
                 Name = "code_quality_profiles",
                 Description = "List available fix profiles and their capabilities",
                 InputSchema = JsonSchemaHelper.CreateSchema()
-            },
-            // Refactoring Tools
-            new McpTool
-            {
-                Name = "extract_method",
-                Description = "Extract selected code into a new method with automatic parameter inference",
-                InputSchema = JsonSchemaHelper.CreateSchema(
-                    new PropertyDefinition
-                    {
-                        Name = "file_path",
-                        Type = "string",
-                        Description = "Path to the file containing code to extract",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "start_line",
-                        Type = "integer",
-                        Description = "Starting line number (1-based)",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "end_line",
-                        Type = "integer",
-                        Description = "Ending line number (1-based)",
-                        Required = true
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "method_name",
-                        Type = "string",
-                        Description = "Name for the extracted method (optional, auto-generated if not provided)",
-                        Required = false
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "accessibility",
-                        Type = "string",
-                        Description = "Method accessibility: private, public, protected, internal (default: private)",
-                        Required = false,
-                        Default = "private"
-                    },
-                    new PropertyDefinition
-                    {
-                        Name = "preview",
-                        Type = "boolean",
-                        Description = "Show preview without applying changes (default: true)",
-                        Required = false,
-                        Default = true
-                    }
-                )
             }
         };
     }
@@ -1383,10 +1222,6 @@ public partial class McpToolRegistry
                 _callChain = new CallChainService(_workspace, _symbolQuery, _callerAnalysis);
                 _typeUsage = new TypeUsageService(_workspace, _symbolQuery);
                 _advancedReferenceFinder = new AdvancedReferenceFinderService(_workspace, _symbolQuery, _callerAnalysis, _callChain, _typeUsage);
-
-                // Initialize rename symbol service
-                _renameSymbol = new RenameSymbolService(_workspace, _advancedReferenceFinder, _symbolQuery,
-                    LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<RenameSymbolService>());
 
                 // Initialize Phase 3 services
                 _architectureValidator = new ArchitectureValidatorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage);
@@ -1436,11 +1271,6 @@ public partial class McpToolRegistry
                 _callerAnalysis = new CallerAnalysisService(_workspace, _symbolQuery);
                 _callChain = new CallChainService(_workspace, _symbolQuery, _callerAnalysis);
                 _typeUsage = new TypeUsageService(_workspace, _symbolQuery);
-                _advancedReferenceFinder = new AdvancedReferenceFinderService(_workspace, _symbolQuery, _callerAnalysis, _callChain, _typeUsage);
-
-                // Initialize rename symbol service
-                _renameSymbol = new RenameSymbolService(_workspace, _advancedReferenceFinder, _symbolQuery,
-                    LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<RenameSymbolService>());
 
                 // Initialize Phase 3 services
                 _architectureValidator = new ArchitectureValidatorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage);
@@ -2060,199 +1890,6 @@ public partial class McpToolRegistry
         }
 
         return new ToolCallResult { Success = true, Result = result };
-    }
-
-    private async Task<ToolCallResult> ExecuteRenameSymbol(JsonDocument arguments, CancellationToken ct = default)
-    {
-        await EnsureWorkspaceInitializedAsync();
-        if (_renameSymbol == null)
-        {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = "Workspace not initialized. Open a project first."
-            };
-        }
-
-        // Parse required parameters
-        if (!arguments.RootElement.TryGetProperty("symbol_name", out var symbolNameElement) ||
-            string.IsNullOrEmpty(symbolNameElement.GetString()))
-        {
-            return new ToolCallResult { Success = false, Error = "symbol_name is required" };
-        }
-
-        if (!arguments.RootElement.TryGetProperty("new_name", out var newNameElement) ||
-            string.IsNullOrEmpty(newNameElement.GetString()))
-        {
-            return new ToolCallResult { Success = false, Error = "new_name is required" };
-        }
-
-        var symbolName = symbolNameElement.GetString()!;
-        var newName = newNameElement.GetString()!;
-
-        // Parse optional parameters
-        string? filePath = null;
-        if (arguments.RootElement.TryGetProperty("file_path", out var filePathElement))
-        {
-            filePath = filePathElement.GetString();
-        }
-
-        int? line = null;
-        if (arguments.RootElement.TryGetProperty("line", out var lineElement))
-        {
-            line = lineElement.GetInt32();
-        }
-
-        int? column = null;
-        if (arguments.RootElement.TryGetProperty("column", out var columnElement))
-        {
-            column = columnElement.GetInt32();
-        }
-
-        string? containingType = null;
-        if (arguments.RootElement.TryGetProperty("containing_type", out var containingTypeElement))
-        {
-            containingType = containingTypeElement.GetString();
-        }
-
-        // Parse symbol kind
-        var symbolKind = SymbolKind.Any;
-        if (arguments.RootElement.TryGetProperty("symbol_kind", out var symbolKindElement))
-        {
-            var symbolKindStr = symbolKindElement.GetString();
-            if (!string.IsNullOrEmpty(symbolKindStr))
-            {
-                symbolKind = symbolKindStr.ToLowerInvariant() switch
-                {
-                    "class" => SymbolKind.Class,
-                    "interface" => SymbolKind.Interface,
-                    "method" => SymbolKind.Method,
-                    "property" => SymbolKind.Property,
-                    "field" => SymbolKind.Field,
-                    "parameter" => SymbolKind.Parameter,
-                    "namespace" => SymbolKind.Namespace,
-                    "local" => SymbolKind.Local,
-                    "type_parameter" => SymbolKind.TypeParameter,
-                    _ => SymbolKind.Any
-                };
-            }
-        }
-
-        // Parse boolean options
-        var renameInComments = true;
-        if (arguments.RootElement.TryGetProperty("rename_in_comments", out var commentsElement))
-        {
-            renameInComments = commentsElement.GetBoolean();
-        }
-
-        var renameInStrings = false;
-        if (arguments.RootElement.TryGetProperty("rename_in_strings", out var stringsElement))
-        {
-            renameInStrings = stringsElement.GetBoolean();
-        }
-
-        var renameOverloads = false;
-        if (arguments.RootElement.TryGetProperty("rename_overloads", out var overloadsElement))
-        {
-            renameOverloads = overloadsElement.GetBoolean();
-        }
-
-        var previewOnly = true; // Default to preview mode for safety
-        if (arguments.RootElement.TryGetProperty("preview", out var previewElement))
-        {
-            previewOnly = previewElement.GetBoolean();
-        }
-
-        var forcePublicApiChange = false;
-        if (arguments.RootElement.TryGetProperty("force_public_api_change", out var forceElement))
-        {
-            forcePublicApiChange = forceElement.GetBoolean();
-        }
-
-        // Parse conflict handling
-        var handleConflicts = ConflictHandling.Abort;
-        if (arguments.RootElement.TryGetProperty("handle_conflicts", out var conflictElement))
-        {
-            var conflictStr = conflictElement.GetString();
-            if (!string.IsNullOrEmpty(conflictStr))
-            {
-                handleConflicts = conflictStr.ToLowerInvariant() switch
-                {
-                    "prompt" => ConflictHandling.Prompt,
-                    "auto_resolve" => ConflictHandling.AutoResolve,
-                    _ => ConflictHandling.Abort
-                };
-            }
-        }
-
-        // Create rename request
-        var request = new RenameRequest
-        {
-            OldName = symbolName,
-            NewName = newName,
-            SymbolKind = symbolKind,
-            ContainingType = containingType,
-            FilePath = filePath,
-            Line = line,
-            Column = column,
-            RenameInComments = renameInComments,
-            RenameInStrings = renameInStrings,
-            RenameOverloads = renameOverloads,
-            PreviewOnly = previewOnly,
-            ForcePublicApiChange = forcePublicApiChange,
-            HandleConflicts = handleConflicts
-        };
-
-        // Execute rename
-        var result = await _renameSymbol.RenameSymbolAsync(request, ct);
-
-        if (!result.Success)
-        {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = result.Errors.Any()
-                    ? string.Join("; ", result.Errors)
-                    : "Rename operation failed"
-            };
-        }
-
-        // Build response
-        var response = new
-        {
-            success = result.Success,
-            renamed_count = result.RenamedCount,
-            files_modified = result.FilesModified,
-            conflicts = result.Conflicts.Select(c => new
-            {
-                type = c.Type.ToString(),
-                severity = c.Severity.ToString(),
-                description = c.Description,
-                location = c.Location != null ? new
-                {
-                    file = c.Location.SourceTree?.FilePath,
-                    line = c.Location.GetLineSpan().StartLinePosition.Line + 1,
-                    column = c.Location.GetLineSpan().StartLinePosition.Character
-                } : null
-            }),
-            preview = result.Preview?.Select(fc => new
-            {
-                file_path = fc.FilePath,
-                changes = fc.Changes.Select(tc => new
-                {
-                    start = tc.Span.Start,
-                    length = tc.Span.Length,
-                    new_text = tc.NewText
-                })
-            }),
-            preview_mode = previewOnly
-        };
-
-        return new ToolCallResult
-        {
-            Success = true,
-            Result = response
-        };
     }
 
     // ===== Advanced Reverse Search Tool Execution Methods =====
@@ -3877,738 +3514,6 @@ public partial class McpToolRegistry
 
     #endregion
 
-    #region Phase 3 SQL Migration Analyzer Execution Methods
-
-    private async Task<ToolCallResult> ExecuteAnalyzeMigrations(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_sqlMigrationAnalyzer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "SQL migration analyzer service not available" };
-        }
-
-        var projectPath = GetStringArgument(arguments, "projectPath") ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
-
-        try
-        {
-            var result = await _sqlMigrationAnalyzer.AnalyzeMigrationsAsync(projectPath, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["totalMigrations"] = result.Summary.TotalMigrations,
-                    ["appliedMigrations"] = result.Summary.AppliedMigrations,
-                    ["pendingMigrations"] = result.Summary.PendingMigrations,
-                    ["breakingChanges"] = result.Summary.BreakingChanges,
-                    ["highRiskOperations"] = result.Summary.HighRiskOperations,
-                    ["provider"] = result.Summary.Provider.ToString(),
-                    ["analysisTime"] = result.Summary.TotalAnalysisTime.TotalSeconds,
-                    ["migrations"] = result.Migrations.Take(10).Select(m => new
-                    {
-                        name = m.Name,
-                        filePath = m.FilePath,
-                        createdAt = m.CreatedAt,
-                        isApplied = m.IsApplied,
-                        operationCount = m.Operations.Count,
-                        hasBreakingChanges = m.Operations.Any(o => o.IsBreakingChange)
-                    }).ToList(),
-                    ["topBreakingChanges"] = result.BreakingChanges.Take(5).Select(bc => new
-                    {
-                        type = bc.Type,
-                        severity = bc.Severity.ToString(),
-                        description = bc.Description,
-                        tableName = bc.TableName,
-                        recommendation = bc.Recommendation
-                    }).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error analyzing migrations: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteDetectBreakingChanges(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_sqlMigrationAnalyzer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "SQL migration analyzer service not available" };
-        }
-
-        var fromMigration = GetStringArgument(arguments, "fromMigration");
-        var toMigration = GetStringArgument(arguments, "toMigration");
-        var projectPath = GetStringArgument(arguments, "projectPath") ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
-
-        if (string.IsNullOrEmpty(fromMigration) || string.IsNullOrEmpty(toMigration))
-        {
-            return new ToolCallResult { Success = false, Error = "fromMigration and toMigration parameters are required" };
-        }
-
-        try
-        {
-            var breakingChanges = await _sqlMigrationAnalyzer.DetectBreakingChangesAsync(fromMigration, toMigration, projectPath, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["totalBreakingChanges"] = breakingChanges.Count,
-                    ["criticalChanges"] = breakingChanges.Count(bc => bc.Severity == Severity.Critical),
-                    ["highSeverityChanges"] = breakingChanges.Count(bc => bc.Severity == Severity.High),
-                    ["breakingChanges"] = breakingChanges.Select(bc => new
-                    {
-                        type = bc.Type,
-                        severity = bc.Severity.ToString(),
-                        description = bc.Description,
-                        tableName = bc.TableName,
-                        columnName = bc.ColumnName,
-                        fromMigration = bc.FromMigration,
-                        toMigration = bc.ToMigration,
-                        recommendation = bc.Recommendation
-                    }).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error detecting breaking changes: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteGetMigrationHistory(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_sqlMigrationAnalyzer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "SQL migration analyzer service not available" };
-        }
-
-        var dbContextPath = GetStringArgument(arguments, "dbContextPath");
-        if (string.IsNullOrEmpty(dbContextPath))
-        {
-            return new ToolCallResult { Success = false, Error = "dbContextPath parameter is required" };
-        }
-
-        try
-        {
-            var history = await _sqlMigrationAnalyzer.GetMigrationHistoryAsync(dbContextPath, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["totalEntries"] = history.Count,
-                    ["history"] = history.Select(h => new
-                    {
-                        migrationId = h.MigrationId,
-                        migrationName = h.MigrationName,
-                        appliedAt = h.AppliedAt,
-                        productVersion = h.ProductVersion
-                    }).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error getting migration history: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteGetMigrationDependencies(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_sqlMigrationAnalyzer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "SQL migration analyzer service not available" };
-        }
-
-        var migrationName = GetStringArgument(arguments, "migrationName");
-        var projectPath = GetStringArgument(arguments, "projectPath") ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
-
-        if (string.IsNullOrEmpty(migrationName))
-        {
-            return new ToolCallResult { Success = false, Error = "migrationName parameter is required" };
-        }
-
-        try
-        {
-            var dependency = await _sqlMigrationAnalyzer.GetMigrationDependenciesAsync(migrationName, projectPath, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["migrationName"] = dependency.MigrationName,
-                    ["dependencyType"] = dependency.Type.ToString(),
-                    ["dependsOn"] = dependency.DependsOn,
-                    ["requiredBy"] = dependency.RequiredBy,
-                    ["totalDependencies"] = dependency.DependsOn.Count,
-                    ["totalDependents"] = dependency.RequiredBy.Count
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error getting migration dependencies: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteGenerateMigrationReport(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_sqlMigrationAnalyzer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "SQL migration analyzer service not available" };
-        }
-
-        var projectPath = GetStringArgument(arguments, "projectPath") ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
-        var includeHistory = GetBoolArgument(arguments, "includeHistory") ?? true;
-
-        try
-        {
-            var report = await _sqlMigrationAnalyzer.GenerateMigrationReportAsync(projectPath, includeHistory, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["metadata"] = new
-                    {
-                        projectPath = report.Metadata.ProjectPath,
-                        generatedAt = report.Metadata.GeneratedAt,
-                        analyzerVersion = report.Metadata.AnalyzerVersion,
-                        provider = report.Metadata.Provider.ToString(),
-                        totalMigrations = report.Metadata.TotalMigrations,
-                        analysisTime = report.Metadata.AnalysisTime.TotalSeconds
-                    },
-                    ["totalMigrations"] = report.Migrations.Count,
-                    ["totalBreakingChanges"] = report.BreakingChanges.Count,
-                    ["overallRisk"] = report.RiskAssessment.OverallRisk.ToString(),
-                    ["highRiskMigrations"] = report.RiskAssessment.MigrationRisks.Count(mr => mr.RiskLevel >= RiskLevel.High),
-                    ["topRecommendations"] = report.Recommendations.BestPractices.Take(5).ToList(),
-                    ["warnings"] = report.Recommendations.Warnings.Take(5).ToList(),
-                    ["statistics"] = report.Statistics
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error generating migration report: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteValidateMigrations(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_sqlMigrationAnalyzer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "SQL migration analyzer service not available" };
-        }
-
-        var projectPath = GetStringArgument(arguments, "projectPath") ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
-
-        try
-        {
-            var issues = await _sqlMigrationAnalyzer.ValidateMigrationsAsync(projectPath, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["totalIssues"] = issues.Count,
-                    ["criticalIssues"] = issues.Count(i => i.Severity == Severity.Critical),
-                    ["highSeverityIssues"] = issues.Count(i => i.Severity == Severity.High),
-                    ["mediumSeverityIssues"] = issues.Count(i => i.Severity == Severity.Medium),
-                    ["lowSeverityIssues"] = issues.Count(i => i.Severity == Severity.Low),
-                    ["issues"] = issues.Take(20).Select(i => new
-                    {
-                        type = i.Type,
-                        severity = i.Severity.ToString(),
-                        message = i.Message,
-                        migrationFile = i.MigrationFile,
-                        recommendation = i.Recommendation
-                    }).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error validating migrations: {ex.Message}" };
-        }
-    }
-
-    #endregion
-
-    #region Phase 3 Large File Optimizer Execution Methods
-
-    private async Task<ToolCallResult> ExecuteAnalyzeLargeFiles(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_largeFileOptimizer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "Large file optimizer service not available" };
-        }
-
-        var projectPath = GetStringArgument(arguments, "projectPath") ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
-        var maxLines = GetIntArgument(arguments, "maxLines");
-
-        try
-        {
-            var result = await _largeFileOptimizer.AnalyzeLargeFilesAsync(projectPath, maxLines, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["totalFilesAnalyzed"] = result.TotalFilesAnalyzed,
-                    ["filesAboveThreshold"] = result.FilesAboveThreshold,
-                    ["averageFileSize"] = result.AverageFileSize,
-                    ["largestFileSize"] = result.LargestFileSize,
-                    ["analysisTime"] = result.AnalysisDuration.TotalSeconds,
-                    ["largeFiles"] = result.LargeFiles.Take(10).Select(f => new
-                    {
-                        filePath = f.FilePath,
-                        lineCount = f.LineCount,
-                        sizeCategory = f.SizeCategory.ToString(),
-                        largeClassCount = f.LargeClasses.Count,
-                        largeMethodCount = f.LargeMethods.Count,
-                        codeSmellCount = f.CodeSmells.Count,
-                        optimizationPriority = f.OptimizationPriority,
-                        immediateActions = f.ImmediateActions.Take(3).ToList()
-                    }).ToList(),
-                    ["fileSizeDistribution"] = result.FileSizeDistribution,
-                    ["statistics"] = new
-                    {
-                        filesNeedingOptimization = result.Statistics.FilesNeedingOptimization,
-                        classesNeedingSplitting = result.Statistics.ClassesNeedingSplitting,
-                        methodsNeedingRefactoring = result.Statistics.MethodsNeedingRefactoring,
-                        totalCodeSmells = result.Statistics.TotalCodeSmells
-                    }
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error analyzing large files: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteOptimizeLargeClass(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_largeFileOptimizer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "Large file optimizer service not available" };
-        }
-
-        var filePath = GetStringArgument(arguments, "filePath");
-        if (string.IsNullOrEmpty(filePath))
-        {
-            return new ToolCallResult { Success = false, Error = "filePath parameter is required" };
-        }
-
-        try
-        {
-            var result = await _largeFileOptimizer.OptimizeLargeClassAsync(filePath, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["className"] = result.ClassName,
-                    ["filePath"] = result.FilePath,
-                    ["priority"] = result.Priority.ToString(),
-                    ["estimatedEffortHours"] = result.EstimatedEffortHours,
-                    ["expectedBenefit"] = result.ExpectedBenefit,
-                    ["currentMetrics"] = new
-                    {
-                        lineCount = result.CurrentMetrics.LineCount,
-                        methodCount = result.CurrentMetrics.MethodCount,
-                        propertyCount = result.CurrentMetrics.PropertyCount,
-                        fieldCount = result.CurrentMetrics.FieldCount,
-                        responsibilities = result.CurrentMetrics.Responsibilities.Count,
-                        dependencies = result.CurrentMetrics.Dependencies.Count,
-                        godClassScore = result.CurrentMetrics.GodClassScore.GodClassScore,
-                        isTooLarge = result.CurrentMetrics.IsTooLarge
-                    },
-                    ["splittingStrategies"] = result.SplittingStrategies.Take(5).Select(s => new
-                    {
-                        strategyName = s.StrategyName,
-                        description = s.Description,
-                        newClassName = s.NewClassName,
-                        splitType = s.SplitType.ToString(),
-                        confidence = s.Confidence,
-                        estimatedEffort = s.EstimatedEffortHours,
-                        pros = s.Pros.Take(3).ToList(),
-                        cons = s.Cons.Take(3).ToList()
-                    }).ToList(),
-                    ["recommendedActions"] = result.RecommendedActions.Take(5).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error optimizing large class: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteOptimizeLargeMethod(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_largeFileOptimizer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "Large file optimizer service not available" };
-        }
-
-        var filePath = GetStringArgument(arguments, "filePath");
-        var methodName = GetStringArgument(arguments, "methodName");
-
-        if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(methodName))
-        {
-            return new ToolCallResult { Success = false, Error = "filePath and methodName parameters are required" };
-        }
-
-        try
-        {
-            var result = await _largeFileOptimizer.OptimizeLargeMethodAsync(filePath, methodName, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["methodName"] = result.MethodName,
-                    ["className"] = result.ClassName,
-                    ["filePath"] = result.FilePath,
-                    ["priority"] = result.Priority.ToString(),
-                    ["estimatedEffortHours"] = result.EstimatedEffortHours,
-                    ["expectedBenefit"] = result.ExpectedBenefit,
-                    ["currentMetrics"] = new
-                    {
-                        lineCount = result.CurrentMetrics.LineCount,
-                        parameterCount = result.CurrentMetrics.ParameterCount,
-                        localVariableCount = result.CurrentMetrics.LocalVariableCount,
-                        loopCount = result.CurrentMetrics.LoopCount,
-                        conditionalCount = result.CurrentMetrics.ConditionalCount,
-                        cyclomaticComplexity = result.CurrentMetrics.Complexity.CyclomaticComplexity,
-                        cognitiveComplexity = result.CurrentMetrics.Complexity.CognitiveComplexity,
-                        isTooLarge = result.CurrentMetrics.IsTooLarge,
-                        isTooComplex = result.CurrentMetrics.IsTooComplex
-                    },
-                    ["refactoringStrategies"] = result.RefactoringStrategies.Take(5).Select(s => new
-                    {
-                        strategyName = s.StrategyName,
-                        description = s.Description,
-                        refactoringType = s.RefactoringType.ToString(),
-                        confidence = s.Confidence,
-                        estimatedEffort = s.EstimatedEffortHours,
-                        pros = s.Pros.Take(3).ToList(),
-                        cons = s.Cons.Take(3).ToList()
-                    }).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error optimizing large method: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteGetComplexityMetrics(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_largeFileOptimizer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "Large file optimizer service not available" };
-        }
-
-        var filePath = GetStringArgument(arguments, "filePath");
-        var methodName = GetStringArgument(arguments, "methodName");
-
-        if (string.IsNullOrEmpty(filePath))
-        {
-            return new ToolCallResult { Success = false, Error = "filePath parameter is required" };
-        }
-
-        try
-        {
-            var metrics = await _largeFileOptimizer.GetComplexityMetricsAsync(filePath, methodName, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["cyclomaticComplexity"] = metrics.CyclomaticComplexity,
-                    ["cognitiveComplexity"] = metrics.CognitiveComplexity,
-                    ["halsteadVolume"] = metrics.HalsteadVolume,
-                    ["halsteadDifficulty"] = metrics.HalsteadDifficulty,
-                    ["maintainabilityIndex"] = metrics.MaintainabilityIndex,
-                    ["maximumNestingDepth"] = metrics.MaximumNestingDepth,
-                    ["numberOfDecisionPoints"] = metrics.NumberOfDecisionPoints,
-                    ["complexityLevel"] = metrics.ComplexityLevel.ToString(),
-                    ["hotspots"] = metrics.Hotspots.Take(5).Select(h => new
-                    {
-                        location = h.Location,
-                        type = h.Type,
-                        complexity = h.Complexity,
-                        description = h.Description
-                    }).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error getting complexity metrics: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteGenerateOptimizationPlan(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_largeFileOptimizer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "Large file optimizer service not available" };
-        }
-
-        var filePath = GetStringArgument(arguments, "filePath");
-        if (string.IsNullOrEmpty(filePath))
-        {
-            return new ToolCallResult { Success = false, Error = "filePath parameter is required" };
-        }
-
-        try
-        {
-            var plan = await _largeFileOptimizer.GenerateOptimizationPlanAsync(filePath, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["filePath"] = plan.FilePath,
-                    ["overallPriority"] = plan.OverallPriority.ToString(),
-                    ["totalEstimatedEffortHours"] = plan.TotalEstimatedEffortHours,
-                    ["totalExpectedBenefit"] = plan.TotalExpectedBenefit,
-                    ["totalActions"] = plan.Actions.Count,
-                    ["actions"] = plan.Actions.Take(10).Select(a => new
-                    {
-                        title = a.Title,
-                        description = a.Description,
-                        actionType = a.ActionType.ToString(),
-                        priority = a.Priority,
-                        estimatedEffort = a.EstimatedEffortHours,
-                        expectedBenefit = a.ExpectedBenefit,
-                        isRecommended = a.IsRecommended
-                    }).ToList(),
-                    ["prerequisites"] = plan.Prerequisites.Take(5).ToList(),
-                    ["risks"] = plan.Risks.Take(5).ToList(),
-                    ["recommendations"] = plan.Recommendations.Take(5).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error generating optimization plan: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteDetectGodClasses(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_largeFileOptimizer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "Large file optimizer service not available" };
-        }
-
-        var projectPath = GetStringArgument(arguments, "projectPath") ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
-        var filePath = GetStringArgument(arguments, "filePath");
-
-        try
-        {
-            var godClasses = await _largeFileOptimizer.DetectGodClassesAsync(projectPath, filePath, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["totalGodClasses"] = godClasses.Count,
-                    ["criticalGodClasses"] = godClasses.Count(gc => gc.Severity == GodClassSeverity.Critical),
-                    ["highSeverityGodClasses"] = godClasses.Count(gc => gc.Severity == GodClassSeverity.High),
-                    ["godClasses"] = godClasses.Take(10).Select(gc => new
-                    {
-                        className = gc.ClassName,
-                        filePath = gc.FilePath,
-                        godClassScore = gc.GodClassScore,
-                        severity = gc.Severity.ToString(),
-                        responsibilityCount = gc.Responsibilities.Count,
-                        violations = gc.Violations.Take(3).ToList(),
-                        recommendedSplits = gc.RecommendedSplits.Take(3).Select(s => new
-                        {
-                            strategyName = s.StrategyName,
-                            newClassName = s.NewClassName,
-                            confidence = s.Confidence
-                        }).ToList()
-                    }).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error detecting god classes: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteDetectGodMethods(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_largeFileOptimizer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "Large file optimizer service not available" };
-        }
-
-        var projectPath = GetStringArgument(arguments, "projectPath") ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
-        var filePath = GetStringArgument(arguments, "filePath");
-
-        try
-        {
-            var godMethods = await _largeFileOptimizer.DetectGodMethodsAsync(projectPath, filePath, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["totalGodMethods"] = godMethods.Count,
-                    ["criticalGodMethods"] = godMethods.Count(gm => gm.Severity == GodMethodSeverity.Critical),
-                    ["highSeverityGodMethods"] = godMethods.Count(gm => gm.Severity == GodMethodSeverity.High),
-                    ["godMethods"] = godMethods.Take(10).Select(gm => new
-                    {
-                        methodName = gm.MethodName,
-                        className = gm.ClassName,
-                        filePath = gm.FilePath,
-                        godMethodScore = gm.GodMethodScore,
-                        severity = gm.Severity.ToString(),
-                        violations = gm.Violations.Take(3).ToList(),
-                        recommendedRefactorings = gm.RecommendedRefactorings.Take(3).Select(r => new
-                        {
-                            strategyName = r.StrategyName,
-                            refactoringType = r.RefactoringType.ToString(),
-                            confidence = r.Confidence
-                        }).ToList()
-                    }).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error detecting god methods: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteAnalyzeCodeSmells(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_largeFileOptimizer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "Large file optimizer service not available" };
-        }
-
-        var filePath = GetStringArgument(arguments, "filePath");
-        if (string.IsNullOrEmpty(filePath))
-        {
-            return new ToolCallResult { Success = false, Error = "filePath parameter is required" };
-        }
-
-        try
-        {
-            var codeSmells = await _largeFileOptimizer.AnalyzeCodeSmellsAsync(filePath, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["totalCodeSmells"] = codeSmells.Count,
-                    ["blockerSmells"] = codeSmells.Count(cs => cs.Severity == CodeSmellSeverity.Blocker),
-                    ["criticalSmells"] = codeSmells.Count(cs => cs.Severity == CodeSmellSeverity.Critical),
-                    ["majorSmells"] = codeSmells.Count(cs => cs.Severity == CodeSmellSeverity.Major),
-                    ["codeSmells"] = codeSmells.Take(20).Select(cs => new
-                    {
-                        smellType = cs.SmellType,
-                        description = cs.Description,
-                        severity = cs.Severity.ToString(),
-                        startLine = cs.StartLine,
-                        endLine = cs.EndLine,
-                        impactScore = cs.ImpactScore,
-                        suggestion = cs.Suggestion,
-                        refactoringPatterns = cs.RefactoringPatterns.Take(2).Select(rp => new
-                        {
-                            patternName = rp.PatternName,
-                            description = rp.Description,
-                            applicability = rp.Applicability
-                        }).ToList()
-                    }).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error analyzing code smells: {ex.Message}" };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteGetOptimizationRecommendations(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_largeFileOptimizer == null)
-        {
-            return new ToolCallResult { Success = false, Error = "Large file optimizer service not available" };
-        }
-
-        var filePath = GetStringArgument(arguments, "filePath");
-        if (string.IsNullOrEmpty(filePath))
-        {
-            return new ToolCallResult { Success = false, Error = "filePath parameter is required" };
-        }
-
-        try
-        {
-            // First analyze code smells
-            var codeSmells = await _largeFileOptimizer.AnalyzeCodeSmellsAsync(filePath, ct);
-
-            // Then suggest refactoring patterns
-            var suggestions = await _largeFileOptimizer.SuggestRefactoringPatternsAsync(filePath, codeSmells, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["totalRecommendations"] = suggestions.Count,
-                    ["highConfidenceRecommendations"] = suggestions.Count(s => s.Confidence > 0.8),
-                    ["lowEffortRecommendations"] = suggestions.Count(s => s.EstimatedEffortHours <= 2),
-                    ["recommendations"] = suggestions.Take(10).Select(s => new
-                    {
-                        title = s.Title,
-                        description = s.Description,
-                        refactoringType = s.Type.ToString(),
-                        filePath = s.FilePath,
-                        startLine = s.StartLine,
-                        endLine = s.EndLine,
-                        confidence = s.Confidence,
-                        estimatedEffort = s.EstimatedEffortHours,
-                        benefits = s.Benefits.Take(3).ToList(),
-                        risks = s.Risks.Take(3).ToList()
-                    }).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error getting optimization recommendations: {ex.Message}" };
-        }
-    }
-
-    #endregion
-
     private string GetProjectPathFromArguments(JsonDocument arguments)
     {
         var context = _projectContext.GetProjectContext();
@@ -4652,4 +3557,1410 @@ public partial class McpToolRegistry
 
       #endregion
 
+    #region Phase 3 Placeholder Tools
+
+    private async Task<ToolCallResult> ExecutePhase3Placeholder(JsonDocument arguments, CancellationToken ct, string toolName)
+    {
+        await EnsureWorkspaceInitializedAsync();
+
+        try
+        {
+            // Extract any relevant arguments for context
+            var projectPath = GetProjectPathFromArguments(arguments) ?? _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new Dictionary<string, object>
+                {
+                    ["message"] = $"Phase 3 tool '{toolName}' is coming soon!",
+                    ["status"] = "placeholder",
+                    ["toolName"] = toolName,
+                    ["projectPath"] = projectPath,
+                    ["description"] = GetToolDescription(toolName),
+                    ["capabilities"] = GetToolCapabilities(toolName)
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Error in Phase 3 placeholder for '{toolName}': {ex.Message}"
+            };
+        }
+    }
+
+    private string GetToolDescription(string toolName)
+    {
+        return toolName switch
+        {
+            "analyze_migrations" => "Analyze Entity Framework migrations and provide insights about database schema changes.",
+            "detect_breaking_changes" => "Detect potentially breaking changes in database migrations.",
+            "get_migration_history" => "Get the history of applied database migrations.",
+            "get_migration_dependencies" => "Analyze dependencies between migrations and detect circular dependencies.",
+            "generate_migration_report" => "Generate a comprehensive report of migration status and issues.",
+            "validate_migrations" => "Validate migration files for potential issues and errors.",
+            "analyze_large_files" => "Identify large source files that may need refactoring for better maintainability.",
+            "optimize_large_class" => "Analyze large classes and suggest refactoring strategies to improve design.",
+            "optimize_large_method" => "Identify complex methods and suggest decomposition strategies.",
+            "get_complexity_metrics" => "Calculate cyclomatic and cognitive complexity metrics for code.",
+            "generate_optimization_plan" => "Create a prioritized optimization plan for improving code quality.",
+            "detect_god_classes" => "Identify classes that have too many responsibilities and violate SRP.",
+            "detect_god_methods" => "Find methods that are doing too many things and need decomposition.",
+            "analyze_code_smells" => "Detect various code smells that indicate design issues.",
+            "get_optimization_recommendations" => "Provide specific refactoring recommendations to improve code quality.",
+            _ => $"A Phase 3 analysis tool: {toolName}"
+        };
+    }
+
+    private Dictionary<string, object> GetToolCapabilities(string toolName)
+    {
+        return new Dictionary<string, object>
+        {
+            ["status"] = "coming_soon",
+            ["phase"] = "phase_3",
+            ["category"] = GetToolCategory(toolName),
+            ["estimatedAvailability"] = "Future release",
+            ["features"] = GetToolFeatures(toolName)
+        };
+    }
+
+    private string GetToolCategory(string toolName)
+    {
+        if (toolName.StartsWith("analyze_migrations") || toolName.StartsWith("detect_") || toolName.StartsWith("get_migration") || toolName.StartsWith("generate_migration") || toolName.StartsWith("validate_migrations"))
+            return "sql_migration_analyzer";
+
+        if (toolName.StartsWith("analyze_large") || toolName.StartsWith("optimize_") || toolName.StartsWith("get_complexity") || toolName.StartsWith("generate_optimization") || toolName.StartsWith("detect_god") || toolName.StartsWith("analyze_code") || toolName.StartsWith("get_optimization"))
+            return "large_file_optimizer";
+
+        return "phase_3";
+    }
+
+    private List<string> GetToolFeatures(string toolName)
+    {
+        return toolName switch
+        {
+            "analyze_migrations" => new List<string> { "Migration parsing", "Dependency analysis", "Change detection" },
+            "detect_breaking_changes" => new List<string> { "Schema analysis", "Breaking change detection", "Impact assessment" },
+            "analyze_large_files" => new List<string> { "File size analysis", "Complexity scoring", "Issue detection" },
+            "optimize_large_class" => new List<string> { "Class analysis", "Refactoring suggestions", "Code generation" },
+            "optimize_large_method" => new List<string> { "Method decomposition", "Complexity reduction", "Code restructuring" },
+            _ => new List<string> { "Advanced analysis", "Pattern detection", "Optimization suggestions" }
+        };
+    }
+
+    #endregion
+
+    #region Consolidated Service Execution Methods
+
+    // ===== Universal File Operations Execution Methods =====
+
+    private async Task<ToolCallResult> ExecuteGetFileInfo(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_universalFileOps == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Universal file operations service not available"
+            };
+        }
+
+        try
+        {
+            var path = arguments.RootElement.GetProperty("path").GetString();
+            if (string.IsNullOrEmpty(path))
+            {
+                return new ToolCallResult { Success = false, Error = "Path is required" };
+            }
+
+            var includeMetadata = true;
+            if (arguments.RootElement.TryGetProperty("includeMetadata", out var metadataElement))
+            {
+                includeMetadata = metadataElement.GetBoolean();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new FileInfoRequest
+            {
+                Path = path,
+                Options = new ToolOptions
+                {
+                    Include = includeMetadata ? IncludeFlags.Metadata : IncludeFlags.Default
+                },
+                RequestId = requestId
+            };
+
+            var result = await _universalFileOps.GetFileInfoAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to get file info: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetFileContent(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_universalFileOps == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Universal file operations service not available"
+            };
+        }
+
+        try
+        {
+            var path = arguments.RootElement.GetProperty("path").GetString();
+            if (string.IsNullOrEmpty(path))
+            {
+                return new ToolCallResult { Success = false, Error = "Path is required" };
+            }
+
+            var encoding = "utf-8";
+            if (arguments.RootElement.TryGetProperty("encoding", out var encodingElement))
+            {
+                encoding = encodingElement.GetString() ?? "utf-8";
+            }
+
+            JsonElement? lineRange = null;
+            if (arguments.RootElement.TryGetProperty("lineRange", out var lineRangeElement))
+            {
+                lineRange = lineRangeElement;
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new FileContentRequest
+            {
+                Path = path,
+                Options = lineRange?.ValueKind == JsonValueKind.Object ? new FileContentOptions
+                {
+                    StartLine = lineRange.Value.TryGetProperty("start", out var startElement) && startElement.ValueKind == JsonValueKind.Number ? startElement.GetInt32() : null,
+                    EndLine = lineRange.Value.TryGetProperty("end", out var endElement) && endElement.ValueKind == JsonValueKind.Number ? endElement.GetInt32() : null
+                } : null,
+                RequestId = requestId
+            };
+
+            var result = await _universalFileOps.GetFileContentAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to get file content: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteFileOperation(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_universalFileOps == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Universal file operations service not available"
+            };
+        }
+
+        try
+        {
+            var operationString = arguments.RootElement.GetProperty("operation").GetString();
+            if (string.IsNullOrEmpty(operationString))
+            {
+                return new ToolCallResult { Success = false, Error = "Operation is required" };
+            }
+
+            if (!Enum.TryParse<FileOperationType>(operationString, true, out var operation))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid operation: {operationString}" };
+            }
+
+            var sourcePath = arguments.RootElement.GetProperty("sourcePath").GetString();
+            var targetPath = arguments.RootElement.GetProperty("targetPath").GetString();
+
+            var overwrite = false;
+            if (arguments.RootElement.TryGetProperty("overwrite", out var overwriteElement))
+            {
+                overwrite = overwriteElement.GetBoolean();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new FileOperationRequest
+            {
+                Path = sourcePath ?? string.Empty,
+                Operation = operation,
+                DestinationPath = targetPath,
+                Options = new FileOperationOptions
+                {
+                    Overwrite = overwrite
+                },
+                RequestId = requestId
+            };
+
+            var result = await _universalFileOps.ExecuteFileOperationAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = result.IsValid,
+                Result = result.IsValid ? result : null,
+                Error = result.IsValid ? null : result.Error
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to execute file operation: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteBatch(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_universalFileOps == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Universal file operations service not available"
+            };
+        }
+
+        try
+        {
+            var operationsArray = arguments.RootElement.GetProperty("operations");
+            if (operationsArray.ValueKind != JsonValueKind.Array)
+            {
+                return new ToolCallResult { Success = false, Error = "Operations must be an array" };
+            }
+
+            var operations = new List<FileOperationDefinition>();
+            foreach (var op in operationsArray.EnumerateArray())
+            {
+                var operationDef = JsonSerializer.Deserialize<FileOperationDefinition>(op.GetRawText());
+                if (operationDef != null)
+                {
+                    operations.Add(operationDef);
+                }
+            }
+
+            var continueOnError = false;
+            if (arguments.RootElement.TryGetProperty("continueOnError", out var continueElement))
+            {
+                continueOnError = continueElement.GetBoolean();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new FileBatchRequest
+            {
+                Operations = operations,
+                ContinueOnError = continueOnError,
+                RequestId = requestId
+            };
+
+            var result = await _universalFileOps.ExecuteBatchAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = result.Success,
+                Result = result.Success ? result : null,
+                Error = result.Success ? null : result.ErrorMessage
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to execute batch operation: {ex.Message}"
+            };
+        }
+    }
+
+    // ===== Unified Analysis Service Execution Methods =====
+
+    private async Task<ToolCallResult> ExecuteAnalyzeSymbol(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_unifiedAnalysis == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Unified analysis service not available"
+            };
+        }
+
+        try
+        {
+            var symbolName = arguments.RootElement.GetProperty("symbolName").GetString();
+            if (string.IsNullOrEmpty(symbolName))
+            {
+                return new ToolCallResult { Success = false, Error = "Symbol name is required" };
+            }
+
+            var filePath = arguments.RootElement.GetProperty("filePath").GetString();
+            int? line = null;
+            int? column = null;
+
+            if (arguments.RootElement.TryGetProperty("line", out var lineElement))
+            {
+                line = lineElement.GetInt32();
+            }
+
+            if (arguments.RootElement.TryGetProperty("column", out var columnElement))
+            {
+                column = columnElement.GetInt32();
+            }
+
+            var includeReferences = true;
+            if (arguments.RootElement.TryGetProperty("includeReferences", out var refsElement))
+            {
+                includeReferences = refsElement.GetBoolean();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new SymbolAnalysisRequest
+            {
+                SymbolName = symbolName,
+                Context = filePath != null ? $"{filePath}:{line}:{column}" : null,
+                Options = new ToolOptions
+                {
+                    Include = includeReferences ? IncludeFlags.Dependencies : IncludeFlags.Default
+                },
+                RequestId = requestId
+            };
+
+            var result = await _unifiedAnalysis.AnalyzeSymbolAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to analyze symbol: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteAnalyzeType(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_unifiedAnalysis == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Unified analysis service not available"
+            };
+        }
+
+        try
+        {
+            var typeName = arguments.RootElement.GetProperty("typeName").GetString();
+            if (string.IsNullOrEmpty(typeName))
+            {
+                return new ToolCallResult { Success = false, Error = "Type name is required" };
+            }
+
+            var includeHierarchy = true;
+            if (arguments.RootElement.TryGetProperty("includeHierarchy", out var hierarchyElement))
+            {
+                includeHierarchy = hierarchyElement.GetBoolean();
+            }
+
+            var includeMembers = true;
+            if (arguments.RootElement.TryGetProperty("includeMembers", out var membersElement))
+            {
+                includeMembers = membersElement.GetBoolean();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new TypeAnalysisRequest
+            {
+                TypeName = typeName,
+                Options = new ToolOptions
+                {
+                    Include = (includeHierarchy ? IncludeFlags.History : 0) | (includeMembers ? IncludeFlags.Dependencies : 0)
+                },
+                RequestId = requestId
+            };
+
+            var result = await _unifiedAnalysis.AnalyzeTypeAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to analyze type: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteAnalyzeFile(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_unifiedAnalysis == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Unified analysis service not available"
+            };
+        }
+
+        try
+        {
+            var filePath = arguments.RootElement.GetProperty("filePath").GetString();
+            if (string.IsNullOrEmpty(filePath))
+            {
+                return new ToolCallResult { Success = false, Error = "File path is required" };
+            }
+
+            var includeStructure = true;
+            if (arguments.RootElement.TryGetProperty("includeStructure", out var structureElement))
+            {
+                includeStructure = structureElement.GetBoolean();
+            }
+
+            var includeSymbols = true;
+            if (arguments.RootElement.TryGetProperty("includeSymbols", out var symbolsElement))
+            {
+                includeSymbols = symbolsElement.GetBoolean();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new FileAnalysisRequest
+            {
+                FilePath = filePath,
+                IncludeStructure = includeStructure,
+                IncludeSymbols = includeSymbols,
+                RequestId = requestId
+            };
+
+            var result = await _unifiedAnalysis.AnalyzeFileAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to analyze file: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteAnalyzeProject(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_unifiedAnalysis == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Unified analysis service not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = arguments.RootElement.GetProperty("projectPath").GetString();
+
+            var includeDependencies = true;
+            if (arguments.RootElement.TryGetProperty("includeDependencies", out var depsElement))
+            {
+                includeDependencies = depsElement.GetBoolean();
+            }
+
+            var includeMetrics = true;
+            if (arguments.RootElement.TryGetProperty("includeMetrics", out var metricsElement))
+            {
+                includeMetrics = metricsElement.GetBoolean();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new ProjectAnalysisRequest
+            {
+                ProjectPath = projectPath,
+                IncludeDependencies = includeDependencies,
+                IncludeMetrics = includeMetrics,
+                RequestId = requestId
+            };
+
+            var result = await _unifiedAnalysis.AnalyzeProjectAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to analyze project: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteAnalyzeArchitecture(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_unifiedAnalysis == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Unified analysis service not available"
+            };
+        }
+
+        try
+        {
+            var projectPath = arguments.RootElement.GetProperty("projectPath").GetString();
+
+            var includeViolations = true;
+            if (arguments.RootElement.TryGetProperty("includeViolations", out var violationsElement))
+            {
+                includeViolations = violationsElement.GetBoolean();
+            }
+
+            var includeRecommendations = true;
+            if (arguments.RootElement.TryGetProperty("includeRecommendations", out var recsElement))
+            {
+                includeRecommendations = recsElement.GetBoolean();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new ArchitectureAnalysisRequest
+            {
+                ProjectPath = projectPath,
+                IncludeViolations = includeViolations,
+                IncludeRecommendations = includeRecommendations,
+                Scope = AnalysisScope.All,
+                RequestId = requestId
+            };
+
+            var result = await _unifiedAnalysis.AnalyzeArchitectureAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to analyze architecture: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteAnalyzeDependenciesUnified(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_unifiedAnalysis == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Unified analysis service not available"
+            };
+        }
+
+        try
+        {
+            var typeName = arguments.RootElement.GetProperty("typeName").GetString();
+            var projectPath = arguments.RootElement.GetProperty("projectPath").GetString();
+
+            var includeCircular = true;
+            if (arguments.RootElement.TryGetProperty("includeCircular", out var circularElement))
+            {
+                includeCircular = circularElement.GetBoolean();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new DependencyAnalysisRequest
+            {
+                TypeName = typeName,
+                ProjectPath = projectPath,
+                IncludeCircular = includeCircular,
+                Scope = AnalysisScope.Dependencies,
+                RequestId = requestId
+            };
+
+            var result = await _unifiedAnalysis.AnalyzeDependenciesAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to analyze dependencies: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteAnalyzeQuality(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_unifiedAnalysis == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Unified analysis service not available"
+            };
+        }
+
+        try
+        {
+            var filePath = arguments.RootElement.GetProperty("filePath").GetString();
+            var projectPath = arguments.RootElement.GetProperty("projectPath").GetString();
+
+            var includeMetrics = true;
+            if (arguments.RootElement.TryGetProperty("includeMetrics", out var metricsElement))
+            {
+                includeMetrics = metricsElement.GetBoolean();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new QualityAnalysisRequest
+            {
+                FilePath = filePath,
+                ProjectPath = projectPath,
+                IncludeMetrics = includeMetrics,
+                Scope = AnalysisScope.All,
+                RequestId = requestId
+            };
+
+            var result = await _unifiedAnalysis.AnalyzeQualityAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to analyze quality: {ex.Message}"
+            };
+        }
+    }
+
+    // ===== Bulk Operations Hub Execution Methods =====
+
+    private async Task<ToolCallResult> ExecuteBulkOperation(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_bulkOperationsHub == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Bulk operations hub not available"
+            };
+        }
+
+        try
+        {
+            var operationTypeString = arguments.RootElement.GetProperty("operationType").GetString();
+            if (string.IsNullOrEmpty(operationTypeString))
+            {
+                return new ToolCallResult { Success = false, Error = "Operation type is required" };
+            }
+
+            if (!Enum.TryParse<BulkOperationType>(operationTypeString, true, out var operationType))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid operation type: {operationTypeString}" };
+            }
+
+            var filesArray = arguments.RootElement.GetProperty("files");
+            if (filesArray.ValueKind != JsonValueKind.Array)
+            {
+                return new ToolCallResult { Success = false, Error = "Files must be an array" };
+            }
+
+            var files = new List<string>();
+            foreach (var file in filesArray.EnumerateArray())
+            {
+                files.Add(file.GetString() ?? "");
+            }
+
+            var operationElement = arguments.RootElement.GetProperty("operation");
+            var optionsElement = arguments.RootElement.GetProperty("options");
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            // Parse options from JsonElement
+            BulkOperationOptions? options = null;
+            if (optionsElement.ValueKind == JsonValueKind.Object)
+            {
+                options = new BulkOperationOptions();
+                if (optionsElement.TryGetProperty("createBackup", out var createBackupElement))
+                    options.CreateBackup = createBackupElement.GetBoolean();
+                if (optionsElement.TryGetProperty("maxParallelism", out var maxParallelismElement))
+                    options.MaxParallelism = maxParallelismElement.GetInt32();
+                if (optionsElement.TryGetProperty("dryRun", out var dryRunElement))
+                    options.DryRun = dryRunElement.GetBoolean();
+                if (optionsElement.TryGetProperty("failFast", out var failFastElement))
+                    options.FailFast = failFastElement.GetBoolean();
+            }
+
+            var request = new BulkOperationRequest
+            {
+                OperationType = operationType,
+                Files = files,
+                Operation = operationElement.GetString(),
+                Options = options,
+                RequestId = requestId
+            };
+
+            var result = await _bulkOperationsHub.ExecuteBulkOperationAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = result.Success,
+                Result = result.Success ? result : null,
+                Error = result.Success ? null : result.ErrorMessage
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to execute bulk operation: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecutePreviewBulkOperation(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_bulkOperationsHub == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Bulk operations hub not available"
+            };
+        }
+
+        try
+        {
+            var operationTypeString = arguments.RootElement.GetProperty("operationType").GetString();
+            if (string.IsNullOrEmpty(operationTypeString))
+            {
+                return new ToolCallResult { Success = false, Error = "Operation type is required" };
+            }
+
+            if (!Enum.TryParse<BulkOperationType>(operationTypeString, true, out var operationType))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid operation type: {operationTypeString}" };
+            }
+
+            var filesArray = arguments.RootElement.GetProperty("files");
+            if (filesArray.ValueKind != JsonValueKind.Array)
+            {
+                return new ToolCallResult { Success = false, Error = "Files must be an array" };
+            }
+
+            var files = new List<string>();
+            foreach (var file in filesArray.EnumerateArray())
+            {
+                files.Add(file.GetString() ?? "");
+            }
+
+            var operationElement = arguments.RootElement.GetProperty("operation");
+
+            var maxPreviewFiles = 10;
+            if (arguments.RootElement.TryGetProperty("maxPreviewFiles", out var maxElement))
+            {
+                maxPreviewFiles = maxElement.GetInt32();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new BulkPreviewRequest
+            {
+                OperationType = operationType,
+                Files = files,
+                Operation = operationElement.GetString(),
+                MaxPreviewFiles = maxPreviewFiles,
+                RequestId = requestId
+            };
+
+            var result = await _bulkOperationsHub.PreviewBulkOperationAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to preview bulk operation: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetBulkProgress(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_bulkOperationsHub == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Bulk operations hub not available"
+            };
+        }
+
+        try
+        {
+            var operationId = arguments.RootElement.GetProperty("operationId").GetString();
+            if (string.IsNullOrEmpty(operationId))
+            {
+                return new ToolCallResult { Success = false, Error = "Operation ID is required" };
+            }
+
+            var result = await _bulkOperationsHub.GetBulkProgressAsync(operationId, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to get bulk progress: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteManageBulkOperation(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_bulkOperationsHub == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Bulk operations hub not available"
+            };
+        }
+
+        try
+        {
+            var operationId = arguments.RootElement.GetProperty("operationId").GetString();
+            if (string.IsNullOrEmpty(operationId))
+            {
+                return new ToolCallResult { Success = false, Error = "Operation ID is required" };
+            }
+
+            var actionString = arguments.RootElement.GetProperty("action").GetString();
+            if (string.IsNullOrEmpty(actionString))
+            {
+                return new ToolCallResult { Success = false, Error = "Action is required" };
+            }
+
+            if (!Enum.TryParse<BulkManagementAction>(actionString, true, out var action))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid action: {actionString}" };
+            }
+
+            var request = new BulkManagementRequest
+            {
+                OperationId = operationId,
+                Action = action
+            };
+
+            var result = await _bulkOperationsHub.ManageBulkOperationAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = result.Success,
+                Result = result.Success ? result : null,
+                Error = result.Success ? null : result.ErrorMessage
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to manage bulk operation: {ex.Message}"
+            };
+        }
+    }
+
+    // ===== Stream Processing Controller Execution Methods =====
+
+    private async Task<ToolCallResult> ExecuteProcessStream(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_streamController == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Stream processing controller not available"
+            };
+        }
+
+        try
+        {
+            var filePath = arguments.RootElement.GetProperty("filePath").GetString();
+            if (string.IsNullOrEmpty(filePath))
+            {
+                return new ToolCallResult { Success = false, Error = "File path is required" };
+            }
+
+            var processorType = arguments.RootElement.GetProperty("processorType").GetString();
+            if (string.IsNullOrEmpty(processorType))
+            {
+                return new ToolCallResult { Success = false, Error = "Processor type is required" };
+            }
+
+            var outputPath = arguments.RootElement.GetProperty("outputPath").GetString();
+            if (string.IsNullOrEmpty(outputPath))
+            {
+                return new ToolCallResult { Success = false, Error = "Output path is required" };
+            }
+
+            ProcessorOptions? processorOptions = null;
+            if (arguments.RootElement.TryGetProperty("processorOptions", out var processorOptionsElement) &&
+                processorOptionsElement.ValueKind == JsonValueKind.Object)
+            {
+                processorOptions = new ProcessorOptions();
+                if (processorOptionsElement.TryGetProperty("chunkSize", out var psChunkElement))
+                    processorOptions.ChunkSize = psChunkElement.GetInt32();
+                if (processorOptionsElement.TryGetProperty("enableCompression", out var compressElement))
+                    processorOptions.EnableCompression = compressElement.GetBoolean();
+                if (processorOptionsElement.TryGetProperty("enableCheckpoints", out var checkpointsElement))
+                    processorOptions.EnableCheckpoints = checkpointsElement.GetBoolean();
+                if (processorOptionsElement.TryGetProperty("maxParallelChunks", out var parallelElement))
+                    processorOptions.MaxParallelChunks = parallelElement.GetInt32();
+            }
+
+            var chunkSize = 65536;
+            if (arguments.RootElement.TryGetProperty("chunkSize", out var chunkElement))
+            {
+                chunkSize = chunkElement.GetInt32();
+            }
+
+            var requestId = arguments.RootElement.GetProperty("requestId").GetString();
+
+            var request = new MCPsharp.Models.Consolidated.StreamProcessRequest
+            {
+                InputType = MCPsharp.Models.Consolidated.StreamInputType.File,
+                FilePath = filePath,
+                ProcessorType = processorType,
+                OutputPath = outputPath,
+                ProcessorOptions = processorOptions,
+                ChunkSize = chunkSize,
+                RequestId = requestId
+            };
+
+            var result = await _streamController.ProcessStreamAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = result.Success,
+                Result = result.Success ? result : null,
+                Error = result.Success ? null : result.ErrorMessage
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to process stream: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteMonitorStream(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_streamController == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Stream processing controller not available"
+            };
+        }
+
+        try
+        {
+            var operationId = arguments.RootElement.GetProperty("operationId").GetString();
+            if (string.IsNullOrEmpty(operationId))
+            {
+                return new ToolCallResult { Success = false, Error = "Operation ID is required" };
+            }
+
+            var includeDetails = true;
+            if (arguments.RootElement.TryGetProperty("includeDetails", out var detailsElement))
+            {
+                includeDetails = detailsElement.GetBoolean();
+            }
+
+            var request = new StreamMonitorRequest
+            {
+                IncludeDetails = includeDetails
+            };
+
+            var result = await _streamController.MonitorStreamAsync(operationId, request, ct);
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = result
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to monitor stream: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteManageStream(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_streamController == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Stream processing controller not available"
+            };
+        }
+
+        try
+        {
+            var operationId = arguments.RootElement.GetProperty("operationId").GetString();
+            var actionString = arguments.RootElement.GetProperty("action").GetString();
+
+            if (!Enum.TryParse<StreamManagementAction>(actionString, true, out var action))
+            {
+                return new ToolCallResult { Success = false, Error = $"Invalid action: {actionString}" };
+            }
+
+            var cleanupOlderThanHours = 24;
+            if (arguments.RootElement.TryGetProperty("cleanupOlderThanHours", out var cleanupElement))
+            {
+                cleanupOlderThanHours = cleanupElement.GetInt32();
+            }
+
+            var request = new StreamManagementRequest
+            {
+                OperationId = operationId,
+                Action = action,
+                CleanupOlderThanHours = cleanupOlderThanHours
+            };
+
+            var result = await _streamController.ManageStreamAsync(request, ct);
+            return new ToolCallResult
+            {
+                Success = result.Success,
+                Result = result.Success ? result : null,
+                Error = result.Success ? null : result.ErrorMessage
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to manage stream: {ex.Message}"
+            };
+        }
+    }
+
+    #endregion
+
+    #region Roslyn Analyzer Execution Methods
+
+    private async Task<ToolCallResult> ExecuteLoadRoslynAnalyzers(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_roslynAnalyzerService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Roslyn Analyzer service is not available"
+            };
+        }
+
+        try
+        {
+            var root = arguments.RootElement;
+
+            if (!root.TryGetProperty("path", out var pathElement))
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Missing required parameter 'path'"
+                };
+            }
+
+            var path = pathElement.GetString();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Parameter 'path' cannot be empty"
+                };
+            }
+
+            var recursive = true;
+            if (root.TryGetProperty("recursive", out var recursiveElement))
+            {
+                recursive = recursiveElement.GetBoolean();
+            }
+
+            // Check if path is a directory or file
+            var isDirectory = Directory.Exists(path);
+            var isFile = File.Exists(path);
+
+            if (!isDirectory && !isFile)
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = $"Path does not exist: {path}"
+                };
+            }
+
+            var analyzers = isDirectory
+                ? await _roslynAnalyzerService.LoadAnalyzersFromDirectoryAsync(path, ct)
+                : await _roslynAnalyzerService.LoadAnalyzersAsync(path, ct);
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new
+                {
+                    analyzersLoaded = analyzers.Length,
+                    analyzers = analyzers.Select(a => new
+                    {
+                        id = a.Id,
+                        name = a.Name,
+                        description = a.Description,
+                        version = a.Version.ToString(),
+                        author = a.Author,
+                        supportedExtensions = a.SupportedExtensions.ToArray(),
+                        isEnabled = a.IsEnabled
+                    }).ToList()
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to load Roslyn analyzers: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteRunRoslynAnalyzers(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_roslynAnalyzerService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Roslyn Analyzer service is not available"
+            };
+        }
+
+        try
+        {
+            var root = arguments.RootElement;
+
+            if (!root.TryGetProperty("target_path", out var targetPathElement))
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Missing required parameter 'target_path'"
+                };
+            }
+
+            var targetPath = targetPathElement.GetString();
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "Parameter 'target_path' cannot be empty"
+                };
+            }
+
+            if (!Directory.Exists(targetPath) && !File.Exists(targetPath))
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = $"Target path does not exist: {targetPath}"
+                };
+            }
+
+            IEnumerable<string>? analyzerIds = null;
+            if (root.TryGetProperty("analyzer_ids", out var analyzerIdsElement) &&
+                analyzerIdsElement.ValueKind == JsonValueKind.Array)
+            {
+                analyzerIds = analyzerIdsElement.EnumerateArray()
+                    .Select(e => e.GetString())
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Cast<string>()
+                    .ToList();
+            }
+
+            var result = await _roslynAnalyzerService.RunAnalyzersAsync(targetPath, analyzerIds, ct);
+
+            return new ToolCallResult
+            {
+                Success = result.Success,
+                Result = result.Success ? new
+                {
+                    success = result.Success,
+                    analyzersRun = result.AnalyzersRun.ToArray(),
+                    totalIssuesFound = result.TotalIssuesFound,
+                    startTime = result.StartTime,
+                    endTime = result.EndTime,
+                    duration = (result.EndTime - result.StartTime).TotalSeconds,
+                    statistics = result.Statistics?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                } : null,
+                Error = result.Success ? null : result.ErrorMessage
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to run Roslyn analyzers: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteListRoslynAnalyzers(JsonDocument arguments, CancellationToken ct)
+    {
+        if (_roslynAnalyzerService == null)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = "Roslyn Analyzer service is not available"
+            };
+        }
+
+        try
+        {
+            var analyzers = _roslynAnalyzerService.GetLoadedAnalyzers();
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new
+                {
+                    totalAnalyzers = analyzers.Length,
+                    analyzers = analyzers.Select(a => new
+                    {
+                        id = a.Id,
+                        name = a.Name,
+                        description = a.Description,
+                        version = a.Version.ToString(),
+                        author = a.Author,
+                        supportedExtensions = a.SupportedExtensions.ToArray(),
+                        isEnabled = a.IsEnabled,
+                        rules = a.GetRules().Select(r => new
+                        {
+                            id = r.Id,
+                            category = r.Category,
+                            severity = r.DefaultSeverity.ToString(),
+                            title = r.Title,
+                            description = r.Description
+                        }).ToList()
+                    }).ToList()
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult
+            {
+                Success = false,
+                Error = $"Failed to list Roslyn analyzers: {ex.Message}"
+            };
+        }
+    }
+
+    #endregion
+}
+
+/// <summary>
+/// Extension methods for JsonElement
+/// </summary>
+internal static class JsonElementExtensions
+{
+    public static JsonElement? GetPropertyOrNull(this JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value) ? value : null;
+    }
 }

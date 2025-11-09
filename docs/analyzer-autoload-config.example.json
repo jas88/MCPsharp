@@ -1,0 +1,17 @@
+{
+  "$schema": "analyzer-autoload-schema.json",
+  "autoLoadEnabled": true,
+  "loadOnStartup": false,
+  "analyzerSources": [
+    "nuget_cache",
+    "builtin_providers"
+  ],
+  "excludeAnalyzers": [
+    "Example.DisabledAnalyzer",
+    "Another.UnwantedAnalyzer"
+  ],
+  "customAnalyzerPaths": [
+    "/path/to/custom/analyzers",
+    "/path/to/specific/analyzer.dll"
+  ]
+}
