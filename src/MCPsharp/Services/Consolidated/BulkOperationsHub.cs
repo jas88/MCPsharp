@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MCPsharp.Models.Consolidated;
 using MCPsharp.Models;
+using MCPsharp.Models.BulkEdit;
 using MCPsharp.Services;
 
 namespace MCPsharp.Services.Consolidated;

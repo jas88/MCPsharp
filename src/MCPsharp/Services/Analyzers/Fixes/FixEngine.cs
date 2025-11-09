@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using MCPsharp.Models;
 using MCPsharp.Models.Analyzers;
+using MCPsharp.Models.BulkEdit;
 
 namespace MCPsharp.Services.Analyzers.Fixes;
 
