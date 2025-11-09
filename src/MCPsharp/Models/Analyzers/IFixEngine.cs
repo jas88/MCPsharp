@@ -311,7 +311,7 @@ public record FileRollbackResult
     /// <summary>
     /// Type of rollback operation performed
     /// </summary>
-    public Models.RollbackOperationType OperationType { get; init; }
+    public RollbackOperationType OperationType { get; init; }
 
     /// <summary>
     /// Time taken for this file rollback (alias for RollbackDuration)

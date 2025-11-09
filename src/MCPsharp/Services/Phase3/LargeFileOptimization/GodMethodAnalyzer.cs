@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using MCPsharp.Models.LargeFileOptimization;
 using MCPsharp.Services.Roslyn;
@@ -80,7 +82,21 @@ internal class GodMethodAnalyzer
                 .ToList();
         }
 
-        // Generate recommended refactorings
+        // Create a temporary GodMethodAnalysis to satisfy the MethodMetrics dependency
+        var tempGodMethodAnalysis = new GodMethodAnalysis
+        {
+            MethodName = methodName,
+            ClassName = className,
+            FilePath = filePath,
+            GodMethodScore = godMethodScore,
+            Severity = DetermineGodMethodSeverity(godMethodScore),
+            Violations = violations,
+            TooManyParameters = methodDecl.ParameterList.Parameters.Select(p => p.Identifier.Text).ToList(),
+            TooManyLocals = tooManyLocals,
+            HighComplexityBlocks = new List<string>(),
+            RecommendedRefactorings = new List<MethodRefactoringStrategy>()
+        };
+
         var methodMetrics = new MethodMetrics
         {
             Complexity = complexity,
@@ -91,6 +107,7 @@ internal class GodMethodAnalyzer
             ConditionalCount = conditionalCount,
             TryCatchCount = tryCatchCount,
             MaximumNestingDepth = complexity.MaximumNestingDepth,
+            GodMethodScore = tempGodMethodAnalysis,
             IsTooLarge = lineCount > GodMethodThreshold,
             HasTooManyParameters = parameterCount > MaxParameters,
             IsTooComplex = complexity.CyclomaticComplexity > HighComplexityThreshold

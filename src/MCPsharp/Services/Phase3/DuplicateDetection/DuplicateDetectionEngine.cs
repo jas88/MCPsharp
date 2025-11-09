@@ -190,16 +190,24 @@ public class DuplicateDetectionEngine
 
     private DuplicateGroup UpdateDuplicateGroup(DuplicateGroup group, List<CodeBlock> updatedBlocks)
     {
-        var lineCount = updatedBlocks.Average(cb => cb.EndLine - cb.StartLine + 1);
+        var lineCount = (int)updatedBlocks.Average(cb => cb.EndLine - cb.StartLine + 1);
         var complexity = (int)updatedBlocks.Average(cb => cb.Complexity.OverallScore);
         var avgSimilarity = updatedBlocks.Count > 1 ? 0.95 : 1.0;
+        var impact = DuplicateDetectionUtils.CalculateDuplicationImpact(updatedBlocks, avgSimilarity);
 
-        group.CodeBlocks = updatedBlocks;
-        group.LineCount = (int)lineCount;
-        group.Complexity = complexity;
-        group.Impact = DuplicateDetectionUtils.CalculateDuplicationImpact(updatedBlocks, avgSimilarity);
-
-        return group;
+        // Create new group with updated values (init-only properties)
+        return new DuplicateGroup
+        {
+            GroupId = group.GroupId,
+            CodeBlocks = updatedBlocks,
+            SimilarityScore = group.SimilarityScore,
+            DuplicationType = group.DuplicationType,
+            LineCount = lineCount,
+            Complexity = complexity,
+            IsExactDuplicate = group.IsExactDuplicate,
+            Impact = impact,
+            Metadata = group.Metadata
+        };
     }
 
     public async Task<DuplicateType?> DetermineDuplicateTypeAsync(

@@ -3,6 +3,7 @@ using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
 using Microsoft.Extensions.Logging;
 using MCPsharp.Models;
+using MCPsharp.Models.BulkEdit;
 
 namespace MCPsharp.Services;
 

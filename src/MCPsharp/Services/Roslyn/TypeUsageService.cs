@@ -573,7 +573,7 @@ public class TypeUsageService : ITypeUsageService
         };
     }
 
-    private async Task<TypeUsageInfo?> AnalyzeTypeUsageLocation(SymbolLocation location, INamedTypeSymbol typeSymbol, CancellationToken cancellationToken)
+    private async Task<TypeUsageInfo?> AnalyzeTypeUsageLocation(Models.Roslyn.SymbolLocation location, INamedTypeSymbol typeSymbol, CancellationToken cancellationToken)
     {
         var document = location.Document;
         if (document == null)
@@ -846,11 +846,11 @@ public class TypeUsageService : ITypeUsageService
     /// <summary>
     /// Converts Microsoft.CodeAnalysis.Location to SymbolLocation
     /// </summary>
-    private static SymbolLocation ConvertToSymbolLocation(Microsoft.CodeAnalysis.Location location)
+    private static Models.Roslyn.SymbolLocation ConvertToSymbolLocation(Microsoft.CodeAnalysis.Location location)
     {
         var lineSpan = location.GetLineSpan();
 
-        return new SymbolLocation
+        return new Models.Roslyn.SymbolLocation
         {
             FilePath = lineSpan.Path,
             Line = lineSpan.StartLinePosition.Line,

@@ -9,6 +9,8 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
+    private async Task<ToolCallResult> ExecuteValidateArchitecture(JsonDocument arguments, CancellationToken ct)
+    {
         await EnsureWorkspaceInitializedAsync();
 
         if (_architectureValidator == null)

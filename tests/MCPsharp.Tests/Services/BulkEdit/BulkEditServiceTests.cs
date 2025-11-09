@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using MCPsharp.Services;
 using MCPsharp.Models;
+using MCPsharp.Models.BulkEdit;
 using MCPsharp.Tests.TestData;
 
 namespace MCPsharp.Tests.Services.BulkEdit;

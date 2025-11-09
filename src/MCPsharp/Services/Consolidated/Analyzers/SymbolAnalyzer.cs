@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MCPsharp.Models.Consolidated;
+using MCPsharp.Models.Roslyn;
 using MCPsharp.Services.Roslyn;
 
 namespace MCPsharp.Services.Consolidated.Analyzers;
@@ -72,7 +73,7 @@ public class SymbolAnalyzer
 
             var references = await _referenceFinder.FindReferencesAsync(symbolName, context);
 
-            return (references.References ?? Enumerable.Empty<ReferenceLocation>()).Select(r => new SymbolReference
+            return (references?.References ?? []).Select(r => new SymbolReference
             {
                 FilePath = r.File,
                 Line = r.Line,

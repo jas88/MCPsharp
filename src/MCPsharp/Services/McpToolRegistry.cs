@@ -49,6 +49,9 @@ public partial class McpToolRegistry
     // Roslyn Analyzer service
     private readonly IRoslynAnalyzerService? _roslynAnalyzerService;
 
+    // Hybrid search service with graceful degradation
+    private HybridSearchService? _hybridSearch;
+
     // Phase 2 services (optional)
     private readonly IWorkflowAnalyzerService? _workflowAnalyzer;
     private readonly IConfigAnalyzerService? _configAnalyzer;
@@ -1382,6 +1385,11 @@ public partial class McpToolRegistry
                 _referenceFinder = new ReferenceFinderService(_workspace);
                 _projectParser = new ProjectParserService();
 
+                // Initialize hybrid search service with graceful degradation
+                var logger = _loggerFactory?.CreateLogger<HybridSearchService>()
+                    ?? LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<HybridSearchService>();
+                _hybridSearch = new HybridSearchService(_workspace, _symbolQuery, logger);
+
                 // Initialize advanced reverse search services
                 _callerAnalysis = new CallerAnalysisService(_workspace, _symbolQuery);
                 _callChain = new CallChainService(_workspace, _symbolQuery, _callerAnalysis);
@@ -1435,6 +1443,11 @@ public partial class McpToolRegistry
                 _semanticEdit = new SemanticEditService(_workspace, _classStructure);
                 _referenceFinder = new ReferenceFinderService(_workspace);
                 _projectParser = new ProjectParserService();
+
+                // Initialize hybrid search service with graceful degradation
+                var logger = _loggerFactory?.CreateLogger<HybridSearchService>()
+                    ?? LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<HybridSearchService>();
+                _hybridSearch = new HybridSearchService(_workspace, _symbolQuery, logger);
 
                 // Initialize advanced reverse search services for project opening
                 _callerAnalysis = new CallerAnalysisService(_workspace, _symbolQuery);
@@ -1775,6 +1788,53 @@ public partial class McpToolRegistry
     private async Task<ToolCallResult> ExecuteFindSymbol(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
+
+        var name = arguments.RootElement.GetProperty("name").GetString();
+        if (string.IsNullOrEmpty(name))
+        {
+            return new ToolCallResult { Success = false, Error = "Name is required" };
+        }
+
+        // Use hybrid search with graceful degradation
+        if (_hybridSearch != null && _workspace != null)
+        {
+            var searchResult = await _hybridSearch.FindSymbolAsync(name, SearchStrategy.Auto);
+
+            if (!searchResult.Success)
+            {
+                return new ToolCallResult
+                {
+                    Success = false,
+                    Error = "All search methods failed. " + string.Join("; ", searchResult.Warnings)
+                };
+            }
+
+            // Get workspace health for capability report
+            var health = _workspace.GetHealth();
+
+            return new ToolCallResult
+            {
+                Success = true,
+                Result = new
+                {
+                    Symbols = searchResult.Symbols,
+                    TotalResults = searchResult.Symbols.Count,
+
+                    // Metadata about search method used
+                    metadata = new
+                    {
+                        method = searchResult.Method,
+                        confidence = searchResult.Confidence,
+                        warnings = searchResult.Warnings
+                    },
+
+                    // Workspace capability status
+                    capabilities = health.GetCapabilitySummary()
+                }
+            };
+        }
+
+        // Fallback to legacy behavior if hybrid search not available
         if (_symbolQuery == null)
         {
             return new ToolCallResult
@@ -1782,12 +1842,6 @@ public partial class McpToolRegistry
                 Success = false,
                 Error = "Workspace not initialized. Open a project first."
             };
-        }
-
-        var name = arguments.RootElement.GetProperty("name").GetString();
-        if (string.IsNullOrEmpty(name))
-        {
-            return new ToolCallResult { Success = false, Error = "Name is required" };
         }
 
         string? kind = null;
@@ -2258,18 +2312,4 @@ public partial class McpToolRegistry
             Result = response
         };
     }
-
-                        benefits = s.Benefits.Take(3).ToList(),
-                        risks = s.Risks.Take(3).ToList()
-                    }).ToList()
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult { Success = false, Error = $"Error getting optimization recommendations: {ex.Message}" };
-        }
-    }
-
-    #endregion
 }

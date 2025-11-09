@@ -18,12 +18,18 @@ public class RoslynWorkspace : IDisposable
     private readonly CompilationCache _compilationCache;
     private readonly object _disposeLock = new();
     private bool _disposed = false;
+    private WorkspaceHealth _health = new();
 
     public RoslynWorkspace()
     {
         _semanticModelCache = new SemanticModelCache();
         _compilationCache = new CompilationCache();
     }
+
+    /// <summary>
+    /// Get the current workspace health status
+    /// </summary>
+    public WorkspaceHealth GetHealth() => _health;
 
     /// <summary>
     /// Initialize workspace with a project directory
@@ -41,6 +47,14 @@ public class RoslynWorkspace : IDisposable
         );
 
         _projectId = _workspace.AddProject(projectInfo).Id;
+
+        // Initialize health tracking
+        _health = new WorkspaceHealth
+        {
+            IsInitialized = false,
+            TotalProjects = 1,
+            LoadedProjects = 0
+        };
 
         // Add common metadata references for test scenarios
         var project = _workspace.CurrentSolution.GetProject(_projectId);
@@ -67,25 +81,53 @@ public class RoslynWorkspace : IDisposable
             _workspace.TryApplyChanges(project.Solution);
         }
 
-        // Add all .cs files
-        foreach (var file in Directory.EnumerateFiles(projectPath, "*.cs", SearchOption.AllDirectories))
-        {
-            // Skip obj and bin directories
-            if (file.Contains("/obj/") || file.Contains("/bin/") ||
-                file.Contains("\\obj\\") || file.Contains("\\bin\\"))
-            {
-                continue;
-            }
+        // Collect all .cs files
+        var allFiles = Directory.EnumerateFiles(projectPath, "*.cs", SearchOption.AllDirectories)
+            .Where(file => !file.Contains("/obj/") && !file.Contains("/bin/") &&
+                          !file.Contains("\\obj\\") && !file.Contains("\\bin\\"))
+            .ToList();
 
-            await AddDocumentAsync(file);
+        _health.TotalFiles = allFiles.Count;
+
+        // Add all .cs files and track health
+        int parseableCount = 0;
+        foreach (var file in allFiles)
+        {
+            var fileHealth = await AddDocumentAndTrackHealthAsync(file);
+            _health.FileStatus[file] = fileHealth;
+            if (fileHealth.IsParseable)
+            {
+                parseableCount++;
+            }
         }
 
-        // Get compilation with caching
+        _health.ParseableFiles = parseableCount;
+
+        // Get compilation with caching and analyze errors
         project = _workspace.CurrentSolution.GetProject(_projectId);
         if (project != null)
         {
-            _compilation = await _compilationCache.GetOrCreateAsync(project);
+            try
+            {
+                _compilation = await _compilationCache.GetOrCreateAsync(project);
+
+                if (_compilation != null)
+                {
+                    var diagnostics = _compilation.GetDiagnostics();
+                    _health.ErrorCount = diagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);
+                    _health.WarningCount = diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
+                }
+
+                _health.LoadedProjects = 1;
+            }
+            catch
+            {
+                // Compilation failed - health already tracks this
+                _health.LoadedProjects = 0;
+            }
         }
+
+        _health.IsInitialized = true;
     }
 
     /// <summary>
@@ -134,6 +176,44 @@ public class RoslynWorkspace : IDisposable
         {
             _compilation = await _compilationCache.GetOrCreateAsync(project);
         }
+    }
+
+    /// <summary>
+    /// Add a document and track its health status (parseability, errors)
+    /// </summary>
+    private async Task<FileHealth> AddDocumentAndTrackHealthAsync(string filePath)
+    {
+        var fileHealth = new FileHealth
+        {
+            FilePath = filePath,
+            LastAnalyzed = DateTimeOffset.UtcNow,
+            IsParseable = false,
+            SyntaxErrors = 0,
+            SemanticErrors = 0
+        };
+
+        try
+        {
+            // Try to parse the file first (Level 1: Syntax-only)
+            var text = await File.ReadAllTextAsync(filePath);
+            var syntaxTree = CSharpSyntaxTree.ParseText(text, path: filePath);
+            var root = await syntaxTree.GetRootAsync();
+
+            // Check for syntax errors
+            var syntaxDiagnostics = syntaxTree.GetDiagnostics();
+            fileHealth.SyntaxErrors = syntaxDiagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);
+            fileHealth.IsParseable = fileHealth.SyntaxErrors == 0;
+
+            // Add to workspace even if there are syntax errors (best effort)
+            await AddDocumentAsync(filePath);
+        }
+        catch (Exception ex)
+        {
+            fileHealth.IsParseable = false;
+            fileHealth.ParseError = ex.Message;
+        }
+
+        return fileHealth;
     }
 
     /// <summary>

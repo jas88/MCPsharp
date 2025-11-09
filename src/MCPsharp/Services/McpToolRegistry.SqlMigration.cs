@@ -269,9 +269,4 @@ public partial class McpToolRegistry
             return new ToolCallResult { Success = false, Error = $"Error validating migrations: {ex.Message}" };
         }
     }
-
-    #endregion
-
-    #region Phase 3 Large File Optimizer Execution Methods
-
 }

@@ -183,7 +183,7 @@ public class RollbackService : IRollbackService
             var rollbackInfo = await GetRollbackInfoAsync(rollbackId, cancellationToken);
             if (rollbackInfo == null)
             {
-                return new Models.RollbackResult
+                return new Models.BulkEdit.RollbackResult
                 {
                     Success = false,
                     SessionId = rollbackId,
@@ -191,7 +191,7 @@ public class RollbackService : IRollbackService
                     SuccessfulRollbacks = 0,
                     FailedRollbacks = 0,
                     FileResults = Array.Empty<FileRollbackResult>(),
-                    Errors = new List<Models.RollbackError>(),
+                    Errors = new List<Models.BulkEdit.RollbackError>(),
                     ElapsedTime = TimeSpan.Zero,
                     CleanupCompleted = false,
                     Summary = $"Rollback session {rollbackId} not found"
@@ -200,7 +200,7 @@ public class RollbackService : IRollbackService
 
             if (!rollbackInfo.CanRollback)
             {
-                return new Models.RollbackResult
+                return new Models.BulkEdit.RollbackResult
                 {
                     Success = false,
                     SessionId = rollbackId,
@@ -208,7 +208,7 @@ public class RollbackService : IRollbackService
                     SuccessfulRollbacks = 0,
                     FailedRollbacks = 0,
                     FileResults = Array.Empty<FileRollbackResult>(),
-                    Errors = new List<Models.RollbackError> { new Models.RollbackError { FilePath = "", ErrorMessage = $"Rollback session {rollbackId} is no longer valid or has expired", IsRecoverable = false, Timestamp = DateTime.UtcNow } },
+                    Errors = new List<Models.BulkEdit.RollbackError> { new Models.BulkEdit.RollbackError { FilePath = "", ErrorMessage = $"Rollback session {rollbackId} is no longer valid or has expired", IsRecoverable = false, Timestamp = DateTime.UtcNow } },
                     ElapsedTime = TimeSpan.Zero,
                     CleanupCompleted = false,
                     Summary = $"Rollback session {rollbackId} is no longer valid or has expired"
@@ -258,12 +258,12 @@ public class RollbackService : IRollbackService
                 "Rollback operation {RollbackId} completed. Success: {Success}, Files: {Successful}/{Total}",
                 rollbackId, overallSuccess, successfulRollbacks, rollbackInfo.Files.Count);
 
-            // Convert RollbackFileResult to Models.FileRollbackResult
-            var modelFileResults = fileResults.Select(fr => new Models.FileRollbackResult
+            // Convert RollbackFileResult to Models.BulkEdit.FileRollbackResult
+            var modelFileResults = fileResults.Select(fr => new Models.BulkEdit.FileRollbackResult
             {
                 FilePath = fr.FilePath,
                 Success = fr.Success,
-                OperationType = fr.Success ? Models.RollbackOperationType.RestoredFromBackup : Models.RollbackOperationType.NoAction,
+                OperationType = fr.Success ? Models.BulkEdit.RollbackOperationType.RestoredFromBackup : Models.BulkEdit.RollbackOperationType.NoAction,
                 ErrorMessage = fr.Error ?? fr.SkipReason,
                 ProcessingTime = fr.ProcessDuration
             }).ToList();
@@ -271,7 +271,7 @@ public class RollbackService : IRollbackService
             // Convert to errors list for the result
             var errors = fileResults
                 .Where(fr => !fr.Success)
-                .Select(fr => new Models.RollbackError
+                .Select(fr => new Models.BulkEdit.RollbackError
                 {
                     FilePath = fr.FilePath,
                     ErrorMessage = fr.Error ?? "Unknown error",
@@ -280,7 +280,7 @@ public class RollbackService : IRollbackService
                     Timestamp = DateTime.UtcNow
                 }).ToList();
 
-            return new Models.RollbackResult
+            return new Models.BulkEdit.RollbackResult
             {
                 Success = overallSuccess,
                 SessionId = rollbackId,
@@ -299,17 +299,17 @@ public class RollbackService : IRollbackService
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Rollback operation {RollbackId} failed", rollbackId);
-            return new Models.RollbackResult
+            return new Models.BulkEdit.RollbackResult
             {
                 Success = false,
                 SessionId = rollbackId,
                 TotalFiles = 0,
                 SuccessfulRollbacks = 0,
                 FailedRollbacks = 0,
-                FileResults = Array.Empty<Models.FileRollbackResult>(),
-                Errors = new List<Models.RollbackError>
+                FileResults = Array.Empty<Models.BulkEdit.FileRollbackResult>(),
+                Errors = new List<Models.BulkEdit.RollbackError>
                 {
-                    new Models.RollbackError
+                    new Models.BulkEdit.RollbackError
                     {
                         FilePath = "",
                         ErrorMessage = ex.Message,

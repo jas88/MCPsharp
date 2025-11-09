@@ -368,8 +368,8 @@ public class FixEngine : IFixEngine
 
             var successfulRollbacks = 0;
             var failedRollbacks = 0;
-            var fileResults = new List<MCPsharp.Models.FileRollbackResult>();
-            var errors = new List<MCPsharp.Models.RollbackError>();
+            var fileResults = new List<MCPsharp.Models.BulkEdit.FileRollbackResult>();
+            var errors = new List<MCPsharp.Models.BulkEdit.RollbackError>();
 
             // Restore from backups
             if (session.Metadata.TryGetValue("BackupPaths", out var backupPathsObj) &&
@@ -386,18 +386,18 @@ public class FixEngine : IFixEngine
                             File.Delete(backupPath);
 
                             successfulRollbacks++;
-                            fileResults.Add(new Models.FileRollbackResult
+                            fileResults.Add(new Models.BulkEdit.FileRollbackResult
                             {
                                 FilePath = originalPath,
                                 Success = true,
-                                OperationType = Models.RollbackOperationType.RestoredFromBackup,
+                                OperationType = Models.BulkEdit.RollbackOperationType.RestoredFromBackup,
                                 ProcessingTime = DateTime.UtcNow - startTime
                             });
                         }
                         else
                         {
                             failedRollbacks++;
-                            errors.Add(new MCPsharp.Models.RollbackError
+                            errors.Add(new MCPsharp.Models.BulkEdit.RollbackError
                             {
                                 FilePath = originalPath,
                                 ErrorMessage = "Backup file not found",
@@ -410,7 +410,7 @@ public class FixEngine : IFixEngine
                     {
                         failedRollbacks++;
                         _logger.LogError(ex, "Error restoring file: {FilePath}", originalPath);
-                        errors.Add(new MCPsharp.Models.RollbackError
+                        errors.Add(new MCPsharp.Models.BulkEdit.RollbackError
                         {
                             FilePath = originalPath,
                             ErrorMessage = ex.Message,
@@ -897,9 +897,9 @@ public class FixEngine : IFixEngine
     }
 
     /// <summary>
-    /// Converts MCPsharp.Models.FileRollbackResult to MCPsharp.Models.Analyzers.FileRollbackResult
+    /// Converts MCPsharp.Models.BulkEdit.FileRollbackResult to MCPsharp.Models.Analyzers.FileRollbackResult
     /// </summary>
-    private static Models.Analyzers.FileRollbackResult ConvertToFileRollbackResult(MCPsharp.Models.FileRollbackResult source)
+    private static Models.Analyzers.FileRollbackResult ConvertToFileRollbackResult(MCPsharp.Models.BulkEdit.FileRollbackResult source)
     {
         return new Models.Analyzers.FileRollbackResult
         {
@@ -912,9 +912,9 @@ public class FixEngine : IFixEngine
     }
 
     /// <summary>
-    /// Converts MCPsharp.Models.RollbackError to MCPsharp.Models.Analyzers.RollbackError
+    /// Converts MCPsharp.Models.BulkEdit.RollbackError to MCPsharp.Models.Analyzers.RollbackError
     /// </summary>
-    private static Models.Analyzers.RollbackError ConvertToRollbackError(MCPsharp.Models.RollbackError source)
+    private static Models.Analyzers.RollbackError ConvertToRollbackError(MCPsharp.Models.BulkEdit.RollbackError source)
     {
         return new Models.Analyzers.RollbackError
         {

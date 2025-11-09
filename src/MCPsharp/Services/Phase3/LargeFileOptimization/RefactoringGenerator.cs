@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using MCPsharp.Models.LargeFileOptimization;
 using MCPsharp.Services.Roslyn;
@@ -37,6 +39,8 @@ internal class RefactoringGenerator
             },
             Confidence = primaryPattern.Applicability,
             EstimatedEffortHours = primaryPattern.EstimatedEffort,
+            ExpectedBenefit = CalculateExpectedBenefit(codeSmell.ImpactScore, primaryPattern.Applicability),
+            Priority = CalculatePriority(codeSmell.Severity, codeSmell.ImpactScore),
             Benefits = new List<string> { "Improved code quality", "Better maintainability", "Reduced complexity" },
             Risks = new List<string> { "Potential for introducing bugs", "May require interface changes" }
         };
@@ -69,6 +73,8 @@ internal class RefactoringGenerator
                 },
                 Confidence = 0.85,
                 EstimatedEffortHours = 6,
+                ExpectedBenefit = CalculateClassExpectedBenefit(metrics),
+                Priority = CalculateClassPriority(metrics),
                 Benefits = new List<string> { "Single Responsibility Principle", "Better testability", "Reduced coupling" },
                 Risks = new List<string> { "Requires careful dependency management" }
             });
@@ -134,5 +140,63 @@ internal class RefactoringGenerator
             "introduce parameter object" => RefactoringType.IntroduceParameterObject,
             _ => RefactoringType.ExtractMethod
         };
+    }
+
+    private double CalculateExpectedBenefit(double impactScore, double applicability)
+    {
+        // Combine impact score and applicability to get a benefit score (0.0 - 1.0)
+        return (impactScore * 0.7 + applicability * 0.3);
+    }
+
+    private int CalculatePriority(CodeSmellSeverity severity, double impactScore)
+    {
+        // Calculate priority (1-5) based on severity and impact
+        var severityWeight = severity switch
+        {
+            CodeSmellSeverity.Blocker => 5,
+            CodeSmellSeverity.Critical => 4,
+            CodeSmellSeverity.Major => 3,
+            CodeSmellSeverity.Minor => 2,
+            CodeSmellSeverity.Info => 1,
+            _ => 1
+        };
+
+        // Adjust by impact score (0.0 - 1.0)
+        var impactAdjustment = impactScore > 0.7 ? 1 : 0;
+        return Math.Min(5, severityWeight + impactAdjustment);
+    }
+
+    private double CalculateClassExpectedBenefit(ClassMetrics metrics)
+    {
+        // Calculate benefit based on class metrics
+        var benefit = 0.0;
+
+        if (metrics.IsTooLarge)
+            benefit += 0.3;
+
+        if (metrics.HasTooManyResponsibilities)
+            benefit += 0.4;
+
+        if (metrics.GodClassScore.Severity >= GodClassSeverity.High)
+            benefit += 0.3;
+
+        return Math.Min(1.0, benefit);
+    }
+
+    private int CalculateClassPriority(ClassMetrics metrics)
+    {
+        // Calculate priority (1-5) based on class metrics
+        var priority = 1;
+
+        if (metrics.GodClassScore.Severity == GodClassSeverity.Critical)
+            priority = 5;
+        else if (metrics.GodClassScore.Severity == GodClassSeverity.High)
+            priority = 4;
+        else if (metrics.HasTooManyResponsibilities)
+            priority = 3;
+        else if (metrics.IsTooLarge)
+            priority = 2;
+
+        return priority;
     }
 }

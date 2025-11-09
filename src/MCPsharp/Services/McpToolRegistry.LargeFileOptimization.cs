@@ -462,4 +462,15 @@ public partial class McpToolRegistry
                         endLine = s.EndLine,
                         confidence = s.Confidence,
                         estimatedEffort = s.EstimatedEffortHours,
+                        expectedBenefit = s.ExpectedBenefit,
+                        priority = s.Priority
+                    }).ToList()
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolCallResult { Success = false, Error = $"Error getting optimization recommendations: {ex.Message}" };
+        }
+    }
 }

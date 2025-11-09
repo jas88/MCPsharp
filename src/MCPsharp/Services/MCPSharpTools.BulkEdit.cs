@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Linq;
 using MCPsharp.Models;
+using MCPsharp.Models.BulkEdit;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;

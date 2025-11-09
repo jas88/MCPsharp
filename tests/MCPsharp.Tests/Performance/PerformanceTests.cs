@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using MCPsharp.Services;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Models;
+using MCPsharp.Models.BulkEdit;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Tests.TestData;
 using NUnit.Framework;

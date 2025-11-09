@@ -328,6 +328,8 @@ public class RefactoringSuggestion
     public required CodeExample BeforeAfter { get; init; }
     public required double Confidence { get; init; }
     public required int EstimatedEffortHours { get; init; }
+    public required double ExpectedBenefit { get; init; }
+    public required int Priority { get; init; }
     public required List<string> Benefits { get; init; } = new();
     public required List<string> Risks { get; init; } = new();
 }

@@ -4,6 +4,13 @@ using MCPsharp.Models.Architecture;
 using ConsolidatedArchitectureDefinition = MCPsharp.Models.Consolidated.ArchitectureDefinition;
 using ConsolidatedArchitectureLayer = MCPsharp.Models.Consolidated.ArchitectureLayer;
 using ConsolidatedArchitectureWarning = MCPsharp.Models.Consolidated.ArchitectureWarning;
+using ArchitectureRecommendation = MCPsharp.Models.Architecture.ArchitectureRecommendation;
+using ConsolidatedDependencyRule = MCPsharp.Models.Consolidated.DependencyRule;
+using ArchitectureDependencyRule = MCPsharp.Models.Architecture.DependencyRule;
+using ConsolidatedDependencyNode = MCPsharp.Models.Consolidated.DependencyNode;
+using ArchitectureDependencyNode = MCPsharp.Models.Architecture.DependencyNode;
+using ConsolidatedDependencyEdge = MCPsharp.Models.Consolidated.DependencyEdge;
+using ArchitectureDependencyEdge = MCPsharp.Models.Architecture.DependencyEdge;
 
 namespace MCPsharp.Services.Consolidated.Analyzers;
 
@@ -37,7 +44,7 @@ public class ArchitectureAnalyzer
                     new() { Name = "Domain", Level = 3, NamespacePatterns = new List<string> { "*.Domain", "*.Core" }, Types = new List<string> { "Entity", "Aggregate", "ValueObject" } },
                     new() { Name = "Infrastructure", Level = 4, NamespacePatterns = new List<string> { "*.Infrastructure", "*.Data" }, Types = new List<string> { "Repository", "DbContext", "Service" } }
                 },
-                Rules = new List<DependencyRule>
+                Rules = new List<ConsolidatedDependencyRule>
                 {
                     new() { FromLayer = "Presentation", ToLayer = "Application", Allowed = true, Reason = "Presentation can depend on Application" },
                     new() { FromLayer = "Application", ToLayer = "Domain", Allowed = true, Reason = "Application can depend on Domain" },
@@ -54,7 +61,7 @@ public class ArchitectureAnalyzer
         {
             Name = "Default Architecture",
             Layers = new List<ConsolidatedArchitectureLayer>(),
-            Rules = new List<DependencyRule>()
+            Rules = new List<ConsolidatedDependencyRule>()
         };
     }
 
@@ -144,10 +151,13 @@ public class ArchitectureAnalyzer
             return recommendations.Select(r => new ArchitectureRecommendation
             {
                 Type = r.Type,
+                Title = r.Title,
                 Description = r.Description,
-                Target = r.Title,
-                Priority = Convert.ToDouble(r.Priority == 0 ? 1.0 : r.Priority),
-                AffectedComponents = new List<string>()
+                Priority = r.Priority,
+                Steps = r.Steps,
+                CodeExample = r.CodeExample,
+                Effort = r.Effort,
+                Impact = r.Impact
             }).ToList();
         }
         catch (Exception ex)
@@ -199,7 +209,7 @@ public class ArchitectureAnalyzer
                 AllowedDependencies = new List<string>(),
                 ForbiddenDependencies = new List<string>()
             }).ToList(),
-            DependencyRules = consolidatedDef.DependencyRules.Select(r => new MCPsharp.Models.Architecture.DependencyRule
+            DependencyRules = consolidatedDef.DependencyRules.Select(r => new ArchitectureDependencyRule
             {
                 FromLayer = r.FromLayer,
                 ToLayer = r.ToLayer,
@@ -239,14 +249,14 @@ public class ArchitectureAnalyzer
     {
         return new DependencyGraph
         {
-            Nodes = sourceAnalysis.Nodes.Select(n => new DependencyNode
+            Nodes = sourceAnalysis.Nodes.Select(n => new ConsolidatedDependencyNode
             {
                 Id = n.Name,
                 Name = n.Name,
                 Type = n.Type.ToString(),
                 Labels = new List<string>()
             }).ToList(),
-            Edges = sourceAnalysis.Edges.Select(e => new DependencyEdge
+            Edges = sourceAnalysis.Edges.Select(e => new ConsolidatedDependencyEdge
             {
                 From = e.From,
                 To = e.To,

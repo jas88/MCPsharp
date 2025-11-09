@@ -1,6 +1,5 @@
 using System.Text.Json;
 using MCPsharp.Models;
-using MCPsharp.Models.Phase3;
 
 namespace MCPsharp.Services;
 
@@ -9,6 +8,10 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
+    #region Duplicate Code Detection Tool Execution
+
+    private async Task<ToolCallResult> ExecuteDetectDuplicates(JsonDocument arguments, CancellationToken ct)
+    {
         await EnsureWorkspaceInitializedAsync();
 
         if (_duplicateCodeDetector == null)
@@ -633,6 +636,5 @@ public partial class McpToolRegistry
 
     #endregion
 
-    #region Phase 3 SQL Migration Analyzer Execution Methods
-
+    #endregion
 }

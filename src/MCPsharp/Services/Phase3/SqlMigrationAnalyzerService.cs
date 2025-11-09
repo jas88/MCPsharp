@@ -22,18 +22,19 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
     private readonly ExecutionEstimator _estimator;
     private readonly ReportGenerator _reportGenerator;
 
-    public SqlMigrationAnalyzerService(ILogger<SqlMigrationAnalyzerService> logger)
+    public SqlMigrationAnalyzerService(ILogger<SqlMigrationAnalyzerService> logger, ILoggerFactory loggerFactory)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(loggerFactory);
 
-        _migrationParser = new MigrationParser(logger);
-        _providerDetector = new DatabaseProviderDetector(logger);
-        _breakingChangeAnalyzer = new BreakingChangeAnalyzer(logger);
-        _dependencyAnalyzer = new DependencyAnalyzer(logger);
-        _schemaEvolutionTracker = new SchemaEvolutionTracker(logger);
-        _validator = new MigrationValidator(logger);
-        _estimator = new ExecutionEstimator(logger);
-        _reportGenerator = new ReportGenerator(logger);
+        _migrationParser = new MigrationParser(loggerFactory.CreateLogger<MigrationParser>());
+        _providerDetector = new DatabaseProviderDetector(loggerFactory.CreateLogger<DatabaseProviderDetector>());
+        _breakingChangeAnalyzer = new BreakingChangeAnalyzer(loggerFactory.CreateLogger<BreakingChangeAnalyzer>());
+        _dependencyAnalyzer = new DependencyAnalyzer(loggerFactory.CreateLogger<DependencyAnalyzer>());
+        _schemaEvolutionTracker = new SchemaEvolutionTracker(loggerFactory.CreateLogger<SchemaEvolutionTracker>());
+        _validator = new MigrationValidator(loggerFactory.CreateLogger<MigrationValidator>());
+        _estimator = new ExecutionEstimator(loggerFactory.CreateLogger<ExecutionEstimator>());
+        _reportGenerator = new ReportGenerator(loggerFactory.CreateLogger<ReportGenerator>());
     }
 
     public async Task<MigrationAnalysisResult> AnalyzeMigrationsAsync(string projectPath, CancellationToken cancellationToken = default)
@@ -366,9 +367,12 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
         if (invocation.ArgumentList?.Arguments.Any() == true)
         {
             var firstArg = invocation.ArgumentList.Arguments[0];
-            if (firstArg.Expression is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression))
+            if (firstArg.Expression is LiteralExpressionSyntax literal)
             {
-                return literal.Token.ValueText;
+                if (literal.Kind() == SyntaxKind.StringLiteralExpression)
+                {
+                    return literal.Token.ValueText;
+                }
             }
         }
         return null;
