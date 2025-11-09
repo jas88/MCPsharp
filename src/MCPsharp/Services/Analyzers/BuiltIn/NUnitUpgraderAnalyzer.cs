@@ -142,7 +142,6 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         try
         {
             var issues = new List<AnalyzerIssue>();
-            var lines = content.Split('\n');
 
             foreach (var rule in Rules)
             {
@@ -221,7 +220,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
 
     public ImmutableArray<AnalyzerFix> GetFixes(string ruleId)
     {
-        if (!_patterns.TryGetValue(ruleId, out var pattern) || !_fixGenerators.TryGetValue(ruleId, out var generator))
+        if (!_patterns.TryGetValue(ruleId, out _) || !_fixGenerators.TryGetValue(ruleId, out _))
         {
             return ImmutableArray<AnalyzerFix>.Empty;
         }

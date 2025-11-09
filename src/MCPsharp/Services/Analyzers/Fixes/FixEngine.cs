@@ -671,7 +671,7 @@ public class FixEngine : IFixEngine
         return conflicts;
     }
 
-    private bool EditsOverlap(TextEdit edit1, TextEdit edit2)
+    private static bool EditsOverlap(TextEdit edit1, TextEdit edit2)
     {
         var pos1 = (edit1.StartLine, edit1.StartColumn);
         var pos2 = (edit2.StartLine, edit2.StartColumn);
@@ -803,7 +803,7 @@ public class FixEngine : IFixEngine
         };
     }
 
-    private string ApplyTextEdit(string content, TextEdit edit)
+    private static string ApplyTextEdit(string content, TextEdit edit)
     {
         var lines = content.Split('\n');
 

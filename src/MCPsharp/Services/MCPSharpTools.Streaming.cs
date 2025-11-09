@@ -397,7 +397,6 @@ public partial class McpToolRegistry
 
             await _tempFileManager.CleanupAsync(TimeSpan.FromHours(olderThanHours));
             var stats = await _tempFileManager.GetStatsAsync();
-            var cleanedFiles = stats.FileCount;
 
             return new ToolCallResult
             {

@@ -88,7 +88,7 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
         return Task.FromResult(progress);
     }
 
-    public async Task SetPhaseAsync(string operationId, string phase)
+    public Task SetPhaseAsync(string operationId, string phase)
     {
         if (_progressTracker.TryGetValue(operationId, out var progress))
         {
@@ -98,9 +98,10 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
                 progress.LastUpdated = DateTime.UtcNow;
             }
         }
+        return Task.CompletedTask;
     }
 
-    public async Task AddMetadataAsync(string operationId, string key, object value)
+    public Task AddMetadataAsync(string operationId, string key, object value)
     {
         if (_progressTracker.TryGetValue(operationId, out var progress))
         {
@@ -110,9 +111,10 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
                 progress.LastUpdated = DateTime.UtcNow;
             }
         }
+        return Task.CompletedTask;
     }
 
-    public async Task CompleteProgressAsync(string operationId)
+    public Task CompleteProgressAsync(string operationId)
     {
         if (_progressTracker.TryGetValue(operationId, out var progress))
         {
@@ -122,21 +124,23 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
                 progress.LastUpdated = DateTime.UtcNow;
             }
         }
+        return Task.CompletedTask;
     }
 
-    public async Task RemoveProgressAsync(string operationId)
+    public Task RemoveProgressAsync(string operationId)
     {
         _progressTracker.TryRemove(operationId, out _);
+        return Task.CompletedTask;
     }
 
-    public async Task<List<StreamProgress>> GetActiveProgressAsync()
+    public Task<List<StreamProgress>> GetActiveProgressAsync()
     {
-        return _progressTracker.Values
+        return Task.FromResult(_progressTracker.Values
             .Where(p => p.CurrentPhase != "Completed" && p.CurrentPhase != "Failed")
-            .ToList();
+            .ToList());
     }
 
-    public async Task CleanupAsync(TimeSpan olderThan)
+    public Task CleanupAsync(TimeSpan olderThan)
     {
         var cutoffTime = DateTime.UtcNow - olderThan;
         var toRemove = _progressTracker
@@ -154,6 +158,8 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
             _logger.LogInformation("Cleaned up {Count} progress trackers older than {OlderThan}",
                 toRemove.Count, olderThan);
         }
+
+        return Task.CompletedTask;
     }
 
     private void PerformCleanup(object? state)

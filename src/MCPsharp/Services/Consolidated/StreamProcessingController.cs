@@ -14,9 +14,7 @@ namespace MCPsharp.Services.Consolidated;
 /// </summary>
 public class StreamProcessingController
 {
-    private readonly IStreamingFileProcessor? _streamingProcessor;
     private readonly IProgressTracker? _progressTracker;
-    private readonly ITempFileManager? _tempFileManager;
     private readonly ILogger<StreamProcessingController> _logger;
 
     // Active stream operations
@@ -32,9 +30,7 @@ public class StreamProcessingController
         ITempFileManager? tempFileManager = null,
         ILogger<StreamProcessingController>? logger = null)
     {
-        _streamingProcessor = streamingProcessor;
         _progressTracker = progressTracker;
-        _tempFileManager = tempFileManager;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<StreamProcessingController>.Instance;
 
         RegisterBuiltInProcessors();
@@ -207,14 +203,6 @@ public class StreamProcessingController
 
         try
         {
-            var response = new StreamMonitorResponse
-            {
-                OperationId = operationId,
-                Status = StreamStatus.NotFound, // Will be updated later
-                CreatedAt = DateTime.UtcNow,
-                RequestId = request.RequestId ?? Guid.NewGuid().ToString(),
-                Metadata = new ResponseMetadata()
-            };
 
             // Get operation context
             StreamOperationContext? context;

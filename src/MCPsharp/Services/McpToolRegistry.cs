@@ -37,8 +37,6 @@ public partial class McpToolRegistry
     // Phase 3 services
     private IArchitectureValidatorService? _architectureValidator;
     private IDuplicateCodeDetectorService? _duplicateCodeDetector;
-    private ISqlMigrationAnalyzerService? _sqlMigrationAnalyzer;
-    private ILargeFileOptimizerService? _largeFileOptimizer;
 
     // Roslyn Analyzer service
     private readonly IRoslynAnalyzerService? _roslynAnalyzerService;
@@ -58,7 +56,6 @@ public partial class McpToolRegistry
     private readonly ITempFileManager? _tempFileManager;
 
     // Consolidated services
-    private readonly FileOperationsService? _fileOperationsService;
     private readonly UniversalFileOperations? _universalFileOps;
     private readonly UnifiedAnalysisService? _unifiedAnalysis;
     private readonly BulkOperationsHub? _bulkOperationsHub;
@@ -99,11 +96,8 @@ public partial class McpToolRegistry
         _streamingProcessor = streamingProcessor;
         _progressTracker = progressTracker;
         _tempFileManager = tempFileManager;
-        _sqlMigrationAnalyzer = sqlMigrationAnalyzer;
-        _largeFileOptimizer = largeFileOptimizer;
 
         // Consolidated services
-        _fileOperationsService = fileOperationsService;
         _universalFileOps = universalFileOps;
         _unifiedAnalysis = unifiedAnalysis;
         _bulkOperationsHub = bulkOperationsHub;
@@ -2854,7 +2848,6 @@ public partial class McpToolRegistry
             {
                 // Detect duplicates first
                 var detectionOptions = ParseDuplicateDetectionOptions(arguments);
-                var detectionResult = await _duplicateCodeDetector.DetectDuplicatesAsync(projectPath, detectionOptions, ct);
                 duplicates = new List<MCPsharp.Models.DuplicateGroup>(); // Skip mapping for now since service expects different type
             }
 
@@ -3555,7 +3548,6 @@ public partial class McpToolRegistry
 
             var sourcePath = arguments.RootElement.GetProperty("sourcePath").GetString();
             var targetPath = arguments.RootElement.GetProperty("targetPath").GetString();
-            var content = arguments.RootElement.GetProperty("content").GetString();
 
             var overwrite = false;
             if (arguments.RootElement.TryGetProperty("overwrite", out var overwriteElement))

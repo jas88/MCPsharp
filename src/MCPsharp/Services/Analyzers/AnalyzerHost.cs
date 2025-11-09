@@ -12,7 +12,6 @@ namespace MCPsharp.Services.Analyzers;
 public class AnalyzerHost : IAnalyzerHost
 {
     private readonly ILogger<AnalyzerHost> _logger;
-    private readonly ILoggerFactory _loggerFactory;
     private readonly IAnalyzerRegistry _registry;
     private readonly ISecurityManager _securityManager;
     private readonly IFixEngine _fixEngine;
@@ -34,7 +33,6 @@ public class AnalyzerHost : IAnalyzerHost
         IAnalyzerSandboxFactory sandboxFactory)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _securityManager = securityManager ?? throw new ArgumentNullException(nameof(securityManager));
         _fixEngine = fixEngine ?? throw new ArgumentNullException(nameof(fixEngine));

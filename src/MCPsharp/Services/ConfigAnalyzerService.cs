@@ -534,7 +534,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Determines the type of a configuration property value.
     /// </summary>
-    private string GetPropertyType(object value)
+    private static string GetPropertyType(object value)
     {
         return value switch
         {
@@ -552,7 +552,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Determines if a configuration key is likely to contain sensitive information.
     /// </summary>
-    private bool IsSensitiveKey(string key)
+    private static bool IsSensitiveKey(string key)
     {
         var keyParts = key.Split(':', StringSplitOptions.RemoveEmptyEntries);
         return keyParts.Any(part =>
@@ -563,7 +563,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Compares two configuration values for equality.
     /// </summary>
-    private bool AreValuesEqual(object value1, object value2)
+    private static bool AreValuesEqual(object value1, object value2)
     {
         if (value1 == null && value2 == null) return true;
         if (value1 == null || value2 == null) return false;
@@ -575,7 +575,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Checks if a configuration file contains a specific key (helper for conflict detection).
     /// </summary>
-    private bool ContainsConfigKey(string filePath, string key)
+    private static bool ContainsConfigKey(string filePath, string key)
     {
         try
         {

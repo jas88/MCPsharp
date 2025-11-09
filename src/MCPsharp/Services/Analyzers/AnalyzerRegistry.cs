@@ -310,7 +310,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
         {
             lock (_lock)
             {
-                if (!_analyzerInfos.TryGetValue(analyzerId, out var info))
+                if (!_analyzerInfos.TryGetValue(analyzerId, out _))
                 {
                     return Task.FromResult(ImmutableArray<AnalyzerDependency>.Empty);
                 }

@@ -334,7 +334,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
         return Path.Combine(configDirectory, $"analyzer_{analyzerId}.json");
     }
 
-    private string GetConfigurationDirectory(string? projectPath)
+    private static string GetConfigurationDirectory(string? projectPath)
     {
         if (!string.IsNullOrEmpty(projectPath))
         {
@@ -346,7 +346,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
         return Path.Combine(homeDirectory, ".mcpsharp", "analyzers");
     }
 
-    private string GetCacheKey(string analyzerId, string? projectPath)
+    private static string GetCacheKey(string analyzerId, string? projectPath)
     {
         return string.IsNullOrEmpty(projectPath)
             ? analyzerId

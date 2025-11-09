@@ -14,9 +14,6 @@ namespace MCPsharp.Services.Phase3;
 public class ArchitectureValidatorService : IArchitectureValidatorService
 {
     private readonly RoslynWorkspace _workspace;
-    private readonly SymbolQueryService _symbolQuery;
-    private readonly ICallerAnalysisService _callerAnalysis;
-    private readonly ITypeUsageService _typeUsage;
     private readonly Dictionary<string, ArchitectureDefinition> _predefinedArchitectures;
 
     public ArchitectureValidatorService(
@@ -26,9 +23,6 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         ITypeUsageService typeUsage)
     {
         _workspace = workspace;
-        _symbolQuery = symbolQuery;
-        _callerAnalysis = callerAnalysis;
-        _typeUsage = typeUsage;
         _predefinedArchitectures = new Dictionary<string, ArchitectureDefinition>();
         InitializePredefinedArchitectures();
     }
@@ -217,7 +211,6 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         var validationResult = await ValidateArchitectureAsync(projectPath, architecture, cancellationToken);
         var dependencyAnalysis = await AnalyzeDependenciesAsync(projectPath, architecture, cancellationToken);
         var diagram = await GenerateArchitectureDiagramAsync(projectPath, architecture, cancellationToken);
-        var circularDependencies = await AnalyzeCircularDependenciesAsync(projectPath, architecture, cancellationToken);
 
         // Generate recommendations
         var recommendations = await GetRecommendationsAsync(validationResult.Violations, cancellationToken);
@@ -244,7 +237,6 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         ValidateArchitectureDefinition(definition);
 
         // Store for future use (could be persisted to file/database)
-        var key = $"{definition.Name}_{DateTime.UtcNow:yyyyMMddHHmmss}";
 
         return definition;
     }

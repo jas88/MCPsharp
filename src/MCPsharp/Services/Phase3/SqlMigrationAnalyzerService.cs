@@ -721,8 +721,8 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
     {
         // Check for breaking column changes
         if (operation.Parameters.TryGetValue("type", out var newType) ||
-            operation.Parameters.TryGetValue("maxLength", out var maxLength) ||
-            operation.Parameters.TryGetValue("nullable", out var nullable))
+            operation.Parameters.TryGetValue("maxLength", out var _maxLength) ||
+            operation.Parameters.TryGetValue("nullable", out var _nullable))
         {
             // Type changes, reducing length, or making non-nullable are potentially breaking
             return true;
@@ -770,7 +770,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
         {
             foreach (var argument in invocation.ArgumentList.Arguments)
             {
-                if (argument.Expression is LiteralExpressionSyntax literal)
+                if (argument.Expression is LiteralExpressionSyntax _literal)
                 {
                     // Handle literal arguments
                 }

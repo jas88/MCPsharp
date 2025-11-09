@@ -171,7 +171,7 @@ public class AnalysisResultCache : IAnalysisResultCache
         }
     }
 
-    public async Task<bool> InvalidateCacheAsync(string filePath, CancellationToken cancellationToken = default)
+    public Task<bool> InvalidateCacheAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -210,16 +210,16 @@ public class AnalysisResultCache : IAnalysisResultCache
                 }
             }
 
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error invalidating cache for {FilePath}", filePath);
-            return false;
+            return Task.FromResult(false);
         }
     }
 
-    public async Task<bool> InvalidateAnalyzerCacheAsync(string analyzerId, CancellationToken cancellationToken = default)
+    public Task<bool> InvalidateAnalyzerCacheAsync(string analyzerId, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -257,16 +257,16 @@ public class AnalysisResultCache : IAnalysisResultCache
                 }
             }
 
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error invalidating cache for analyzer {AnalyzerId}", analyzerId);
-            return false;
+            return Task.FromResult(false);
         }
     }
 
-    public async Task<bool> ClearCacheAsync(CancellationToken cancellationToken = default)
+    public Task<bool> ClearCacheAsync(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -298,16 +298,16 @@ public class AnalysisResultCache : IAnalysisResultCache
             }
 
             _logger.LogInformation("Cache cleared successfully");
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error clearing cache");
-            return false;
+            return Task.FromResult(false);
         }
     }
 
-    public async Task<CacheStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
+    public Task<CacheStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -330,7 +330,7 @@ public class AnalysisResultCache : IAnalysisResultCache
             var totalRequests = _cacheHits + _cacheMisses;
             var hitRate = totalRequests > 0 ? (double)_cacheHits / totalRequests : 0;
 
-            return new CacheStatistics
+            return Task.FromResult(new CacheStatistics
             {
                 MemoryCacheCount = memoryCacheCount,
                 DiskCacheCount = diskCacheCount,
@@ -339,12 +339,12 @@ public class AnalysisResultCache : IAnalysisResultCache
                 TotalMisses = _cacheMisses,
                 HitRate = hitRate,
                 TotalRequests = totalRequests
-            };
+            });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting cache statistics");
-            return new CacheStatistics();
+            return Task.FromResult(new CacheStatistics());
         }
     }
 
@@ -361,7 +361,7 @@ public class AnalysisResultCache : IAnalysisResultCache
         return $"{analyzerId}_{filePathHash}_{contentHash}";
     }
 
-    private string GetFilePathHash(string filePath)
+    private static string GetFilePathHash(string filePath)
     {
         using var sha256 = SHA256.Create();
         var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(filePath));

@@ -24,7 +24,7 @@ public class RoslynCodeFixLoader
     /// <summary>
     /// Load all Roslyn code fix providers from a given assembly path
     /// </summary>
-    public async Task<ImmutableArray<RoslynCodeFixAdapter>> LoadCodeFixProvidersFromAssemblyAsync(
+    public Task<ImmutableArray<RoslynCodeFixAdapter>> LoadCodeFixProvidersFromAssemblyAsync(
         string assemblyPath,
         CancellationToken cancellationToken = default)
     {
@@ -35,7 +35,7 @@ public class RoslynCodeFixLoader
             if (!File.Exists(assemblyPath))
             {
                 _logger.LogError("Assembly not found: {AssemblyPath}", assemblyPath);
-                return ImmutableArray<RoslynCodeFixAdapter>.Empty;
+                return Task.FromResult(ImmutableArray<RoslynCodeFixAdapter>.Empty);
             }
 
             var codeFixProviders = new List<RoslynCodeFixAdapter>();
@@ -90,12 +90,12 @@ public class RoslynCodeFixLoader
             _logger.LogInformation("Successfully loaded {Count} Roslyn code fix providers from {AssemblyPath}",
                 codeFixProviders.Count, assemblyPath);
 
-            return codeFixProviders.ToImmutableArray();
+            return Task.FromResult(codeFixProviders.ToImmutableArray());
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading code fix providers from assembly {AssemblyPath}", assemblyPath);
-            return ImmutableArray<RoslynCodeFixAdapter>.Empty;
+            return Task.FromResult(ImmutableArray<RoslynCodeFixAdapter>.Empty);
         }
     }
 

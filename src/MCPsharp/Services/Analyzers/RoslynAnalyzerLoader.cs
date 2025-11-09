@@ -25,7 +25,7 @@ public class RoslynAnalyzerLoader
     /// <summary>
     /// Load all Roslyn analyzers from a given assembly path
     /// </summary>
-    public async Task<ImmutableArray<IAnalyzer>> LoadAnalyzersFromAssemblyAsync(
+    public Task<ImmutableArray<IAnalyzer>> LoadAnalyzersFromAssemblyAsync(
         string assemblyPath,
         CancellationToken cancellationToken = default)
     {
@@ -36,7 +36,7 @@ public class RoslynAnalyzerLoader
             if (!File.Exists(assemblyPath))
             {
                 _logger.LogError("Assembly not found: {AssemblyPath}", assemblyPath);
-                return ImmutableArray<IAnalyzer>.Empty;
+                return Task.FromResult(ImmutableArray<IAnalyzer>.Empty);
             }
 
             var analyzers = new List<IAnalyzer>();
@@ -91,12 +91,12 @@ public class RoslynAnalyzerLoader
             _logger.LogInformation("Successfully loaded {Count} Roslyn analyzers from {AssemblyPath}",
                 analyzers.Count, assemblyPath);
 
-            return analyzers.ToImmutableArray();
+            return Task.FromResult(analyzers.ToImmutableArray());
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading analyzers from assembly {AssemblyPath}", assemblyPath);
-            return ImmutableArray<IAnalyzer>.Empty;
+            return Task.FromResult(ImmutableArray<IAnalyzer>.Empty);
         }
     }
 
@@ -202,7 +202,6 @@ public class RoslynAnalyzerLoader
                 _logger.LogInformation("Scanning NuGet cache for analyzers: {CachePath}", cachePath);
 
                 // Look for analyzer DLLs in the analyzers subdirectory
-                var analyzerPattern = Path.Combine(cachePath, "**", "analyzers", "**", "*.dll");
 
                 var assemblyPaths = DiscoverAnalyzerAssemblies(cachePath, recursive: true);
                 var analyzers = await LoadAnalyzersFromAssembliesAsync(assemblyPaths, cancellationToken);

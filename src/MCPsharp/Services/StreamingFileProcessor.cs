@@ -216,7 +216,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             operation.ErrorMessage = ex.Message;
             operation.CompletedAt = DateTime.UtcNow;
 
-            _logger.LogError(ex, "Failed to process file {FilePath} after {AttemptCount} attempts - Stack Trace: {StackTrace}", request.FilePath, attempt, ex.StackTrace);
+            _logger.LogError(ex, "Failed to process file {FilePath} after {AttemptCount} attempts", request.FilePath, attempt);
             return CreateFailureResult(operation, ex.Message);
         }
         }
@@ -269,7 +269,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
 
     public async Task<StreamProgress?> GetProgressAsync(string operationId)
     {
-        if (_operations.TryGetValue(operationId, out var operation))
+        if (_operations.TryGetValue(operationId, out _))
         {
             return await _progressTracker.GetProgressAsync(operationId);
         }
@@ -385,7 +385,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
 
         foreach (var operationId in toRemove)
         {
-            if (_operations.TryRemove(operationId, out var operation))
+            if (_operations.TryRemove(operationId, out _))
             {
                 await _tempFileManager.CleanupAsync(operationId);
                 await _progressTracker.RemoveProgressAsync(operationId);
@@ -508,7 +508,6 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
 
         var buffer = new byte[request.ChunkSize];
         var chunkIndex = 0;
-        var totalBytes = inputStream.Length;
         var processedBytes = 0L;
         var processedChunks = 0L;
         var processedLines = 0L;
@@ -1067,7 +1066,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             catch (Exception ex)
             {
                 // Return failure result instead of throwing
-                _logger.LogError(ex, "Error processing file {FilePath}: {ExceptionType} - {Message}", filePath, ex.GetType().Name, ex.Message);
+                _logger.LogError(ex, "Error processing file {FilePath}", filePath);
                 return new StreamResult
                 {
                     Success = false,
@@ -1154,7 +1153,6 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         await File.WriteAllTextAsync(outputPath, transformedContent);
 
         var fileInfo = new FileInfo(filePath);
-        var outputFileInfo = new FileInfo(outputPath);
 
         var result = new StreamResult
         {

@@ -114,7 +114,6 @@ public class TypeUsageService : ITypeUsageService
                 IsSealed = false
             };
 
-        var usages = await FindTypeUsagesAsync(typeSymbol, cancellationToken);
         var baseClasses = new List<TypeUsageInfo>();
         var derivedClasses = new List<TypeUsageInfo>();
         var implementedInterfaces = new List<TypeUsageInfo>();
@@ -249,7 +248,6 @@ public class TypeUsageService : ITypeUsageService
 
     public async Task<TypeDependencyAnalysis> AnalyzeTypeDependenciesAsync(string typeName, CancellationToken cancellationToken = default)
     {
-        var startTime = DateTime.UtcNow;
         var result = await FindTypeUsagesAsync(typeName, cancellationToken);
         if (result == null)
             return new TypeDependencyAnalysis
@@ -318,7 +316,6 @@ public class TypeUsageService : ITypeUsageService
 
     public async Task<TypeUsagePatternAnalysis> AnalyzeUsagePatternsAsync(string? namespaceFilter = null, CancellationToken cancellationToken = default)
     {
-        var startTime = DateTime.UtcNow;
         var compilation = _workspace.GetCompilation();
         if (compilation == null)
             return new TypeUsagePatternAnalysis

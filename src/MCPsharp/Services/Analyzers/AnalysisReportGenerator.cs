@@ -296,7 +296,7 @@ public class AnalysisReportGenerator
         return sb.ToString();
     }
 
-    private string EscapeCsv(string value)
+    private static string EscapeCsv(string value)
     {
         if (string.IsNullOrEmpty(value))
             return string.Empty;

@@ -13,7 +13,6 @@ public class FileOperationsHandler
 {
     private readonly UniversalFileOperations _fileOps;
     private readonly ILogger<FileOperationsHandler> _logger;
-    private readonly ResponseProcessor _responseProcessor;
 
     public FileOperationsHandler(
         UniversalFileOperations fileOps,
@@ -22,7 +21,6 @@ public class FileOperationsHandler
     {
         _fileOps = fileOps;
         _logger = logger;
-        _responseProcessor = responseProcessor;
     }
 
     /// <summary>

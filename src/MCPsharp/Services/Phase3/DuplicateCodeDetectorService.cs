@@ -19,9 +19,6 @@ namespace MCPsharp.Services.Phase3;
 public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
 {
     private readonly RoslynWorkspace _workspace;
-    private readonly SymbolQueryService _symbolQuery;
-    private readonly ICallerAnalysisService _callerAnalysis;
-    private readonly ITypeUsageService _typeUsage;
     private readonly ILogger<DuplicateCodeDetectorService> _logger;
 
     // Cache for compiled results
@@ -36,9 +33,6 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         ILogger<DuplicateCodeDetectorService> logger)
     {
         _workspace = workspace;
-        _symbolQuery = symbolQuery;
-        _callerAnalysis = callerAnalysis;
-        _typeUsage = typeUsage;
         _logger = logger;
     }
 
@@ -1253,7 +1247,6 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         List<CodeBlock> allCodeBlocks,
         CancellationToken cancellationToken)
     {
-        var totalFiles = allCodeBlocks.Select(cb => cb.FilePath).Distinct().Count();
         var filesWithDuplicates = duplicateGroups
             .SelectMany(g => g.CodeBlocks)
             .Select(cb => cb.FilePath)
@@ -1387,8 +1380,6 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
 
     private RefactoringSuggestion CreateExtractMethodSuggestion(DuplicateGroup group)
     {
-        var primaryLocation = group.CodeBlocks.First();
-        var allFiles = group.CodeBlocks.Select(cb => cb.FilePath).Distinct().ToList();
 
         return new RefactoringSuggestion
         {
@@ -2069,7 +2060,6 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
     private int CalculateCognitiveComplexity(SyntaxNode node)
     {
         var complexity = 0;
-        var nestingLevel = 0;
 
         void VisitNode(SyntaxNode n, int currentNesting)
         {

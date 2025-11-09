@@ -17,7 +17,6 @@ public class UniversalFileOperations
 {
     private readonly string _rootPath;
     private readonly FileOperationsService _fileOperations;
-    private readonly IBulkEditService? _bulkEditService;
     private readonly ILogger<UniversalFileOperations> _logger;
 
     public UniversalFileOperations(
@@ -28,7 +27,6 @@ public class UniversalFileOperations
     {
         _rootPath = Path.GetFullPath(rootPath);
         _fileOperations = fileOperations;
-        _bulkEditService = bulkEditService;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<UniversalFileOperations>.Instance;
     }
 
@@ -396,7 +394,6 @@ public class UniversalFileOperations
 
             foreach (var entry in Directory.GetFileSystemEntries(fullPath, pattern))
             {
-                var entryInfo = new System.IO.FileInfo(entry);
                 var childRequest = new FileInfoRequest
                 {
                     Path = Path.GetRelativePath(_rootPath, entry),

@@ -52,7 +52,6 @@ public class FeatureTracerService : IFeatureTracerService
     private readonly FileOperationsService _fileOps;
     private readonly SymbolQueryService _symbolQuery;
     private readonly AdvancedReferenceFinderService _referenceFinder;
-    private readonly RoslynWorkspace _workspace;
     private readonly string _rootPath;
 
     public FeatureTracerService(
@@ -66,7 +65,6 @@ public class FeatureTracerService : IFeatureTracerService
         _fileOps = fileOps ?? throw new ArgumentNullException(nameof(fileOps));
         _symbolQuery = symbolQuery ?? throw new ArgumentNullException(nameof(symbolQuery));
         _referenceFinder = referenceFinder ?? throw new ArgumentNullException(nameof(referenceFinder));
-        _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
 
         // Extract root path from file operations service
         // FileOperationsService constructor stores the absolute path
@@ -99,7 +97,6 @@ public class FeatureTracerService : IFeatureTracerService
             await SearchForFeatureFilesAsync(normalizedFeature, components, dataFlow);
 
             // Build dependency graph for found components
-            var dependencyGraph = await BuildDependencyGraphAsync(components);
 
             _logger.LogInformation("Feature trace completed for {FeatureName}: found {ComponentCount} components",
                 featureName, GetComponentCount(components));

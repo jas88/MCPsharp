@@ -22,7 +22,6 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
     private readonly ILogger<StreamOperationManager> _logger;
     private readonly IStreamingFileProcessor _streamingProcessor;
     private readonly IProgressTracker _progressTracker;
-    private readonly ITempFileManager _tempFileManager;
 
     // Thread-safe collections for operation management
     private readonly ConcurrentDictionary<string, StreamOperation> _operations;
@@ -43,7 +42,6 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _streamingProcessor = streamingProcessor ?? throw new ArgumentNullException(nameof(streamingProcessor));
         _progressTracker = progressTracker ?? throw new ArgumentNullException(nameof(progressTracker));
-        _tempFileManager = tempFileManager ?? throw new ArgumentNullException(nameof(tempFileManager));
 
         _operations = new ConcurrentDictionary<string, StreamOperation>();
         _checkpoints = new ConcurrentDictionary<string, List<CheckpointData>>();

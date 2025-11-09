@@ -15,9 +15,6 @@ namespace MCPsharp.Services.Phase3;
 public class LargeFileOptimizerService : ILargeFileOptimizerService
 {
     private readonly RoslynWorkspace _workspace;
-    private readonly SymbolQueryService _symbolQuery;
-    private readonly ICallerAnalysisService _callerAnalysis;
-    private readonly ITypeUsageService _typeUsage;
     private readonly ILogger<LargeFileOptimizerService>? _logger;
 
     // Configuration constants
@@ -36,9 +33,6 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         ILogger<LargeFileOptimizerService>? logger = null)
     {
         _workspace = workspace;
-        _symbolQuery = symbolQuery;
-        _callerAnalysis = callerAnalysis;
-        _typeUsage = typeUsage;
         _logger = logger;
     }
 
@@ -598,7 +592,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         catch (Exception ex)
         {
             // Log error and continue
-            _logger?.LogError(ex, "Error analyzing file {FilePath}: {ErrorMessage}", filePath, ex.Message);
+            _logger?.LogError(ex, "Error analyzing file {FilePath}", filePath);
             return null;
         }
     }
@@ -654,7 +648,6 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
     {
         var cyclomaticComplexity = 1; // Base complexity
         var cognitiveComplexity = 0;
-        var nestingDepth = 0;
         var maxNestingDepth = 0;
         var decisionPoints = 0;
         var hotspots = new List<ComplexityHotspot>();
@@ -829,7 +822,6 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     private List<string> IdentifyClassResponsibilities(ClassDeclarationSyntax classDecl, SemanticModel semanticModel)
     {
-        var responsibilities = new List<string>();
         var methodNames = classDecl.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
             .Select(m => m.Identifier.Text)
@@ -1110,9 +1102,6 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
             violations.Add($"Too high cyclomatic complexity: {complexity.CyclomaticComplexity} (threshold: {HighComplexityThreshold})");
 
         // Find problematic parameters
-        var tooManyParameters = methodDecl.ParameterList.Parameters
-            .Select(p => p.Identifier.Text)
-            .ToList();
 
         // Find problematic local variables
         var tooManyLocals = new List<string>();
@@ -1126,7 +1115,6 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         }
 
         // Find high complexity blocks
-        var highComplexityBlocks = IdentifyHighComplexityBlocks(methodDecl, complexity);
 
         // Generate recommended refactorings first
         var methodMetrics = new MethodMetrics

@@ -23,6 +23,7 @@ public class UnifiedAnalysisService
     private readonly RoslynWorkspace? _workspace;
     private readonly SymbolQueryService? _symbolQuery;
     private readonly ClassStructureService? _classStructure;
+    private readonly SemanticEditService? _semanticEdit;
     private readonly ReferenceFinderService? _referenceFinder;
     private readonly ProjectParserService? _projectParser;
     private readonly IArchitectureValidatorService? _architectureValidator;
@@ -33,6 +34,7 @@ public class UnifiedAnalysisService
         RoslynWorkspace? workspace = null,
         SymbolQueryService? symbolQuery = null,
         ClassStructureService? classStructure = null,
+        SemanticEditService? semanticEdit = null,
         ReferenceFinderService? referenceFinder = null,
         ProjectParserService? projectParser = null,
         IArchitectureValidatorService? architectureValidator = null,
@@ -42,6 +44,7 @@ public class UnifiedAnalysisService
         _workspace = workspace;
         _symbolQuery = symbolQuery;
         _classStructure = classStructure;
+        _semanticEdit = semanticEdit;
         _referenceFinder = referenceFinder;
         _projectParser = projectParser;
         _architectureValidator = architectureValidator;
@@ -912,6 +915,7 @@ public class UnifiedAnalysisService
             if (definition == null) return null;
 
             var references = await GetSymbolReferencesAsync(symbolName, context, ct);
+            var callers = await GetSymbolCallersAsync(symbolName, context, ct);
 
             // Basic metrics
             var usageCount = references?.Count ?? 0;
@@ -1610,6 +1614,7 @@ public class UnifiedAnalysisService
 
             if (Directory.Exists(Path.GetDirectoryName(projectPath)))
             {
+                var projectDir = Path.GetDirectoryName(projectPath)!;
 
                 // Add basic configurations
                 structure.Configurations.Add("Debug");
@@ -1634,6 +1639,7 @@ public class UnifiedAnalysisService
         try
         {
             var files = new List<ProjectFile>();
+            var projectStructure = await GetProjectStructureAsync(projectPath, ct);
 
                       // Get all C# files in the project directory
             var projectDir = Path.GetDirectoryName(projectPath);
@@ -1762,10 +1768,12 @@ public class UnifiedAnalysisService
     {
         try
         {
+            var projectStructure = await GetProjectStructureAsync(projectPath, ct);
             var files = await GetProjectFileInventoryAsync(projectPath, null, ct);
 
             var csharpFiles = files.Where(f => f.Language == "C#").ToList();
             var totalLines = csharpFiles.Sum(f => f.LineCount);
+            var totalSize = files.Sum(f => f.Size);
 
             return new ProjectMetrics
             {
@@ -1833,6 +1841,8 @@ public class UnifiedAnalysisService
         {
             // Basic metrics calculation
             var layerCount = definition.Layers.Count;
+            var ruleCount = definition.DependencyRules.Count;
+            var complexity = layerCount * 2 + ruleCount;
 
             return new ArchitectureMetrics
             {
@@ -1931,7 +1941,9 @@ public class UnifiedAnalysisService
             var graph = await BuildDependencyGraphAsync(scope, 10, ct);
 
             // Calculate impact metrics
+            var nodeCount = graph.Nodes.Count;
             var edgeCount = graph.Edges.Count;
+            var averageDependencies = nodeCount > 0 ? (double)edgeCount / nodeCount : 0;
 
             return new DependencyImpact
             {
@@ -2206,6 +2218,7 @@ public class UnifiedAnalysisService
                     // Long method detection
                     if (line.Contains("public") || line.Contains("private"))
                     {
+                        var methodStart = i;
                         var methodLines = CountMethodLines(content, i);
                         if (methodLines > 50)
                         {
@@ -2228,6 +2241,7 @@ public class UnifiedAnalysisService
                     // Large class detection
                     if (line.Contains("class "))
                     {
+                        var classStart = i;
                         var classLines = CountClassLines(content, i);
                         if (classLines > 300)
                         {

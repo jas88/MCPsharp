@@ -357,7 +357,7 @@ public class FileOperationsService
     /// <summary>
     /// Extract line and column bounds from any edit type
     /// </summary>
-    private (int startLine, int startColumn, int endLine, int endColumn) GetEditBounds(TextEdit edit)
+    private static (int startLine, int startColumn, int endLine, int endColumn) GetEditBounds(TextEdit edit)
     {
         return edit switch
         {
@@ -389,7 +389,7 @@ public class FileOperationsService
         }
     }
 
-    private void ApplyReplaceEdit(List<string> lines, ReplaceEdit edit)
+    private static void ApplyReplaceEdit(List<string> lines, ReplaceEdit edit)
     {
         if (edit.StartLine == edit.EndLine)
         {
@@ -426,7 +426,7 @@ public class FileOperationsService
         }
     }
 
-    private void ApplyInsertEdit(List<string> lines, InsertEdit edit)
+    private static void ApplyInsertEdit(List<string> lines, InsertEdit edit)
     {
         var line = lines[edit.StartLine];
         var before = line[..edit.StartColumn];
@@ -448,7 +448,7 @@ public class FileOperationsService
         }
     }
 
-    private void ApplyDeleteEdit(List<string> lines, DeleteEdit edit)
+    private static void ApplyDeleteEdit(List<string> lines, DeleteEdit edit)
     {
         if (edit.StartLine == edit.EndLine)
         {
@@ -469,8 +469,8 @@ public class FileOperationsService
         }
     }
 
-    
-    private (int line, int column) GetEditStartPosition(TextEdit edit)
+
+    private static (int line, int column) GetEditStartPosition(TextEdit edit)
     {
         return edit switch
         {

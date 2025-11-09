@@ -15,7 +15,6 @@ public class RoslynAnalyzerAdapter : IAnalyzer
     private readonly DiagnosticAnalyzer _roslynAnalyzer;
     private readonly ILogger<RoslynAnalyzerAdapter> _logger;
     private readonly string _analyzerId;
-    private readonly AnalyzerFileReference? _analyzerReference;
 
     public string Id => _analyzerId;
     public string Name { get; }
@@ -33,7 +32,6 @@ public class RoslynAnalyzerAdapter : IAnalyzer
     {
         _roslynAnalyzer = roslynAnalyzer ?? throw new ArgumentNullException(nameof(roslynAnalyzer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _analyzerReference = analyzerReference;
 
         // Generate unique ID from analyzer type
         _analyzerId = $"Roslyn_{roslynAnalyzer.GetType().Name}";
@@ -231,7 +229,7 @@ public class RoslynAnalyzerAdapter : IAnalyzer
         };
     }
 
-    private IssueSeverity MapSeverity(DiagnosticSeverity severity)
+    private static IssueSeverity MapSeverity(DiagnosticSeverity severity)
     {
         return severity switch
         {
@@ -243,7 +241,7 @@ public class RoslynAnalyzerAdapter : IAnalyzer
         };
     }
 
-    private RuleCategory MapCategory(string category)
+    private static RuleCategory MapCategory(string category)
     {
         return category.ToLowerInvariant() switch
         {

@@ -28,13 +28,11 @@ public interface IStreamProcessor
 /// </summary>
 public class LineStreamProcessor : IStreamProcessor
 {
-    private readonly ILogger<LineStreamProcessor> _logger;
 
     public StreamProcessorType ProcessorType => StreamProcessorType.LineProcessor;
 
     public LineStreamProcessor(ILogger<LineStreamProcessor>? logger = null)
     {
-        _logger = logger ?? NullLogger<LineStreamProcessor>.Instance;
     }
 
     public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
@@ -136,7 +134,6 @@ public class LineStreamProcessor : IStreamProcessor
 
     private string? ProcessLine(string line, LineProcessorConfig config, long lineNumber = 0)
     {
-        var originalLine = line;
 
         // Trim whitespace if configured
         if (config.TrimWhitespace)
@@ -213,13 +210,11 @@ public class LineStreamProcessor : IStreamProcessor
 /// </summary>
 public class RegexStreamProcessor : IStreamProcessor
 {
-    private readonly ILogger<RegexStreamProcessor> _logger;
 
     public StreamProcessorType ProcessorType => StreamProcessorType.RegexProcessor;
 
     public RegexStreamProcessor(ILogger<RegexStreamProcessor>? logger = null)
     {
-        _logger = logger ?? NullLogger<RegexStreamProcessor>.Instance;
     }
 
     public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
@@ -328,13 +323,11 @@ public class RegexStreamProcessor : IStreamProcessor
 /// </summary>
 public class CsvStreamProcessor : IStreamProcessor
 {
-    private readonly ILogger<CsvStreamProcessor> _logger;
 
     public StreamProcessorType ProcessorType => StreamProcessorType.CsvProcessor;
 
     public CsvStreamProcessor(ILogger<CsvStreamProcessor>? logger = null)
     {
-        _logger = logger ?? NullLogger<CsvStreamProcessor>.Instance;
     }
 
     public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
@@ -502,13 +495,11 @@ public class CsvStreamProcessor : IStreamProcessor
 /// </summary>
 public class BinaryStreamProcessor : IStreamProcessor
 {
-    private readonly ILogger<BinaryStreamProcessor> _logger;
 
     public StreamProcessorType ProcessorType => StreamProcessorType.BinaryProcessor;
 
     public BinaryStreamProcessor(ILogger<BinaryStreamProcessor>? logger = null)
     {
-        _logger = logger ?? NullLogger<BinaryStreamProcessor>.Instance;
     }
 
     public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)

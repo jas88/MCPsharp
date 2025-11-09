@@ -8,8 +8,6 @@ namespace MCPsharp.Services.Phase2;
 public class ImpactAnalyzerService : IImpactAnalyzerService
 {
     private readonly RoslynWorkspace _workspace;
-    private readonly ReferenceFinderService _referenceFinder;
-    private readonly IConfigAnalyzerService _configAnalyzer;
     private readonly IWorkflowAnalyzerService _workflowAnalyzer;
 
     public ImpactAnalyzerService(
@@ -19,8 +17,6 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         IWorkflowAnalyzerService workflowAnalyzer)
     {
         _workspace = workspace;
-        _referenceFinder = referenceFinder;
-        _configAnalyzer = configAnalyzer;
         _workflowAnalyzer = workflowAnalyzer;
     }
 
@@ -451,7 +447,6 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
     {
         var lines = content.Split('\n');
         var symbolName = change.SymbolName;
-        var sourceFileName = Path.GetFileNameWithoutExtension(change.FilePath);
 
         for (int i = 0; i < lines.Length; i++)
         {

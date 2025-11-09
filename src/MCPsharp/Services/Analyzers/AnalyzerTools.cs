@@ -336,9 +336,6 @@ public static class AnalyzerTools
 
             var previewOnly = arguments.RootElement.TryGetProperty("preview_only", out var previewProp) && previewProp.GetBoolean();
             var resolveConflicts = arguments.RootElement.TryGetProperty("resolve_conflicts", out var resolveProp) && resolveProp.GetBoolean();
-            var conflictStrategy = arguments.RootElement.TryGetProperty("conflict_strategy", out var strategyProp)
-                ? Enum.Parse<ConflictResolutionStrategy>(strategyProp.GetString()!)
-                : ConflictResolutionStrategy.PreferNewer;
 
             var inputs = new Dictionary<string, object>();
             if (arguments.RootElement.TryGetProperty("inputs", out var inputsElement))
@@ -456,7 +453,6 @@ public static class AnalyzerTools
         try
         {
             var analyzerId = arguments.RootElement.GetProperty("analyzer_id").GetString() ?? string.Empty;
-            var force = arguments.RootElement.TryGetProperty("force", out var forceProp) && forceProp.GetBoolean();
 
             var success = await analyzerHost.UnloadAnalyzerAsync(analyzerId, cancellationToken);
 
@@ -624,7 +620,6 @@ public static class AnalyzerTools
         try
         {
             var sessionId = arguments.RootElement.GetProperty("session_id").GetString() ?? string.Empty;
-            var force = arguments.RootElement.TryGetProperty("force", out var forceProp) && forceProp.GetBoolean();
 
             var result = await fixEngine.RollbackFixesAsync(sessionId, cancellationToken);
 

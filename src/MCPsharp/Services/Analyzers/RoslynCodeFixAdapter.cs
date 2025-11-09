@@ -92,7 +92,6 @@ public class RoslynCodeFixAdapter
             // Create a workspace and document
             var workspace = new AdhocWorkspace();
             var projectId = ProjectId.CreateNewId();
-            var documentId = DocumentId.CreateNewId(projectId);
 
             var projectInfo = ProjectInfo.Create(
                 projectId,
@@ -138,7 +137,7 @@ public class RoslynCodeFixAdapter
     /// <summary>
     /// Apply a fix and return the modified content
     /// </summary>
-    public async Task<FixApplicationResult> ApplyFixAsync(
+    public Task<FixApplicationResult> ApplyFixAsync(
         AnalyzerFix fix,
         string fileContent,
         CancellationToken cancellationToken = default)
@@ -149,9 +148,8 @@ public class RoslynCodeFixAdapter
             _logger.LogDebug("Applying fix {FixId} for rule {RuleId}", fix.Id, fix.RuleId);
 
             // Apply the edits to the content
-            var modifiedContent = ApplyTextEdits(fileContent, fix.Edits);
 
-            return new FixApplicationResult
+            return Task.FromResult(new FixApplicationResult
             {
                 SessionId = Guid.NewGuid().ToString(),
                 Success = true,
@@ -166,20 +164,20 @@ public class RoslynCodeFixAdapter
                 ModifiedFiles = fix.AffectedFiles,
                 AppliedAt = DateTime.UtcNow,
                 Duration = DateTime.UtcNow - startTime
-            };
+            });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error applying fix {FixId} for rule {RuleId}", fix.Id, fix.RuleId);
 
-            return new FixApplicationResult
+            return Task.FromResult(new FixApplicationResult
             {
                 SessionId = Guid.NewGuid().ToString(),
                 Success = false,
                 ErrorMessage = ex.Message,
                 AppliedAt = DateTime.UtcNow,
                 Duration = DateTime.UtcNow - startTime
-            };
+            });
         }
     }
 
@@ -363,7 +361,7 @@ public class RoslynCodeFixAdapter
         return string.Join(Environment.NewLine, lines);
     }
 
-    private DiagnosticSeverity MapSeverityToDiagnosticSeverity(IssueSeverity severity)
+    private static DiagnosticSeverity MapSeverityToDiagnosticSeverity(IssueSeverity severity)
     {
         return severity switch
         {
@@ -375,7 +373,7 @@ public class RoslynCodeFixAdapter
         };
     }
 
-    private string MapCategoryToString(RuleCategory category)
+    private static string MapCategoryToString(RuleCategory category)
     {
         return category switch
         {

@@ -1504,7 +1504,7 @@ public class BulkEditService : IBulkEditService
         return allFiles.ToList();
     }
 
-    private string DetermineRootDirectory(string pattern)
+    private static string DetermineRootDirectory(string pattern)
     {
         if (Path.IsPathRooted(pattern))
         {
@@ -1526,7 +1526,7 @@ public class BulkEditService : IBulkEditService
         return Directory.GetCurrentDirectory();
     }
 
-    private bool IsHiddenFile(string filePath)
+    private static bool IsHiddenFile(string filePath)
     {
         try
         {
@@ -1612,7 +1612,7 @@ public class BulkEditService : IBulkEditService
         return rollbackInfo;
     }
 
-    private async Task<string> ComputeFileChecksum(string filePath, CancellationToken cancellationToken)
+    private static async Task<string> ComputeFileChecksum(string filePath, CancellationToken cancellationToken)
     {
         using var sha256 = SHA256.Create();
         await using var stream = File.OpenRead(filePath);
@@ -2367,7 +2367,7 @@ public class BulkEditService : IBulkEditService
         return condition.Negate ? !result : result;
     }
 
-    private bool CheckFileSizeCondition(string filePath, BulkEditCondition condition)
+    private static bool CheckFileSizeCondition(string filePath, BulkEditCondition condition)
     {
         try
         {
@@ -2392,7 +2392,7 @@ public class BulkEditService : IBulkEditService
         }
     }
 
-    private bool CheckFileModifiedCondition(string filePath, BulkEditCondition condition)
+    private static bool CheckFileModifiedCondition(string filePath, BulkEditCondition condition)
     {
         try
         {
@@ -2410,13 +2410,13 @@ public class BulkEditService : IBulkEditService
         }
     }
 
-    private bool CheckFileExtensionCondition(string filePath, BulkEditCondition condition)
+    private static bool CheckFileExtensionCondition(string filePath, BulkEditCondition condition)
     {
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         return extension.Equals(condition.Pattern.ToLowerInvariant());
     }
 
-    private bool CheckFileInDirectoryCondition(string filePath, BulkEditCondition condition)
+    private static bool CheckFileInDirectoryCondition(string filePath, BulkEditCondition condition)
     {
         var directory = Path.GetDirectoryName(filePath);
         return !string.IsNullOrEmpty(directory) &&
@@ -2468,7 +2468,7 @@ public class BulkEditService : IBulkEditService
         };
     }
 
-    private string GenerateDiff(string originalContent, IReadOnlyList<FileChange> changes)
+    private static string GenerateDiff(string originalContent, IReadOnlyList<FileChange> changes)
     {
         // Simple diff generation - in a real implementation, you'd use a proper diff library
         var diffLines = new List<string>();
@@ -2499,7 +2499,7 @@ public class BulkEditService : IBulkEditService
         return string.Join("\n", diffLines);
     }
 
-    private int GetLineNumber(string content, int index)
+    private static int GetLineNumber(string content, int index)
     {
         var lineCount = 1;
         for (int i = 0; i < index && i < content.Length; i++)
@@ -2512,7 +2512,7 @@ public class BulkEditService : IBulkEditService
         return lineCount - 1; // 0-indexed
     }
 
-    private int GetColumnNumber(string content, int index)
+    private static int GetColumnNumber(string content, int index)
     {
         var column = 0;
         for (int i = index - 1; i >= 0; i--)

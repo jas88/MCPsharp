@@ -97,7 +97,6 @@ internal class AnalyzerInitializationService : IHostedService
         {
             _logger.LogInformation("Initializing built-in analyzers");
 
-            var analyzerHost = _serviceProvider.GetRequiredService<IAnalyzerHost>();
             var registry = _serviceProvider.GetRequiredService<IAnalyzerRegistry>();
 
             // Register built-in analyzers
