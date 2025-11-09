@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using MCPsharp.Models.Search;
 using Microsoft.Extensions.FileSystemGlobbing;
+using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;
@@ -167,7 +169,7 @@ public class SearchService : ISearchService
                 return targetPath;
             }
 
-            var projectRoot = _projectContext.ProjectRoot;
+            var projectRoot = _projectContext.GetProjectContext()?.RootPath;
             if (!string.IsNullOrWhiteSpace(projectRoot))
             {
                 return Path.Combine(projectRoot, targetPath);
@@ -175,7 +177,7 @@ public class SearchService : ISearchService
         }
 
         // Default to project root
-        return _projectContext.ProjectRoot ?? Directory.GetCurrentDirectory();
+        return _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
     }
 
     private List<string> GetFilesToSearch(string searchRoot, string? includePattern, string? excludePattern)

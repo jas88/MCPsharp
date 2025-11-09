@@ -82,7 +82,7 @@ public class BulkEditServiceTests : FileServiceTestBase
     }
 
     [Test]
-    public async Task BulkReplaceAsync_WithInvalidRegex_ShouldFail()
+    public void BulkReplaceAsync_WithInvalidRegex_ShouldFail()
     {
         // Arrange
         var testFile = CreateTestFile("Some content");
@@ -93,6 +93,7 @@ public class BulkEditServiceTests : FileServiceTestBase
         var ex = Assert.ThrowsAsync<RegexParseException>(async () =>
             await _service.BulkReplaceAsync(files, invalidPattern, "replacement"));
 
+        Assert.NotNull(ex);
         Assert.That(ex.Message, Does.Contain("Invalid pattern"));
     }
 
@@ -109,7 +110,7 @@ public class BulkEditServiceTests : FileServiceTestBase
 
         // Assert
         Assert.That(result.Success, Is.True);
-        Assert.That(result.RollbackInfo, Is.Not.Null);
+        Assert.NotNull(result.RollbackInfo);
         Assert.That(result.RollbackInfo.Files.Count, Is.EqualTo(1));
         Assert.That(result.RollbackInfo.Files[0].BackupExists, Is.True);
         Assert.That(File.Exists(result.RollbackInfo.Files[0].BackupPath), Is.True);
@@ -386,7 +387,7 @@ public class BulkEditServiceTests : FileServiceTestBase
         var editResult = await _service.BulkReplaceAsync(new[] { testFile }, "Original", "Modified", options);
         var rollbackId = editResult.RollbackInfo?.RollbackId;
 
-        Assert.That(rollbackId, Is.Not.Null);
+        Assert.NotNull(rollbackId);
         Assert.That(editResult.Success, Is.True);
 
         // Verify file was modified

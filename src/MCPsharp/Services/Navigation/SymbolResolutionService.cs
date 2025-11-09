@@ -234,23 +234,19 @@ public class SymbolResolutionService : ISymbolResolutionService
         }
 
         // Strategy 4: Try to find symbol at position using Roslyn's FindSymbols
-        if (symbol == null)
+        if (symbol == null && _workspace.IsInitialized)
         {
-            var workspace = _workspace.GetWorkspace();
-            if (workspace != null)
+            var solution = _workspace.Solution;
+            var document = solution.GetDocument(semanticModel.SyntaxTree);
+            if (document != null)
             {
-                var solution = workspace.CurrentSolution;
-                var document = solution.GetDocument(semanticModel.SyntaxTree);
-                if (document != null)
-                {
-                    var symbolAtPosition = await SymbolFinder.FindSymbolAtPositionAsync(
-                        document, position, CancellationToken.None);
+                var symbolAtPosition = await SymbolFinder.FindSymbolAtPositionAsync(
+                    document, position, CancellationToken.None);
 
-                    if (symbolAtPosition != null)
-                    {
-                        symbol = symbolAtPosition;
-                        confidence = SymbolConfidence.Medium;
-                    }
+                if (symbolAtPosition != null)
+                {
+                    symbol = symbolAtPosition;
+                    confidence = SymbolConfidence.Medium;
                 }
             }
         }
@@ -281,7 +277,7 @@ public class SymbolResolutionService : ISymbolResolutionService
         if (options.PreferImplementationOverInterface)
         {
             var implementations = candidateList
-                .Where(s => s.Kind != SymbolKind.NamedType ||
+                .Where(s => s.Kind != Microsoft.CodeAnalysis.SymbolKind.NamedType ||
                            ((INamedTypeSymbol)s).TypeKind != TypeKind.Interface)
                 .ToList();
 
@@ -291,9 +287,9 @@ public class SymbolResolutionService : ISymbolResolutionService
             }
         }
 
-        // Prefer symbols in the current project
+        // Prefer symbols in the current project (not from GAC/framework assemblies)
         var currentProjectSymbols = candidateList
-            .Where(s => !s.ContainingAssembly.GlobalAssemblyCache)
+            .Where(s => s.Locations.Any(l => l.IsInSource))
             .ToList();
 
         if (currentProjectSymbols.Count == 1)
@@ -373,7 +369,55 @@ public class SymbolResolutionService : ISymbolResolutionService
 
     private NavigationSymbolInfo CreateNavigationSymbolInfo(ISymbol symbol)
     {
-        var info = new NavigationSymbolInfo
+        // Add method-specific information
+        if (symbol is IMethodSymbol method)
+        {
+            return new NavigationSymbolInfo
+            {
+                Name = symbol.Name,
+                Kind = GetSymbolKind(symbol),
+                Signature = symbol.ToDisplayString(),
+                ContainingType = symbol.ContainingType?.Name,
+                Namespace = symbol.ContainingNamespace?.ToDisplayString(),
+                Accessibility = symbol.DeclaredAccessibility.ToString().ToLower(),
+                Documentation = GetDocumentationSummary(symbol),
+                IsAbstract = symbol.IsAbstract,
+                IsVirtual = symbol.IsVirtual,
+                IsOverride = symbol.IsOverride,
+                IsSealed = symbol.IsSealed,
+                IsStatic = symbol.IsStatic,
+                ReturnType = method.ReturnType.ToDisplayString(),
+                Parameters = method.Parameters.Select(p => $"{p.Type.ToDisplayString()} {p.Name}").ToList(),
+                IsExplicitInterfaceImplementation = method.ExplicitInterfaceImplementations.Any()
+            };
+        }
+        // Add property-specific information
+        else if (symbol is IPropertySymbol property)
+        {
+            var modifiers = new List<string>();
+            if (property.IsReadOnly) modifiers.Add("readonly");
+            if (property.IsWriteOnly) modifiers.Add("writeonly");
+
+            return new NavigationSymbolInfo
+            {
+                Name = symbol.Name,
+                Kind = GetSymbolKind(symbol),
+                Signature = symbol.ToDisplayString(),
+                ContainingType = symbol.ContainingType?.Name,
+                Namespace = symbol.ContainingNamespace?.ToDisplayString(),
+                Accessibility = symbol.DeclaredAccessibility.ToString().ToLower(),
+                Documentation = GetDocumentationSummary(symbol),
+                IsAbstract = symbol.IsAbstract,
+                IsVirtual = symbol.IsVirtual,
+                IsOverride = symbol.IsOverride,
+                IsSealed = symbol.IsSealed,
+                IsStatic = symbol.IsStatic,
+                ReturnType = property.Type.ToDisplayString(),
+                Modifiers = modifiers
+            };
+        }
+
+        return new NavigationSymbolInfo
         {
             Name = symbol.Name,
             Kind = GetSymbolKind(symbol),
@@ -388,25 +432,6 @@ public class SymbolResolutionService : ISymbolResolutionService
             IsSealed = symbol.IsSealed,
             IsStatic = symbol.IsStatic
         };
-
-        // Add method-specific information
-        if (symbol is IMethodSymbol method)
-        {
-            info.ReturnType = method.ReturnType.ToDisplayString();
-            info.Parameters = method.Parameters.Select(p => $"{p.Type.ToDisplayString()} {p.Name}").ToList();
-            info.IsExplicitInterfaceImplementation = method.ExplicitInterfaceImplementations.Any();
-        }
-        // Add property-specific information
-        else if (symbol is IPropertySymbol property)
-        {
-            info.ReturnType = property.Type.ToDisplayString();
-            var modifiers = new List<string>();
-            if (property.IsReadOnly) modifiers.Add("readonly");
-            if (property.IsWriteOnly) modifiers.Add("writeonly");
-            info.Modifiers = modifiers;
-        }
-
-        return info;
     }
 
     private string GetSymbolKind(ISymbol symbol)
@@ -426,7 +451,8 @@ public class SymbolResolutionService : ISymbolResolutionService
             {
                 MethodKind.Constructor => "constructor",
                 MethodKind.Destructor => "destructor",
-                MethodKind.Operator => "operator",
+                MethodKind.UserDefinedOperator => "operator",
+                MethodKind.Conversion => "conversion",
                 MethodKind.PropertyGet => "getter",
                 MethodKind.PropertySet => "setter",
                 _ => "method"

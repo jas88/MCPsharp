@@ -124,7 +124,7 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
     }
 
     [Test]
-    public async Task LoadAnalyzersFromAssemblyAsync_WithCancellation_ShouldThrowOperationCanceledException()
+    public void LoadAnalyzersFromAssemblyAsync_WithCancellation_ShouldThrowOperationCanceledException()
     {
         // Arrange
         var assemblyPath = Assembly.GetExecutingAssembly().Location;
@@ -200,7 +200,7 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
     }
 
     [Test]
-    public async Task LoadAnalyzersFromAssembliesAsync_WithCancellation_ShouldThrowOperationCanceledException()
+    public void LoadAnalyzersFromAssembliesAsync_WithCancellation_ShouldThrowOperationCanceledException()
     {
         // Arrange
         var assemblies = new[] { Assembly.GetExecutingAssembly().Location };
@@ -325,7 +325,7 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
     #region LoadAnalyzersFromNuGetCacheAsync Tests
 
     [Test]
-    public async Task LoadAnalyzersFromNuGetCacheAsync_ShouldNotThrow()
+    public void LoadAnalyzersFromNuGetCacheAsync_ShouldNotThrow()
     {
         // Act & Assert - Should handle missing NuGet cache gracefully
         Assert.DoesNotThrowAsync(async () =>
@@ -345,7 +345,7 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
     }
 
     [Test]
-    public async Task LoadAnalyzersFromNuGetCacheAsync_WithCancellation_ShouldThrowOperationCanceledException()
+    public void LoadAnalyzersFromNuGetCacheAsync_WithCancellation_ShouldThrowOperationCanceledException()
     {
         // Arrange
         using var cts = new CancellationTokenSource();

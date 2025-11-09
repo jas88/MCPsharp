@@ -10,6 +10,7 @@ using MCPsharp.Services.Phase3;
 using MCPsharp.Services.Consolidated;
 using MCPsharp.Services.Analyzers;
 using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry;
+using MCPsharp.Models.LargeFileOptimization;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;
@@ -218,9 +219,10 @@ public partial class McpToolRegistry
                 "compare_code_blocks" => await ExecuteCompareCodeBlocks(request.Arguments, ct),
                 "validate_refactoring" => await ExecuteValidateRefactoring(request.Arguments, ct),
                 // Roslyn Analyzer Tools
-                "load_roslyn_analyzers" => await ExecuteLoadRoslynAnalyzers(request.Arguments, ct),
-                "run_roslyn_analyzers" => await ExecuteRunRoslynAnalyzers(request.Arguments, ct),
-                "list_roslyn_analyzers" => await ExecuteListRoslynAnalyzers(request.Arguments, ct),
+                // TODO: Implement these methods or route to MCPSharpTools
+                // "load_roslyn_analyzers" => await ExecuteLoadRoslynAnalyzers(request.Arguments, ct),
+                // "run_roslyn_analyzers" => await ExecuteRunRoslynAnalyzers(request.Arguments, ct),
+                // "list_roslyn_analyzers" => await ExecuteListRoslynAnalyzers(request.Arguments, ct),
                 // Automated Code Fix Tools
                 "code_quality_analyze" => await ExecuteCodeQualityAnalyze(request.Arguments, ct),
                 "code_quality_fix" => await ExecuteCodeQualityFix(request.Arguments, ct),
@@ -248,35 +250,37 @@ public partial class McpToolRegistry
                 "detect_god_methods" => await ExecuteDetectGodMethods(request.Arguments, ct),
                 "analyze_code_smells" => await ExecuteAnalyzeCodeSmells(request.Arguments, ct),
                 // Refactoring tools
-                "extract_method" => await ExecuteExtractMethod(request.Arguments, ct),
+                // TODO: Implement method extraction
+                // "extract_method" => await ExecuteExtractMethod(request.Arguments, ct),
                 "get_optimization_recommendations" => await ExecuteGetOptimizationRecommendations(request.Arguments, ct),
 
             // Consolidated Service Tool Routes
+            // TODO: Integrate these with consolidated services or implement methods
             // Universal File Operations Tools
-            "get_file_info" => await ExecuteGetFileInfo(request.Arguments, ct),
-            "get_file_content" => await ExecuteGetFileContent(request.Arguments, ct),
-            "execute_file_operation" => await ExecuteFileOperation(request.Arguments, ct),
-            "execute_batch" => await ExecuteBatch(request.Arguments, ct),
+            // "get_file_info" => await ExecuteGetFileInfo(request.Arguments, ct),
+            // "get_file_content" => await ExecuteGetFileContent(request.Arguments, ct),
+            // "execute_file_operation" => await ExecuteFileOperation(request.Arguments, ct),
+            // "execute_batch" => await ExecuteBatch(request.Arguments, ct),
 
-            // Unified Analysis Service Tools
-            "analyze_symbol" => await ExecuteAnalyzeSymbol(request.Arguments, ct),
-            "analyze_type" => await ExecuteAnalyzeType(request.Arguments, ct),
-            "analyze_file" => await ExecuteAnalyzeFile(request.Arguments, ct),
-            "analyze_project" => await ExecuteAnalyzeProject(request.Arguments, ct),
-            "analyze_architecture" => await ExecuteAnalyzeArchitecture(request.Arguments, ct),
-            "analyze_dependencies" => await ExecuteAnalyzeDependenciesUnified(request.Arguments, ct),
-            "analyze_quality" => await ExecuteAnalyzeQuality(request.Arguments, ct),
+            // // Unified Analysis Service Tools
+            // "analyze_symbol" => await ExecuteAnalyzeSymbol(request.Arguments, ct),
+            // "analyze_type" => await ExecuteAnalyzeType(request.Arguments, ct),
+            // "analyze_file" => await ExecuteAnalyzeFile(request.Arguments, ct),
+            // "analyze_project" => await ExecuteAnalyzeProject(request.Arguments, ct),
+            // "analyze_architecture" => await ExecuteAnalyzeArchitecture(request.Arguments, ct),
+            // "analyze_dependencies" => await ExecuteAnalyzeDependenciesUnified(request.Arguments, ct),
+            // "analyze_quality" => await ExecuteAnalyzeQuality(request.Arguments, ct),
 
-            // Bulk Operations Hub Tools
-            "execute_bulk_operation" => await ExecuteBulkOperation(request.Arguments, ct),
-            "preview_bulk_operation" => await ExecutePreviewBulkOperation(request.Arguments, ct),
-            "get_bulk_progress" => await ExecuteGetBulkProgress(request.Arguments, ct),
-            "manage_bulk_operation" => await ExecuteManageBulkOperation(request.Arguments, ct),
+            // // Bulk Operations Hub Tools
+            // "execute_bulk_operation" => await ExecuteBulkOperation(request.Arguments, ct),
+            // "preview_bulk_operation" => await ExecutePreviewBulkOperation(request.Arguments, ct),
+            // "get_bulk_progress" => await ExecuteGetBulkProgress(request.Arguments, ct),
+            // "manage_bulk_operation" => await ExecuteManageBulkOperation(request.Arguments, ct),
 
-            // Stream Processing Controller Tools
-            "process_stream" => await ExecuteProcessStream(request.Arguments, ct),
-            "monitor_stream" => await ExecuteMonitorStream(request.Arguments, ct),
-            "manage_stream" => await ExecuteManageStream(request.Arguments, ct),
+            // // Stream Processing Controller Tools
+            // "process_stream" => await ExecuteProcessStream(request.Arguments, ct),
+            // "monitor_stream" => await ExecuteMonitorStream(request.Arguments, ct),
+            // "manage_stream" => await ExecuteManageStream(request.Arguments, ct),
 
             _ => new ToolCallResult
                 {
@@ -3643,7 +3647,7 @@ public partial class McpToolRegistry
                 };
             }
 
-            var suggestion = JsonSerializer.Deserialize<RefactoringSuggestion>(suggestionElement.Value.GetRawText());
+            var suggestion = JsonSerializer.Deserialize<MCPsharp.Models.RefactoringSuggestion>(suggestionElement.Value.GetRawText());
             if (suggestion == null)
             {
                 return new ToolCallResult
@@ -3846,7 +3850,7 @@ public partial class McpToolRegistry
                 Accessibility = Accessibility.Private,
                 IsGenerated = false,
                 IsTestCode = false,
-                Complexity = new ComplexityMetrics
+                Complexity = new MCPsharp.Models.ComplexityMetrics
                 {
                     CyclomaticComplexity = 1,
                     CognitiveComplexity = 1,
@@ -3956,8 +3960,8 @@ public partial class McpToolRegistry
                 Result = new Dictionary<string, object>
                 {
                     ["totalBreakingChanges"] = breakingChanges.Count,
-                    ["criticalChanges"] = breakingChanges.Count(bc => bc.Severity == Severity.Critical),
-                    ["highSeverityChanges"] = breakingChanges.Count(bc => bc.Severity == Severity.High),
+                    ["criticalChanges"] = breakingChanges.Count(bc => bc.Severity == MCPsharp.Models.SqlMigration.Severity.Critical),
+                    ["highSeverityChanges"] = breakingChanges.Count(bc => bc.Severity == MCPsharp.Models.SqlMigration.Severity.High),
                     ["breakingChanges"] = breakingChanges.Select(bc => new
                     {
                         type = bc.Type,
@@ -4003,10 +4007,11 @@ public partial class McpToolRegistry
                     ["totalEntries"] = history.Count,
                     ["history"] = history.Select(h => new
                     {
-                        migrationId = h.MigrationId,
                         migrationName = h.MigrationName,
                         appliedAt = h.AppliedAt,
-                        productVersion = h.ProductVersion
+                        checksum = h.Checksum,
+                        executionTime = h.ExecutionTime,
+                        isSuccessful = h.IsSuccessful
                     }).ToList()
                 }
             };
@@ -4087,7 +4092,7 @@ public partial class McpToolRegistry
                     ["totalMigrations"] = report.Migrations.Count,
                     ["totalBreakingChanges"] = report.BreakingChanges.Count,
                     ["overallRisk"] = report.RiskAssessment.OverallRisk.ToString(),
-                    ["highRiskMigrations"] = report.RiskAssessment.MigrationRisks.Count(mr => mr.RiskLevel >= RiskLevel.High),
+                    ["highRiskMigrations"] = report.RiskAssessment.MigrationRisks.Count(mr => (int)mr.RiskLevel >= (int)MCPsharp.Models.SqlMigration.RiskLevel.High),
                     ["topRecommendations"] = report.Recommendations.BestPractices.Take(5).ToList(),
                     ["warnings"] = report.Recommendations.Warnings.Take(5).ToList(),
                     ["statistics"] = report.Statistics
@@ -4119,10 +4124,10 @@ public partial class McpToolRegistry
                 Result = new Dictionary<string, object>
                 {
                     ["totalIssues"] = issues.Count,
-                    ["criticalIssues"] = issues.Count(i => i.Severity == Severity.Critical),
-                    ["highSeverityIssues"] = issues.Count(i => i.Severity == Severity.High),
-                    ["mediumSeverityIssues"] = issues.Count(i => i.Severity == Severity.Medium),
-                    ["lowSeverityIssues"] = issues.Count(i => i.Severity == Severity.Low),
+                    ["criticalIssues"] = issues.Count(i => i.Severity == MCPsharp.Models.SqlMigration.Severity.Critical),
+                    ["highSeverityIssues"] = issues.Count(i => i.Severity == MCPsharp.Models.SqlMigration.Severity.High),
+                    ["mediumSeverityIssues"] = issues.Count(i => i.Severity == MCPsharp.Models.SqlMigration.Severity.Medium),
+                    ["lowSeverityIssues"] = issues.Count(i => i.Severity == MCPsharp.Models.SqlMigration.Severity.Low),
                     ["issues"] = issues.Take(20).Select(i => new
                     {
                         type = i.Type,
@@ -4350,10 +4355,12 @@ public partial class McpToolRegistry
                     ["complexityLevel"] = metrics.ComplexityLevel.ToString(),
                     ["hotspots"] = metrics.Hotspots.Take(5).Select(h => new
                     {
-                        location = h.Location,
-                        type = h.Type,
-                        complexity = h.Complexity,
-                        description = h.Description
+                        startLine = h.StartLine,
+                        endLine = h.EndLine,
+                        hotspotType = h.HotspotType,
+                        localComplexity = h.LocalComplexity,
+                        description = h.Description,
+                        suggestion = h.Suggestion
                     }).ToList()
                 }
             };
@@ -4650,6 +4657,80 @@ public partial class McpToolRegistry
         return Convert.ToBase64String(hash);
     }
 
-      #endregion
+    private string? GetStringArgument(JsonDocument arguments, string parameterName)
+    {
+        if (arguments.RootElement.TryGetProperty(parameterName, out var propertyElement))
+        {
+            return propertyElement.ValueKind == JsonValueKind.String ? propertyElement.GetString() : propertyElement.ToString();
+        }
+        return null;
+    }
 
+    private bool? GetBoolArgument(JsonDocument arguments, string parameterName)
+    {
+        if (arguments.RootElement.TryGetProperty(parameterName, out var propertyElement))
+        {
+            if (propertyElement.ValueKind == JsonValueKind.True || propertyElement.ValueKind == JsonValueKind.False)
+            {
+                return propertyElement.GetBoolean();
+            }
+            if (propertyElement.ValueKind == JsonValueKind.String &&
+                bool.TryParse(propertyElement.GetString(), out var boolValue))
+            {
+                return boolValue;
+            }
+        }
+        return null;
+    }
+
+    private int? GetIntArgument(JsonDocument arguments, string parameterName)
+    {
+        if (arguments.RootElement.TryGetProperty(parameterName, out var propertyElement))
+        {
+            if (propertyElement.ValueKind == JsonValueKind.Number && propertyElement.TryGetInt32(out var intValue))
+            {
+                return intValue;
+            }
+            if (propertyElement.ValueKind == JsonValueKind.String &&
+                int.TryParse(propertyElement.GetString(), out var parsedValue))
+            {
+                return parsedValue;
+            }
+        }
+        return null;
+    }
+
+    private double? GetDoubleArgument(JsonDocument arguments, string parameterName)
+    {
+        if (arguments.RootElement.TryGetProperty(parameterName, out var propertyElement))
+        {
+            if (propertyElement.ValueKind == JsonValueKind.Number && propertyElement.TryGetDouble(out var doubleValue))
+            {
+                return doubleValue;
+            }
+            if (propertyElement.ValueKind == JsonValueKind.String &&
+                double.TryParse(propertyElement.GetString(), out var parsedValue))
+            {
+                return parsedValue;
+            }
+        }
+        return null;
+    }
+
+      #endregion
+}
+
+/// <summary>
+/// Extension methods for JsonElement
+/// </summary>
+internal static class JsonElementExtensions
+{
+    public static JsonElement? GetPropertyOrNull(this JsonElement element, string propertyName)
+    {
+        if (element.TryGetProperty(propertyName, out var propertyElement))
+        {
+            return propertyElement;
+        }
+        return null;
+    }
 }

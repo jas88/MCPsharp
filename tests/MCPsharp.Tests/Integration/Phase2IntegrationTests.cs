@@ -127,7 +127,9 @@ jobs:
         var details = await _workflowAnalyzer.ParseWorkflowAsync(workflowPath);
 
         // Assert: Verify workflow structure is extracted
+        Assert.NotNull(details);
         Assert.Equal("Complex Build", details.Name);
+        Assert.NotNull(details.Triggers);
         Assert.Contains(details.Triggers, t => t == "push");
         Assert.Contains(details.Triggers, t => t == "pull_request");
         Assert.Contains(details.Jobs, j => j.Name == "build");

@@ -268,7 +268,7 @@ public class TestClass
     #region Analyzer Discovery Tests
 
     [Test]
-    public async Task AnalyzerDiscovery_LoadFromAssembly_SuccessfullyLoadsAnalyzers()
+    public void AnalyzerDiscovery_LoadFromAssembly_SuccessfullyLoadsAnalyzers()
     {
         // Arrange: Create a simple analyzer assembly path
         // In a real scenario, this would be a path to a compiled analyzer DLL
@@ -532,8 +532,8 @@ public class TestClass
         Assert.That(healthStatuses.Length, Is.GreaterThan(0));
 
         var analyzerHealth = healthStatuses.FirstOrDefault(h => h.AnalyzerId == adapter.Id);
-        Assert.That(analyzerHealth, Is.Not.Null);
-        Assert.That(analyzerHealth!.IsHealthy, Is.True);
+        Assert.NotNull(analyzerHealth);
+        Assert.That(analyzerHealth.IsHealthy, Is.True);
         Assert.That(analyzerHealth.IsLoaded, Is.True);
         Assert.That(analyzerHealth.IsEnabled, Is.True);
     }

@@ -193,7 +193,7 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
     #region InitializeAsync Tests
 
     [Test]
-    public async Task InitializeAsync_ShouldCompleteSuccessfully()
+    public void InitializeAsync_ShouldCompleteSuccessfully()
     {
         // Arrange
         var analyzer = new TestDiagnosticAnalyzer();
@@ -204,7 +204,7 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
     }
 
     [Test]
-    public async Task InitializeAsync_WithCancellation_ShouldComplete()
+    public void InitializeAsync_WithCancellation_ShouldComplete()
     {
         // Arrange
         var analyzer = new TestDiagnosticAnalyzer();
@@ -285,7 +285,7 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
     }
 
     [Test]
-    public async Task AnalyzeAsync_WithCancellation_ShouldThrowOperationCanceledException()
+    public void AnalyzeAsync_WithCancellation_ShouldThrowOperationCanceledException()
     {
         // Arrange
         var analyzer = new TestDiagnosticAnalyzer();
@@ -438,7 +438,7 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
     #region DisposeAsync Tests
 
     [Test]
-    public async Task DisposeAsync_ShouldCompleteSuccessfully()
+    public void DisposeAsync_ShouldCompleteSuccessfully()
     {
         // Arrange
         var analyzer = new TestDiagnosticAnalyzer();

@@ -349,7 +349,7 @@ public class McpServerIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task Test12_GlobPatterns_CsprojFiles()
+    public void Test12_GlobPatterns_CsprojFiles()
     {
         // Arrange
         _fileService = new FileOperationsService(_testProjectRoot);
@@ -363,7 +363,7 @@ public class McpServerIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task Test13_GlobPatterns_TestFiles()
+    public void Test13_GlobPatterns_TestFiles()
     {
         // Arrange
         _fileService = new FileOperationsService(_testProjectRoot);

@@ -178,12 +178,13 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         {
             // If progress was reported, verify it's in order
             Assert.That(progressReports, Is.Ordered.By("ProgressPercentage").Ascending);
+            Assert.NotNull(progressReports.LastOrDefault());
             Assert.That(progressReports.Last().ProgressPercentage, Is.EqualTo(100));
         }
     }
 
     [Test]
-    public async Task ProcessFileAsync_WithCancellation_ShouldRespectCancellationToken()
+    public void ProcessFileAsync_WithCancellation_ShouldRespectCancellationToken()
     {
         // Arrange
         var testFile = CreateTestFile(TestDataFixtures.PerformanceTestData.GenerateLargeText(10000));
@@ -235,7 +236,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         }
 
         // Assert
-        Assert.That(results, Is.Not.Null);
+        Assert.NotNull(results);
         Assert.That(results.Count, Is.EqualTo(3));
         Assert.That(results.All(r => r.Success), Is.True);
         Assert.That(results.Sum(r => r.ProcessedSize), Is.GreaterThan(0));

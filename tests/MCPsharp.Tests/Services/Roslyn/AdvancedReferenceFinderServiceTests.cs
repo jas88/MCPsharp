@@ -98,8 +98,9 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.FindCallersAsync(methodName, containingType, true);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
+        Assert.NotNull(result);
         Assert.That(result.TargetSymbol, Is.EqualTo(methodName));
+        Assert.NotNull(result.TargetSignature);
         Assert.That(result.TargetSignature.ContainingType, Is.EqualTo(containingType));
         Assert.That(result.TotalCallers, Is.EqualTo(1)); // We added 1 caller
 
@@ -192,7 +193,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.FindCallersAtLocationAsync(filePath, line, column, false);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
+        Assert.NotNull(result);
+        Assert.NotNull(result.TargetSignature);
         Assert.That(result.TargetSignature.Name, Is.EqualTo("ProcessData"));
 
         await _mockCallerAnalysis.Received(1).FindCallersAtLocationAsync(filePath, line, column, Arg.Any<CancellationToken>());
@@ -265,7 +267,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.FindCallersAtLocationAsync(filePath, line, column, false);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
+        Assert.NotNull(result);
+        Assert.NotNull(result.Callers);
         Assert.That(result.Callers.Count, Is.EqualTo(1));
         Assert.That(result.Callers[0].CallerMethod, Is.EqualTo("DirectCaller"));
     }
@@ -315,7 +318,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.FindCallChainsAsync(methodName, containingType, direction, maxDepth);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
+        Assert.NotNull(result);
+        Assert.NotNull(result.TargetMethod);
         Assert.That(result.TargetMethod.Name, Is.EqualTo(methodName));
         Assert.That(result.Direction, Is.EqualTo(direction));
         Assert.That(result.TotalPaths, Is.EqualTo(3));
@@ -506,7 +510,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.AnalyzeCallPatternsAsync(methodName, containingType);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
+        Assert.NotNull(result);
+        Assert.NotNull(result.TargetMethod);
         Assert.That(result.TargetMethod.Name, Is.EqualTo(methodName));
         Assert.That(result.TargetMethod.ContainingType, Is.EqualTo(containingType));
 
@@ -702,8 +707,9 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.AnalyzeCallGraphAsync(typeName);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
+        Assert.NotNull(result);
         Assert.That(result.Scope, Is.EqualTo(typeName));
+        Assert.NotNull(result.Methods);
         Assert.That(result.Methods.Count, Is.EqualTo(15));
 
         await _mockCallChain.Received(1).AnalyzeCallGraphAsync(typeName, null, Arg.Any<CancellationToken>());

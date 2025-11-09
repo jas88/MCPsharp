@@ -554,7 +554,7 @@ public class AnalyzerHostTests : FileServiceTestBase
         var result = _analyzerHost.GetAnalyzer(analyzerId);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
+        Assert.NotNull(result);
         Assert.That(result.Id, Is.EqualTo(analyzerId));
 
         _mockAnalyzerRegistry.Received(1).GetAnalyzer(analyzerId);
@@ -578,7 +578,7 @@ public class AnalyzerHostTests : FileServiceTestBase
     }
 
     [Test]
-    public async Task Cancellation_ShouldRespectCancellationToken()
+    public void Cancellation_ShouldRespectCancellationToken()
     {
         // Arrange
         var analyzerId = "slow-analyzer";

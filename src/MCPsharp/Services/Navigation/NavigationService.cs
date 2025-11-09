@@ -149,14 +149,15 @@ public class NavigationService : INavigationService
                 }
             }
 
-            // Find all overrides
-            var workspace = _workspace.GetWorkspace();
-            if (workspace != null)
-            {
-                var solution = workspace.CurrentSolution;
+            // Get the original virtual/abstract definition
+            ISymbol? originalSymbol = null;
 
-                // Get the original virtual/abstract definition
-                var originalSymbol = GetOriginalVirtualSymbol(symbol);
+            // Find all overrides
+            if (_workspace.IsInitialized)
+            {
+                var solution = _workspace.Solution;
+
+                originalSymbol = GetOriginalVirtualSymbol(symbol);
 
                 // Find overrides using Roslyn's SymbolFinder
                 var overrides = await SymbolFinder.FindOverridesAsync(
@@ -255,11 +256,8 @@ public class NavigationService : INavigationService
                     var location = CreateNavigationLocation(overload);
                     if (location != null)
                     {
-                        // Mark the current method
-                        if (overload.Equals(method, SymbolEqualityComparer.Default))
-                        {
-                            location.Symbol!.IsOverride = true; // Reusing for marking current
-                        }
+                        // Note: Cannot modify init-only properties after creation
+                        // The IsOverride flag is already set correctly by CreateNavigationSymbolInfo
                         locations.Add(location);
                     }
                 }
@@ -573,10 +571,9 @@ public class NavigationService : INavigationService
             }
 
             // Find implementations
-            var workspace = _workspace.GetWorkspace();
-            if (workspace != null)
+            if (_workspace.IsInitialized)
             {
-                var solution = workspace.CurrentSolution;
+                var solution = _workspace.Solution;
                 var implementations = await SymbolFinder.FindImplementationsAsync(
                     symbol, solution, cancellationToken: CancellationToken.None);
 
@@ -761,7 +758,30 @@ public class NavigationService : INavigationService
 
     private NavigationSymbolInfo CreateNavigationSymbolInfo(ISymbol symbol)
     {
-        var info = new NavigationSymbolInfo
+        // Add method-specific information
+        if (symbol is IMethodSymbol method)
+        {
+            return new NavigationSymbolInfo
+            {
+                Name = symbol.Name,
+                Kind = GetSymbolKind(symbol),
+                Signature = symbol.ToDisplayString(),
+                ContainingType = symbol.ContainingType?.Name,
+                Namespace = symbol.ContainingNamespace?.ToDisplayString(),
+                Accessibility = symbol.DeclaredAccessibility.ToString().ToLower(),
+                Documentation = GetDocumentationSummary(symbol),
+                IsAbstract = symbol.IsAbstract,
+                IsVirtual = symbol.IsVirtual,
+                IsOverride = symbol.IsOverride,
+                IsSealed = symbol.IsSealed,
+                IsStatic = symbol.IsStatic,
+                ReturnType = method.ReturnType.ToDisplayString(),
+                Parameters = method.Parameters.Select(p => $"{p.Type.ToDisplayString()} {p.Name}").ToList(),
+                IsExplicitInterfaceImplementation = method.ExplicitInterfaceImplementations.Any()
+            };
+        }
+
+        return new NavigationSymbolInfo
         {
             Name = symbol.Name,
             Kind = GetSymbolKind(symbol),
@@ -776,16 +796,6 @@ public class NavigationService : INavigationService
             IsSealed = symbol.IsSealed,
             IsStatic = symbol.IsStatic
         };
-
-        // Add method-specific information
-        if (symbol is IMethodSymbol method)
-        {
-            info.ReturnType = method.ReturnType.ToDisplayString();
-            info.Parameters = method.Parameters.Select(p => $"{p.Type.ToDisplayString()} {p.Name}").ToList();
-            info.IsExplicitInterfaceImplementation = method.ExplicitInterfaceImplementations.Any();
-        }
-
-        return info;
     }
 
     private string GetSymbolKind(ISymbol symbol)
@@ -888,13 +898,23 @@ public class NavigationService : INavigationService
                     after.Add(lines[i].ToString());
                 }
 
-                location.Context = new CodeContext
+                // Create new location with context
+                return new NavigationLocation
                 {
-                    Before = before,
-                    Target = targetLine.ToString(),
-                    After = after,
-                    StartLine = Math.Max(0, location.Line - 2),
-                    EndLine = Math.Min(lines.Count - 1, location.Line + 2)
+                    FilePath = location.FilePath,
+                    Line = location.Line,
+                    Column = location.Column,
+                    Symbol = location.Symbol,
+                    IsPartial = location.IsPartial,
+                    IsPrimary = location.IsPrimary,
+                    Context = new CodeContext
+                    {
+                        Before = before,
+                        Target = targetLine.ToString(),
+                        After = after,
+                        StartLine = Math.Max(0, location.Line - 2),
+                        EndLine = Math.Min(lines.Count - 1, location.Line + 2)
+                    }
                 };
             }
         }

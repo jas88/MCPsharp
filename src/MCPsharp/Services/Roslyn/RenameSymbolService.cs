@@ -156,32 +156,28 @@ public class RenameSymbolService
                 if (syntaxTree != null)
                 {
                     var position = syntaxTree.GetText().Lines[request.Line.Value - 1].Start + request.Column.Value;
-                    var semanticModel = await document.GetSemanticModelAsync(ct);
-                    if (semanticModel != null)
+                    var symbol = await SymbolFinder.FindSymbolAtPositionAsync(document, position, ct);
+                    if (symbol != null)
                     {
-                        var symbol = await SymbolFinder.FindSymbolAtPositionAsync(semanticModel, position, _workspace.Solution, ct);
-                        if (symbol != null)
-                        {
-                            return symbol;
-                        }
+                        return symbol;
                     }
                 }
             }
         }
 
         // Otherwise, search by name and kind
-        var candidates = await _symbolQuery.FindSymbolsAsync(request.OldName);
+        var candidates = _symbolQuery.FindSymbolsByName(request.OldName);
 
         // Filter by symbol kind if specified
         if (request.SymbolKind != SymbolKind.Any)
         {
-            candidates = FilterByKind(candidates, request.SymbolKind);
+            candidates = FilterByKind(candidates, request.SymbolKind).ToList();
         }
 
         // Filter by containing type if specified
         if (!string.IsNullOrEmpty(request.ContainingType))
         {
-            candidates = candidates.Where(s => s.ContainingType?.Name == request.ContainingType);
+            candidates = candidates.Where(s => s.ContainingType?.Name == request.ContainingType).ToList();
         }
 
         return candidates.FirstOrDefault();
@@ -195,9 +191,9 @@ public class RenameSymbolService
         var conflicts = new List<RenameConflict>();
 
         // Check for name collision in the same scope
-        if (symbol.ContainingSymbol != null)
+        if (symbol.ContainingSymbol is INamedTypeSymbol containingType)
         {
-            var existingMembers = symbol.ContainingSymbol.GetMembers(newName);
+            var existingMembers = containingType.GetMembers(newName);
             foreach (var existing in existingMembers)
             {
                 if (!SymbolEqualityComparer.Default.Equals(existing, symbol))
@@ -206,17 +202,39 @@ public class RenameSymbolService
                     {
                         Type = ConflictType.NameCollision,
                         Severity = ConflictSeverity.Error,
-                        Description = $"Name '{newName}' already exists in {symbol.ContainingSymbol.Name}",
+                        Description = $"Name '{newName}' already exists in {containingType.Name}",
                         Location = existing.Locations.FirstOrDefault()
                     });
                 }
             }
         }
+        else if (symbol.ContainingSymbol is INamespaceSymbol containingNamespace)
+        {
+            var compilation = _workspace.GetCompilation();
+            if (compilation != null)
+            {
+                var existingSymbols = compilation.GetSymbolsWithName(n => n == newName, SymbolFilter.TypeAndMember)
+                    .Where(s => SymbolEqualityComparer.Default.Equals(s.ContainingNamespace, containingNamespace));
+                foreach (var existing in existingSymbols)
+                {
+                    if (!SymbolEqualityComparer.Default.Equals(existing, symbol))
+                    {
+                        conflicts.Add(new RenameConflict
+                        {
+                            Type = ConflictType.NameCollision,
+                            Severity = ConflictSeverity.Error,
+                            Description = $"Name '{newName}' already exists in namespace {containingNamespace.ToDisplayString()}",
+                            Location = existing.Locations.FirstOrDefault()
+                        });
+                    }
+                }
+            }
+        }
 
         // Check for hiding inherited members
-        if (symbol.ContainingType is INamedTypeSymbol containingType)
+        if (symbol.ContainingType is INamedTypeSymbol containingTypeForInheritance)
         {
-            var baseType = containingType.BaseType;
+            var baseType = containingTypeForInheritance.BaseType;
             while (baseType != null)
             {
                 var baseMember = baseType.GetMembers(newName).FirstOrDefault();

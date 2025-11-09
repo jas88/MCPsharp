@@ -47,7 +47,7 @@ class Program
             var analyzerLoader = new MCPsharp.Services.Analyzers.RoslynAnalyzerLoader(
                 loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerLoader>() ??
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerLoader>.Instance,
-                loggerFactory);
+                loggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
 
             var analyzerRegistry = new MCPsharp.Services.Analyzers.AnalyzerRegistry(
                 loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerRegistry>() ??
@@ -64,7 +64,7 @@ class Program
             var codeFixRegistry = new MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry.BuiltInCodeFixRegistry(
                 loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry.BuiltInCodeFixRegistry>() ??
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry.BuiltInCodeFixRegistry>.Instance,
-                loggerFactory);
+                loggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
 
             // Initialize analyzer host dependencies
             var securityManager = new MCPsharp.Services.Analyzers.SecurityManager(
@@ -78,14 +78,14 @@ class Program
                 fileOperations);
 
             var sandboxFactory = new MCPsharp.Services.Analyzers.DefaultAnalyzerSandboxFactory(
-                loggerFactory,
+                loggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
                 securityManager);
 
             // Initialize analyzer host
             var analyzerHost = new MCPsharp.Services.Analyzers.AnalyzerHost(
                 loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerHost>() ??
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.AnalyzerHost>.Instance,
-                loggerFactory,
+                loggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
                 analyzerRegistry,
                 securityManager,
                 fixEngine,

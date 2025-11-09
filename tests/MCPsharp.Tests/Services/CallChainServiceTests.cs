@@ -198,7 +198,7 @@ public class DataEntity
     public async Task FindRecursiveCallChains_ShouldDetectRecursion()
     {
         // Add a recursive method to test
-        var recursiveCode = @"
+        _ = @"
 namespace MCPsharp.Tests.TestFixtures;
 
 public class RecursiveClass
@@ -252,7 +252,7 @@ public class RecursiveClass
     public async Task FindCircularDependencies_ShouldDetectCycles()
     {
         // Add circular dependency scenario
-        var circularCode = @"
+        _ = @"
 namespace MCPsharp.Tests.TestFixtures;
 
 public class A

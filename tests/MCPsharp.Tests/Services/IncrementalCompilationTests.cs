@@ -116,11 +116,12 @@ public class IncrementalCompilationTests : IDisposable
 
         // Verify semantic model reflects the changes
         var root = await updatedDocument!.GetSyntaxRootAsync();
+        Assert.NotNull(root);
         var methodDeclaration = root.DescendantNodes()
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>()
             .FirstOrDefault();
         Assert.NotNull(methodDeclaration);
-        Assert.Equal("UpdatedMethod", methodDeclaration!.Identifier.Text);
+        Assert.Equal("UpdatedMethod", methodDeclaration.Identifier.Text);
     }
 
     [Fact]
@@ -161,11 +162,12 @@ public class IncrementalCompilationTests : IDisposable
 
         // Verify semantic model has correct structure
         var root = await document!.GetSyntaxRootAsync();
+        Assert.NotNull(root);
         var classDeclaration = root.DescendantNodes()
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>()
             .FirstOrDefault();
         Assert.NotNull(classDeclaration);
-        Assert.Equal("NewClass", classDeclaration!.Identifier.Text);
+        Assert.Equal("NewClass", classDeclaration.Identifier.Text);
     }
 
     [Fact]

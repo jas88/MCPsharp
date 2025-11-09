@@ -17,6 +17,40 @@ public class SymbolQueryService
     }
 
     /// <summary>
+    /// Find ISymbol objects by name and optional kind filter (for rename operations)
+    /// </summary>
+    public List<ISymbol> FindSymbolsByName(string name, string? kind = null)
+    {
+        var compilation = _workspace.GetCompilation();
+        if (compilation == null)
+        {
+            return new List<ISymbol>();
+        }
+
+        var symbols = compilation.GetSymbolsWithName(n => n == name, SymbolFilter.TypeAndMember);
+        var results = new List<ISymbol>();
+
+        foreach (var symbol in symbols)
+        {
+            // Filter by kind if specified
+            if (kind != null && !MatchesKind(symbol, kind))
+            {
+                continue;
+            }
+
+            var location = symbol.Locations.FirstOrDefault();
+            if (location == null || !location.IsInSource)
+            {
+                continue;
+            }
+
+            results.Add(symbol);
+        }
+
+        return results;
+    }
+
+    /// <summary>
     /// Find symbols by name and optional kind filter
     /// </summary>
     public async Task<List<SymbolResult>> FindSymbolsAsync(string name, string? kind = null)
@@ -104,7 +138,7 @@ public class SymbolQueryService
         {
             foreach (var member in typeSymbol.GetMembers())
             {
-                if (member.Kind == SymbolKind.Method && member is IMethodSymbol method)
+                if (member.Kind == Microsoft.CodeAnalysis.SymbolKind.Method && member is IMethodSymbol method)
                 {
                     if (method.MethodKind != MethodKind.Ordinary && method.MethodKind != MethodKind.Constructor)
                     {

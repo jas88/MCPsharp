@@ -89,7 +89,7 @@ public class Consumer
     }
 
     [Fact]
-    public async Task ToolRegistry_ShouldContainReverseSearchTools()
+    public void ToolRegistry_ShouldContainReverseSearchTools()
     {
         // Act
         var tools = _toolRegistry.GetTools();

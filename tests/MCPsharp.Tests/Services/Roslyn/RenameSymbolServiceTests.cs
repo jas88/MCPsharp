@@ -1,6 +1,6 @@
 using Xunit;
 using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
 using MCPsharp.Services.Roslyn;
 
 namespace MCPsharp.Tests.Services.Roslyn;
@@ -12,7 +12,7 @@ public class RenameSymbolServiceTests : TestBase
 {
     private readonly RenameSymbolService _service;
     private readonly RoslynWorkspace _workspace;
-    private readonly Mock<ILogger<RenameSymbolService>> _loggerMock;
+    private readonly ILogger<RenameSymbolService> _logger;
 
     public RenameSymbolServiceTests()
     {
@@ -20,18 +20,18 @@ public class RenameSymbolServiceTests : TestBase
         var referenceFinder = new AdvancedReferenceFinderService(
             _workspace,
             new SymbolQueryService(_workspace),
-            new Mock<ICallerAnalysisService>().Object,
-            new Mock<ICallChainService>().Object,
-            new Mock<ITypeUsageService>().Object);
+            Substitute.For<ICallerAnalysisService>(),
+            Substitute.For<ICallChainService>(),
+            Substitute.For<ITypeUsageService>());
 
         var symbolQuery = new SymbolQueryService(_workspace);
-        _loggerMock = new Mock<ILogger<RenameSymbolService>>();
+        _logger = Substitute.For<ILogger<RenameSymbolService>>();
 
         _service = new RenameSymbolService(
             _workspace,
             referenceFinder,
             symbolQuery,
-            _loggerMock.Object);
+            _logger);
     }
 
     #region Basic Rename Tests
@@ -510,7 +510,7 @@ public class DerivedClass : BaseClass
 
         // Assert
         // Should have warning about hiding inherited member
-        Assert.True(result.Conflicts.Any(c => c.Type == ConflictType.HidesInheritedMember));
+        Assert.Contains(result.Conflicts, c => c.Type == ConflictType.HidesInheritedMember);
     }
 
     #endregion

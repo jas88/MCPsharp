@@ -279,8 +279,8 @@ public class ExtractMethodService
             result.InputParameters.AddRange(
                 dataFlow.DataFlowsIn
                     .Where(s => !s.IsImplicitlyDeclared &&
-                               s.Kind != SymbolKind.Property &&
-                               s.Kind != SymbolKind.Field &&
+                               s.Kind != Microsoft.CodeAnalysis.SymbolKind.Property &&
+                               s.Kind != Microsoft.CodeAnalysis.SymbolKind.Field &&
                                !IsThisParameter(s)));
 
             // Output variables: variables written inside and read outside
@@ -306,9 +306,20 @@ public class ExtractMethodService
                 .SelectMany(s => s.DescendantNodesAndSelf().OfType<ReturnStatementSyntax>())
                 .ToList();
 
-            result.HasMultipleReturns = returnStatements.Count > 1;
-            result.HasEarlyReturns = returnStatements.Any() &&
+            var hasMultipleReturns = returnStatements.Count > 1;
+            var hasEarlyReturns = returnStatements.Any() &&
                 returnStatements.Last() != statements.Last().DescendantNodesAndSelf().LastOrDefault();
+
+            // Create new result with all properties set
+            return new DataFlowAnalysisResult
+            {
+                InputParameters = result.InputParameters,
+                OutputVariables = result.OutputVariables,
+                RefParameters = result.RefParameters,
+                CapturedVariables = result.CapturedVariables,
+                HasMultipleReturns = hasMultipleReturns,
+                HasEarlyReturns = hasEarlyReturns
+            };
         }
         catch
         {
