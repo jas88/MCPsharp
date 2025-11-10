@@ -99,8 +99,12 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.NotNull(result);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.That(result.TargetSymbol, Is.EqualTo(methodName));
         Assert.NotNull(result.TargetSignature);
+        if (result.TargetSignature == null)
+            throw new InvalidOperationException("TargetSignature should not be null");
         Assert.That(result.TargetSignature.ContainingType, Is.EqualTo(containingType));
         Assert.That(result.TotalCallers, Is.EqualTo(1)); // We added 1 caller
 
@@ -194,7 +198,11 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.NotNull(result);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.NotNull(result.TargetSignature);
+        if (result.TargetSignature == null)
+            throw new InvalidOperationException("TargetSignature should not be null");
         Assert.That(result.TargetSignature.Name, Is.EqualTo("ProcessData"));
 
         await _mockCallerAnalysis.Received(1).FindCallersAtLocationAsync(filePath, line, column, Arg.Any<CancellationToken>());
@@ -268,7 +276,11 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.NotNull(result);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.NotNull(result.Callers);
+        if (result.Callers == null)
+            throw new InvalidOperationException("Callers should not be null");
         Assert.That(result.Callers.Count, Is.EqualTo(1));
         Assert.That(result.Callers[0].CallerMethod, Is.EqualTo("DirectCaller"));
     }
@@ -319,7 +331,11 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.NotNull(result);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.NotNull(result.TargetMethod);
+        if (result.TargetMethod == null)
+            throw new InvalidOperationException("TargetMethod should not be null");
         Assert.That(result.TargetMethod.Name, Is.EqualTo(methodName));
         Assert.That(result.Direction, Is.EqualTo(direction));
         Assert.That(result.TotalPaths, Is.EqualTo(3));
@@ -411,6 +427,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.That(result.TotalPaths, Is.EqualTo(2));
 
         await _mockCallChain.Received(1).FindCallChainsAtLocationAsync(filePath, line, column, Arg.Any<CallDirection>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
@@ -444,6 +462,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.That(result.TypeName, Is.EqualTo(typeName));
         Assert.That(result.TotalUsages, Is.EqualTo(8));
 
@@ -480,6 +500,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.That(result.TotalUsages, Is.EqualTo(3));
 
         await _mockTypeUsage.Received(1).FindTypeUsagesAtLocationAsync(filePath, line, column, Arg.Any<CancellationToken>());
@@ -785,6 +807,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.That(result.Length, Is.EqualTo(1));
 
         await _mockCallChain.Received(1).FindShortestPathAsync(fromMethod, toMethod, Arg.Any<CancellationToken>());

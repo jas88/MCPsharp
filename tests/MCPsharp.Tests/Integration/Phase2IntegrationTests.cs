@@ -132,6 +132,7 @@ jobs:
         Assert.NotNull(details.Triggers);
         Assert.Contains(details.Triggers, t => t == "push");
         Assert.Contains(details.Triggers, t => t == "pull_request");
+        Assert.NotNull(details.Jobs);
         Assert.Contains(details.Jobs, j => j.Name == "build");
         Assert.Contains(details.Jobs, j => j.Name == "deploy");
     }

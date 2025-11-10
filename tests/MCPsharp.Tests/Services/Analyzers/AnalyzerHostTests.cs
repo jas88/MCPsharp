@@ -70,8 +70,11 @@ public class AnalyzerHostTests : FileServiceTestBase
 
         // Set up default sandbox factory behavior
         _mockSandboxFactory.CreateSandbox().Returns(_mockSandbox);
+        // Note: Returning null for LoadAnalyzerAsync to simulate analyzer not found scenario
+        // The nullability warning CS8620 is unavoidable here due to NSubstitute's API design
+        IAnalyzer? nullAnalyzer = default;
         _mockSandbox.LoadAnalyzerAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((IAnalyzer?)null);
+            .Returns(Task.FromResult(nullAnalyzer));
 
         _mockLogger = CreateNullLogger<AnalyzerHost>();
         _mockLoggerFactory = CreateNullLoggerFactory();
@@ -365,6 +368,8 @@ public class AnalyzerHostTests : FileServiceTestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.That(result.SupportedLanguages, Is.EqualTo(expectedCapabilities.SupportedLanguages));
         Assert.That(result.SupportedFileTypes, Is.EqualTo(expectedCapabilities.SupportedFileTypes));
         Assert.That(result.MaxFileSize, Is.EqualTo(expectedCapabilities.MaxFileSize));
@@ -555,6 +560,8 @@ public class AnalyzerHostTests : FileServiceTestBase
 
         // Assert
         Assert.NotNull(result);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.That(result.Id, Is.EqualTo(analyzerId));
 
         _mockAnalyzerRegistry.Received(1).GetAnalyzer(analyzerId);
