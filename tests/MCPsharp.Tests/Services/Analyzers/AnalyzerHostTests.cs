@@ -71,10 +71,12 @@ public class AnalyzerHostTests : FileServiceTestBase
         // Set up default sandbox factory behavior
         _mockSandboxFactory.CreateSandbox().Returns(_mockSandbox);
         // Note: Returning null for LoadAnalyzerAsync to simulate analyzer not found scenario
-        // The nullability warning CS8620 is unavoidable here due to NSubstitute's API design
+        // Suppressing CS8620 as it's unavoidable with NSubstitute's API design
+#pragma warning disable CS8620 // Argument nullability mismatch in NSubstitute
         IAnalyzer? nullAnalyzer = default;
         _mockSandbox.LoadAnalyzerAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(nullAnalyzer));
+#pragma warning restore CS8620
 
         _mockLogger = CreateNullLogger<AnalyzerHost>();
         _mockLoggerFactory = CreateNullLoggerFactory();

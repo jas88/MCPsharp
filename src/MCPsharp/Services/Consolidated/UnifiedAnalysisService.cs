@@ -698,8 +698,10 @@ public class UnifiedAnalysisService
             if (_referenceFinder == null || _workspace == null) return null;
 
             var references = await _referenceFinder.FindReferencesAsync(symbolName, context);
+            if (references == null || references.References == null)
+                return new List<SymbolReference>();
 
-            return (references.References ?? Enumerable.Empty<ReferenceLocation>()).Select(r => new SymbolReference
+            return references.References.Select(r => new SymbolReference
             {
                 FilePath = r.File,
                 Line = r.Line,

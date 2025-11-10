@@ -233,6 +233,8 @@ public class ExtractMethodService
             var firstStmt = statements.First();
             var lastStmt = statements.Last();
             var controlFlow = semanticModel.AnalyzeControlFlow(firstStmt, lastStmt);
+            if (controlFlow == null)
+                throw new InvalidOperationException("Control flow analysis returned null");
 
             if (!controlFlow.Succeeded)
             {
@@ -270,6 +272,8 @@ public class ExtractMethodService
             var lastStmt = statements.Last();
 
             var dataFlow = semanticModel.AnalyzeDataFlow(firstStmt, lastStmt);
+            if (dataFlow == null)
+                return result;
 
             if (!dataFlow.Succeeded)
             {

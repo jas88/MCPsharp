@@ -418,6 +418,7 @@ public class CodeBlockExtractorService
 
         foreach (var token in node.DescendantTokens())
         {
+            if (token.SyntaxTree == null) continue;
             var lineSpan = token.SyntaxTree.GetLineSpan(token.Span);
 
             tokens.Add(new CodeToken

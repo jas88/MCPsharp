@@ -2192,6 +2192,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
 
         foreach (var token in node.DescendantTokens())
         {
+            if (token.SyntaxTree == null) continue;
             var lineSpan = token.SyntaxTree.GetLineSpan(token.Span);
 
             tokens.Add(new CodeToken
@@ -2381,7 +2382,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return MCPsharp.Models.Accessibility.Private; // Default
     }
 
-    private CodeContext ExtractContext(SyntaxNode node, int contextLines)
+    private CodeContext? ExtractContext(SyntaxNode node, int contextLines)
     {
         if (contextLines <= 0)
             return null;

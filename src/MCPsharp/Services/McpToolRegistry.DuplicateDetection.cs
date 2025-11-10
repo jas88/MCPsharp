@@ -33,7 +33,7 @@ public partial class McpToolRegistry
             return new ToolCallResult
             {
                 Success = true,
-                Result = new Dictionary<string, object>
+                Result = new Dictionary<string, object?>
                 {
                     ["duplicateGroups"] = result.DuplicateGroups,
                     ["metrics"] = result.Metrics,
@@ -592,7 +592,7 @@ public partial class McpToolRegistry
             // In a real implementation, we would need to read the actual source code and extract details
             return new CodeBlock
             {
-                FilePath = filePath,
+                FilePath = filePath ?? string.Empty,
                 StartLine = startLine,
                 EndLine = endLine,
                 StartColumn = 1,

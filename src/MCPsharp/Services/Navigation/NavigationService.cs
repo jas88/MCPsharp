@@ -158,6 +158,8 @@ public class NavigationService : INavigationService
                 var solution = _workspace.Solution;
 
                 originalSymbol = GetOriginalVirtualSymbol(symbol);
+                if (originalSymbol == null)
+                    return new MultiNavigationResult { Locations = locations };
 
                 // Find overrides using Roslyn's SymbolFinder
                 var overrides = await SymbolFinder.FindOverridesAsync(

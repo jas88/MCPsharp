@@ -302,6 +302,8 @@ public partial class McpToolRegistry
             #pragma warning disable CS8602 // _streamingProcessor is checked for null at method entry
             var result = await _streamingProcessor.ResumeOperationAsync(operationId, cancellationToken);
             #pragma warning restore CS8602
+            if (result == null)
+                throw new InvalidOperationException("Resume operation returned null result");
 
             return new ToolCallResult
             {

@@ -197,7 +197,8 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (syntaxTree == null || semanticModel == null) return null;
+        if (syntaxTree == null || semanticModel == null)
+            throw new InvalidOperationException($"Unable to get syntax tree or semantic model for file: {filePath}");
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         // Find the target method
@@ -351,7 +352,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         {
             if (!syntaxTree.FilePath?.EndsWith(".cs") == true) continue;
             if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath) continue;
-            if (!IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
+            if (syntaxTree.FilePath == null || !IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
 
             var root = await syntaxTree.GetRootAsync(cancellationToken);
             var semanticModel = compilation.GetSemanticModel(syntaxTree);
@@ -381,7 +382,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         {
             if (!syntaxTree.FilePath?.EndsWith(".cs") == true) continue;
             if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath) continue;
-            if (!IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
+            if (syntaxTree.FilePath == null || !IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
 
             var root = await syntaxTree.GetRootAsync(cancellationToken);
             var semanticModel = compilation.GetSemanticModel(syntaxTree);
@@ -408,6 +409,11 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (syntaxTree == null)
+            throw new InvalidOperationException($"Unable to get syntax tree for file: {filePath}");
+        if (semanticModel == null)
+            throw new InvalidOperationException($"Unable to get semantic model for file: {filePath}");
+
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         var codeSmells = new List<CodeSmell>();
@@ -433,6 +439,11 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (syntaxTree == null)
+            throw new InvalidOperationException($"Unable to get syntax tree for file: {filePath}");
+        if (semanticModel == null)
+            throw new InvalidOperationException($"Unable to get semantic model for file: {filePath}");
+
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         var suggestions = new List<RefactoringSuggestion>();
@@ -535,6 +546,8 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
             var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+            if (syntaxTree == null || semanticModel == null) return null;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var largeClasses = new List<string>();

@@ -1373,7 +1373,12 @@ public partial class McpToolRegistry
     {
         if (_workspace != null && _projectContext.GetProjectContext() != null)
         {
-            var context = _projectContext.GetProjectContext()!;
+            var context = _projectContext.GetProjectContext();
+            if (context == null)
+                throw new InvalidOperationException("Project context is not available");
+            if (string.IsNullOrEmpty(context.RootPath))
+                throw new InvalidOperationException("Project root path is not available");
+
             if (!_workspace.IsInitialized)
             {
                 await _workspace.InitializeAsync(context.RootPath);

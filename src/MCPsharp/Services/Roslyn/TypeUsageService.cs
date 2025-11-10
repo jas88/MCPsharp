@@ -636,7 +636,7 @@ public class TypeUsageService : ITypeUsageService
                 case MethodDeclarationSyntax methodDecl:
                     if (methodDecl.ReturnType.Contains(node))
                         return TypeUsageKind.ReturnType;
-                    if (methodDecl.ParameterList?.Parameters.Any(p => p.Type.Contains(node)) == true)
+                    if (methodDecl.ParameterList?.Parameters.Any(p => p.Type != null && p.Type.Contains(node)) == true)
                         return TypeUsageKind.Parameter;
                     break;
 
@@ -801,7 +801,7 @@ public class TypeUsageService : ITypeUsageService
                 case MethodDeclarationSyntax method:
                     if (method.ReturnType.Contains(node))
                         return TypeUsageKind.ReturnType;
-                    if (method.ParameterList?.Parameters.Any(p => p.Type.Contains(node)) == true)
+                    if (method.ParameterList?.Parameters.Any(p => p.Type != null && p.Type.Contains(node)) == true)
                         return TypeUsageKind.Parameter;
                     break;
                 case PropertyDeclarationSyntax property:
