@@ -193,7 +193,9 @@ public class AnalyzerHostTests : FileServiceTestBase
         Assert.That(result, Is.True);
 
         _mockAnalyzerRegistry.Received(1).GetAnalyzer(analyzerId);
+#pragma warning disable CS4014 // NSubstitute verification - intentionally not awaited
         _mockAnalyzerRegistry.Received(1).UnregisterAnalyzerAsync(analyzerId);
+#pragma warning restore CS4014
     }
 
     [Test]
@@ -211,7 +213,9 @@ public class AnalyzerHostTests : FileServiceTestBase
         Assert.That(result, Is.False);
 
         _mockAnalyzerRegistry.Received(1).GetAnalyzer(analyzerId);
+#pragma warning disable CS4014 // NSubstitute verification - intentionally not awaited
         _mockAnalyzerRegistry.DidNotReceive().UnregisterAnalyzerAsync(analyzerId);
+#pragma warning restore CS4014
     }
 
     [Test]
@@ -295,7 +299,9 @@ public class AnalyzerHostTests : FileServiceTestBase
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Does.Contain("cannot analyze"));
 
+#pragma warning disable CS4014 // NSubstitute verification - intentionally not awaited
         analyzer.DidNotReceive().AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+#pragma warning restore CS4014
     }
 
     [Test]
