@@ -435,6 +435,8 @@ public class PerformanceTests : PerformanceTestBase
 
     [Test]
     [Category("Scaling")]
+    [Category("Manual")]
+    [Explicit("Performance test - run manually, not reliable on shared CI runners")]
     public async Task Scaling_FileCountScaling_ShouldScaleLinearly()
     {
         // Arrange
