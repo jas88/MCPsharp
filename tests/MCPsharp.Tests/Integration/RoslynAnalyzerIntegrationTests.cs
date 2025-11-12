@@ -157,22 +157,28 @@ namespace TestNamespace
         var file1Code = @"
 public class Class1
 {
-    private int unused1;
-    public void Method1() { }
+    public void Method1()
+    {
+        var unused1 = 10;
+    }
 }";
 
         var file2Code = @"
 public class Class2
 {
-    private string unused2;
-    public void Method2() { var x = 10; }
+    public void Method2()
+    {
+        var unused2 = ""test"";
+    }
 }";
 
         var file3Code = @"
 public class Class3
 {
-    private bool unused3;
-    public void Method3() { }
+    public void Method3()
+    {
+        var unused3 = true;
+    }
 }";
 
         File.WriteAllText(Path.Combine(testDir, "File1.cs"), file1Code);

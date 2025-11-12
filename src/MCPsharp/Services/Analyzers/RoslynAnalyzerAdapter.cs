@@ -79,6 +79,8 @@ public class RoslynAnalyzerAdapter : IAnalyzer
 
     public async Task<Models.Analyzers.AnalysisResult> AnalyzeAsync(string filePath, string content, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var startTime = DateTime.UtcNow;
 
         try

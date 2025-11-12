@@ -35,6 +35,7 @@ public class AnalyzerHost : IAnalyzerHost
         IAnalyzerSandboxFactory sandboxFactory)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(loggerFactory);
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _securityManager = securityManager ?? throw new ArgumentNullException(nameof(securityManager));
         _fixEngine = fixEngine ?? throw new ArgumentNullException(nameof(fixEngine));
