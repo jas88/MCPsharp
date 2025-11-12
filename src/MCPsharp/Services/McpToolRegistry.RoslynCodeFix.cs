@@ -400,6 +400,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// Execute get_analyzer_config tool
     /// </summary>
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<ToolCallResult> ExecuteGetAnalyzerConfig(JsonDocument arguments, CancellationToken ct)
     {
         try
@@ -584,6 +585,8 @@ public partial class McpToolRegistry
         }
     }
 
-    // Field to store the last analysis result for report generation
+    // Field to store analysis result for caching (currently not populated; TODO: implement result caching)
+    #pragma warning disable CS0649 // Field is never assigned - placeholder for future result caching implementation
     private AnalyzerRunResult? analysisResult;
+    #pragma warning restore CS0649
 }

@@ -137,6 +137,7 @@ public class SearchServiceTests : IDisposable
     public async Task SearchTextAsync_InvalidRegex_ReturnsError()
     {
         // Arrange
+        CreateTestFile("test.cs", "some content here");
         var request = new SearchRequest
         {
             Pattern = "([invalid",
@@ -147,6 +148,7 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
+        Assert.NotNull(result);
         Assert.False(result.Success);
         Assert.Contains("Invalid regex", result.ErrorMessage ?? "", StringComparison.OrdinalIgnoreCase);
     }
@@ -395,7 +397,7 @@ public class SearchServiceTests : IDisposable
         };
 
         // Act & Assert
-        await Assert.ThrowsAsync<OperationCanceledException>(
+        await Assert.ThrowsAsync<TaskCanceledException>(
             async () => await _searchService.SearchTextAsync(request, cts.Token));
     }
 

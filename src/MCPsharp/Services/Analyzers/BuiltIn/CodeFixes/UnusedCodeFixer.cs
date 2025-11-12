@@ -88,7 +88,7 @@ public class UnusedCodeFixer : CodeFixProvider
         var declaration = variableDeclarator.Parent as VariableDeclarationSyntax;
         var statement = declaration?.Parent as LocalDeclarationStatementSyntax;
 
-        if (statement == null)
+        if (statement == null || declaration == null)
             return document;
 
         // If this is the only variable in the declaration, remove the entire statement

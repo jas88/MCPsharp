@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using MCPsharp.Services;
 using MCPsharp.Models;
+using MCPsharp.Models.BulkEdit;
 using MCPsharp.Tests.TestData;
 
 namespace MCPsharp.Tests.Services.BulkEdit;
@@ -94,6 +95,8 @@ public class BulkEditServiceTests : FileServiceTestBase
             await _service.BulkReplaceAsync(files, invalidPattern, "replacement"));
 
         Assert.NotNull(ex);
+        if (ex == null)
+            throw new InvalidOperationException("Exception should not be null");
         Assert.That(ex.Message, Does.Contain("Invalid pattern"));
     }
 
@@ -111,6 +114,8 @@ public class BulkEditServiceTests : FileServiceTestBase
         // Assert
         Assert.That(result.Success, Is.True);
         Assert.NotNull(result.RollbackInfo);
+        if (result.RollbackInfo == null)
+            throw new InvalidOperationException("RollbackInfo should not be null");
         Assert.That(result.RollbackInfo.Files.Count, Is.EqualTo(1));
         Assert.That(result.RollbackInfo.Files[0].BackupExists, Is.True);
         Assert.That(File.Exists(result.RollbackInfo.Files[0].BackupPath), Is.True);
@@ -388,6 +393,8 @@ public class BulkEditServiceTests : FileServiceTestBase
         var rollbackId = editResult.RollbackInfo?.RollbackId;
 
         Assert.NotNull(rollbackId);
+        if (rollbackId == null)
+            throw new InvalidOperationException("Rollback ID should not be null");
         Assert.That(editResult.Success, Is.True);
 
         // Verify file was modified

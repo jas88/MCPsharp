@@ -15,11 +15,13 @@ public class SqlMigrationAnalyzerServiceTests
 {
     private readonly SqlMigrationAnalyzerService _service;
     private readonly ILogger<SqlMigrationAnalyzerService> _mockLogger;
+    private readonly ILoggerFactory _mockLoggerFactory;
 
     public SqlMigrationAnalyzerServiceTests()
     {
         _mockLogger = Substitute.For<ILogger<SqlMigrationAnalyzerService>>();
-        _service = new SqlMigrationAnalyzerService(_mockLogger);
+        _mockLoggerFactory = Substitute.For<ILoggerFactory>();
+        _service = new SqlMigrationAnalyzerService(_mockLogger, _mockLoggerFactory);
     }
 
     [Fact]

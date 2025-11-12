@@ -197,7 +197,8 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (syntaxTree == null || semanticModel == null) return null;
+        if (syntaxTree == null || semanticModel == null)
+            throw new InvalidOperationException($"Unable to get syntax tree or semantic model for file: {filePath}");
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         // Find the target method
@@ -351,7 +352,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         {
             if (!syntaxTree.FilePath?.EndsWith(".cs") == true) continue;
             if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath) continue;
-            if (!IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
+            if (syntaxTree.FilePath == null || !IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
 
             var root = await syntaxTree.GetRootAsync(cancellationToken);
             var semanticModel = compilation.GetSemanticModel(syntaxTree);
@@ -381,7 +382,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         {
             if (!syntaxTree.FilePath?.EndsWith(".cs") == true) continue;
             if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath) continue;
-            if (!IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
+            if (syntaxTree.FilePath == null || !IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
 
             var root = await syntaxTree.GetRootAsync(cancellationToken);
             var semanticModel = compilation.GetSemanticModel(syntaxTree);
@@ -408,6 +409,11 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (syntaxTree == null)
+            throw new InvalidOperationException($"Unable to get syntax tree for file: {filePath}");
+        if (semanticModel == null)
+            throw new InvalidOperationException($"Unable to get semantic model for file: {filePath}");
+
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         var codeSmells = new List<CodeSmell>();
@@ -433,6 +439,11 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (syntaxTree == null)
+            throw new InvalidOperationException($"Unable to get syntax tree for file: {filePath}");
+        if (semanticModel == null)
+            throw new InvalidOperationException($"Unable to get semantic model for file: {filePath}");
+
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         var suggestions = new List<RefactoringSuggestion>();
@@ -449,6 +460,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return suggestions.OrderByDescending(s => s.Confidence).ToList();
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<OptimizationEstimate> EstimateOptimizationEffortAsync(OptimizationPlan optimizationPlan, CancellationToken cancellationToken = default)
     {
         var effortByType = new Dictionary<OptimizationActionType, int>();
@@ -534,6 +546,8 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
             var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+            if (syntaxTree == null || semanticModel == null) return null;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var largeClasses = new List<string>();
@@ -644,6 +658,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<ComplexityMetrics> CalculateMethodComplexity(MethodDeclarationSyntax method, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var cyclomaticComplexity = 1; // Base complexity
@@ -958,6 +973,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region God Class Analysis
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<GodClassAnalysis> AnalyzeGodClass(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var className = classDecl.Identifier.Text;
@@ -988,6 +1004,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         var tooManyFields = fields
             .Select(f => f.Declaration.Variables.FirstOrDefault()?.Identifier.Text)
             .Where(n => !string.IsNullOrEmpty(n))
+            .OfType<string>()
             .ToList();
 
         // Analyze coupling
@@ -1625,6 +1642,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Code Smell Detection
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectLongParameterListSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1666,6 +1684,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectLongMethodSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1708,6 +1727,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectLargeClassSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1750,6 +1770,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectComplexConditionalSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1760,6 +1781,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectDuplicateCodeSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1770,6 +1792,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectMagicNumberSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1780,6 +1803,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectFeatureEnvySmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1790,6 +1814,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return codeSmells;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CodeSmell>> DetectDataClumpsSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
     {
         var codeSmells = new List<CodeSmell>();
@@ -1814,6 +1839,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Refactoring Suggestion Generation
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<RefactoringSuggestion?> GenerateRefactoringSuggestion(CodeSmell codeSmell, SyntaxNode root, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         if (codeSmell.RefactoringPatterns.Count == 0)
@@ -1838,6 +1864,8 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
             },
             Confidence = primaryPattern.Applicability,
             EstimatedEffortHours = primaryPattern.EstimatedEffort,
+            ExpectedBenefit = CalculateExpectedBenefit(codeSmell.ImpactScore, primaryPattern.Applicability),
+            Priority = CalculatePriority(codeSmell.Severity, codeSmell.ImpactScore),
             Benefits = new List<string> { "Improved code quality", "Better maintainability", "Reduced complexity" },
             Risks = new List<string> { "Potential for introducing bugs", "May require interface changes" }
         };
@@ -1860,6 +1888,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<RefactoringSuggestion>> GenerateClassRefactoringSuggestions(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, ClassMetrics metrics, CancellationToken cancellationToken)
     {
         var suggestions = new List<RefactoringSuggestion>();
@@ -1883,12 +1912,72 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
                 },
                 Confidence = 0.85,
                 EstimatedEffortHours = 6,
+                ExpectedBenefit = CalculateClassExpectedBenefit(metrics),
+                Priority = CalculateClassPriority(metrics),
                 Benefits = new List<string> { "Single Responsibility Principle", "Better testability", "Reduced coupling" },
                 Risks = new List<string> { "Requires careful dependency management" }
             });
         }
 
         return suggestions;
+    }
+
+    private double CalculateExpectedBenefit(double impactScore, double applicability)
+    {
+        // Combine impact score and applicability to get a benefit score (0.0 - 1.0)
+        return (impactScore * 0.7 + applicability * 0.3);
+    }
+
+    private int CalculatePriority(CodeSmellSeverity severity, double impactScore)
+    {
+        // Calculate priority (1-5) based on severity and impact
+        var severityWeight = severity switch
+        {
+            CodeSmellSeverity.Blocker => 5,
+            CodeSmellSeverity.Critical => 4,
+            CodeSmellSeverity.Major => 3,
+            CodeSmellSeverity.Minor => 2,
+            CodeSmellSeverity.Info => 1,
+            _ => 1
+        };
+
+        // Adjust by impact score (0.0 - 1.0)
+        var impactAdjustment = impactScore > 0.7 ? 1 : 0;
+        return Math.Min(5, severityWeight + impactAdjustment);
+    }
+
+    private double CalculateClassExpectedBenefit(ClassMetrics metrics)
+    {
+        // Calculate benefit based on class metrics
+        var benefit = 0.0;
+
+        if (metrics.IsTooLarge)
+            benefit += 0.3;
+
+        if (metrics.HasTooManyResponsibilities)
+            benefit += 0.4;
+
+        if (metrics.GodClassScore.Severity >= GodClassSeverity.High)
+            benefit += 0.3;
+
+        return Math.Min(1.0, benefit);
+    }
+
+    private int CalculateClassPriority(ClassMetrics metrics)
+    {
+        // Calculate priority (1-5) based on class metrics
+        var priority = 1;
+
+        if (metrics.GodClassScore.Severity == GodClassSeverity.Critical)
+            priority = 5;
+        else if (metrics.GodClassScore.Severity == GodClassSeverity.High)
+            priority = 4;
+        else if (metrics.HasTooManyResponsibilities)
+            priority = 3;
+        else if (metrics.IsTooLarge)
+            priority = 2;
+
+        return priority;
     }
 
     #endregion

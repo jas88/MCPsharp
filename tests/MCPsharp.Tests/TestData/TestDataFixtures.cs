@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using MCPsharp.Models;
+using MCPsharp.Models.BulkEdit;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Models.Streaming;
 

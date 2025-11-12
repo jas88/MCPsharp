@@ -39,9 +39,32 @@ public class ExtractMethodService
             var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
 
-            if (syntaxRoot == null || semanticModel == null)
+            if (syntaxRoot == null)
             {
-                return ExtractMethodResult.CreateError("Unable to analyze document");
+                return ExtractMethodResult.CreateError("Unable to get syntax root for document");
+            }
+
+            if (semanticModel == null)
+            {
+                return ExtractMethodResult.CreateError("Unable to get semantic model for document");
+            }
+
+            // Validate request parameters
+            if (request.StartLine < 1 || request.EndLine < 1)
+            {
+                return ExtractMethodResult.CreateError("Line numbers must be greater than 0");
+            }
+
+            if (request.StartLine > request.EndLine)
+            {
+                return ExtractMethodResult.CreateError("Start line cannot be greater than end line");
+            }
+
+            // Validate line numbers are within document bounds
+            var lineCount = syntaxRoot.GetText().Lines.Count;
+            if (request.EndLine > lineCount)
+            {
+                return ExtractMethodResult.CreateError($"Line numbers exceed document length (document has {lineCount} lines)");
             }
 
             // Step 2: Get selected statements
@@ -75,7 +98,7 @@ public class ExtractMethodService
 
             // Step 6: Infer parameters and return type
             var parameters = InferParameters(dataFlow, semanticModel);
-            var returnInfo = InferReturnType(dataFlow, semanticModel);
+            var returnInfo = InferReturnType(dataFlow, semanticModel, selectedNodes);
 
             // Step 7: Detect method characteristics
             var characteristics = DetectCharacteristics(selectedNodes, dataFlow);
@@ -161,12 +184,42 @@ public class ExtractMethodService
     private TextSpan GetTextSpan(SyntaxNode root, ExtractMethodRequest request)
     {
         var text = root.GetText();
+        if (text == null)
+        {
+            throw new InvalidOperationException("Unable to get text from syntax root");
+        }
+
+        // Validate line indices
+        if (request.StartLine < 1 || request.EndLine < 1 || request.StartLine > text.Lines.Count || request.EndLine > text.Lines.Count)
+        {
+            throw new ArgumentException($"Invalid line range: {request.StartLine}-{request.EndLine}, document has {text.Lines.Count} lines");
+        }
 
         var startLine = text.Lines[request.StartLine - 1];
         var endLine = text.Lines[request.EndLine - 1];
 
-        var start = startLine.Start + (request.StartColumn ?? 1) - 1;
-        var end = endLine.Start + (request.EndColumn ?? endLine.Span.Length);
+        var startColumn = Math.Max(1, request.StartColumn ?? 1);
+        var endColumn = request.EndColumn ?? endLine.Span.Length;
+
+        // Validate column positions
+        if (startColumn < 1 || startColumn > startLine.Span.Length + 1)
+        {
+            throw new ArgumentException($"Invalid start column: {startColumn} for line {request.StartLine} (line length: {startLine.Span.Length + 1})");
+        }
+
+        if (endColumn < 1 || endColumn > endLine.Span.Length + 1)
+        {
+            throw new ArgumentException($"Invalid end column: {endColumn} for line {request.EndLine} (line length: {endLine.Span.Length + 1})");
+        }
+
+        var start = startLine.Start + startColumn - 1;
+        var end = endLine.Start + endColumn;
+
+        // Validate final span bounds
+        if (start < 0 || start > text.Length || end < 0 || end > text.Length || start > end)
+        {
+            throw new ArgumentException($"Invalid text span calculated: start={start}, end={end}, text length={text.Length}");
+        }
 
         return TextSpan.FromBounds(start, end);
     }
@@ -233,6 +286,8 @@ public class ExtractMethodService
             var firstStmt = statements.First();
             var lastStmt = statements.Last();
             var controlFlow = semanticModel.AnalyzeControlFlow(firstStmt, lastStmt);
+            if (controlFlow == null)
+                throw new InvalidOperationException("Control flow analysis returned null");
 
             if (!controlFlow.Succeeded)
             {
@@ -255,6 +310,7 @@ public class ExtractMethodService
         return (true, null, null, containingMethod);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<DataFlowAnalysisResult> AnalyzeDataFlowAsync(
         List<StatementSyntax> statements,
         SemanticModel semanticModel,
@@ -269,6 +325,8 @@ public class ExtractMethodService
             var lastStmt = statements.Last();
 
             var dataFlow = semanticModel.AnalyzeDataFlow(firstStmt, lastStmt);
+            if (dataFlow == null)
+                return result;
 
             if (!dataFlow.Succeeded)
             {
@@ -372,11 +430,79 @@ public class ExtractMethodService
 
     private (string returnType, List<string>? returnVariables) InferReturnType(
         DataFlowAnalysisResult dataFlow,
-        SemanticModel semanticModel)
+        SemanticModel semanticModel,
+        List<StatementSyntax> statements)
     {
         var outputVars = dataFlow.OutputVariables
             .Where(s => !dataFlow.InputParameters.Contains(s))
             .ToList();
+
+        // Check if this is an async method that returns the result of await expressions
+        var awaitExpressions = statements
+            .SelectMany(s => s.DescendantNodesAndSelf().OfType<AwaitExpressionSyntax>())
+            .ToList();
+
+        if (awaitExpressions.Any())
+        {
+            // For async methods with await expressions, we need to check if there's a clear return value
+            var lastStatement = statements.LastOrDefault();
+
+            if (lastStatement is LocalDeclarationStatementSyntax localDecl)
+            {
+                // The last statement declares a variable - check if it comes from an await
+                var variableName = localDecl.Declaration.Variables.FirstOrDefault()?.Identifier.Text;
+                var initializer = localDecl.Declaration.Variables.FirstOrDefault()?.Initializer;
+
+                if (initializer?.Value is AwaitExpressionSyntax awaitExpr)
+                {
+                    var awaitTypeInfo = semanticModel.GetTypeInfo(awaitExpr);
+                    var awaitedType = awaitTypeInfo.Type;
+
+                    if (awaitedType != null)
+                    {
+                        var typeString = awaitedType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+
+                        // For async methods, we want the awaited type, not the Task<T>
+                        if (typeString.StartsWith("Task<"))
+                        {
+                            typeString = typeString.Substring(5, typeString.Length - 6); // Remove "Task<" and ">"
+                        }
+
+                        if (!string.IsNullOrEmpty(variableName))
+                        {
+                            return (typeString, new List<string> { variableName });
+                        }
+                        return (typeString, null);
+                    }
+                }
+            }
+
+            // If we have await expressions but no clear return variable,
+            // check the last await expression to infer type
+            var lastAwait = awaitExpressions.LastOrDefault();
+            if (lastAwait != null)
+            {
+                var awaitTypeInfo = semanticModel.GetTypeInfo(lastAwait);
+                var awaitedType = awaitTypeInfo.Type;
+
+                if (awaitedType != null)
+                {
+                    var typeString = awaitedType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+
+                    // For async methods, we want the awaited type, not the Task<T>
+                    if (typeString.StartsWith("Task<"))
+                    {
+                        typeString = typeString.Substring(5, typeString.Length - 6); // Remove "Task<" and ">"
+                    }
+
+                    // For async methods without clear return variable, return the awaited type
+                    return (typeString, null);
+                }
+            }
+
+            // Default for async methods - void (Task)
+            return ("void", null);
+        }
 
         if (outputVars.Count == 0)
         {
@@ -418,20 +544,35 @@ public class ExtractMethodService
         List<StatementSyntax> statements,
         DataFlowAnalysisResult dataFlow)
     {
+        if (statements == null || !statements.Any())
+        {
+            return new MethodCharacteristics
+            {
+                IsAsync = false,
+                IsStatic = false,
+                IsGeneric = false,
+                HasMultipleReturns = false,
+                HasEarlyReturns = false,
+                CapturesVariables = false,
+                ContainsAwait = false,
+                ContainsYield = false
+            };
+        }
+
         var hasAwait = statements.Any(s =>
-            s.DescendantNodesAndSelf().Any(n => n is AwaitExpressionSyntax));
+            s?.DescendantNodesAndSelf().Any(n => n is AwaitExpressionSyntax) == true);
 
         var hasYield = statements.Any(s =>
-            s.DescendantNodesAndSelf().Any(n => n is YieldStatementSyntax));
+            s?.DescendantNodesAndSelf().Any(n => n is YieldStatementSyntax) == true);
 
         return new MethodCharacteristics
         {
             IsAsync = hasAwait,
             IsStatic = false, // Will be set by CanBeStatic
             IsGeneric = false, // MVP: no generic support yet
-            HasMultipleReturns = dataFlow.HasMultipleReturns,
-            HasEarlyReturns = dataFlow.HasEarlyReturns,
-            CapturesVariables = dataFlow.CapturedVariables.Any(),
+            HasMultipleReturns = dataFlow?.HasMultipleReturns ?? false,
+            HasEarlyReturns = dataFlow?.HasEarlyReturns ?? false,
+            CapturesVariables = dataFlow?.CapturedVariables?.Any() ?? false,
             ContainsAwait = hasAwait,
             ContainsYield = hasYield
         };
@@ -457,16 +598,32 @@ public class ExtractMethodService
         List<ParameterInfo> parameters,
         string returnType)
     {
+        // Validate inputs
+        if (string.IsNullOrWhiteSpace(methodName))
+        {
+            methodName = "ExtractedMethod";
+        }
+
+        if (string.IsNullOrWhiteSpace(accessibility))
+        {
+            accessibility = "private";
+        }
+
+        if (string.IsNullOrWhiteSpace(returnType))
+        {
+            returnType = "void";
+        }
+
         var sb = new StringBuilder();
 
-        sb.Append(accessibility);
+        sb.Append(accessibility.Trim());
 
         if (isStatic)
         {
             sb.Append(" static");
         }
 
-        if (characteristics.IsAsync)
+        if (characteristics?.IsAsync == true)
         {
             sb.Append(" async");
 
@@ -481,7 +638,7 @@ public class ExtractMethodService
             }
         }
 
-        if (characteristics.ContainsYield)
+        if (characteristics?.ContainsYield == true)
         {
             // Wrap in IEnumerable
             if (!returnType.StartsWith("IEnumerable"))
@@ -492,14 +649,20 @@ public class ExtractMethodService
 
         sb.Append($" {returnType} {methodName}(");
 
-        // Add parameters
-        var paramStrings = parameters.Select(p =>
+        // Add parameters safely
+        if (parameters != null && parameters.Any())
         {
-            var modifier = p.Modifier != null ? p.Modifier + " " : "";
-            return $"{modifier}{p.Type} {p.Name}";
-        });
+            var paramStrings = parameters.Select(p =>
+            {
+                var modifier = !string.IsNullOrWhiteSpace(p.Modifier) ? p.Modifier.Trim() + " " : "";
+                var type = !string.IsNullOrWhiteSpace(p.Type) ? p.Type : "object";
+                var name = !string.IsNullOrWhiteSpace(p.Name) ? p.Name : "param";
+                return $"{modifier}{type} {name}";
+            });
 
-        sb.Append(string.Join(", ", paramStrings));
+            sb.Append(string.Join(", ", paramStrings));
+        }
+
         sb.Append(")");
 
         return sb.ToString();

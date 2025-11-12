@@ -70,8 +70,13 @@ public class AnalyzerHostTests : FileServiceTestBase
 
         // Set up default sandbox factory behavior
         _mockSandboxFactory.CreateSandbox().Returns(_mockSandbox);
+        // Note: Returning null for LoadAnalyzerAsync to simulate analyzer not found scenario
+        // Suppressing CS8620 as it's unavoidable with NSubstitute's API design
+#pragma warning disable CS8620 // Argument nullability mismatch in NSubstitute
+        IAnalyzer? nullAnalyzer = default;
         _mockSandbox.LoadAnalyzerAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((IAnalyzer?)null);
+            .Returns(Task.FromResult(nullAnalyzer));
+#pragma warning restore CS8620
 
         _mockLogger = CreateNullLogger<AnalyzerHost>();
         _mockLoggerFactory = CreateNullLoggerFactory();
@@ -190,7 +195,9 @@ public class AnalyzerHostTests : FileServiceTestBase
         Assert.That(result, Is.True);
 
         _mockAnalyzerRegistry.Received(1).GetAnalyzer(analyzerId);
+#pragma warning disable CS4014 // NSubstitute verification - intentionally not awaited
         _mockAnalyzerRegistry.Received(1).UnregisterAnalyzerAsync(analyzerId);
+#pragma warning restore CS4014
     }
 
     [Test]
@@ -208,7 +215,9 @@ public class AnalyzerHostTests : FileServiceTestBase
         Assert.That(result, Is.False);
 
         _mockAnalyzerRegistry.Received(1).GetAnalyzer(analyzerId);
+#pragma warning disable CS4014 // NSubstitute verification - intentionally not awaited
         _mockAnalyzerRegistry.DidNotReceive().UnregisterAnalyzerAsync(analyzerId);
+#pragma warning restore CS4014
     }
 
     [Test]
@@ -292,7 +301,9 @@ public class AnalyzerHostTests : FileServiceTestBase
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Does.Contain("cannot analyze"));
 
+#pragma warning disable CS4014 // NSubstitute verification - intentionally not awaited
         analyzer.DidNotReceive().AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+#pragma warning restore CS4014
     }
 
     [Test]
@@ -365,6 +376,8 @@ public class AnalyzerHostTests : FileServiceTestBase
 
         // Assert
         Assert.That(result, Is.Not.Null);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.That(result.SupportedLanguages, Is.EqualTo(expectedCapabilities.SupportedLanguages));
         Assert.That(result.SupportedFileTypes, Is.EqualTo(expectedCapabilities.SupportedFileTypes));
         Assert.That(result.MaxFileSize, Is.EqualTo(expectedCapabilities.MaxFileSize));
@@ -555,6 +568,8 @@ public class AnalyzerHostTests : FileServiceTestBase
 
         // Assert
         Assert.NotNull(result);
+        if (result == null)
+            throw new InvalidOperationException("Result should not be null");
         Assert.That(result.Id, Is.EqualTo(analyzerId));
 
         _mockAnalyzerRegistry.Received(1).GetAnalyzer(analyzerId);

@@ -237,6 +237,8 @@ public class StreamingFileProcessorTests : FileServiceTestBase
 
         // Assert
         Assert.NotNull(results);
+        if (results == null)
+            throw new InvalidOperationException("Results should not be null");
         Assert.That(results.Count, Is.EqualTo(3));
         Assert.That(results.All(r => r.Success), Is.True);
         Assert.That(results.Sum(r => r.ProcessedSize), Is.GreaterThan(0));

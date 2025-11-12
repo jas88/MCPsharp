@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using MCPsharp.Services;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Models;
+using MCPsharp.Models.BulkEdit;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Tests.TestData;
 using NUnit.Framework;
@@ -312,6 +313,8 @@ public class PerformanceTests : PerformanceTestBase
 
     [Test]
     [Category("Concurrency")]
+    [Category("Manual")]
+    [Explicit("Performance test - run manually, not reliable on shared CI runners")]
     public async Task Performance_ConcurrentBulkEdits_ShouldScaleWithParallelism()
     {
         // Arrange
@@ -432,6 +435,8 @@ public class PerformanceTests : PerformanceTestBase
 
     [Test]
     [Category("Scaling")]
+    [Category("Manual")]
+    [Explicit("Performance test - run manually, not reliable on shared CI runners")]
     public async Task Scaling_FileCountScaling_ShouldScaleLinearly()
     {
         // Arrange

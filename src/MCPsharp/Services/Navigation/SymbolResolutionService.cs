@@ -107,6 +107,7 @@ public class SymbolResolutionService : ISymbolResolutionService
     /// <summary>
     /// Resolve a symbol by name with optional context
     /// </summary>
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<ISymbol?> ResolveSymbolByNameAsync(
         string symbolName,
         string? containingType = null,

@@ -31,24 +31,25 @@ public class McpToolRegistryTests : IDisposable
     }
 
     [Fact]
-    public void GetTools_ReturnsAllThirtyOneTools()
+    public void GetTools_ReturnsAllThirtySevenTools()
     {
         // Act
         var tools = _registry.GetTools();
 
         // Assert
         Assert.NotNull(tools);
-        Assert.Equal(31, tools.Count);
+        Assert.Equal(37, tools.Count);
 
         var toolNames = tools.Select(t => t.Name).ToList();
 
-        // Phase 0 tools (6)
+        // Phase 0 tools (7)
         Assert.Contains("project_open", toolNames);
         Assert.Contains("project_info", toolNames);
         Assert.Contains("file_list", toolNames);
         Assert.Contains("file_read", toolNames);
         Assert.Contains("file_write", toolNames);
         Assert.Contains("file_edit", toolNames);
+        Assert.Contains("search_text", toolNames);
 
         // Phase 1 tools (8)
         Assert.Contains("find_symbol", toolNames);
@@ -69,7 +70,7 @@ public class McpToolRegistryTests : IDisposable
         Assert.Contains("analyze_impact", toolNames);
         Assert.Contains("trace_feature", toolNames);
 
-        // Advanced analysis tools (9)
+        // Advanced analysis tools (10)
         Assert.Contains("find_callers", toolNames);
         Assert.Contains("find_call_chains", toolNames);
         Assert.Contains("find_type_usages", toolNames);
@@ -80,6 +81,15 @@ public class McpToolRegistryTests : IDisposable
         Assert.Contains("analyze_call_graph", toolNames);
         Assert.Contains("find_recursive_calls", toolNames);
         Assert.Contains("analyze_type_dependencies", toolNames);
+        Assert.Contains("rename_symbol", toolNames);
+
+        // Code quality tools (3)
+        Assert.Contains("code_quality_analyze", toolNames);
+        Assert.Contains("code_quality_fix", toolNames);
+        Assert.Contains("code_quality_profiles", toolNames);
+
+        // Refactoring tools (1)
+        Assert.Contains("extract_method", toolNames);
     }
 
     [Fact]

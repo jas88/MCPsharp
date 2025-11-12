@@ -158,6 +158,8 @@ public class NavigationService : INavigationService
                 var solution = _workspace.Solution;
 
                 originalSymbol = GetOriginalVirtualSymbol(symbol);
+                if (originalSymbol == null)
+                    return new MultiNavigationResult { Locations = locations };
 
                 // Find overrides using Roslyn's SymbolFinder
                 var overrides = await SymbolFinder.FindOverridesAsync(
@@ -926,6 +928,7 @@ public class NavigationService : INavigationService
         return location;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<NavigationLocation>> GetAlternativeLocationsAsync(
         IEnumerable<ISymbol> symbols)
     {

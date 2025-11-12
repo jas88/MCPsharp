@@ -157,22 +157,28 @@ namespace TestNamespace
         var file1Code = @"
 public class Class1
 {
-    private int unused1;
-    public void Method1() { }
+    public void Method1()
+    {
+        var unused1 = 10;
+    }
 }";
 
         var file2Code = @"
 public class Class2
 {
-    private string unused2;
-    public void Method2() { var x = 10; }
+    public void Method2()
+    {
+        var unused2 = ""test"";
+    }
 }";
 
         var file3Code = @"
 public class Class3
 {
-    private bool unused3;
-    public void Method3() { }
+    public void Method3()
+    {
+        var unused3 = true;
+    }
 }";
 
         File.WriteAllText(Path.Combine(testDir, "File1.cs"), file1Code);
@@ -188,6 +194,9 @@ public class Class3
         await _analyzerRegistry!.RegisterAnalyzerAsync(adapter);
 
         // Act: Run analysis on directory
+        if (_analyzerHost == null)
+            throw new InvalidOperationException("Analyzer host is not initialized");
+
         var analysisResult = await _analyzerHost.RunAnalyzerAsync(
             adapter.Id,
             testDir);
@@ -250,6 +259,9 @@ public class TestClass
                 ["ReportAll"] = true
             }
         };
+
+        if (_analyzerHost == null)
+            throw new InvalidOperationException("Analyzer host is not initialized");
 
         await _analyzerHost.ConfigureAnalyzerAsync(adapter.Id, configuration);
 
@@ -329,6 +341,9 @@ public class TestClass
         });
 
         // Act: Run analysis (should succeed with read-only)
+        if (_analyzerHost == null)
+            throw new InvalidOperationException("Analyzer host is not initialized");
+
         var analysisResult = await _analyzerHost.RunAnalyzerAsync(
             adapter.Id,
             testFile);
@@ -358,6 +373,9 @@ public class TestClass
         await _analyzerRegistry!.RegisterAnalyzerAsync(adapter);
 
         // Act: Run analysis with timing
+        if (_analyzerHost == null)
+            throw new InvalidOperationException("Analyzer host is not initialized");
+
         var startTime = DateTime.UtcNow;
         var analysisResult = await _analyzerHost.RunAnalyzerAsync(
             adapter.Id,
@@ -398,8 +416,12 @@ public class TestClass{i}
         await _analyzerRegistry!.RegisterAnalyzerAsync(adapter);
 
         // Act: Run analyses concurrently
+        if (_analyzerHost == null)
+            throw new InvalidOperationException("Analyzer host is not initialized");
+
+        var analyzerHost = _analyzerHost;
         var analysisTasks = testFiles.Select(file =>
-            _analyzerHost.RunAnalyzerAsync(adapter.Id, file));
+            analyzerHost.RunAnalyzerAsync(adapter.Id, file));
 
         var results = await Task.WhenAll(analysisTasks);
 
@@ -437,6 +459,9 @@ public class TestClass
         await _analyzerRegistry!.RegisterAnalyzerAsync(adapter);
 
         // Act: Run analysis on invalid file
+        if (_analyzerHost == null)
+            throw new InvalidOperationException("Analyzer host is not initialized");
+
         var analysisResult = await _analyzerHost.RunAnalyzerAsync(
             adapter.Id,
             testFile);
@@ -466,6 +491,9 @@ public class TestClass
         cts.Cancel();
 
         // Act & Assert: Should handle cancellation
+        if (_analyzerHost == null)
+            throw new InvalidOperationException("Analyzer host is not initialized");
+
         try
         {
             await _analyzerHost.RunAnalyzerAsync(
@@ -499,6 +527,9 @@ public class TestClass
         await _analyzerRegistry!.RegisterAnalyzerAsync(adapter);
 
         // Act: Attempt to analyze non-existent file
+        if (_analyzerHost == null)
+            throw new InvalidOperationException("Analyzer host is not initialized");
+
         var analysisResult = await _analyzerHost.RunAnalyzerAsync(
             adapter.Id,
             nonExistentFile);
@@ -525,6 +556,9 @@ public class TestClass
         await _analyzerRegistry!.RegisterAnalyzerAsync(adapter);
 
         // Act: Get health status
+        if (_analyzerHost == null)
+            throw new InvalidOperationException("Analyzer host is not initialized");
+
         var healthStatuses = await _analyzerHost.GetHealthStatusAsync();
 
         // Assert: Should have health status for loaded analyzer
@@ -532,7 +566,9 @@ public class TestClass
         Assert.That(healthStatuses.Length, Is.GreaterThan(0));
 
         var analyzerHealth = healthStatuses.FirstOrDefault(h => h.AnalyzerId == adapter.Id);
-        Assert.NotNull(analyzerHealth);
+        if (analyzerHealth == null)
+            throw new InvalidOperationException($"Health status for analyzer {adapter.Id} not found");
+
         Assert.That(analyzerHealth.IsHealthy, Is.True);
         Assert.That(analyzerHealth.IsLoaded, Is.True);
         Assert.That(analyzerHealth.IsEnabled, Is.True);
@@ -552,6 +588,9 @@ public class TestClass
         Assert.That(registered, Is.True);
 
         // Verify loaded
+        if (_analyzerHost == null)
+            throw new InvalidOperationException("Analyzer host is not initialized");
+
         var loadedAnalyzers = _analyzerHost.GetLoadedAnalyzers();
         Assert.That(loadedAnalyzers.Any(a => a.Id == adapter.Id), Is.True);
 

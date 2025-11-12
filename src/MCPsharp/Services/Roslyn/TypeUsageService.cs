@@ -307,6 +307,7 @@ public class TypeUsageService : ITypeUsageService
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<List<MethodSignature>> FindSimilarTypesAsync(string typeName, CancellationToken cancellationToken = default)
     {
         // This is a placeholder implementation
@@ -573,7 +574,7 @@ public class TypeUsageService : ITypeUsageService
         };
     }
 
-    private async Task<TypeUsageInfo?> AnalyzeTypeUsageLocation(SymbolLocation location, INamedTypeSymbol typeSymbol, CancellationToken cancellationToken)
+    private async Task<TypeUsageInfo?> AnalyzeTypeUsageLocation(Models.Roslyn.SymbolLocation location, INamedTypeSymbol typeSymbol, CancellationToken cancellationToken)
     {
         var document = location.Document;
         if (document == null)
@@ -635,7 +636,7 @@ public class TypeUsageService : ITypeUsageService
                 case MethodDeclarationSyntax methodDecl:
                     if (methodDecl.ReturnType.Contains(node))
                         return TypeUsageKind.ReturnType;
-                    if (methodDecl.ParameterList?.Parameters.Any(p => p.Type.Contains(node)) == true)
+                    if (methodDecl.ParameterList?.Parameters.Any(p => p.Type != null && p.Type.Contains(node)) == true)
                         return TypeUsageKind.Parameter;
                     break;
 
@@ -800,7 +801,7 @@ public class TypeUsageService : ITypeUsageService
                 case MethodDeclarationSyntax method:
                     if (method.ReturnType.Contains(node))
                         return TypeUsageKind.ReturnType;
-                    if (method.ParameterList?.Parameters.Any(p => p.Type.Contains(node)) == true)
+                    if (method.ParameterList?.Parameters.Any(p => p.Type != null && p.Type.Contains(node)) == true)
                         return TypeUsageKind.Parameter;
                     break;
                 case PropertyDeclarationSyntax property:
@@ -846,11 +847,11 @@ public class TypeUsageService : ITypeUsageService
     /// <summary>
     /// Converts Microsoft.CodeAnalysis.Location to SymbolLocation
     /// </summary>
-    private static SymbolLocation ConvertToSymbolLocation(Microsoft.CodeAnalysis.Location location)
+    private static Models.Roslyn.SymbolLocation ConvertToSymbolLocation(Microsoft.CodeAnalysis.Location location)
     {
         var lineSpan = location.GetLineSpan();
 
-        return new SymbolLocation
+        return new Models.Roslyn.SymbolLocation
         {
             FilePath = lineSpan.Path,
             Line = lineSpan.StartLinePosition.Line,

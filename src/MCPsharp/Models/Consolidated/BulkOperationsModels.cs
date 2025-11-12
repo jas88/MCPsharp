@@ -1,3 +1,5 @@
+using MCPsharp.Models.BulkEdit;
+
 namespace MCPsharp.Models.Consolidated;
 
 /// <summary>

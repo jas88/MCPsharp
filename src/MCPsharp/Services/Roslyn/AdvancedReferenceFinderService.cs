@@ -257,7 +257,7 @@ public class AdvancedReferenceFinderService
         {
             return await _typeUsage.AnalyzeInheritanceAsync(typeName, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Return default result on error
             return new InheritanceAnalysis
@@ -341,7 +341,7 @@ public class AdvancedReferenceFinderService
         {
             return await _typeUsage.AnalyzeTypeDependenciesAsync(typeName, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Return default result on error
             return new TypeDependencyAnalysis
@@ -530,7 +530,7 @@ public class AdvancedReferenceFinderService
                 }
             };
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Return default capabilities on error
             return new ReverseSearchCapabilities

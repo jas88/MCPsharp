@@ -711,6 +711,7 @@ public class CallerAnalysisService : ICallerAnalysisService
 
         return new SymbolLocation
         {
+            Document = referenceLocation.Document,
             FilePath = lineSpan.Path,
             Line = lineSpan.StartLinePosition.Line,
             Column = lineSpan.StartLinePosition.Character,

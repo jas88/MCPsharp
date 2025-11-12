@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MCPsharp.Models.Consolidated;
 using MCPsharp.Models;
+using MCPsharp.Models.BulkEdit;
 using MCPsharp.Services;
 
 namespace MCPsharp.Services.Consolidated;
@@ -447,6 +448,7 @@ public class BulkOperationsHub
 
     #region Private Helper Methods
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkValidationResult> ValidateBulkOperationRequestAsync(BulkOperationRequest request, CancellationToken ct)
     {
         // Check if we have the necessary services
@@ -575,19 +577,19 @@ public class BulkOperationsHub
                 // Read file content
                 var content = await File.ReadAllTextAsync(file, ct);
 
-                // Check conditions - convert Consolidated.EditCondition to Models.BulkEditCondition
+                // Check conditions - convert Consolidated.EditCondition to Models.BulkEdit.BulkEditCondition
                 var shouldEdit = request.Conditions.All(condition =>
                     {
-                        var bulkCondition = new MCPsharp.Models.BulkEditCondition
+                        var bulkCondition = new MCPsharp.Models.BulkEdit.BulkEditCondition
                         {
                             ConditionType = condition.Type.ToLowerInvariant() switch
                             {
-                                "contains" => MCPsharp.Models.BulkConditionType.FileContains,
-                                "notcontains" => MCPsharp.Models.BulkConditionType.FileContains,
-                                "regex" => MCPsharp.Models.BulkConditionType.FileMatches,
-                                "fileexists" => MCPsharp.Models.BulkConditionType.Custom,
-                                "filedoesnotexist" => MCPsharp.Models.BulkConditionType.Custom,
-                                _ => MCPsharp.Models.BulkConditionType.Custom
+                                "contains" => MCPsharp.Models.BulkEdit.BulkConditionType.FileContains,
+                                "notcontains" => MCPsharp.Models.BulkEdit.BulkConditionType.FileContains,
+                                "regex" => MCPsharp.Models.BulkEdit.BulkConditionType.FileMatches,
+                                "fileexists" => MCPsharp.Models.BulkEdit.BulkConditionType.Custom,
+                                "filedoesnotexist" => MCPsharp.Models.BulkEdit.BulkConditionType.Custom,
+                                _ => MCPsharp.Models.BulkEdit.BulkConditionType.Custom
                             },
                             Pattern = condition.Value,
                             Negate = condition.Type.ToLowerInvariant() == "notcontains" || condition.Type.ToLowerInvariant() == "filedoesnotexist"
@@ -652,9 +654,9 @@ public class BulkOperationsHub
             PreviewMode = request.Options?.DryRun == true
         };
 
-        var refactorPattern = new MCPsharp.Models.BulkRefactorPattern
+        var refactorPattern = new MCPsharp.Models.BulkEdit.BulkRefactorPattern
         {
-            RefactorType = Enum.Parse<MCPsharp.Models.BulkRefactorType>(request.RefactorType ?? "RenameSymbol"),
+            RefactorType = Enum.Parse<MCPsharp.Models.BulkEdit.BulkRefactorType>(request.RefactorType ?? "RenameSymbol"),
             TargetPattern = request.TargetPattern ?? string.Empty,
             ReplacementPattern = request.ReplacementPattern ?? string.Empty
         };
@@ -692,7 +694,7 @@ public class BulkOperationsHub
 
         // For multi-file operations, we'll need to transform the operations
         // Convert FileOperationDefinition to MultiFileEditOperation
-        var multiFileOps = request.Operations?.Select(op => new MCPsharp.Models.MultiFileEditOperation
+        var multiFileOps = request.Operations?.Select(op => new MCPsharp.Models.BulkEdit.MultiFileEditOperation
         {
             FilePattern = op.Path,
             Edits = op.Edits?.Select(e => new MCPsharp.Models.ReplaceEdit
@@ -705,7 +707,7 @@ public class BulkOperationsHub
                 EndColumn = e.EndColumn
             }).ToList() ?? new List<MCPsharp.Models.ReplaceEdit>(),
             Priority = 0 // FileOperationOptions doesn't have Priority property, use default
-        }).ToList() ?? new List<MCPsharp.Models.MultiFileEditOperation>();
+        }).ToList() ?? new List<MCPsharp.Models.BulkEdit.MultiFileEditOperation>();
 
         var result = await _bulkEditService.MultiFileEditAsync(
             multiFileOps,
@@ -766,14 +768,14 @@ public class BulkOperationsHub
         return results;
     }
 
-    private static bool EvaluateCondition(string content, MCPsharp.Models.BulkEditCondition condition)
+    private static bool EvaluateCondition(string content, MCPsharp.Models.BulkEdit.BulkEditCondition condition)
     {
         // Simple condition evaluation - could be enhanced
         var matches = condition.ConditionType switch
         {
-            MCPsharp.Models.BulkConditionType.FileContains => content.Contains(condition.Pattern, StringComparison.OrdinalIgnoreCase),
-            MCPsharp.Models.BulkConditionType.FileMatches => System.Text.RegularExpressions.Regex.IsMatch(content, condition.Pattern),
-            MCPsharp.Models.BulkConditionType.Custom => condition.Pattern.ToLowerInvariant() switch
+            MCPsharp.Models.BulkEdit.BulkConditionType.FileContains => content.Contains(condition.Pattern, StringComparison.OrdinalIgnoreCase),
+            MCPsharp.Models.BulkEdit.BulkConditionType.FileMatches => System.Text.RegularExpressions.Regex.IsMatch(content, condition.Pattern),
+            MCPsharp.Models.BulkEdit.BulkConditionType.Custom => condition.Pattern.ToLowerInvariant() switch
             {
                 "fileexists" => File.Exists(condition.Pattern),
                 "filedoesnotexist" => !File.Exists(condition.Pattern),
@@ -846,6 +848,7 @@ public class BulkOperationsHub
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkImpactAnalysis> AnalyzeBulkImpactAsync(List<BulkOperationResult> results, CancellationToken ct)
     {
         return new BulkImpactAnalysis
@@ -858,9 +861,10 @@ public class BulkOperationsHub
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkRiskAssessment> AssessBulkRisksAsync(List<BulkOperationResult> results, CancellationToken ct)
     {
-        var riskLevel = MCPsharp.Models.RiskLevel.Low;
+        var riskLevel = MCPsharp.Models.BulkEdit.RiskLevel.Low;
         var warnings = new List<string>();
 
         var errorCount = results.Count(r => !r.Success);
@@ -868,12 +872,12 @@ public class BulkOperationsHub
 
         if (errorCount > 0)
         {
-            riskLevel = MCPsharp.Models.RiskLevel.High;
+            riskLevel = MCPsharp.Models.BulkEdit.RiskLevel.High;
             warnings.Add($"{errorCount} files failed during preview");
         }
         else if (changeCount > 1000)
         {
-            riskLevel = MCPsharp.Models.RiskLevel.Medium;
+            riskLevel = MCPsharp.Models.BulkEdit.RiskLevel.Medium;
             warnings.Add($"Large number of changes ({changeCount}) - consider breaking into smaller operations");
         }
 
@@ -885,11 +889,11 @@ public class BulkOperationsHub
         };
     }
 
-    private static List<string> GenerateRiskRecommendations(MCPsharp.Models.RiskLevel riskLevel, int changeCount, int errorCount)
+    private static List<string> GenerateRiskRecommendations(MCPsharp.Models.BulkEdit.RiskLevel riskLevel, int changeCount, int errorCount)
     {
         var recommendations = new List<string>();
 
-        if (riskLevel >= MCPsharp.Models.RiskLevel.Medium)
+        if (riskLevel >= MCPsharp.Models.BulkEdit.RiskLevel.Medium)
         {
             recommendations.Add("Create a backup before proceeding");
         }
@@ -922,6 +926,7 @@ public class BulkOperationsHub
         return baseTime + (perFileTime * totalFiles) + (perChangeTime * totalChanges);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<BulkOperationInfo>> ListActiveOperationsAsync(CancellationToken ct)
     {
         List<BulkOperationInfo> operations;
@@ -942,6 +947,7 @@ public class BulkOperationsHub
         return operations;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkCancelResult> CancelBulkOperationAsync(string operationId, CancellationToken ct)
     {
         // Implementation for canceling operations
@@ -952,6 +958,7 @@ public class BulkOperationsHub
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkPauseResult> PauseBulkOperationAsync(string operationId, CancellationToken ct)
     {
         // Implementation for pausing operations
@@ -962,6 +969,7 @@ public class BulkOperationsHub
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkResumeResult> ResumeBulkOperationAsync(string operationId, CancellationToken ct)
     {
         // Implementation for resuming operations
@@ -972,6 +980,7 @@ public class BulkOperationsHub
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkCleanupResult> CleanupBulkOperationsAsync(TimeSpan? maxAge, CancellationToken ct)
     {
         var cleanedCount = 0;
@@ -999,6 +1008,7 @@ public class BulkOperationsHub
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<BulkOperationStatusResult> GetBulkOperationStatusAsync(string operationId, CancellationToken ct)
     {
         BulkOperationContext? context;

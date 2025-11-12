@@ -25,10 +25,12 @@ public class RoslynAnalyzerLoader
     /// <summary>
     /// Load all Roslyn analyzers from a given assembly path
     /// </summary>
-    public Task<ImmutableArray<IAnalyzer>> LoadAnalyzersFromAssemblyAsync(
+    public virtual Task<ImmutableArray<IAnalyzer>> LoadAnalyzersFromAssemblyAsync(
         string assemblyPath,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             _logger.LogInformation("Loading Roslyn analyzers from assembly: {AssemblyPath}", assemblyPath);
@@ -107,6 +109,8 @@ public class RoslynAnalyzerLoader
         IEnumerable<string> assemblyPaths,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var allAnalyzers = new List<IAnalyzer>();
 
         foreach (var assemblyPath in assemblyPaths)
@@ -121,7 +125,7 @@ public class RoslynAnalyzerLoader
     /// <summary>
     /// Discover Roslyn analyzer assemblies in a directory
     /// </summary>
-    public ImmutableArray<string> DiscoverAnalyzerAssemblies(string directory, bool recursive = true)
+    public virtual ImmutableArray<string> DiscoverAnalyzerAssemblies(string directory, bool recursive = true)
     {
         try
         {
@@ -181,6 +185,8 @@ public class RoslynAnalyzerLoader
     public async Task<ImmutableArray<IAnalyzer>> LoadAnalyzersFromNuGetCacheAsync(
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             // Common NuGet cache locations

@@ -570,6 +570,7 @@ public class CallChainService : ICallChainService
         return calledMethods;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<MethodCallInfo>> AnalyzeMethodCalls(MethodDeclarationSyntax methodDecl, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var methodCalls = new List<MethodCallInfo>();
@@ -678,6 +679,7 @@ public class CallChainService : ICallChainService
         return false;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<CircularDependency>> FindCircularDependenciesInGraph(Dictionary<string, List<string>> callGraph, CancellationToken cancellationToken)
     {
         var circularDependencies = new List<CircularDependency>();
@@ -794,6 +796,7 @@ public class CallChainService : ICallChainService
         return await FindCallChainsAsync(symbol, direction, maxDepth, cancellationToken);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<IMethodSymbol?> FindMethodSymbol(string methodName, string? containingType, CancellationToken cancellationToken)
     {
         var compilation = _workspace.GetCompilation();
@@ -816,6 +819,7 @@ public class CallChainService : ICallChainService
         return matchingSymbol;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<IMethodSymbol?> ConvertToMethodSymbol(ISymbol symbol, string filePath, int line, int column, CancellationToken cancellationToken)
     {
         if (symbol is IMethodSymbol methodSymbol)

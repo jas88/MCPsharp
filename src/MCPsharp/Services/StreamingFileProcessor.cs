@@ -180,7 +180,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
 
             return result;
         }
-        catch (OperationCanceledException ex)
+        catch (OperationCanceledException)
         {
             operation.Status = StreamOperationStatus.Cancelled;
             operation.CompletedAt = DateTime.UtcNow;
@@ -276,6 +276,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         return null;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<bool> CancelOperationAsync(string operationId)
     {
         if (_operations.TryGetValue(operationId, out var operation))
@@ -367,6 +368,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         return checkpoint;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<List<StreamOperation>> ListOperationsAsync(int maxCount = 50)
     {
         return _operations.Values
@@ -403,6 +405,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<List<ChunkProcessor>> GetAvailableProcessorsAsync()
     {
         return _processors.Select(kvp => new ChunkProcessor
@@ -461,6 +464,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         return (errors.Count == 0, errors);
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<TimeSpan> EstimateProcessingTimeAsync(StreamProcessRequest request)
     {
         try
@@ -817,6 +821,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<string>> GetInputFilesAsync(BulkTransformRequest request)
     {
         var inputFiles = new List<string>();
@@ -1282,6 +1287,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         }
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<ProcessingStatistics> GetProcessingStatisticsAsync()
     {
         _statistics.ActiveProcessingTasks = _operations.Values

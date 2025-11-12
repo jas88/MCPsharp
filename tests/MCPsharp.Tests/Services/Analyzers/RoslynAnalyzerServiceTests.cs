@@ -545,6 +545,8 @@ public class RoslynAnalyzerServiceTests : FileServiceTestBase
     private IAnalyzer CreateMockAnalyzer(string id)
     {
         var analyzer = Substitute.For<IAnalyzer>();
+
+        // Configure properties (non-arg-matching returns)
         analyzer.Id.Returns(id);
         analyzer.Name.Returns($"Test Analyzer {id}");
         analyzer.Description.Returns($"Test description for {id}");

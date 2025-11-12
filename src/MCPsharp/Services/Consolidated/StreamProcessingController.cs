@@ -451,6 +451,7 @@ public class StreamProcessingController
         _processors["transform"] = new TransformStreamProcessor();
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamValidationResult> ValidateStreamRequestAsync(ConsolidatedStream.StreamProcessRequest request, CancellationToken ct)
     {
         // Validate input
@@ -680,6 +681,7 @@ public class StreamProcessingController
         return results;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<StreamProcessResult>> ProcessDataStreamAsync(
         ConsolidatedStream.StreamProcessRequest request,
         IStreamProcessor processor,
@@ -705,6 +707,7 @@ public class StreamProcessingController
     }
 
   
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamMetrics> GetStreamMetricsAsync(StreamOperationContext context, bool includeDetails, CancellationToken ct)
     {
         // Implementation for gathering stream metrics
@@ -741,6 +744,7 @@ public class StreamProcessingController
         return 0.0; // Placeholder
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamPerformanceData> GetStreamPerformanceAsync(StreamOperationContext context, CancellationToken ct)
     {
         // Implementation for performance data
@@ -766,6 +770,7 @@ public class StreamProcessingController
         return new List<string>();
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<List<ActiveStreamInfo>> ListActiveStreamsAsync(CancellationToken ct)
     {
         List<ActiveStreamInfo> streams;
@@ -779,7 +784,7 @@ public class StreamProcessingController
                 Status = ctx.Status,
                 CreatedAt = ctx.CreatedAt,
                 StartedAt = ctx.StartedAt,
-                ProcessorType = ctx.ProcessorType,
+                ProcessorType = ctx.ProcessorType ?? string.Empty,
                 BytesProcessed = ctx.BytesProcessed,
                 CurrentFile = ctx.CurrentFile ?? string.Empty
             }).ToList();
@@ -788,6 +793,7 @@ public class StreamProcessingController
         return streams;
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamCancelResult> CancelStreamAsync(string operationId, CancellationToken ct)
     {
         // Implementation for canceling streams
@@ -798,6 +804,7 @@ public class StreamProcessingController
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamPauseResult> PauseStreamAsync(string operationId, CancellationToken ct)
     {
         // Implementation for pausing streams
@@ -808,6 +815,7 @@ public class StreamProcessingController
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamResumeResult> ResumeStreamAsync(string operationId, CancellationToken ct)
     {
         // Implementation for resuming streams
@@ -818,6 +826,7 @@ public class StreamProcessingController
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamCleanupResult> CleanupStreamsAsync(TimeSpan? maxAge, CancellationToken ct)
     {
         var cleanedCount = 0;
@@ -845,6 +854,7 @@ public class StreamProcessingController
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamRegisterResult> RegisterProcessorAsync(StreamProcessorDefinition definition, CancellationToken ct)
     {
         // Implementation for registering custom processors
@@ -855,6 +865,7 @@ public class StreamProcessingController
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamUnregisterResult> UnregisterProcessorAsync(string processorName, CancellationToken ct)
     {
         var success = _processors.Remove(processorName);
@@ -866,6 +877,7 @@ public class StreamProcessingController
         };
     }
 
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task CleanupStreamContextAsync(StreamOperationContext context, CancellationToken ct)
     {
         // Cleanup temporary files, close streams, etc.

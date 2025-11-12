@@ -1,4 +1,5 @@
 ﻿using MCPsharp.Models;
+using MCPsharp.Models.BulkEdit;
 
 namespace MCPsharp.Services;
 
