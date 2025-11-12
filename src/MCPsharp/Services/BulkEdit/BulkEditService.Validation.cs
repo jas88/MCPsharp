@@ -124,13 +124,15 @@ public partial class BulkEditService
             }
 
             // Check for potential security issues
-            if (request.Files.Any(f => f.Contains("..") || Path.IsPathRooted(f) && !f.StartsWith("/")))
+            // Only flag paths with ".." (directory traversal)
+            // Rooted paths are legitimate on all platforms (Unix: /tmp/file, Windows: C:\temp\file)
+            if (request.Files.Any(f => f.Contains("..")))
             {
                 issues.Add(new ValidationIssue
                 {
                     Type = ValidationIssueType.SecurityIssue,
                     Severity = ValidationSeverity.Warning,
-                    Description = "File patterns contain potentially unsafe paths",
+                    Description = "File patterns contain potentially unsafe paths with directory traversal (..)",
                     IsBlocking = false,
                     SuggestedFix = "Review file patterns to ensure they target intended files only"
                 });
