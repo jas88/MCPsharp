@@ -8,12 +8,13 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>MCPsharp</RootNamespace>
     <AssemblyName>mcpsharp</AssemblyName>
+  </PropertyGroup>
 
-    <!-- Publishing configuration for single-file self-contained deployment -->
-    <PublishSingleFile>true</PublishSingleFile>
+  <!-- Publishing configuration for single-file self-contained deployment -->
+  <!-- Only apply these when publishing, not during regular builds -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
     <PublishSelfContained>true</PublishSelfContained>
     <UseAppHost>true</UseAppHost>
-    <RuntimeIdentifier>osx-arm64</RuntimeIdentifier>
     <PublishReadyToRun>true</PublishReadyToRun>
     <PublishTrimmed>false</PublishTrimmed>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
