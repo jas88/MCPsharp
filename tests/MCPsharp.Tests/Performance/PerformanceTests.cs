@@ -313,6 +313,8 @@ public class PerformanceTests : PerformanceTestBase
 
     [Test]
     [Category("Concurrency")]
+    [Category("Manual")]
+    [Explicit("Performance test - run manually, not reliable on shared CI runners")]
     public async Task Performance_ConcurrentBulkEdits_ShouldScaleWithParallelism()
     {
         // Arrange
