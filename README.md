@@ -10,6 +10,7 @@ A Model Context Protocol (MCP) server for intelligent C# project analysis and se
 - **File Operations** — Open projects, list files with glob patterns, read/write/edit files
 - **Roslyn Integration** — Direct Roslyn APIs for C# semantic analysis (no subprocess overhead)
 - **Semantic Editing** — Find classes, add properties/methods with proper indentation
+- **AI-Powered Tools** — Natural language codebase queries using local Ollama or cloud AI (implements [AI-Powered MCP pattern](docs/AI_POWERED_MCP_PATTERN.md))
 - **Cross-platform** — macOS, Linux, and Windows support
 
 ## Architecture
@@ -103,12 +104,116 @@ Or using dotnet run for development:
 }
 ```
 
+## AI-Powered Tools Setup
+
+MCPsharp includes AI-powered tools that use local or cloud AI to answer natural language questions about your codebase. This implements the [AI-Powered MCP pattern](docs/AI_POWERED_MCP_PATTERN.md) — AI processes verbose data internally and returns concise answers, preventing context pollution.
+
+### Supported AI Providers
+
+MCPsharp auto-detects available AI providers in this order:
+
+1. **Ollama** (Local, free, recommended)
+2. **OpenRouter** (Cloud-based, requires API key)
+3. None (AI tools disabled)
+
+### Option 1: Ollama (Recommended)
+
+Install and run Ollama locally:
+
+```bash
+# macOS
+brew install ollama
+
+# Linux
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Start Ollama service
+ollama serve
+
+# Pull a code-specialized model
+ollama pull qwen2.5-coder:3b
+```
+
+MCPsharp will automatically detect Ollama at `http://localhost:11434` and use `qwen2.5-coder:3b` by default.
+
+**Environment variables:**
+- `OLLAMA_URL` — Ollama server URL (default: `http://localhost:11434`)
+- `OLLAMA_MODEL` — Model to use (default: `qwen2.5-coder:3b`)
+
+### Option 2: OpenRouter
+
+Configure OpenRouter API key:
+
+```bash
+export OPENROUTER_API_KEY="your-api-key"
+```
+
+Or add to your configuration file. MCPsharp will use `anthropic/claude-3.5-sonnet` by default.
+
+### Option 3: Disable AI Tools
+
+Set `AIProvider:Type` to `none` in configuration to disable AI-powered tools.
+
+### Using AI Tools
+
+Once configured, use the `ask_codebase` tool to ask natural language questions:
+
+```json
+{
+  "name": "ask_codebase",
+  "arguments": {
+    "question": "How does authentication work in this project?",
+    "focus_path": "src/Auth"  // optional
+  }
+}
+```
+
+The AI analyzes your codebase structure, code, and configuration internally and returns a concise answer with file:line references.
+
+### AI Code Transformation Tools
+
+In addition to read-only queries, MCPsharp provides AI-powered code modification tools that use **Roslyn AST transformations** to guarantee correctness:
+
+```json
+{
+  "name": "ai_suggest_fix",
+  "arguments": {
+    "file_path": "src/MyService.cs",
+    "description": "Fix the null reference exception in ProcessData",
+    "line_number": 42,
+    "apply_changes": false  // Preview first (default)
+  }
+}
+```
+
+**Why Roslyn AST instead of text manipulation?**
+
+Traditional tools use sed scripts, regex, or Python text manipulation which can:
+- Generate syntactically invalid code
+- Break compilation
+- Corrupt code structure
+- Introduce subtle bugs
+
+MCPsharp's AI transformation tools use Roslyn's Abstract Syntax Tree (AST) to:
+- ✅ Guarantee syntactically valid C# code
+- ✅ Preserve compilation integrity
+- ✅ Maintain code structure and formatting
+- ✅ Validate changes before returning them
+- ✅ Use semantic awareness for refactoring
+
+**Available transformation tools:**
+- `ai_suggest_fix` - Bug fixes with Roslyn validation
+- `ai_refactor` - Semantic-aware refactoring (preserves behavior)
+- `ai_implement_feature` - AST-based code generation
+
+All tools return a **preview by default**. Set `apply_changes: true` to modify files directly.
+
 ## Usage
 
 ### Running the Server
 
 ```bash
-# Run on current directory
+# Run on current directory (auto-loads .sln/.csproj if found)
 dotnet run --project src/MCPsharp/MCPsharp.csproj
 
 # Run on specific project
@@ -117,6 +222,8 @@ dotnet run --project src/MCPsharp/MCPsharp.csproj /path/to/project
 # Or use published binary
 ./mcpsharp /path/to/project
 ```
+
+**Auto-Loading**: If MCPsharp is launched in a directory containing `.sln` or `.csproj` files, it will automatically load the project on startup. Solution files (`.sln`) are preferred over project files when both exist.
 
 ### Testing the Server
 
@@ -133,7 +240,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | dotnet run -
 
 ### Available Tools
 
-The server provides 21 MCP tools:
+The server provides 41 MCP tools:
 
 **File Operations:**
 - `project_open` - Open a project directory
@@ -163,6 +270,33 @@ The server provides 21 MCP tools:
 **Advanced Analysis (Phase 2):**
 - `analyze_impact` - Analyze code change impact
 - `trace_feature` - Trace features across files
+- `rename_symbol` - Rename symbols across the codebase
+- `find_callers` - Find all callers of a method
+- `find_call_chains` - Analyze method call chains
+- `find_type_usages` - Find all usages of a type
+- `analyze_call_patterns` - Analyze method call patterns
+- `analyze_inheritance` - Analyze type inheritance
+- `find_circular_dependencies` - Find circular dependencies
+- `find_unused_methods` - Find unused methods
+- `analyze_call_graph` - Analyze call graphs
+- `find_recursive_calls` - Find recursive call chains
+- `analyze_type_dependencies` - Analyze type dependencies
+
+**Code Quality:**
+- `code_quality_analyze` - Analyze code quality issues
+- `code_quality_fix` - Apply automated fixes
+- `code_quality_profiles` - List available fix profiles
+- `extract_method` - Extract code to new method
+
+**AI-Powered Tools (Read-Only):**
+- `ask_codebase` - Ask natural language questions about the codebase using AI (returns concise answers, not verbose data)
+
+**AI-Powered Code Transformation (Roslyn AST-based):**
+- `ai_suggest_fix` - AI suggests bug fixes using Roslyn transformations (guarantees syntactically valid C#)
+- `ai_refactor` - AI-guided refactoring with semantic awareness (preserves program behavior)
+- `ai_implement_feature` - AI implements features using AST-based code generation (no string templates)
+
+**IMPORTANT:** The AI transformation tools use Roslyn AST instead of text manipulation (sed/regex/Python) to ensure all code changes are syntactically valid and preserve compilation integrity. Always prefer these tools for C# code modifications.
 
 ## Development
 

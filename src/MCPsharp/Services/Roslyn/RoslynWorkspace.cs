@@ -1,6 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
+using Microsoft.CodeAnalysis.MSBuild;
 using MCPsharp.Services.Caching;
 
 namespace MCPsharp.Services.Roslyn;
@@ -10,7 +11,7 @@ namespace MCPsharp.Services.Roslyn;
 /// </summary>
 public class RoslynWorkspace : IDisposable
 {
-    private AdhocWorkspace? _workspace;
+    private Workspace? _workspace;
     private ProjectId? _projectId;
     private Compilation? _compilation;
     private readonly Dictionary<string, DocumentId> _documentMap = new();
@@ -19,6 +20,7 @@ public class RoslynWorkspace : IDisposable
     private readonly object _disposeLock = new();
     private bool _disposed = false;
     private WorkspaceHealth _health = new();
+    private bool _useAdhoc = false; // Track whether we're using adhoc workspace
 
     public RoslynWorkspace()
     {
@@ -32,11 +34,182 @@ public class RoslynWorkspace : IDisposable
     public WorkspaceHealth GetHealth() => _health;
 
     /// <summary>
-    /// Initialize workspace with a project directory
+    /// Initialize workspace with a project directory, .csproj file, or .sln file
     /// </summary>
     public async Task InitializeAsync(string projectPath)
     {
-        _workspace = new AdhocWorkspace();
+        // Initialize health tracking
+        _health = new WorkspaceHealth
+        {
+            IsInitialized = false,
+            TotalProjects = 1,
+            LoadedProjects = 0
+        };
+
+        try
+        {
+            // Determine what we're dealing with: directory, .csproj, or .sln
+            string? csprojPath = null;
+            string? slnPath = null;
+            string workspaceRoot;
+
+            if (File.Exists(projectPath))
+            {
+                // It's a file - check if it's .sln or .csproj
+                var extension = Path.GetExtension(projectPath).ToLowerInvariant();
+                if (extension == ".sln")
+                {
+                    slnPath = projectPath;
+                    workspaceRoot = Path.GetDirectoryName(projectPath) ?? projectPath;
+                }
+                else if (extension == ".csproj")
+                {
+                    csprojPath = projectPath;
+                    workspaceRoot = Path.GetDirectoryName(projectPath) ?? projectPath;
+                }
+                else
+                {
+                    throw new ArgumentException($"Unsupported file type: {extension}. Expected .sln or .csproj");
+                }
+            }
+            else if (Directory.Exists(projectPath))
+            {
+                // It's a directory - look for .sln or .csproj files
+                workspaceRoot = projectPath;
+
+                var slnFiles = Directory.GetFiles(projectPath, "*.sln", SearchOption.TopDirectoryOnly);
+                if (slnFiles.Length > 0)
+                {
+                    slnPath = slnFiles[0]; // Prefer .sln if available
+                }
+                else
+                {
+                    var csprojFiles = Directory.GetFiles(projectPath, "*.csproj", SearchOption.TopDirectoryOnly);
+                    if (csprojFiles.Length > 0)
+                    {
+                        csprojPath = csprojFiles[0];
+                    }
+                }
+            }
+            else
+            {
+                throw new ArgumentException($"Path does not exist: {projectPath}");
+            }
+
+            // If we couldn't find a project or solution, fall back to adhoc workspace
+            if (slnPath == null && csprojPath == null)
+            {
+                await InitializeAdhocWorkspaceAsync(workspaceRoot);
+                return;
+            }
+
+            // Use MSBuildWorkspace to load the actual project/solution with all references
+            var msbuildWorkspace = MSBuildWorkspace.Create();
+
+            // Log workspace diagnostics
+            msbuildWorkspace.WorkspaceFailed += (sender, e) =>
+            {
+                Console.Error.WriteLine($"MSBuildWorkspace warning: {e.Diagnostic.Kind} - {e.Diagnostic.Message}");
+            };
+
+            Project project;
+            if (slnPath != null)
+            {
+                // Load solution - this loads all projects in the solution
+                var solution = await msbuildWorkspace.OpenSolutionAsync(slnPath);
+
+                // Use the first project for now (TODO: support multi-project solutions)
+                project = solution.Projects.FirstOrDefault()
+                    ?? throw new InvalidOperationException("Solution contains no projects");
+            }
+            else
+            {
+                // Load single project
+                project = await msbuildWorkspace.OpenProjectAsync(csprojPath!);
+            }
+
+            _workspace = msbuildWorkspace;
+            _projectId = project.Id;
+            _useAdhoc = false;
+
+            // Build document map
+            foreach (var doc in project.Documents)
+            {
+                if (doc.FilePath != null)
+                {
+                    _documentMap[doc.FilePath] = doc.Id;
+                }
+            }
+
+            // Collect all .cs files for health tracking
+            var allFiles = Directory.EnumerateFiles(workspaceRoot, "*.cs", SearchOption.AllDirectories)
+                .Where(file => !file.Contains("/obj/") && !file.Contains("/bin/") &&
+                              !file.Contains("\\obj\\") && !file.Contains("\\bin\\"))
+                .ToList();
+
+            _health.TotalFiles = allFiles.Count;
+
+            // Track health for files in the project
+            int parseableCount = 0;
+            foreach (var file in allFiles)
+            {
+                var fileHealth = await TrackFileHealthAsync(file);
+                _health.FileStatus[file] = fileHealth;
+                if (fileHealth.IsParseable)
+                {
+                    parseableCount++;
+                }
+            }
+
+            _health.ParseableFiles = parseableCount;
+
+            // Get compilation with caching and analyze errors
+            try
+            {
+                _compilation = await _compilationCache.GetOrCreateAsync(project);
+
+                if (_compilation != null)
+                {
+                    var diagnostics = _compilation.GetDiagnostics();
+                    _health.ErrorCount = diagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);
+                    _health.WarningCount = diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
+                }
+
+                _health.LoadedProjects = 1;
+            }
+            catch (Exception ex)
+            {
+                // Compilation failed - log and track
+                Console.Error.WriteLine($"Compilation failed: {ex.Message}");
+                _health.LoadedProjects = 0;
+            }
+
+            _health.IsInitialized = true;
+        }
+        catch (Exception ex)
+        {
+            // MSBuildWorkspace failed, fallback to ad-hoc workspace
+            Console.Error.WriteLine($"MSBuildWorkspace initialization failed: {ex.Message}");
+
+            // Determine workspace root for adhoc fallback
+            string adhocRoot = projectPath;
+            if (File.Exists(projectPath))
+            {
+                adhocRoot = Path.GetDirectoryName(projectPath) ?? projectPath;
+            }
+
+            await InitializeAdhocWorkspaceAsync(adhocRoot);
+        }
+    }
+
+    /// <summary>
+    /// Initialize an ad-hoc workspace (fallback when MSBuildWorkspace fails or no .csproj found)
+    /// </summary>
+    private async Task InitializeAdhocWorkspaceAsync(string projectPath)
+    {
+        var adhocWorkspace = new AdhocWorkspace();
+        _workspace = adhocWorkspace;
+        _useAdhoc = true;
 
         var projectInfo = ProjectInfo.Create(
             ProjectId.CreateNewId(),
@@ -46,18 +219,10 @@ public class RoslynWorkspace : IDisposable
             LanguageNames.CSharp
         );
 
-        _projectId = _workspace.AddProject(projectInfo).Id;
-
-        // Initialize health tracking
-        _health = new WorkspaceHealth
-        {
-            IsInitialized = false,
-            TotalProjects = 1,
-            LoadedProjects = 0
-        };
+        _projectId = adhocWorkspace.AddProject(projectInfo).Id;
 
         // Add common metadata references for test scenarios
-        var project = _workspace.CurrentSolution.GetProject(_projectId);
+        var project = adhocWorkspace.CurrentSolution.GetProject(_projectId);
         if (project != null)
         {
             // Add basic metadata references that are commonly needed
@@ -78,7 +243,7 @@ public class RoslynWorkspace : IDisposable
                 }
             }
 
-            _workspace.TryApplyChanges(project.Solution);
+            adhocWorkspace.TryApplyChanges(project.Solution);
         }
 
         // Collect all .cs files
@@ -104,7 +269,7 @@ public class RoslynWorkspace : IDisposable
         _health.ParseableFiles = parseableCount;
 
         // Get compilation with caching and analyze errors
-        project = _workspace.CurrentSolution.GetProject(_projectId);
+        project = adhocWorkspace.CurrentSolution.GetProject(_projectId);
         if (project != null)
         {
             try
@@ -131,6 +296,41 @@ public class RoslynWorkspace : IDisposable
     }
 
     /// <summary>
+    /// Track file health without adding to workspace (for MSBuildWorkspace which already has documents)
+    /// </summary>
+    private async Task<FileHealth> TrackFileHealthAsync(string filePath)
+    {
+        var fileHealth = new FileHealth
+        {
+            FilePath = filePath,
+            LastAnalyzed = DateTimeOffset.UtcNow,
+            IsParseable = false,
+            SyntaxErrors = 0,
+            SemanticErrors = 0
+        };
+
+        try
+        {
+            // Try to parse the file first (Level 1: Syntax-only)
+            var text = await File.ReadAllTextAsync(filePath);
+            var syntaxTree = CSharpSyntaxTree.ParseText(text, path: filePath);
+            var root = await syntaxTree.GetRootAsync();
+
+            // Check for syntax errors
+            var syntaxDiagnostics = syntaxTree.GetDiagnostics();
+            fileHealth.SyntaxErrors = syntaxDiagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);
+            fileHealth.IsParseable = fileHealth.SyntaxErrors == 0;
+        }
+        catch (Exception ex)
+        {
+            fileHealth.IsParseable = false;
+            fileHealth.ParseError = ex.Message;
+        }
+
+        return fileHealth;
+    }
+
+    /// <summary>
     /// Add or update a document in the workspace from file
     /// </summary>
     public async Task AddDocumentAsync(string filePath)
@@ -151,14 +351,16 @@ public class RoslynWorkspace : IDisposable
             {
                 var newDocument = document.WithText(sourceText);
                 _workspace.TryApplyChanges(newDocument.Project.Solution);
-                
+
                 // Invalidate semantic model cache for the updated document
                 _semanticModelCache.Invalidate(existingDocId);
             }
         }
-        else
+        else if (_useAdhoc)
         {
-            // Add new document
+            // Only add new documents if using adhoc workspace
+            // MSBuildWorkspace manages its own documents based on .csproj
+            var adhocWorkspace = (AdhocWorkspace)_workspace;
             var documentInfo = DocumentInfo.Create(
                 DocumentId.CreateNewId(_projectId),
                 Path.GetFileName(filePath),
@@ -166,7 +368,7 @@ public class RoslynWorkspace : IDisposable
                 filePath: filePath
             );
 
-            var doc = _workspace.AddDocument(documentInfo);
+            var doc = adhocWorkspace.AddDocument(documentInfo);
             _documentMap[filePath] = doc.Id;
         }
 
@@ -226,6 +428,12 @@ public class RoslynWorkspace : IDisposable
             throw new InvalidOperationException("Workspace not initialized");
         }
 
+        if (!_useAdhoc)
+        {
+            throw new InvalidOperationException("AddInMemoryDocumentAsync is only supported with adhoc workspace");
+        }
+
+        var adhocWorkspace = (AdhocWorkspace)_workspace;
         var sourceText = SourceText.From(content);
 
         var documentInfo = DocumentInfo.Create(
@@ -235,11 +443,11 @@ public class RoslynWorkspace : IDisposable
             filePath: filePath
         );
 
-        var doc = _workspace.AddDocument(documentInfo);
+        var doc = adhocWorkspace.AddDocument(documentInfo);
         _documentMap[filePath] = doc.Id;
 
         // Refresh compilation with caching
-        var project = _workspace.CurrentSolution.GetProject(_projectId);
+        var project = adhocWorkspace.CurrentSolution.GetProject(_projectId);
         if (project != null)
         {
             _compilation = await _compilationCache.GetOrCreateAsync(project);
@@ -253,7 +461,9 @@ public class RoslynWorkspace : IDisposable
     /// </summary>
     public async Task InitializeTestWorkspaceAsync()
     {
-        _workspace = new AdhocWorkspace();
+        var adhocWorkspace = new AdhocWorkspace();
+        _workspace = adhocWorkspace;
+        _useAdhoc = true;
 
         var projectInfo = ProjectInfo.Create(
             ProjectId.CreateNewId(),
@@ -263,10 +473,10 @@ public class RoslynWorkspace : IDisposable
             LanguageNames.CSharp
         );
 
-        _projectId = _workspace.AddProject(projectInfo).Id;
+        _projectId = adhocWorkspace.AddProject(projectInfo).Id;
 
         // Add reference assemblies for common types
-        var project = _workspace.CurrentSolution.GetProject(_projectId);
+        var project = adhocWorkspace.CurrentSolution.GetProject(_projectId);
         if (project != null)
         {
             // Add basic metadata references
@@ -285,7 +495,7 @@ public class RoslynWorkspace : IDisposable
                 }
             }
 
-            _workspace.TryApplyChanges(project.Solution);
+            adhocWorkspace.TryApplyChanges(project.Solution);
             _compilation = await _compilationCache.GetOrCreateAsync(project);
         }
     }

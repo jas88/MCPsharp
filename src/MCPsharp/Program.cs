@@ -3,6 +3,7 @@ using MCPsharp.Services.Phase2;
 using MCPsharp.Services.Phase3;
 using MCPsharp.Services.Consolidated;
 using MCPsharp.Services.Roslyn;
+using MCPsharp.Services.AI;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp;
@@ -39,6 +40,9 @@ class Program
             // Initialize all services
             var projectManager = new ProjectContextManager();
             var roslynWorkspace = new RoslynWorkspace();
+
+            // Auto-load project if current directory is a C# project
+            await AutoLoadProjectAsync(workspaceRoot, projectManager, roslynWorkspace, logger);
 
             // Initialize core file operations service first (needed by consolidated services)
             var fileOperations = new FileOperationsService(workspaceRoot);
@@ -143,6 +147,36 @@ class Program
                 logger: loggerFactory?.CreateLogger<StreamProcessingController>()
             );
 
+            // Initialize AI services (optional - gracefully degrades if unavailable)
+            var aiProviderFactory = new AIProviderFactory(null, loggerFactory.CreateLogger<AIProviderFactory>());
+            var aiProvider = await aiProviderFactory.CreateAsync();
+
+            CodebaseQueryService? codebaseQuery = null;
+            AICodeTransformationService? aiCodeTransformation = null;
+
+            if (aiProvider != null)
+            {
+                codebaseQuery = new CodebaseQueryService(
+                    aiProvider,
+                    projectManager,
+                    loggerFactory.CreateLogger<CodebaseQueryService>()
+                );
+
+                aiCodeTransformation = new AICodeTransformationService(
+                    aiProvider,
+                    roslynWorkspace,
+                    loggerFactory.CreateLogger<AICodeTransformationService>()
+                );
+
+                logger.LogInformation("AI-powered tools enabled with {Provider}/{Model}",
+                    aiProvider.ProviderName, aiProvider.ModelName);
+                logger.LogInformation("AI code transformation tools enabled (Roslyn AST-based)");
+            }
+            else
+            {
+                logger.LogInformation("AI-powered tools disabled (no provider available)");
+            }
+
             // Create tool registry with all Phase 2 services and consolidated services
             // Note: ImpactAnalyzerService and FeatureTracerService require runtime dependencies
             // and will be instantiated lazily by the McpToolRegistry
@@ -164,7 +198,9 @@ class Program
                 streamController: streamController,
                 roslynAnalyzerService: roslynAnalyzerService,
                 codeFixRegistry: codeFixRegistry,
-                loggerFactory: loggerFactory
+                loggerFactory: loggerFactory,
+                codebaseQuery: codebaseQuery,
+                aiCodeTransformation: aiCodeTransformation
             );
 
             logger.LogInformation("MCPsharp initialized with {ToolCount} tools", toolRegistry.GetTools().Count);
@@ -192,6 +228,67 @@ class Program
             await Console.Error.WriteLineAsync($"Fatal error: {ex.Message}");
             await Console.Error.WriteLineAsync(ex.StackTrace);
             return 1;
+        }
+    }
+
+    /// <summary>
+    /// Auto-load project if the workspace directory contains C# project files.
+    /// </summary>
+    private static async Task AutoLoadProjectAsync(
+        string workspaceRoot,
+        ProjectContextManager projectManager,
+        RoslynWorkspace roslynWorkspace,
+        ILogger logger)
+    {
+        try
+        {
+            // Look for .csproj or .sln files in the workspace
+            var csprojFiles = Directory.GetFiles(workspaceRoot, "*.csproj", SearchOption.TopDirectoryOnly);
+            var slnFiles = Directory.GetFiles(workspaceRoot, "*.sln", SearchOption.TopDirectoryOnly);
+
+            string? projectPath = null;
+
+            // Prefer .sln files if present
+            if (slnFiles.Length > 0)
+            {
+                projectPath = slnFiles[0];
+                if (slnFiles.Length > 1)
+                {
+                    logger.LogInformation("Found {Count} solution files, auto-loading: {Path}",
+                        slnFiles.Length, Path.GetFileName(projectPath));
+                }
+            }
+            else if (csprojFiles.Length > 0)
+            {
+                projectPath = csprojFiles[0];
+                if (csprojFiles.Length > 1)
+                {
+                    logger.LogInformation("Found {Count} project files, auto-loading: {Path}",
+                        csprojFiles.Length, Path.GetFileName(projectPath));
+                }
+            }
+
+            if (projectPath != null)
+            {
+                logger.LogInformation("Auto-loading C# project: {Project}", Path.GetFileName(projectPath));
+
+                // Load directory into project manager (expects directory, not file)
+                projectManager.OpenProject(workspaceRoot);
+
+                // Initialize Roslyn workspace with project/solution file
+                await roslynWorkspace.InitializeAsync(projectPath);
+
+                logger.LogInformation("Project auto-loaded successfully");
+            }
+            else
+            {
+                logger.LogInformation("No C# project files found in workspace - project tools available on demand");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Don't fail startup if auto-load fails - just log it
+            logger.LogWarning(ex, "Failed to auto-load project, continuing without pre-loaded project");
         }
     }
 }

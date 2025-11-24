@@ -69,6 +69,10 @@ public class StaticMethodFixer : CodeFixProvider
 
     private static SyntaxTokenList InsertStaticModifier(SyntaxTokenList modifiers, SyntaxToken staticToken)
     {
+        // Check if static modifier already exists (prevent duplicates)
+        if (modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+            return modifiers;
+
         // Find the correct position to insert 'static'
         // Order: access modifiers -> static -> other modifiers (async, unsafe, etc.)
 
@@ -97,13 +101,14 @@ public class StaticMethodFixer : CodeFixProvider
         else if (insertPosition >= modifiers.Count)
         {
             // After all access modifiers, at the end
-            return modifiers.Add(staticToken.WithLeadingTrivia(SyntaxFactory.Space));
+            // Don't add leading trivia - previous modifier already has trailing space
+            return modifiers.Add(staticToken.WithTrailingTrivia(SyntaxFactory.Space));
         }
         else
         {
             // Insert in the middle
+            // Don't add leading trivia - previous modifier already has trailing space
             return modifiers.Insert(insertPosition, staticToken
-                .WithLeadingTrivia(SyntaxFactory.Space)
                 .WithTrailingTrivia(SyntaxFactory.Space));
         }
     }

@@ -10,6 +10,7 @@ using MCPsharp.Services.Phase3;
 using MCPsharp.Services.Consolidated;
 using MCPsharp.Services.Analyzers;
 using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry;
+using MCPsharp.Services.AI;
 using MCPsharp.Models.LargeFileOptimization;
 using Microsoft.Extensions.Logging;
 
@@ -76,6 +77,11 @@ public partial class McpToolRegistry
     private readonly ResponseProcessor _responseProcessor;
     private readonly ILoggerFactory? _loggerFactory;
 
+    // AI-powered tools
+    private readonly CodebaseQueryService? _codebaseQuery;
+    private readonly AICodeTransformationService? _aiCodeTransformation;
+    private readonly ILogger? _logger;
+
     public McpToolRegistry(
         ProjectContextManager projectContext,
         RoslynWorkspace? workspace = null,
@@ -97,7 +103,9 @@ public partial class McpToolRegistry
         IRoslynAnalyzerService? roslynAnalyzerService = null,
         BuiltInCodeFixRegistry? codeFixRegistry = null,
         ISearchService? searchService = null,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        CodebaseQueryService? codebaseQuery = null,
+        AICodeTransformationService? aiCodeTransformation = null)
     {
         _projectContext = projectContext;
         _workspace = workspace;
@@ -123,6 +131,9 @@ public partial class McpToolRegistry
         _roslynAnalyzerService = roslynAnalyzerService;
         _searchService = searchService;
         _loggerFactory = loggerFactory;
+        _codebaseQuery = codebaseQuery;
+        _aiCodeTransformation = aiCodeTransformation;
+        _logger = loggerFactory?.CreateLogger<McpToolRegistry>();
 
         // Initialize response processor with configuration
         var responseConfig = ResponseConfiguration.LoadFromEnvironment();
@@ -130,6 +141,9 @@ public partial class McpToolRegistry
         _responseProcessor = new ResponseProcessor(responseConfig, responseLogger);
 
         _tools = RegisterTools();
+
+        // Register AI-powered tools if available
+        RegisterAITools();
     }
 
     /// <summary>
@@ -173,6 +187,11 @@ public partial class McpToolRegistry
                 "analyze_call_graph" => await ExecuteAnalyzeCallGraph(request.Arguments),
                 "find_recursive_calls" => await ExecuteFindRecursiveCalls(request.Arguments),
                 "analyze_type_dependencies" => await ExecuteAnalyzeTypeDependencies(request.Arguments),
+                // AI-powered tools
+                "ask_codebase" => await HandleAskCodebaseAsync(request.Arguments),
+                "ai_suggest_fix" => await HandleAISuggestFixAsync(request.Arguments),
+                "ai_refactor" => await HandleAIRefactorAsync(request.Arguments),
+                "ai_implement_feature" => await HandleAIImplementFeatureAsync(request.Arguments),
                 // Phase 2 tools
                 "get_workflows" => await ExecuteGetWorkflows(request.Arguments),
                 "parse_workflow" => await ExecuteParseWorkflow(request.Arguments),
@@ -449,7 +468,19 @@ public partial class McpToolRegistry
             new McpTool
             {
                 Name = "file_edit",
-                Description = "Apply text edits to a file",
+                Description = @"Apply text edits to a file using line/column positions.
+
+**DEPRECATED: For C# code modifications, use AI-powered tools instead:**
+- Use `ai_suggest_fix` for bug fixes
+- Use `ai_refactor` for refactoring
+- Use `ai_implement_feature` for new features
+
+These tools use Roslyn AST and guarantee syntactically valid code.
+
+Edit types:
+- replace: Requires start_line, start_column, end_line, end_column, new_text
+- insert: Requires line, column, text
+- delete: Requires start_line, start_column, end_line, end_column",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -462,7 +493,7 @@ public partial class McpToolRegistry
                     {
                         Name = "edits",
                         Type = "array",
-                        Description = "Array of edit operations to apply",
+                        Description = "Array of edit operations with line/column positions",
                         Required = true,
                         Items = new Dictionary<string, object>
                         {
@@ -472,9 +503,51 @@ public partial class McpToolRegistry
                                 ["type"] = new Dictionary<string, object>
                                 {
                                     ["type"] = "string",
-                                    ["enum"] = new[] { "replace", "insert", "delete" }
+                                    ["enum"] = new[] { "replace", "insert", "delete" },
+                                    ["description"] = "Type of edit operation"
+                                },
+                                ["start_line"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Starting line number (0-indexed, required for replace/delete)"
+                                },
+                                ["start_column"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Starting column number (0-indexed, required for replace/delete)"
+                                },
+                                ["end_line"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Ending line number (0-indexed, required for replace/delete)"
+                                },
+                                ["end_column"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Ending column number (0-indexed, required for replace/delete)"
+                                },
+                                ["new_text"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "string",
+                                    ["description"] = "New text for replace operations"
+                                },
+                                ["line"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Line number for insert operations (0-indexed)"
+                                },
+                                ["column"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Column number for insert operations (0-indexed)"
+                                },
+                                ["text"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "string",
+                                    ["description"] = "Text to insert"
                                 }
-                            }
+                            },
+                            ["required"] = new[] { "type" }
                         }
                     }
                 )
