@@ -12,14 +12,24 @@ public class JsonRpcHandler
     private readonly TextReader _input;
     private readonly TextWriter _output;
     private readonly McpToolRegistry _toolRegistry;
+    private readonly McpResourceRegistry? _resourceRegistry;
+    private readonly McpPromptRegistry? _promptRegistry;
     private readonly Microsoft.Extensions.Logging.ILogger _logger;
     private readonly JsonSerializerOptions _jsonOptions;
 
-    public JsonRpcHandler(TextReader input, TextWriter output, McpToolRegistry toolRegistry, Microsoft.Extensions.Logging.ILogger logger)
+    public JsonRpcHandler(
+        TextReader input,
+        TextWriter output,
+        McpToolRegistry toolRegistry,
+        Microsoft.Extensions.Logging.ILogger logger,
+        McpResourceRegistry? resourceRegistry = null,
+        McpPromptRegistry? promptRegistry = null)
     {
         _input = input;
         _output = output;
         _toolRegistry = toolRegistry;
+        _resourceRegistry = resourceRegistry;
+        _promptRegistry = promptRegistry;
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
         {
@@ -104,6 +114,10 @@ public class JsonRpcHandler
                 "initialize" => await HandleInitialize(request.Params),
                 "tools/list" => await HandleToolsList(request.Params),
                 "tools/call" => await HandleToolsCall(request.Params),
+                "resources/list" => await HandleResourcesListAsync(),
+                "resources/read" => await HandleResourcesReadAsync(request.Params),
+                "prompts/list" => await HandlePromptsListAsync(),
+                "prompts/get" => await HandlePromptsGetAsync(request.Params),
                 _ => throw new MethodNotFoundException($"Method not found: {request.Method}")
             };
 
@@ -156,6 +170,30 @@ public class JsonRpcHandler
     private Task<object> HandleInitialize(object? parameters)
     {
         // MCP initialize handshake
+        var capabilities = new Dictionary<string, object>
+        {
+            ["tools"] = new { }
+        };
+
+        // Add resources capability if registry is available
+        if (_resourceRegistry != null)
+        {
+            capabilities["resources"] = new Dictionary<string, object>
+            {
+                ["subscribe"] = false,
+                ["listChanged"] = false
+            };
+        }
+
+        // Add prompts capability if registry is available
+        if (_promptRegistry != null)
+        {
+            capabilities["prompts"] = new Dictionary<string, object>
+            {
+                ["listChanged"] = false
+            };
+        }
+
         var response = new
         {
             protocolVersion = "2024-11-05",
@@ -164,10 +202,7 @@ public class JsonRpcHandler
                 name = "MCPsharp",
                 version = "0.1.0"
             },
-            capabilities = new
-            {
-                tools = new { }
-            }
+            capabilities
         };
 
         return Task.FromResult<object>(response);
@@ -231,6 +266,73 @@ public class JsonRpcHandler
         };
 
         return response;
+    }
+
+    private Task<object> HandleResourcesListAsync()
+    {
+        if (_resourceRegistry == null)
+        {
+            return Task.FromResult<object>(new { resources = Array.Empty<object>() });
+        }
+        return Task.FromResult<object>(_resourceRegistry.ListResources());
+    }
+
+    private async Task<object> HandleResourcesReadAsync(object? parameters)
+    {
+        if (_resourceRegistry == null)
+        {
+            throw new InvalidOperationException("Resources not available");
+        }
+
+        if (parameters == null)
+        {
+            throw new ArgumentException("Missing parameters");
+        }
+
+        var paramsJson = JsonSerializer.SerializeToDocument(parameters, _jsonOptions);
+        var uri = paramsJson.RootElement.GetProperty("uri").GetString()
+            ?? throw new ArgumentException("Missing uri parameter");
+
+        return await _resourceRegistry.ReadResourceAsync(uri);
+    }
+
+    private Task<object> HandlePromptsListAsync()
+    {
+        if (_promptRegistry == null)
+        {
+            return Task.FromResult<object>(new { prompts = Array.Empty<object>() });
+        }
+        return Task.FromResult<object>(_promptRegistry.ListPrompts());
+    }
+
+    private Task<object> HandlePromptsGetAsync(object? parameters)
+    {
+        if (_promptRegistry == null)
+        {
+            throw new InvalidOperationException("Prompts not available");
+        }
+
+        if (parameters == null)
+        {
+            throw new ArgumentException("Missing parameters");
+        }
+
+        var paramsJson = JsonSerializer.SerializeToDocument(parameters, _jsonOptions);
+        var name = paramsJson.RootElement.GetProperty("name").GetString()
+            ?? throw new ArgumentException("Missing name parameter");
+
+        Dictionary<string, string>? arguments = null;
+        if (paramsJson.RootElement.TryGetProperty("arguments", out var argsElement) &&
+            argsElement.ValueKind == JsonValueKind.Object)
+        {
+            arguments = new Dictionary<string, string>();
+            foreach (var prop in argsElement.EnumerateObject())
+            {
+                arguments[prop.Name] = prop.Value.GetString() ?? "";
+            }
+        }
+
+        return Task.FromResult<object>(_promptRegistry.GetPrompt(name, arguments));
     }
 
     private static JsonRpcResponse CreateErrorResponse(object? id, int code, string message)

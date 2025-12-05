@@ -32,8 +32,7 @@ public partial class McpToolRegistry
         _tools.Add(new McpTool
         {
             Name = "ask_codebase",
-            Description = @"Ask a natural language question about the codebase.
-This tool uses AI to process project structure, code, and configuration to provide concise answers.
+            Description = @"Ask natural language questions about the codebase using AI-powered semantic analysis. PREFERRED for high-level exploration and understanding before diving into code details. Use for architectural questions, feature location, and design understanding.
 
 Examples:
 - ""How does authentication work in this project?""
@@ -41,8 +40,7 @@ Examples:
 - ""What would break if I rename UserService?""
 - ""Which files handle user registration?""
 
-The AI analyzes the codebase internally and returns a focused answer with file:line references.
-This is more efficient than using multiple low-level tools for exploration.",
+Returns focused answers with file:line references. More efficient than using multiple low-level tools for initial exploration. Use this first to understand the landscape, then use specific semantic tools (find_symbol, get_class_structure) for detailed analysis.",
             InputSchema = JsonSchemaHelper.CreateSchema(
                 new PropertyDefinition
                 {

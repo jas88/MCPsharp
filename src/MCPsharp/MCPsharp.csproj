@@ -48,6 +48,9 @@
 
     <!-- YAML parsing -->
     <PackageReference Include="YamlDotNet" Version="16.2.0" />
+
+    <!-- SQLite database -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>

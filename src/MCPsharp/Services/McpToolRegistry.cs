@@ -425,7 +425,7 @@ public partial class McpToolRegistry
             new McpTool
             {
                 Name = "file_read",
-                Description = "Read the contents of a file",
+                Description = "Read the contents of a file. Consider using semantic tools (find_symbol, get_class_structure, find_references) first to understand code structure and relationships, then use file_read for full context when needed. Semantic tools provide structured data that's easier to process than raw file content.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -555,7 +555,7 @@ Edit types:
             new McpTool
             {
                 Name = "search_text",
-                Description = "Search for text or regex patterns across project files",
+                Description = "Search for text or regex patterns across project files. Use find_symbol for code elements (classes, methods, etc.) when possible as it provides semantic understanding. Text search is useful for comments, strings, documentation, and non-code content where semantic analysis isn't applicable.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -630,7 +630,7 @@ Edit types:
             new McpTool
             {
                 Name = "find_symbol",
-                Description = "Find symbols (classes, methods, properties) by name",
+                Description = "Search for symbols (classes, methods, properties) by name using the semantic index. PREFERRED over reading files directly - returns structured symbol data with location info. Supports partial matching and kind filtering (class, method, property, field, etc.). Use this to locate code elements before examining them in detail.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -679,7 +679,7 @@ Edit types:
             new McpTool
             {
                 Name = "get_class_structure",
-                Description = "Get complete structure of a class including all members",
+                Description = "Get complete structure of a class including all members, inheritance, and implementations. PREFERRED over reading the file directly - returns structured member data with types, accessibility, and relationships. Use to understand a class before modifying it or to analyze its design.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -802,7 +802,7 @@ Edit types:
             new McpTool
             {
                 Name = "find_references",
-                Description = "Find all references to a symbol",
+                Description = "Find all references to a symbol across the codebase using semantic analysis. More accurate than text search as it understands symbol identity, not just text matches. Use for refactoring impact analysis or understanding how code is used. Preferred over grep for tracking symbol usage.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -1102,7 +1102,7 @@ Edit types:
             new McpTool
             {
                 Name = "find_callers",
-                Description = "Find all callers of a specific method (who calls this method)",
+                Description = "Find all methods that call a specific method using call graph analysis. PREFERRED over grep/search for understanding code flow and dependencies. Returns structured caller information with file and line locations. Use to analyze method dependencies before refactoring or to trace execution paths.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {

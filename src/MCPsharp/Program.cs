@@ -4,6 +4,8 @@ using MCPsharp.Services.Phase3;
 using MCPsharp.Services.Consolidated;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Services.AI;
+using MCPsharp.Services.Database;
+using MCPsharp.Models;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp;
@@ -37,12 +39,19 @@ class Program
             var logger = loggerFactory.CreateLogger<Program>();
             logger.LogInformation("MCPsharp starting, workspace: {Workspace}", workspaceRoot);
 
+            // Database initialization
+            var projectDatabase = new ProjectDatabase(loggerFactory?.CreateLogger<ProjectDatabase>());
+
+            // Resource and prompt registries
+            var resourceRegistry = new McpResourceRegistry(loggerFactory?.CreateLogger<McpResourceRegistry>());
+            var promptRegistry = new McpPromptRegistry(loggerFactory?.CreateLogger<McpPromptRegistry>());
+
             // Initialize all services
             var projectManager = new ProjectContextManager();
             var roslynWorkspace = new RoslynWorkspace();
 
             // Auto-load project if current directory is a C# project
-            await AutoLoadProjectAsync(workspaceRoot, projectManager, roslynWorkspace, logger);
+            await AutoLoadProjectAsync(workspaceRoot, projectManager, roslynWorkspace, projectDatabase, logger);
 
             // Initialize core file operations service first (needed by consolidated services)
             var fileOperations = new FileOperationsService(workspaceRoot);
@@ -177,6 +186,32 @@ class Program
                 logger.LogInformation("AI-powered tools disabled (no provider available)");
             }
 
+            // Setup resource content generators
+            var resourceGenerators = new ResourceContentGenerators(projectManager, () => projectDatabase);
+
+            // Register MCP resources
+            resourceRegistry.RegisterResource(
+                new McpResource { Uri = "project://overview", Name = "Project Overview", Description = "Overview of the current project", MimeType = "text/markdown" },
+                () => resourceGenerators.GenerateOverview());
+
+            resourceRegistry.RegisterResource(
+                new McpResource { Uri = "project://structure", Name = "Project Structure", Description = "File and folder structure", MimeType = "text/markdown" },
+                () => resourceGenerators.GenerateStructure());
+
+            resourceRegistry.RegisterResource(
+                new McpResource { Uri = "project://dependencies", Name = "Dependencies", Description = "Project dependencies", MimeType = "text/markdown" },
+                () => resourceGenerators.GenerateDependencies());
+
+            resourceRegistry.RegisterResource(
+                new McpResource { Uri = "project://symbols", Name = "Symbols", Description = "Symbol summary", MimeType = "text/markdown" },
+                () => resourceGenerators.GenerateSymbolsSummary());
+
+            resourceRegistry.RegisterResource(
+                new McpResource { Uri = "project://guidance", Name = "Usage Guide", Description = "Best practices for using MCPsharp", MimeType = "text/markdown" },
+                () => resourceGenerators.GenerateGuidance());
+
+            logger.LogInformation("Registered {Count} MCP resources", 5);
+
             // Create tool registry with all Phase 2 services and consolidated services
             // Note: ImpactAnalyzerService and FeatureTracerService require runtime dependencies
             // and will be instantiated lazily by the McpToolRegistry
@@ -206,7 +241,13 @@ class Program
             logger.LogInformation("MCPsharp initialized with {ToolCount} tools", toolRegistry.GetTools().Count);
 
             // Create and run JSON-RPC handler
-            var handler = new JsonRpcHandler(Console.In, Console.Out, toolRegistry, logger);
+            var handler = new JsonRpcHandler(
+                Console.In,
+                Console.Out,
+                toolRegistry,
+                logger,
+                resourceRegistry,
+                promptRegistry);
 
             // Setup cancellation on Ctrl+C
             using var cts = new CancellationTokenSource();
@@ -219,6 +260,9 @@ class Program
 
             // Run MCP server loop
             await handler.RunAsync(cts.Token);
+
+            // Cleanup
+            await projectDatabase.DisposeAsync();
 
             logger.LogInformation("MCPsharp stopped");
             return 0;
@@ -238,6 +282,7 @@ class Program
         string workspaceRoot,
         ProjectContextManager projectManager,
         RoslynWorkspace roslynWorkspace,
+        ProjectDatabase projectDatabase,
         ILogger logger)
     {
         try
@@ -277,6 +322,17 @@ class Program
 
                 // Initialize Roslyn workspace with project/solution file
                 await roslynWorkspace.InitializeAsync(projectPath);
+
+                // Initialize database for the project
+                try
+                {
+                    await projectDatabase.OpenOrCreateAsync(workspaceRoot);
+                    logger.LogInformation("Opened project database");
+                }
+                catch (Exception dbEx)
+                {
+                    logger.LogWarning(dbEx, "Failed to open project database, continuing without cache");
+                }
 
                 logger.LogInformation("Project auto-loaded successfully");
             }

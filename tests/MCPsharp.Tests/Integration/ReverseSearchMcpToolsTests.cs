@@ -370,7 +370,7 @@ public class Consumer
         // Assert
         Assert.NotNull(findCallersTool);
         Assert.NotNull(findCallersTool.InputSchema);
-        Assert.Equal("Find all callers of a specific method (who calls this method)", findCallersTool.Description);
+        Assert.Equal("Find all methods that call a specific method using call graph analysis. PREFERRED over grep/search for understanding code flow and dependencies. Returns structured caller information with file and line locations. Use to analyze method dependencies before refactoring or to trace execution paths.", findCallersTool.Description);
     }
 
     [Fact]
