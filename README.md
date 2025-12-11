@@ -1,6 +1,7 @@
 # MCPsharp
 
 [![Build and Test](https://github.com/jas88/MCPsharp/actions/workflows/build.yml/badge.svg)](https://github.com/jas88/MCPsharp/actions/workflows/build.yml)
+[![codecov](https://codecov.io/gh/jas88/MCPsharp/graph/badge.svg)](https://codecov.io/gh/jas88/MCPsharp)
 
 A Model Context Protocol (MCP) server for intelligent C# project analysis and semantic code editing. Provides Claude Code with deep understanding of C# projects including cross-file dependencies, project structure, and Roslyn-based semantic operations.
 

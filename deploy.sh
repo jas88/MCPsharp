@@ -1,0 +1,1 @@
+dotnet publish src/MCPsharp/MCPsharp.csproj -c Release -r osx-arm64 --self-contained -o pub -p:PublishSingleFile=true -p:UseAppHost=true && mv pub/mcpsharp ~/.local/bin/mcpsharp
