@@ -17,3 +17,9 @@ updates:
     schedule:
       interval: "weekly"
       day: "sunday"
+
+  - package-ecosystem: "dotnet-sdk"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
