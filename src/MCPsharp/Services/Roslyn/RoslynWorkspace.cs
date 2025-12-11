@@ -221,6 +221,14 @@ public class RoslynWorkspace : IDisposable
 
         _projectId = adhocWorkspace.AddProject(projectInfo).Id;
 
+        // Initialize health tracking
+        _health = new WorkspaceHealth
+        {
+            IsInitialized = false,
+            TotalProjects = 1,
+            LoadedProjects = 0
+        };
+
         // Add common metadata references for test scenarios
         var project = adhocWorkspace.CurrentSolution.GetProject(_projectId);
         if (project != null)
