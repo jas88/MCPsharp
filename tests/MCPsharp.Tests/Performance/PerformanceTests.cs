@@ -308,7 +308,7 @@ public class PerformanceTests : PerformanceTestBase
         Assert.That(memoryEfficiency, Is.LessThan(3.0), "Memory usage should not exceed 3x file size");
 
         // Memory should be cleaned up after operation (allow more realistic memory usage)
-        Assert.That(finalMemory - initialMemory, Is.LessThan(150 * 1024 * 1024), "Memory leak should be minimal");
+        Assert.That(finalMemory - Assert.That(initialMemory, Is.LessThan(150 * 1024 * 1024), "Memory leak should be minimal");
     }
 
     [Test]

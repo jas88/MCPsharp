@@ -94,7 +94,7 @@ public class BulkEditServiceTests : FileServiceTestBase
         var ex = Assert.ThrowsAsync<RegexParseException>(async () =>
             await _service.BulkReplaceAsync(files, invalidPattern, "replacement"));
 
-        Assert.NotNull(ex);
+        Assert.That(ex, Is.Not.Null);
         if (ex == null)
             throw new InvalidOperationException("Exception should not be null");
         Assert.That(ex.Message, Does.Contain("Invalid pattern"));
@@ -113,7 +113,7 @@ public class BulkEditServiceTests : FileServiceTestBase
 
         // Assert
         Assert.That(result.Success, Is.True);
-        Assert.NotNull(result.RollbackInfo);
+        Assert.That(result.RollbackInfo, Is.Not.Null);
         if (result.RollbackInfo == null)
             throw new InvalidOperationException("RollbackInfo should not be null");
         Assert.That(result.RollbackInfo.Files.Count, Is.EqualTo(1));
@@ -392,7 +392,7 @@ public class BulkEditServiceTests : FileServiceTestBase
         var editResult = await _service.BulkReplaceAsync(new[] { testFile }, "Original", "Modified", options);
         var rollbackId = editResult.RollbackInfo?.RollbackId;
 
-        Assert.NotNull(rollbackId);
+        Assert.That(rollbackId, Is.Not.Null);
         if (rollbackId == null)
             throw new InvalidOperationException("Rollback ID should not be null");
         Assert.That(editResult.Success, Is.True);

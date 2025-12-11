@@ -1,5 +1,5 @@
 using MCPsharp.Services.Roslyn;
-using Xunit;
+using NUnit.Framework;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,7 +11,7 @@ namespace MCPsharp.Tests.Services.Roslyn;
 /// </summary>
 public class RoslynWorkspaceInitializationTests
 {
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithRealProject_LoadsWithoutErrors()
     {
         // Arrange
@@ -29,24 +29,24 @@ public class RoslynWorkspaceInitializationTests
         var health = workspace.GetHealth();
 
         // Assert
-        Assert.True(health.IsInitialized, "Workspace should be initialized");
-        Assert.True(health.LoadedProjects > 0, "At least one project should be loaded");
-        Assert.True(health.TotalFiles > 0, "Should have source files");
-        Assert.True(health.ParseableFiles > 0, "Should have parseable files");
+        Assert.That(health.IsInitialized, "Workspace should be initialized", Is.True);
+        Assert.That(health.LoadedProjects > 0, "At least one project should be loaded", Is.True);
+        Assert.That(health.TotalFiles > 0, "Should have source files", Is.True);
+        Assert.That(health.ParseableFiles > 0, "Should have parseable files", Is.True);
 
         // The key assertion: error count should match actual build (0 errors)
         // Previously this was 179 errors due to missing NuGet references
-        Assert.True(health.ErrorCount < 50,
-            $"Error count should be low (< 50), but got {health.ErrorCount}. " +
+        Assert.That(health.ErrorCount < 50,
+            $"Error count should be low (< 50, Is.True), but got {health.ErrorCount}. " +
             $"This indicates MSBuildWorkspace is loading references correctly.");
 
         // Verify semantic operations are available or close to being available
-        Assert.True(health.CanDoSyntaxOperations, "Should be able to do syntax operations");
+        Assert.That(health.CanDoSyntaxOperations, "Should be able to do syntax operations", Is.True);
 
         workspace.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithRealProject_CanFindSymbols()
     {
         // Arrange
@@ -63,8 +63,8 @@ public class RoslynWorkspaceInitializationTests
         var compilation = workspace.GetCompilation();
 
         // Assert
-        Assert.NotNull(compilation);
-        Assert.True(compilation.References.Count() > 5,
+        Assert.That(compilation, Is.Not.Null);
+        Assert.That(compilation.References.Count(, Is.True) > 5,
             $"Should have many references from NuGet packages, got {compilation.References.Count()}");
 
         // Verify we can find a known type (proves references are loaded)
@@ -72,12 +72,12 @@ public class RoslynWorkspaceInitializationTests
             n => n == "RoslynWorkspace",
             Microsoft.CodeAnalysis.SymbolFilter.Type);
 
-        Assert.NotEmpty(symbolsWithName);
+        Assert.That(symbolsWithName, Is.Not.Empty);
 
         workspace.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithSolutionFile_LoadsSuccessfully()
     {
         // Arrange
@@ -95,19 +95,19 @@ public class RoslynWorkspaceInitializationTests
         var health = workspace.GetHealth();
 
         // Assert
-        Assert.True(health.IsInitialized, "Workspace should be initialized from .sln file");
-        Assert.True(health.LoadedProjects > 0, "At least one project should be loaded from solution");
-        Assert.True(health.TotalFiles > 0, "Should have source files");
+        Assert.That(health.IsInitialized, "Workspace should be initialized from .sln file", Is.True);
+        Assert.That(health.LoadedProjects > 0, "At least one project should be loaded from solution", Is.True);
+        Assert.That(health.TotalFiles > 0, "Should have source files", Is.True);
 
         // The key fix: error count should be low, not 15k
-        Assert.True(health.ErrorCount < 50,
-            $"Error count should be low (< 50), but got {health.ErrorCount}. " +
+        Assert.That(health.ErrorCount < 50,
+            $"Error count should be low (< 50, Is.True), but got {health.ErrorCount}. " +
             $"Regression test: Previously passing .sln file caused fallback to AdhocWorkspace with 15k errors.");
 
         workspace.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithCsprojFile_LoadsSuccessfully()
     {
         // Arrange
@@ -125,11 +125,11 @@ public class RoslynWorkspaceInitializationTests
         var health = workspace.GetHealth();
 
         // Assert
-        Assert.True(health.IsInitialized, "Workspace should be initialized from .csproj file");
-        Assert.True(health.LoadedProjects > 0, "At least one project should be loaded");
-        Assert.True(health.TotalFiles > 0, "Should have source files");
-        Assert.True(health.ErrorCount < 50,
-            $"Error count should be low (< 50), but got {health.ErrorCount}");
+        Assert.That(health.IsInitialized, "Workspace should be initialized from .csproj file", Is.True);
+        Assert.That(health.LoadedProjects > 0, "At least one project should be loaded", Is.True);
+        Assert.That(health.TotalFiles > 0, "Should have source files", Is.True);
+        Assert.That(health.ErrorCount < 50,
+            $"Error count should be low (< 50, Is.True), but got {health.ErrorCount}");
 
         workspace.Dispose();
     }

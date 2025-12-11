@@ -567,7 +567,7 @@ public class AnalyzerHostTests : FileServiceTestBase
         var result = _analyzerHost.GetAnalyzer(analyzerId);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         if (result == null)
             throw new InvalidOperationException("Result should not be null");
         Assert.That(result.Id, Is.EqualTo(analyzerId));

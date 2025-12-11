@@ -1,4 +1,3 @@
-using FluentAssertions;
 using MCPsharp.Models.Database;
 using MCPsharp.Services.Database;
 using NUnit.Framework;
@@ -35,8 +34,8 @@ public class ProjectDatabaseTests
         await db.OpenInMemoryAsync();
 
         // Assert
-        db.IsOpen.Should().BeTrue();
-        db.DatabasePath.Should().Be(":memory:");
+        Assert.That(db.IsOpen, Is.True);
+        Assert.That(db.DatabasePath, Is.EqualTo(":memory:"));
 
         await db.DisposeAsync();
     }
@@ -55,9 +54,9 @@ public class ProjectDatabaseTests
             await db.OpenOrCreateAsync(tempPath);
 
             // Assert
-            db.IsOpen.Should().BeTrue();
+            Assert.That(db.IsOpen, Is.True);
             db.DatabasePath.Should().NotBeNullOrEmpty();
-            File.Exists(db.DatabasePath!).Should().BeTrue();
+            File.Exists(db.DatabasePath!), Is.True);
 
             await db.CloseAsync();
         }
@@ -80,7 +79,7 @@ public class ProjectDatabaseTests
         await db.CloseAsync();
 
         // Assert
-        db.IsOpen.Should().BeFalse();
+        Assert.That(db.IsOpen, Is.False);
 
         await db.DisposeAsync();
     }
@@ -96,7 +95,7 @@ public class ProjectDatabaseTests
         await db.OpenInMemoryAsync(); // Should close first connection
 
         // Assert
-        db.IsOpen.Should().BeTrue();
+        Assert.That(db.IsOpen, Is.True);
 
         await db.DisposeAsync();
     }
@@ -112,8 +111,8 @@ public class ProjectDatabaseTests
         var path2 = ProjectDatabase.GetDatabasePath(projectPath);
 
         // Assert
-        path1.Should().Be(path2);
-        path1.Should().EndWith(".db");
+        Assert.That(path1, Is.EqualTo(path2));
+        Assert.That(path1, Does.EndWith(".db"));
     }
 
     [Test]
@@ -127,7 +126,7 @@ public class ProjectDatabaseTests
         var hash2 = ProjectDatabase.ComputeProjectHash(projectPath);
 
         // Assert
-        hash1.Should().Be(hash2);
+        Assert.That(hash1, Is.EqualTo(hash2));
         hash1.Should().HaveLength(16);
         hash1.Should().MatchRegex("^[a-f0-9]+$");
     }
@@ -143,12 +142,12 @@ public class ProjectDatabaseTests
         var projectId = await _db.GetOrCreateProjectAsync("/test/path", "TestProject");
 
         // Assert
-        projectId.Should().BeGreaterThan(0);
+        Assert.That(projectId, Is.GreaterThan(0));
 
         var project = await _db.GetProjectByIdAsync(projectId);
-        project.Should().NotBeNull();
-        project!.Name.Should().Be("TestProject");
-        project.RootPath.Should().Be("/test/path");
+        Assert.That(project, Is.Not.Null);
+        Assert.That(project!.Name, Is.EqualTo("TestProject"));
+        Assert.That(project.RootPath, Is.EqualTo("/test/path"));
     }
 
     [Test]
@@ -161,7 +160,7 @@ public class ProjectDatabaseTests
         var projectId2 = await _db.GetOrCreateProjectAsync("/test/path", "TestProject");
 
         // Assert
-        projectId1.Should().Be(projectId2);
+        Assert.That(projectId1, Is.EqualTo(projectId2));
     }
 
     [Test]
@@ -189,7 +188,7 @@ public class ProjectDatabaseTests
         var project = await _db.GetProjectByIdAsync(999999);
 
         // Assert
-        project.Should().BeNull();
+        Assert.That(project, Is.Null);
     }
 
     [Test]
@@ -202,9 +201,9 @@ public class ProjectDatabaseTests
         var project = await _db.GetProjectByPathAsync("/test/path");
 
         // Assert
-        project.Should().NotBeNull();
-        project!.Id.Should().Be(projectId);
-        project.Name.Should().Be("TestProject");
+        Assert.That(project, Is.Not.Null);
+        Assert.That(project!.Id, Is.EqualTo(projectId));
+        Assert.That(project.Name, Is.EqualTo("TestProject"));
     }
 
     [Test]
@@ -218,7 +217,7 @@ public class ProjectDatabaseTests
 
         // Assert
         var project = await _db.GetProjectByIdAsync(projectId);
-        project!.SolutionCount.Should().Be(5);
+        Assert.That(project!.SolutionCount, Is.EqualTo(5));
     }
 
     [Test]
@@ -232,9 +231,9 @@ public class ProjectDatabaseTests
 
         // Assert
         var project = await _db.GetProjectByIdAsync(projectId);
-        project!.SolutionCount.Should().Be(2);
-        project.ProjectCount.Should().Be(10);
-        project.FileCount.Should().Be(100);
+        Assert.That(project!.SolutionCount, Is.EqualTo(2));
+        Assert.That(project.ProjectCount, Is.EqualTo(10));
+        Assert.That(project.FileCount, Is.EqualTo(100));
     }
 
     [Test]
@@ -248,7 +247,7 @@ public class ProjectDatabaseTests
 
         // Assert
         var result = await _db.GetProjectStructureAsync(projectId, "test-key");
-        result.Should().Be("{\"value\":42}");
+        Assert.That(result, Is.EqualTo("{\"value\":42}"));
     }
 
     [Test]
@@ -263,7 +262,7 @@ public class ProjectDatabaseTests
 
         // Assert
         var result = await _db.GetProjectStructureAsync(projectId, "test-key");
-        result.Should().Be("{\"value\":100}");
+        Assert.That(result, Is.EqualTo("{\"value\":100}"));
     }
 
     [Test]
@@ -276,7 +275,7 @@ public class ProjectDatabaseTests
         var result = await _db.GetProjectStructureAsync(projectId, "nonexistent-key");
 
         // Assert
-        result.Should().BeNull();
+        Assert.That(result, Is.Null);
     }
 
     [Test]
@@ -292,8 +291,8 @@ public class ProjectDatabaseTests
         var keys = await _db.GetProjectStructureKeysAsync(projectId);
 
         // Assert
-        keys.Should().HaveCount(3);
-        keys.Should().Contain(new[] { "key1", "key2", "key3" });
+        Assert.That(keys, Has.Count.EqualTo(3));
+        Assert.That(keys, Does.Contain(new[] { "key1", "key2", "key3" }));
     }
 
     [Test]
@@ -307,7 +306,7 @@ public class ProjectDatabaseTests
 
         // Assert
         var project = await _db.GetProjectByIdAsync(projectId);
-        project.Should().BeNull();
+        Assert.That(project, Is.Null);
     }
 
     [Test]
@@ -321,7 +320,7 @@ public class ProjectDatabaseTests
 
         // Assert
         stats.Should().ContainKey("projects");
-        stats["projects"].Should().Be(1);
+        stats["projects"], Is.EqualTo(1));
         stats.Should().ContainKey("files");
         stats.Should().ContainKey("symbols");
         stats.Should().ContainKey("symbol_references");
@@ -341,14 +340,14 @@ public class ProjectDatabaseTests
         var fileId = await _db.UpsertFileAsync(projectId, "Program.cs", "hash123", 1000, "csharp");
 
         // Assert
-        fileId.Should().BeGreaterThan(0);
+        Assert.That(fileId, Is.GreaterThan(0));
 
         var file = await _db.GetFileAsync(projectId, "Program.cs");
-        file.Should().NotBeNull();
-        file!.RelativePath.Should().Be("Program.cs");
-        file.ContentHash.Should().Be("hash123");
-        file.SizeBytes.Should().Be(1000);
-        file.Language.Should().Be("csharp");
+        Assert.That(file, Is.Not.Null);
+        Assert.That(file!.RelativePath, Is.EqualTo("Program.cs"));
+        Assert.That(file.ContentHash, Is.EqualTo("hash123"));
+        Assert.That(file.SizeBytes, Is.EqualTo(1000));
+        Assert.That(file.Language, Is.EqualTo("csharp"));
     }
 
     [Test]
@@ -362,11 +361,11 @@ public class ProjectDatabaseTests
         var fileId2 = await _db.UpsertFileAsync(projectId, "Program.cs", "hash456", 2000, "csharp");
 
         // Assert
-        fileId1.Should().Be(fileId2);
+        Assert.That(fileId1, Is.EqualTo(fileId2));
 
         var file = await _db.GetFileAsync(projectId, "Program.cs");
-        file!.ContentHash.Should().Be("hash456");
-        file.SizeBytes.Should().Be(2000);
+        Assert.That(file!.ContentHash, Is.EqualTo("hash456"));
+        Assert.That(file.SizeBytes, Is.EqualTo(2000));
     }
 
     [Test]
@@ -379,7 +378,7 @@ public class ProjectDatabaseTests
         var file = await _db.GetFileAsync(projectId, "NonExistent.cs");
 
         // Assert
-        file.Should().BeNull();
+        Assert.That(file, Is.Null);
     }
 
     [Test]
@@ -395,7 +394,7 @@ public class ProjectDatabaseTests
         var files = await _db.GetAllFilesAsync(projectId);
 
         // Assert
-        files.Should().HaveCount(3);
+        Assert.That(files, Has.Count.EqualTo(3));
         files.Should().OnlyContain(f => f.ProjectId == projectId);
     }
 
@@ -417,8 +416,8 @@ public class ProjectDatabaseTests
         var staleFiles = await _db.GetStaleFilesAsync(projectId, currentHashes);
 
         // Assert
-        staleFiles.Should().HaveCount(1);
-        staleFiles.First().RelativePath.Should().Be("File2.cs");
+        Assert.That(staleFiles, Has.Count.EqualTo(1));
+        staleFiles.First().RelativePath, Is.EqualTo("File2.cs"));
     }
 
     [Test]
@@ -438,8 +437,8 @@ public class ProjectDatabaseTests
         var staleFiles = await _db.GetStaleFilesAsync(projectId, currentHashes);
 
         // Assert
-        staleFiles.Should().HaveCount(1);
-        staleFiles.First().RelativePath.Should().Be("File2.cs");
+        Assert.That(staleFiles, Has.Count.EqualTo(1));
+        staleFiles.First().RelativePath, Is.EqualTo("File2.cs"));
     }
 
     [Test]
@@ -456,8 +455,8 @@ public class ProjectDatabaseTests
         var deletedFiles = await _db.GetDeletedFilesAsync(projectId, currentPaths);
 
         // Assert
-        deletedFiles.Should().HaveCount(1);
-        deletedFiles.First().RelativePath.Should().Be("File2.cs");
+        Assert.That(deletedFiles, Has.Count.EqualTo(1));
+        deletedFiles.First().RelativePath, Is.EqualTo("File2.cs"));
     }
 
     [Test]
@@ -472,7 +471,7 @@ public class ProjectDatabaseTests
 
         // Assert
         var file = await _db.GetFileAsync(projectId, "File1.cs");
-        file.Should().BeNull();
+        Assert.That(file, Is.Null);
     }
 
     [Test]
@@ -487,7 +486,7 @@ public class ProjectDatabaseTests
 
         // Assert
         var file = await _db.GetFileAsync(projectId, "File1.cs");
-        file.Should().BeNull();
+        Assert.That(file, Is.Null);
     }
 
     [Test]
@@ -502,7 +501,7 @@ public class ProjectDatabaseTests
         var count = await _db.GetFileCountAsync(projectId);
 
         // Assert
-        count.Should().Be(2);
+        Assert.That(count, Is.EqualTo(2));
     }
 
     [Test]
@@ -522,7 +521,7 @@ public class ProjectDatabaseTests
 
         // Assert
         var allFiles = await _db.GetAllFilesAsync(projectId);
-        allFiles.Should().HaveCount(3);
+        Assert.That(allFiles, Has.Count.EqualTo(3));
     }
 
     [Test]
@@ -548,7 +547,7 @@ public class ProjectDatabaseTests
         await _db.UpsertFilesBatchAsync(projectId, filesUpdate);
 
         var countAfter = await _db.GetFileCountAsync(projectId);
-        countAfter.Should().Be(3); // 3 total files
+        Assert.That(countAfter, Is.EqualTo(3)); // 3 total files
     }
 
     #endregion
@@ -581,12 +580,12 @@ public class ProjectDatabaseTests
         var symbolId = await _db.UpsertSymbolAsync(symbol);
 
         // Assert
-        symbolId.Should().BeGreaterThan(0);
+        Assert.That(symbolId, Is.GreaterThan(0));
 
         var retrievedSymbol = await _db.GetSymbolByIdAsync(symbolId);
-        retrievedSymbol.Should().NotBeNull();
-        retrievedSymbol!.Name.Should().Be("TestClass");
-        retrievedSymbol.Kind.Should().Be("Class");
+        Assert.That(retrievedSymbol, Is.Not.Null);
+        Assert.That(retrievedSymbol!.Name, Is.EqualTo("TestClass"));
+        Assert.That(retrievedSymbol.Kind, Is.EqualTo("Class"));
     }
 
     [Test]
@@ -604,7 +603,7 @@ public class ProjectDatabaseTests
         var symbols = await _db.FindSymbolsByNameAsync("Test");
 
         // Assert
-        symbols.Should().HaveCount(2);
+        Assert.That(symbols, Has.Count.EqualTo(2));
         symbols.Should().OnlyContain(s => s.Name.Contains("Test"));
     }
 
@@ -622,8 +621,8 @@ public class ProjectDatabaseTests
         var symbols = await _db.FindSymbolsByNameAsync("Test", kind: "Class");
 
         // Assert
-        symbols.Should().HaveCount(1);
-        symbols.First().Name.Should().Be("TestClass");
+        Assert.That(symbols, Has.Count.EqualTo(1));
+        symbols.First().Name, Is.EqualTo("TestClass"));
     }
 
     [Test]
@@ -640,8 +639,8 @@ public class ProjectDatabaseTests
         var symbols = await _db.FindSymbolsByExactNameAsync("TestClass");
 
         // Assert
-        symbols.Should().HaveCount(1);
-        symbols.First().Name.Should().Be("TestClass");
+        Assert.That(symbols, Has.Count.EqualTo(1));
+        symbols.First().Name, Is.EqualTo("TestClass"));
     }
 
     [Test]
@@ -659,11 +658,11 @@ public class ProjectDatabaseTests
         var symbols = await _db.GetSymbolsInFileAsync(fileId);
 
         // Assert
-        symbols.Should().HaveCount(3);
+        Assert.That(symbols, Has.Count.EqualTo(3));
         // Should be ordered by line, column
-        symbols[0].Line.Should().Be(1);
-        symbols[1].Line.Should().Be(5);
-        symbols[2].Line.Should().Be(10);
+        symbols[0].Line, Is.EqualTo(1));
+        symbols[1].Line, Is.EqualTo(5));
+        symbols[2].Line, Is.EqualTo(10));
     }
 
     [Test]
@@ -684,8 +683,8 @@ public class ProjectDatabaseTests
             namespaces: new[] { "Test.Namespace" });
 
         // Assert
-        symbols.Should().HaveCount(1);
-        symbols.First().Name.Should().Be("TestClass");
+        Assert.That(symbols, Has.Count.EqualTo(1));
+        symbols.First().Name, Is.EqualTo("TestClass"));
     }
 
     [Test]
@@ -702,7 +701,7 @@ public class ProjectDatabaseTests
         var symbols = await _db.SearchSymbolsAsync();
 
         // Assert
-        symbols.Should().HaveCount(2);
+        Assert.That(symbols, Has.Count.EqualTo(2));
     }
 
     [Test]
@@ -721,9 +720,9 @@ public class ProjectDatabaseTests
 
         // Assert
         counts.Should().ContainKey("Class");
-        counts["Class"].Should().Be(2);
+        counts["Class"], Is.EqualTo(2));
         counts.Should().ContainKey("Method");
-        counts["Method"].Should().Be(1);
+        counts["Method"], Is.EqualTo(1));
     }
 
     [Test]
@@ -741,7 +740,7 @@ public class ProjectDatabaseTests
 
         // Assert
         var symbols = await _db.GetSymbolsInFileAsync(fileId);
-        symbols.Should().BeEmpty();
+        Assert.That(symbols, Is.Empty);
     }
 
     [Test]
@@ -763,7 +762,7 @@ public class ProjectDatabaseTests
 
         // Assert
         var allSymbols = await _db.GetSymbolsInFileAsync(fileId);
-        allSymbols.Should().HaveCount(3);
+        Assert.That(allSymbols, Has.Count.EqualTo(3));
     }
 
     #endregion
@@ -793,7 +792,7 @@ public class ProjectDatabaseTests
         var refId = await _db.UpsertReferenceAsync(reference);
 
         // Assert
-        refId.Should().BeGreaterThan(0);
+        Assert.That(refId, Is.GreaterThan(0));
     }
 
     [Test]
@@ -819,8 +818,8 @@ public class ProjectDatabaseTests
         var callers = await _db.FindCallersAsync(calleeId);
 
         // Assert
-        callers.Should().HaveCount(1);
-        callers.First().Caller.Name.Should().Be("Caller");
+        Assert.That(callers, Has.Count.EqualTo(1));
+        callers.First().Caller.Name, Is.EqualTo("Caller"));
     }
 
     [Test]
@@ -846,8 +845,8 @@ public class ProjectDatabaseTests
         var callees = await _db.FindCalleesAsync(callerId);
 
         // Assert
-        callees.Should().HaveCount(1);
-        callees.First().Callee.Name.Should().Be("Callee");
+        Assert.That(callees, Has.Count.EqualTo(1));
+        callees.First().Callee.Name, Is.EqualTo("Callee"));
     }
 
     [Test]
@@ -868,9 +867,9 @@ public class ProjectDatabaseTests
         var chain = await _db.GetCallChainAsync(cId, ProjectDatabase.CallChainDirection.Backward, maxDepth: 10);
 
         // Assert
-        chain.Should().HaveCount(2);
-        chain.Should().Contain(s => s.Name == "MethodA");
-        chain.Should().Contain(s => s.Name == "MethodB");
+        Assert.That(chain, Has.Count.EqualTo(2));
+        Assert.That(chain, Does.Contain(s => s.Name == "MethodA"));
+        Assert.That(chain, Does.Contain(s => s.Name == "MethodB"));
     }
 
     [Test]
@@ -891,9 +890,9 @@ public class ProjectDatabaseTests
         var chain = await _db.GetCallChainAsync(aId, ProjectDatabase.CallChainDirection.Forward, maxDepth: 10);
 
         // Assert
-        chain.Should().HaveCount(2);
-        chain.Should().Contain(s => s.Name == "MethodB");
-        chain.Should().Contain(s => s.Name == "MethodC");
+        Assert.That(chain, Has.Count.EqualTo(2));
+        Assert.That(chain, Does.Contain(s => s.Name == "MethodB"));
+        Assert.That(chain, Does.Contain(s => s.Name == "MethodC"));
     }
 
     [Test]
@@ -916,9 +915,9 @@ public class ProjectDatabaseTests
         var chain = await _db.GetCallChainAsync(aId, ProjectDatabase.CallChainDirection.Forward, maxDepth: 2);
 
         // Assert - Should only find B and C, not D
-        chain.Should().HaveCount(2);
-        chain.Should().Contain(s => s.Name == "MethodB");
-        chain.Should().Contain(s => s.Name == "MethodC");
+        Assert.That(chain, Has.Count.EqualTo(2));
+        Assert.That(chain, Does.Contain(s => s.Name == "MethodB"));
+        Assert.That(chain, Does.Contain(s => s.Name == "MethodC"));
         chain.Should().NotContain(s => s.Name == "MethodD");
     }
 
@@ -940,7 +939,7 @@ public class ProjectDatabaseTests
         var references = await _db.GetReferencesToSymbolAsync(calleeId);
 
         // Assert
-        references.Should().HaveCount(2);
+        Assert.That(references, Has.Count.EqualTo(2));
     }
 
     [Test]
@@ -962,9 +961,9 @@ public class ProjectDatabaseTests
 
         // Assert
         counts.Should().ContainKey("Call");
-        counts["Call"].Should().Be(2);
+        counts["Call"], Is.EqualTo(2));
         counts.Should().ContainKey("TypeUsage");
-        counts["TypeUsage"].Should().Be(1);
+        counts["TypeUsage"], Is.EqualTo(1));
     }
 
     [Test]
@@ -984,7 +983,7 @@ public class ProjectDatabaseTests
 
         // Assert
         var references = await _db.GetReferencesToSymbolAsync(symbol2Id);
-        references.Should().BeEmpty();
+        Assert.That(references, Is.Empty);
     }
 
     [Test]
@@ -1009,7 +1008,7 @@ public class ProjectDatabaseTests
 
         // Assert
         var callees = await _db.FindCalleesAsync(symbol1Id);
-        callees.Should().HaveCount(2);
+        Assert.That(callees, Has.Count.EqualTo(2));
     }
 
     #endregion
@@ -1026,7 +1025,7 @@ public class ProjectDatabaseTests
         var files = await _db.GetAllFilesAsync(projectId);
 
         // Assert
-        files.Should().BeEmpty();
+        Assert.That(files, Is.Empty);
     }
 
     [Test]
@@ -1040,7 +1039,7 @@ public class ProjectDatabaseTests
         var symbols = await _db.GetSymbolsInFileAsync(fileId);
 
         // Assert
-        symbols.Should().BeEmpty();
+        Assert.That(symbols, Is.Empty);
     }
 
     [Test]
@@ -1055,7 +1054,7 @@ public class ProjectDatabaseTests
         var callers = await _db.FindCallersAsync(symbolId);
 
         // Assert
-        callers.Should().BeEmpty();
+        Assert.That(callers, Is.Empty);
     }
 
     [Test]
@@ -1070,7 +1069,7 @@ public class ProjectDatabaseTests
         var chain = await _db.GetCallChainAsync(symbolId, ProjectDatabase.CallChainDirection.Forward);
 
         // Assert
-        chain.Should().BeEmpty();
+        Assert.That(chain, Is.Empty);
     }
 
     [Test]
@@ -1091,7 +1090,7 @@ public class ProjectDatabaseTests
 
         // Assert - transaction should have rolled back
         var fileCountAfter = await _db.GetFileCountAsync(projectId);
-        fileCountAfter.Should().Be(fileCountBefore);
+        Assert.That(fileCountAfter, Is.EqualTo(fileCountBefore));
     }
 
     [Test]
@@ -1106,9 +1105,9 @@ public class ProjectDatabaseTests
 
         // Assert
         var project = await _db.GetProjectByIdAsync(projectId);
-        project!.SolutionCount.Should().Be(7);
-        project.ProjectCount.Should().Be(10); // unchanged
-        project.FileCount.Should().Be(20); // unchanged
+        Assert.That(project!.SolutionCount, Is.EqualTo(7));
+        Assert.That(project.ProjectCount, Is.EqualTo(10)); // unchanged
+        Assert.That(project.FileCount, Is.EqualTo(20)); // unchanged
     }
 
     [Test]
@@ -1133,7 +1132,7 @@ public class ProjectDatabaseTests
             namespaces: Array.Empty<string>());
 
         // Assert
-        symbols.Should().HaveCount(1);
+        Assert.That(symbols, Has.Count.EqualTo(1));
     }
 
     #endregion

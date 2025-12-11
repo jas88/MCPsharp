@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Tests.TestFixtures;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 
@@ -130,43 +130,43 @@ public class DataEntity
         }
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallChains_Backward_ShouldFindCallers()
     {
         // Act
         var result = await _callChain.FindCallChainsAsync("ProcessData", "Service", 5);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(CallDirection.Backward, result.Direction);
-        Assert.True(result.TotalPaths >= 1);
-        Assert.All(result.Paths, p => Assert.True(p.Steps.Count > 0));
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Direction, Is.EqualTo(CallDirection.Backward));
+        Assert.That(result.TotalPaths >= 1, Is.True);
+        Assert.All(result.Paths, p => Assert.That(p.Steps.Count > 0, Is.True));
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallChains_Forward_ShouldFindCalledMethods()
     {
         // Act
         var result = await _callChain.FindForwardCallChainsAsync("ProcessData", "Service", 5);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(CallDirection.Forward, result.Direction);
-        Assert.True(result.TotalPaths >= 1);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Direction, Is.EqualTo(CallDirection.Forward));
+        Assert.That(result.TotalPaths >= 1, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallChains_WithMaxDepth_ShouldLimitDepth()
     {
         // Act
         var result = await _callChain.FindCallChainsAsync("ProcessData", "Service", 2);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.All(result.Paths, p => Assert.True(p.Steps.Count <= 2));
+        Assert.That(result, Is.Not.Null);
+        Assert.All(result.Paths, p => Assert.That(p.Steps.Count <= 2, Is.True));
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallChainsBetween_ShouldFindPathsBetweenMethods()
     {
         // Arrange
@@ -190,11 +190,11 @@ public class DataEntity
         var paths = await _callChain.FindCallChainsBetweenAsync(fromMethod, toMethod, 10);
 
         // Assert
-        Assert.NotNull(paths);
+        Assert.That(paths, Is.Not.Null);
         // This might return empty paths in our simple test setup
     }
 
-    [Fact]
+    [Test]
     public async Task FindRecursiveCallChains_ShouldDetectRecursion()
     {
         // Add a recursive method to test
@@ -219,36 +219,36 @@ public class RecursiveClass
         var result = await _callChain.FindRecursiveCallChainsAsync("RecursiveMethod", "RecursiveClass", 10);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         // Should find recursive calls if they exist
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeCallGraph_ShouldReturnCallGraph()
     {
         // Act
         var result = await _callChain.AnalyzeCallGraphAsync("Service", null);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Methods.Count >= 1);
-        Assert.NotNull(result.CallGraph);
-        Assert.NotNull(result.ReverseCallGraph);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Methods.Count >= 1, Is.True);
+        Assert.That(result.CallGraph, Is.Not.Null);
+        Assert.That(result.ReverseCallGraph, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeCallGraph_ForNamespace_ShouldAnalyzeNamespace()
     {
         // Act
         var result = await _callChain.AnalyzeCallGraphAsync(null, "MCPsharp.Tests.TestFixtures");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Methods.Count >= 1);
-        Assert.Equal("MCPsharp.Tests.TestFixtures", result.Scope);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Methods.Count >= 1, Is.True);
+        Assert.That(result.Scope, Is.EqualTo("MCPsharp.Tests.TestFixtures"));
     }
 
-    [Fact]
+    [Test]
     public async Task FindCircularDependencies_ShouldDetectCycles()
     {
         // Add circular dependency scenario
@@ -276,24 +276,24 @@ public class B
         var result = await _callChain.FindCircularDependenciesAsync("MCPsharp.Tests.TestFixtures");
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         // Should detect circular dependencies if they exist
     }
 
-    [Fact]
+    [Test]
     public async Task FindReachableMethods_ShouldFindReachableMethods()
     {
         // Act
         var result = await _callChain.FindReachableMethodsAsync("HandleRequest", "Controller", 10);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("HandleRequest", result.StartMethod.Name);
-        Assert.True(result.ReachableMethods.Count >= 1);
-        Assert.True(result.MethodsByDepth.Count >= 1);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.StartMethod.Name, Is.EqualTo("HandleRequest"));
+        Assert.That(result.ReachableMethods.Count >= 1, Is.True);
+        Assert.That(result.MethodsByDepth.Count >= 1, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task FindShortestPath_ShouldReturnShortestPath()
     {
         // Arrange
@@ -320,17 +320,17 @@ public class B
         // May return null if no path exists in our test setup
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallChains_WithNonExistentMethod_ShouldReturnNull()
     {
         // Act
         var result = await _callChain.FindCallChainsAsync("NonExistentMethod");
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void CallChainPath_ShouldCalculateCorrectProperties()
     {
         // Arrange
@@ -355,13 +355,13 @@ public class B
         };
 
         // Assert
-        Assert.Equal(1, path.Length);
-        Assert.Equal("Method1", path.StartMethod?.Name);
-        Assert.Equal("Method2", path.EndMethod?.Name);
-        Assert.False(path.IsRecursive);
+        Assert.That(path.Length, Is.EqualTo(1));
+        Assert.That(path.StartMethod?.Name, Is.EqualTo("Method1"));
+        Assert.That(path.EndMethod?.Name, Is.EqualTo("Method2"));
+        Assert.That(path.IsRecursive, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void CallChainPath_WithRecursiveCall_ShouldBeMarkedRecursive()
     {
         // Arrange
@@ -395,10 +395,10 @@ public class B
         };
 
         // Assert
-        Assert.True(path.IsRecursive);
+        Assert.That(path.IsRecursive, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void CircularDependency_ShouldGenerateCorrectDescription()
     {
         // Arrange
@@ -445,9 +445,9 @@ public class B
         var description = circularDependency.GetDescription();
 
         // Assert
-        Assert.Contains("Circular dependency", description);
-        Assert.Contains("MethodA", description);
-        Assert.Contains("MethodB", description);
+        Assert.That(description, Does.Contain("Circular dependency"));
+        Assert.That(description, Does.Contain("MethodA"));
+        Assert.That(description, Does.Contain("MethodB"));
     }
 
     public void Dispose()

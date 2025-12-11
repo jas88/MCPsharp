@@ -1,4 +1,4 @@
-using Xunit;
+using NUnit.Framework;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
@@ -20,30 +20,30 @@ public class AsyncAwaitPatternIntegrationTests
         _loggerFactory = NullLoggerFactory.Instance;
     }
 
-    [Fact]
+    [Test]
     public void Analyzer_CanBeCreated()
     {
         // Arrange & Act
         var analyzer = new AsyncAwaitPatternAnalyzer();
 
         // Assert
-        Assert.NotNull(analyzer);
-        Assert.Equal("MCP001", AsyncAwaitPatternAnalyzer.DiagnosticId);
+        Assert.That(analyzer, Is.Not.Null);
+        Assert.That(AsyncAwaitPatternAnalyzer.DiagnosticId, Is.EqualTo("MCP001"));
         Assert.Single(analyzer.SupportedDiagnostics);
     }
 
-    [Fact]
+    [Test]
     public void Fixer_CanBeCreated()
     {
         // Arrange & Act
         var fixer = new AsyncAwaitPatternFixer();
 
         // Assert
-        Assert.NotNull(fixer);
-        Assert.Contains(AsyncAwaitPatternAnalyzer.DiagnosticId, fixer.FixableDiagnosticIds);
+        Assert.That(fixer, Is.Not.Null);
+        Assert.That(fixer.FixableDiagnosticIds, Does.Contain(AsyncAwaitPatternAnalyzer.DiagnosticId));
     }
 
-    [Fact]
+    [Test]
     public void Provider_CanBeCreated()
     {
         // Arrange
@@ -53,15 +53,15 @@ public class AsyncAwaitPatternIntegrationTests
         var provider = new AsyncAwaitPatternProvider(logger);
 
         // Assert
-        Assert.NotNull(provider);
-        Assert.Equal("AsyncAwaitPattern", provider.Id);
-        Assert.Equal(FixProfile.Balanced, provider.Profile);
-        Assert.True(provider.IsFullyAutomated);
-        Assert.NotNull(provider.GetAnalyzer());
-        Assert.NotNull(provider.GetCodeFixProvider());
+        Assert.That(provider, Is.Not.Null);
+        Assert.That(provider.Id, Is.EqualTo("AsyncAwaitPattern"));
+        Assert.That(provider.Profile, Is.EqualTo(FixProfile.Balanced));
+        Assert.That(provider.IsFullyAutomated, Is.True);
+        Assert.That(provider.GetAnalyzer(, Is.Not.Null));
+        Assert.That(provider.GetCodeFixProvider(, Is.Not.Null));
     }
 
-    [Fact]
+    [Test]
     public void Registry_CanBeCreated()
     {
         // Arrange
@@ -71,14 +71,14 @@ public class AsyncAwaitPatternIntegrationTests
         var registry = new BuiltInCodeFixRegistry(logger, _loggerFactory);
 
         // Assert
-        Assert.NotNull(registry);
+        Assert.That(registry, Is.Not.Null);
 
         var providers = registry.GetAllProviders();
-        Assert.NotEmpty(providers);
-        Assert.Contains(providers, p => p.Id == "AsyncAwaitPattern");
+        Assert.That(providers, Is.Not.Empty);
+        Assert.That(p => p.Id == "AsyncAwaitPattern", Does.Contain(providers));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProviderById_ReturnsCorrectProvider()
     {
         // Arrange
@@ -89,11 +89,11 @@ public class AsyncAwaitPatternIntegrationTests
         var provider = registry.GetProvider("AsyncAwaitPattern");
 
         // Assert
-        Assert.NotNull(provider);
-        Assert.Equal("AsyncAwaitPattern", provider!.Id);
+        Assert.That(provider, Is.Not.Null);
+        Assert.That(provider!.Id, Is.EqualTo("AsyncAwaitPattern"));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProvidersByProfile_ReturnsBalancedProviders()
     {
         // Arrange
@@ -104,11 +104,11 @@ public class AsyncAwaitPatternIntegrationTests
         var providers = registry.GetProvidersByProfile(FixProfile.Balanced);
 
         // Assert
-        Assert.NotEmpty(providers);
-        Assert.Contains(providers, p => p.Id == "AsyncAwaitPattern");
+        Assert.That(providers, Is.Not.Empty);
+        Assert.That(p => p.Id == "AsyncAwaitPattern", Does.Contain(providers));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetFullyAutomatedProviders_IncludesAsyncAwait()
     {
         // Arrange
@@ -119,11 +119,11 @@ public class AsyncAwaitPatternIntegrationTests
         var providers = registry.GetFullyAutomatedProviders();
 
         // Assert
-        Assert.NotEmpty(providers);
-        Assert.Contains(providers, p => p.Id == "AsyncAwaitPattern");
+        Assert.That(providers, Is.Not.Empty);
+        Assert.That(p => p.Id == "AsyncAwaitPattern", Does.Contain(providers));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetStatistics_ReturnsCorrectStats()
     {
         // Arrange
@@ -134,63 +134,63 @@ public class AsyncAwaitPatternIntegrationTests
         var stats = registry.GetStatistics();
 
         // Assert
-        Assert.True(stats.TotalProviders >= 1);
-        Assert.True(stats.FullyAutomatedCount >= 1);
-        Assert.True(stats.TotalFixableDiagnostics >= 1);
-        Assert.Contains(FixProfile.Balanced, stats.ProvidersByProfile.Keys);
+        Assert.That(stats.TotalProviders >= 1, Is.True);
+        Assert.That(stats.FullyAutomatedCount >= 1, Is.True);
+        Assert.That(stats.TotalFixableDiagnostics >= 1, Is.True);
+        Assert.That(stats.ProvidersByProfile.Keys, Does.Contain(FixProfile.Balanced));
     }
 
-    [Fact]
+    [Test]
     public void FixConfiguration_DefaultValues_AreCorrect()
     {
         // Arrange & Act
         var config = new FixConfiguration();
 
         // Assert
-        Assert.Equal(FixProfile.Balanced, config.Profile);
-        Assert.True(config.RequireUserApproval);
-        Assert.True(config.CreateBackup);
-        Assert.True(config.ValidateAfterApply);
-        Assert.False(config.StopOnFirstError);
+        Assert.That(config.Profile, Is.EqualTo(FixProfile.Balanced));
+        Assert.That(config.RequireUserApproval, Is.True);
+        Assert.That(config.CreateBackup, Is.True);
+        Assert.That(config.ValidateAfterApply, Is.True);
+        Assert.That(config.StopOnFirstError, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void FixConfiguration_ConservativeDefault_IsCorrect()
     {
         // Arrange & Act
         var config = FixConfiguration.ConservativeDefault;
 
         // Assert
-        Assert.Equal(FixProfile.Conservative, config.Profile);
-        Assert.False(config.RequireUserApproval); // Conservative is safe enough for auto-apply
-        Assert.True(config.CreateBackup);
-        Assert.True(config.ValidateAfterApply);
+        Assert.That(config.Profile, Is.EqualTo(FixProfile.Conservative));
+        Assert.That(config.RequireUserApproval, Is.False); // Conservative is safe enough for auto-apply
+        Assert.That(config.CreateBackup, Is.True);
+        Assert.That(config.ValidateAfterApply, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void FixConfiguration_BalancedDefault_IsCorrect()
     {
         // Arrange & Act
         var config = FixConfiguration.BalancedDefault;
 
         // Assert
-        Assert.Equal(FixProfile.Balanced, config.Profile);
-        Assert.True(config.RequireUserApproval);
-        Assert.True(config.CreateBackup);
-        Assert.True(config.ValidateAfterApply);
+        Assert.That(config.Profile, Is.EqualTo(FixProfile.Balanced));
+        Assert.That(config.RequireUserApproval, Is.True);
+        Assert.That(config.CreateBackup, Is.True);
+        Assert.That(config.ValidateAfterApply, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void FixConfiguration_AggressiveDefault_IsCorrect()
     {
         // Arrange & Act
         var config = FixConfiguration.AggressiveDefault;
 
         // Assert
-        Assert.Equal(FixProfile.Aggressive, config.Profile);
-        Assert.True(config.RequireUserApproval);
-        Assert.True(config.CreateBackup);
-        Assert.True(config.ValidateAfterApply);
-        Assert.False(config.StopOnFirstError);
+        Assert.That(config.Profile, Is.EqualTo(FixProfile.Aggressive));
+        Assert.That(config.RequireUserApproval, Is.True);
+        Assert.That(config.CreateBackup, Is.True);
+        Assert.That(config.ValidateAfterApply, Is.True);
+        Assert.That(config.StopOnFirstError, Is.False);
     }
 }

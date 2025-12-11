@@ -1,6 +1,5 @@
-using FluentAssertions;
 using MCPsharp.Services;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 
@@ -26,7 +25,7 @@ public class ProjectContextManagerTests : IDisposable
         }
     }
 
-    [Fact]
+    [Test]
     public void OpenProject_ShouldSetContext_WhenValidDirectoryProvided()
     {
         // Arrange
@@ -39,14 +38,14 @@ public class ProjectContextManagerTests : IDisposable
         var context = _manager.GetProjectContext();
 
         // Assert
-        context.Should().NotBeNull();
-        context!.RootPath.Should().Be(Path.GetFullPath(_testRoot));
+        Assert.That(context, Is.Not.Null);
+        Assert.That(context!.RootPath, Is.EqualTo(Path.GetFullPath(_testRoot)));
         context.OpenedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
-        context.FileCount.Should().Be(3);
-        context.KnownFiles.Should().HaveCount(3);
+        Assert.That(context.FileCount, Is.EqualTo(3));
+        Assert.That(context.KnownFiles, Has.Count.EqualTo(3));
     }
 
-    [Fact]
+    [Test]
     public void OpenProject_ShouldThrowDirectoryNotFoundException_WhenDirectoryDoesNotExist()
     {
         // Arrange
@@ -58,7 +57,7 @@ public class ProjectContextManagerTests : IDisposable
             .WithMessage($"Directory does not exist: {Path.GetFullPath(nonExistentPath)}");
     }
 
-    [Fact]
+    [Test]
     public void OpenProject_ShouldThrowArgumentException_WhenPathIsFile()
     {
         // Arrange
@@ -70,7 +69,7 @@ public class ProjectContextManagerTests : IDisposable
             .WithMessage($"Path is a file, not a directory: {Path.GetFullPath(filePath)}");
     }
 
-    [Fact]
+    [Test]
     public void OpenProject_ShouldNormalizePath_WithGetFullPath()
     {
         // Arrange
@@ -82,35 +81,35 @@ public class ProjectContextManagerTests : IDisposable
         var context = _manager.GetProjectContext();
 
         // Assert
-        context!.RootPath.Should().Be(Path.GetFullPath(relativePath));
+        Assert.That(context!.RootPath, Is.EqualTo(Path.GetFullPath(relativePath)));
     }
 
-    [Fact]
+    [Test]
     public void CloseProject_ShouldClearContext()
     {
         // Arrange
         _manager.OpenProject(_testRoot);
-        _manager.GetProjectContext().Should().NotBeNull();
+        _manager.GetProjectContext(), Is.Not.Null);
 
         // Act
         _manager.CloseProject();
         var context = _manager.GetProjectContext();
 
         // Assert
-        context.Should().BeNull();
+        Assert.That(context, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void GetProjectInfo_ShouldReturnNull_WhenNoProjectOpen()
     {
         // Act
         var info = _manager.GetProjectInfo();
 
         // Assert
-        info.Should().BeNull();
+        Assert.That(info, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void GetProjectInfo_ShouldReturnProjectMetadata_WhenProjectOpen()
     {
         // Arrange
@@ -122,24 +121,24 @@ public class ProjectContextManagerTests : IDisposable
         var info = _manager.GetProjectInfo();
 
         // Assert
-        info.Should().NotBeNull();
-        info!["rootPath"].Should().Be(Path.GetFullPath(_testRoot));
-        info["fileCount"].Should().Be(2);
-        info["openedAt"].Should().BeOfType<string>();
-        info["openedAt"].ToString().Should().NotBeEmpty();
+        Assert.That(info, Is.Not.Null);
+        info!["rootPath"], Is.EqualTo(Path.GetFullPath(_testRoot)));
+        info["fileCount"], Is.EqualTo(2));
+        info["openedAt"], Is.TypeOf<string>());
+        info["openedAt"].ToString(), Is.Not.Empty);
     }
 
-    [Fact]
+    [Test]
     public void IsValidPath_ShouldReturnFalse_WhenNoProjectOpen()
     {
         // Act
         var isValid = _manager.IsValidPath(Path.Combine(_testRoot, "file.txt"));
 
         // Assert
-        isValid.Should().BeFalse();
+        Assert.That(isValid, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void IsValidPath_ShouldReturnTrue_WhenPathInsideProjectRoot()
     {
         // Arrange
@@ -149,10 +148,10 @@ public class ProjectContextManagerTests : IDisposable
         var isValid = _manager.IsValidPath(Path.Combine(_testRoot, "subdir", "file.txt"));
 
         // Assert
-        isValid.Should().BeTrue();
+        Assert.That(isValid, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void IsValidPath_ShouldReturnFalse_WhenPathOutsideProjectRoot()
     {
         // Arrange
@@ -163,10 +162,10 @@ public class ProjectContextManagerTests : IDisposable
         var isValid = _manager.IsValidPath(outsidePath);
 
         // Assert
-        isValid.Should().BeFalse();
+        Assert.That(isValid, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void IsValidPath_ShouldUseCaseInsensitiveComparison()
     {
         // Arrange
@@ -177,10 +176,10 @@ public class ProjectContextManagerTests : IDisposable
         var isValid = _manager.IsValidPath(upperCasePath);
 
         // Assert (should work on case-insensitive file systems like Windows/macOS)
-        isValid.Should().BeTrue();
+        Assert.That(isValid, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void OpenProject_ShouldReplaceCurrentProject_WhenOpeningDifferentProject()
     {
         // Arrange
@@ -195,17 +194,17 @@ public class ProjectContextManagerTests : IDisposable
 
             _manager.OpenProject(firstProject);
             var firstContext = _manager.GetProjectContext();
-            firstContext!.FileCount.Should().Be(1);
+            Assert.That(firstContext!.FileCount, Is.EqualTo(1));
 
             // Act
             _manager.OpenProject(secondProject);
             var secondContext = _manager.GetProjectContext();
 
             // Assert
-            secondContext.Should().NotBeNull();
-            secondContext!.RootPath.Should().Be(Path.GetFullPath(secondProject));
-            secondContext.FileCount.Should().Be(1);
-            secondContext.RootPath.Should().NotBe(firstContext.RootPath);
+            Assert.That(secondContext, Is.Not.Null);
+            Assert.That(secondContext!.RootPath, Is.EqualTo(Path.GetFullPath(secondProject)));
+            Assert.That(secondContext.FileCount, Is.EqualTo(1));
+            Assert.That(secondContext.RootPath, Is.Not.EqualTo(firstContext.RootPath));
         }
         finally
         {
@@ -217,7 +216,7 @@ public class ProjectContextManagerTests : IDisposable
         }
     }
 
-    [Fact]
+    [Test]
     public void OpenProject_ShouldCountFilesAccurately_WithNestedDirectories()
     {
         // Arrange
@@ -233,18 +232,18 @@ public class ProjectContextManagerTests : IDisposable
         var context = _manager.GetProjectContext();
 
         // Assert
-        context!.FileCount.Should().Be(6);
-        context.KnownFiles.Should().HaveCount(6);
+        Assert.That(context!.FileCount, Is.EqualTo(6));
+        Assert.That(context.KnownFiles, Has.Count.EqualTo(6));
     }
 
-    [Fact]
+    [Test]
     public void GetProjectContext_ShouldReturnNull_InitiallyBeforeOpeningProject()
     {
         // Act
         var context = _manager.GetProjectContext();
 
         // Assert
-        context.Should().BeNull();
+        Assert.That(context, Is.Null);
     }
 
     private string CreateTestFile(string relativePath, string content)

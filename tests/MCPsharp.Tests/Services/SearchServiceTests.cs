@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using MCPsharp.Models.Search;
 using MCPsharp.Services;
 using Microsoft.Extensions.Logging.Abstractions;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 
@@ -39,7 +39,7 @@ public class SearchServiceTests : IDisposable
         }
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_EmptyPattern_ReturnsError()
     {
         // Arrange
@@ -49,11 +49,11 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.False(result.Success);
-        Assert.Contains("empty", result.ErrorMessage ?? "", StringComparison.OrdinalIgnoreCase);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage ?? "", Assert.That(StringComparison.OrdinalIgnoreCase, Does.Contain("empty"));
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_NonExistentDirectory_ReturnsError()
     {
         // Arrange
@@ -67,11 +67,11 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.False(result.Success);
-        Assert.Contains("does not exist", result.ErrorMessage ?? "", StringComparison.OrdinalIgnoreCase);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage ?? "", Assert.That(StringComparison.OrdinalIgnoreCase, Does.Contain("does not exist"));
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_LiteralSearch_FindsMatches()
     {
         // Arrange
@@ -88,12 +88,12 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.Equal(2, result.TotalMatches);
-        Assert.All(result.Matches, m => Assert.Equal(1, m.LineNumber));
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.TotalMatches, Is.EqualTo(2));
+        Assert.All(result.Matches, m => Assert.That(m.LineNumber, Is.EqualTo(1)));
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_CaseInsensitive_FindsMatches()
     {
         // Arrange
@@ -109,11 +109,11 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.Equal(2, result.TotalMatches);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.TotalMatches, Is.EqualTo(2));
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_RegexSearch_FindsMatches()
     {
         // Arrange
@@ -129,11 +129,11 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.Equal(3, result.TotalMatches);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.TotalMatches, Is.EqualTo(3));
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_InvalidRegex_ReturnsError()
     {
         // Arrange
@@ -148,12 +148,12 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.False(result.Success);
-        Assert.Contains("Invalid regex", result.ErrorMessage ?? "", StringComparison.OrdinalIgnoreCase);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage ?? "", Assert.That(StringComparison.OrdinalIgnoreCase, Does.Contain("Invalid regex"));
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_IncludePattern_FiltersFiles()
     {
         // Arrange
@@ -171,12 +171,12 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.Equal(1, result.TotalMatches);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.TotalMatches, Is.EqualTo(1));
         Assert.EndsWith(".cs", result.Matches[0].FilePath);
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_ExcludePattern_FiltersFiles()
     {
         // Arrange
@@ -193,12 +193,12 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.Equal(1, result.TotalMatches);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.TotalMatches, Is.EqualTo(1));
         Assert.DoesNotContain("ignore", result.Matches[0].FilePath, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_ContextLines_IncludesContext()
     {
         // Arrange
@@ -214,18 +214,18 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
         Assert.Single(result.Matches);
         var match = result.Matches[0];
-        Assert.Equal(2, match.ContextBefore.Count);
-        Assert.Equal("line 1", match.ContextBefore[0]);
-        Assert.Equal("line 2", match.ContextBefore[1]);
-        Assert.Equal(2, match.ContextAfter.Count);
-        Assert.Equal("line 4", match.ContextAfter[0]);
-        Assert.Equal("line 5", match.ContextAfter[1]);
+        Assert.That(match.ContextBefore.Count, Is.EqualTo(2));
+        Assert.That(match.ContextBefore[0], Is.EqualTo("line 1"));
+        Assert.That(match.ContextBefore[1], Is.EqualTo("line 2"));
+        Assert.That(match.ContextAfter.Count, Is.EqualTo(2));
+        Assert.That(match.ContextAfter[0], Is.EqualTo("line 4"));
+        Assert.That(match.ContextAfter[1], Is.EqualTo("line 5"));
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_ContextLines_HandlesFileBoundaries()
     {
         // Arrange
@@ -241,13 +241,13 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
         var match = result.Matches[0];
-        Assert.Empty(match.ContextBefore); // No lines before
+        Assert.That(match.ContextBefore, Is.Empty); // No lines before
         Assert.Single(match.ContextAfter); // Only one line after
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_Pagination_ReturnsCorrectSubset()
     {
         // Arrange
@@ -265,15 +265,15 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.Equal(50, result.TotalMatches);
-        Assert.Equal(10, result.Returned);
-        Assert.Equal(5, result.Offset);
-        Assert.True(result.HasMore);
-        Assert.Equal(6, result.Matches[0].LineNumber); // First match should be line 6 (offset 5)
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.TotalMatches, Is.EqualTo(50));
+        Assert.That(result.Returned, Is.EqualTo(10));
+        Assert.That(result.Offset, Is.EqualTo(5));
+        Assert.That(result.HasMore, Is.True);
+        Assert.That(result.Matches[0].LineNumber, Is.EqualTo(6)); // First match should be line 6 (offset 5)
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_NoMatches_ReturnsEmptyResult()
     {
         // Arrange
@@ -288,13 +288,13 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.Equal(0, result.TotalMatches);
-        Assert.Empty(result.Matches);
-        Assert.False(result.HasMore);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.TotalMatches, Is.EqualTo(0));
+        Assert.That(result.Matches, Is.Empty);
+        Assert.That(result.HasMore, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_SkipsBinaryFiles()
     {
         // Arrange
@@ -310,12 +310,12 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
         // Should only find match in .cs file, not .dll
         Assert.All(result.Matches, m => Assert.EndsWith(".cs", m.FilePath));
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_SkipsDefaultExcludeDirs()
     {
         // Arrange
@@ -333,12 +333,12 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
         // Should not find matches in bin directory
         Assert.All(result.Matches, m => Assert.DoesNotContain("bin", m.FilePath));
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_ColumnNumber_IsCorrect()
     {
         // Arrange
@@ -353,12 +353,12 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
         Assert.Single(result.Matches);
-        Assert.Equal(5, result.Matches[0].ColumnNumber); // 1-based, after 4 spaces
+        Assert.That(result.Matches[0].ColumnNumber, Is.EqualTo(5)); // 1-based, after 4 spaces
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_MultipleMatchesInSameLine_FindsAll()
     {
         // Arrange
@@ -373,13 +373,13 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
         // Note: Current implementation finds first match per line
         // This test documents expected behavior
-        Assert.Equal(1, result.TotalMatches);
+        Assert.That(result.TotalMatches, Is.EqualTo(1));
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_CancellationToken_CancelsOperation()
     {
         // Arrange
@@ -401,7 +401,7 @@ public class SearchServiceTests : IDisposable
             async () => await _searchService.SearchTextAsync(request, cts.Token));
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_PerformanceTest_SearchesQuickly()
     {
         // Arrange
@@ -419,12 +419,12 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.Equal(100, result.TotalMatches);
-        Assert.True(result.SearchDurationMs < 3000, $"Search took {result.SearchDurationMs}ms, expected < 3000ms");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.TotalMatches, Is.EqualTo(100));
+        Assert.That(result.SearchDurationMs < 3000, $"Search took {result.SearchDurationMs}ms, expected < 3000ms", Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task SearchTextAsync_RegexWithGroups_CapturesMatch()
     {
         // Arrange
@@ -440,9 +440,9 @@ public class SearchServiceTests : IDisposable
         var result = await _searchService.SearchTextAsync(request);
 
         // Assert
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
         Assert.Single(result.Matches);
-        Assert.Contains("1.2.3", result.Matches[0].MatchText);
+        Assert.That(result.Matches[0].MatchText, Does.Contain("1.2.3"));
     }
 
     private void CreateTestFile(string relativePath, string content)

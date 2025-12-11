@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Tests.TestFixtures;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 
@@ -123,19 +123,19 @@ public class RecursiveService
         }
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallers_ShouldReturnCallerAnalysis()
     {
         // Act
         var result = await _advancedReferenceFinder.FindCallersAsync("Execute", "Service");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.True(result.TotalCallers >= 1);
-        Assert.Contains(result.Callers, c => c.CallerType.Contains("Manager"));
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalCallers >= 1, Is.True);
+        Assert.That(c => c.CallerType.Contains("Manager", Does.Contain(result.Callers)));
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallersAtLocation_ShouldFindCallersAtLocation()
     {
         // This test requires actual file locations, which is complex to set up
@@ -145,43 +145,43 @@ public class RecursiveService
         // May return null for non-existent location
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallChains_ShouldReturnCallChains()
     {
         // Act
         var result = await _advancedReferenceFinder.FindCallChainsAsync("Execute", "Service", CallDirection.Backward, 5);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(CallDirection.Backward, result.Direction);
-        Assert.True(result.TotalPaths >= 0);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Direction, Is.EqualTo(CallDirection.Backward));
+        Assert.That(result.TotalPaths >= 0, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task FindTypeUsages_ShouldReturnTypeUsages()
     {
         // Act
         var result = await _advancedReferenceFinder.FindTypeUsagesAsync("Service");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Service", result.TypeName);
-        Assert.True(result.TotalUsages >= 1);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TypeName, Is.EqualTo("Service"));
+        Assert.That(result.TotalUsages >= 1, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeCallPatterns_ShouldReturnPatternAnalysis()
     {
         // Act
         var result = await _advancedReferenceFinder.AnalyzeCallPatternsAsync("Execute", "Service");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Execute", result.TargetMethod.Name);
-        Assert.True(result.TotalCallSites >= 1);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TargetMethod.Name, Is.EqualTo("Execute"));
+        Assert.That(result.TotalCallSites >= 1, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallChainsBetween_ShouldFindPaths()
     {
         // Arrange
@@ -205,77 +205,77 @@ public class RecursiveService
         var result = await _advancedReferenceFinder.FindCallChainsBetweenAsync(fromMethod, toMethod, 10);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         // May return empty in our simple test setup
     }
 
-    [Fact]
+    [Test]
     public async Task FindRecursiveCallChains_ShouldDetectRecursion()
     {
         // Act
         var result = await _advancedReferenceFinder.FindRecursiveCallChainsAsync("RecursiveMethod", "RecursiveService", 10);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         // Should detect recursive calls if they exist
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeInheritance_ShouldAnalyzeInheritance()
     {
         // Act
         var result = await _advancedReferenceFinder.AnalyzeInheritanceAsync("Service");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Service", result.TargetType);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TargetType, Is.EqualTo("Service"));
     }
 
-    [Fact]
+    [Test]
     public async Task FindUnusedMethods_ShouldFindUnusedMethods()
     {
         // Act
         var result = await _advancedReferenceFinder.FindUnusedMethodsAsync("MCPsharp.Tests.TestFixtures");
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         // May find unused methods depending on the test setup
     }
 
-    [Fact]
+    [Test]
     public async Task FindTestOnlyMethods_ShouldFindTestOnlyMethods()
     {
         // Act
         var result = await _advancedReferenceFinder.FindTestOnlyMethods();
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         // May return empty since our test files aren't actual test files
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeCallGraph_ShouldAnalyzeCallGraph()
     {
         // Act
         var result = await _advancedReferenceFinder.AnalyzeCallGraphAsync("Service", null);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Methods.Count >= 1);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Methods.Count >= 1, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task FindCircularDependencies_ShouldDetectCycles()
     {
         // Act
         var result = await _advancedReferenceFinder.FindCircularDependenciesAsync("MCPsharp.Tests.TestFixtures");
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         // Should detect the indirect recursive cycle in RecursiveService
     }
 
-    [Fact]
+    [Test]
     public async Task FindShortestPath_ShouldReturnShortestPath()
     {
         // Arrange
@@ -302,79 +302,79 @@ public class RecursiveService
         // May return null if no path exists
     }
 
-    [Fact]
+    [Test]
     public async Task FindReachableMethods_ShouldFindReachableMethods()
     {
         // Act
         var result = await _advancedReferenceFinder.FindReachableMethodsAsync("Run", "Manager", 10);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Run", result.StartMethod.Name);
-        Assert.True(result.ReachableMethods.Count >= 1);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.StartMethod.Name, Is.EqualTo("Run"));
+        Assert.That(result.ReachableMethods.Count >= 1, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeTypeDependencies_ShouldAnalyzeDependencies()
     {
         // Act
         var result = await _advancedReferenceFinder.AnalyzeTypeDependenciesAsync("Manager");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Manager", result.TargetType);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TargetType, Is.EqualTo("Manager"));
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeUsagePatterns_ShouldAnalyzePatterns()
     {
         // Act
         var result = await _advancedReferenceFinder.AnalyzeUsagePatternsAsync("MCPsharp.Tests.TestFixtures");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.True(result.TypeStatistics.Count >= 1);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TypeStatistics.Count >= 1, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task FindRefactoringOpportunities_ShouldFindOpportunities()
     {
         // Act
         var result = await _advancedReferenceFinder.FindRefactoringOpportunitiesAsync("MCPsharp.Tests.TestFixtures");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.True(result.TotalOpportunities >= 0);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalOpportunities >= 0, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeMethodComprehensively_ShouldReturnComprehensiveAnalysis()
     {
         // Act
         var result = await _advancedReferenceFinder.AnalyzeMethodComprehensivelyAsync("Execute", "Service");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Execute", result.MethodName);
-        Assert.Equal("Service", result.ContainingType);
-        Assert.NotNull(result.Callers);
-        Assert.NotNull(result.CallPatterns);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MethodName, Is.EqualTo("Execute"));
+        Assert.That(result.ContainingType, Is.EqualTo("Service"));
+        Assert.That(result.Callers, Is.Not.Null);
+        Assert.That(result.CallPatterns, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeTypeComprehensively_ShouldReturnComprehensiveAnalysis()
     {
         // Act
         var result = await _advancedReferenceFinder.AnalyzeTypeComprehensivelyAsync("Service");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Service", result.TypeName);
-        Assert.NotNull(result.TypeUsages);
-        Assert.NotNull(result.InheritanceAnalysis);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TypeName, Is.EqualTo("Service"));
+        Assert.That(result.TypeUsages, Is.Not.Null);
+        Assert.That(result.InheritanceAnalysis, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task FindMethodsBySignature_ShouldFindMatchingMethods()
     {
         // Arrange
@@ -391,38 +391,38 @@ public class RecursiveService
         var result = await _advancedReferenceFinder.FindMethodsBySignatureAsync(signature);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Count >= 1);
-        Assert.Contains(result, m => m.Name == "Execute");
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Count >= 1, Is.True);
+        Assert.That(m => m.Name == "Execute", Does.Contain(result));
     }
 
-    [Fact]
+    [Test]
     public async Task FindSimilarMethods_ShouldFindSimilarMethods()
     {
         // Act
         var result = await _advancedReferenceFinder.FindSimilarMethods("Execute", 0.7);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         // Should find methods with similar names
     }
 
-    [Fact]
+    [Test]
     public async Task GetCapabilities_ShouldReturnCapabilities()
     {
         // Act
         var result = await _advancedReferenceFinder.GetCapabilitiesAsync();
 
         // Assert
-        Assert.NotNull(result);
-        Assert.True(result.IsWorkspaceReady);
-        Assert.True(result.TotalFiles >= 1);
-        Assert.True(result.TotalTypes >= 1);
-        Assert.True(result.TotalMethods >= 1);
-        Assert.True(result.SupportedAnalyses.Count >= 8);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsWorkspaceReady, Is.True);
+        Assert.That(result.TotalFiles >= 1, Is.True);
+        Assert.That(result.TotalTypes >= 1, Is.True);
+        Assert.That(result.TotalMethods >= 1, Is.True);
+        Assert.That(result.SupportedAnalyses.Count >= 8, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void MethodComprehensiveAnalysis_ShouldCalculateCorrectProperties()
     {
         // Arrange
@@ -484,13 +484,13 @@ public class RecursiveService
         };
 
         // Assert
-        Assert.Equal("Execute", analysis.MethodName);
-        Assert.Equal("Service", analysis.ContainingType);
-        Assert.Equal(1, analysis.TotalDirectCallers);
-        Assert.False(analysis.HasRecursiveCalls);
+        Assert.That(analysis.MethodName, Is.EqualTo("Execute"));
+        Assert.That(analysis.ContainingType, Is.EqualTo("Service"));
+        Assert.That(analysis.TotalDirectCallers, Is.EqualTo(1));
+        Assert.That(analysis.HasRecursiveCalls, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void TypeComprehensiveAnalysis_ShouldCalculateCorrectProperties()
     {
         // Arrange
@@ -582,10 +582,10 @@ public class RecursiveService
         };
 
         // Assert
-        Assert.Equal("Service", analysis.TypeName);
-        Assert.Equal(5, analysis.TotalUsages);
-        Assert.Equal(1, analysis.InstantiationCount);
-        Assert.Equal(1, analysis.InterfaceImplementationCount);
+        Assert.That(analysis.TypeName, Is.EqualTo("Service"));
+        Assert.That(analysis.TotalUsages, Is.EqualTo(5));
+        Assert.That(analysis.InstantiationCount, Is.EqualTo(1));
+        Assert.That(analysis.InterfaceImplementationCount, Is.EqualTo(1));
     }
 
     public void Dispose()

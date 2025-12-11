@@ -1,4 +1,4 @@
-using Xunit;
+using NUnit.Framework;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
@@ -20,19 +20,19 @@ public class ExceptionLoggingIntegrationTests
         _loggerFactory = NullLoggerFactory.Instance;
     }
 
-    [Fact]
+    [Test]
     public void Analyzer_CanBeCreated()
     {
         // Arrange & Act
         var analyzer = new ExceptionLoggingAnalyzer();
 
         // Assert
-        Assert.NotNull(analyzer);
-        Assert.Equal("MCP002", ExceptionLoggingAnalyzer.DiagnosticId);
+        Assert.That(analyzer, Is.Not.Null);
+        Assert.That(ExceptionLoggingAnalyzer.DiagnosticId, Is.EqualTo("MCP002"));
         Assert.Single(analyzer.SupportedDiagnostics);
     }
 
-    [Fact]
+    [Test]
     public void Analyzer_DiagnosticDescriptor_HasCorrectProperties()
     {
         // Arrange
@@ -42,23 +42,23 @@ public class ExceptionLoggingIntegrationTests
         var descriptor = analyzer.SupportedDiagnostics[0];
 
         // Assert
-        Assert.Equal("MCP002", descriptor.Id);
-        Assert.Equal("Logging", descriptor.Category);
-        Assert.True(descriptor.IsEnabledByDefault);
+        Assert.That(descriptor.Id, Is.EqualTo("MCP002"));
+        Assert.That(descriptor.Category, Is.EqualTo("Logging"));
+        Assert.That(descriptor.IsEnabledByDefault, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void Fixer_CanBeCreated()
     {
         // Arrange & Act
         var fixer = new ExceptionLoggingFixer();
 
         // Assert
-        Assert.NotNull(fixer);
-        Assert.Contains(ExceptionLoggingAnalyzer.DiagnosticId, fixer.FixableDiagnosticIds);
+        Assert.That(fixer, Is.Not.Null);
+        Assert.That(fixer.FixableDiagnosticIds, Does.Contain(ExceptionLoggingAnalyzer.DiagnosticId));
     }
 
-    [Fact]
+    [Test]
     public void Fixer_FixableDiagnosticIds_ContainsMCP002()
     {
         // Arrange
@@ -69,10 +69,10 @@ public class ExceptionLoggingIntegrationTests
 
         // Assert
         Assert.Single(ids);
-        Assert.Equal("MCP002", ids[0]);
+        Assert.That(ids[0], Is.EqualTo("MCP002"));
     }
 
-    [Fact]
+    [Test]
     public void Provider_CanBeCreated()
     {
         // Arrange
@@ -82,15 +82,15 @@ public class ExceptionLoggingIntegrationTests
         var provider = new ExceptionLoggingProvider(logger);
 
         // Assert
-        Assert.NotNull(provider);
-        Assert.Equal("ExceptionLogging", provider.Id);
-        Assert.Equal(FixProfile.Balanced, provider.Profile);
-        Assert.True(provider.IsFullyAutomated);
-        Assert.NotNull(provider.GetAnalyzer());
-        Assert.NotNull(provider.GetCodeFixProvider());
+        Assert.That(provider, Is.Not.Null);
+        Assert.That(provider.Id, Is.EqualTo("ExceptionLogging"));
+        Assert.That(provider.Profile, Is.EqualTo(FixProfile.Balanced));
+        Assert.That(provider.IsFullyAutomated, Is.True);
+        Assert.That(provider.GetAnalyzer(, Is.Not.Null));
+        Assert.That(provider.GetCodeFixProvider(, Is.Not.Null));
     }
 
-    [Fact]
+    [Test]
     public void Provider_Properties_AreCorrect()
     {
         // Arrange
@@ -98,14 +98,14 @@ public class ExceptionLoggingIntegrationTests
         var provider = new ExceptionLoggingProvider(logger);
 
         // Assert
-        Assert.Equal("ExceptionLogging", provider.Id);
-        Assert.Equal("Exception Logging Fixer", provider.Name);
-        Assert.Contains("exception", provider.Description.ToLowerInvariant());
-        Assert.Equal(FixProfile.Balanced, provider.Profile);
-        Assert.True(provider.IsFullyAutomated);
+        Assert.That(provider.Id, Is.EqualTo("ExceptionLogging"));
+        Assert.That(provider.Name, Is.EqualTo("Exception Logging Fixer"));
+        Assert.That(provider.Description.ToLowerInvariant(, Does.Contain("exception")));
+        Assert.That(provider.Profile, Is.EqualTo(FixProfile.Balanced));
+        Assert.That(provider.IsFullyAutomated, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void Provider_FixableDiagnosticIds_ContainsMCP002()
     {
         // Arrange
@@ -117,10 +117,10 @@ public class ExceptionLoggingIntegrationTests
 
         // Assert
         Assert.Single(ids);
-        Assert.Equal("MCP002", ids[0]);
+        Assert.That(ids[0], Is.EqualTo("MCP002"));
     }
 
-    [Fact]
+    [Test]
     public void Provider_GetAnalyzer_ReturnsExceptionLoggingAnalyzer()
     {
         // Arrange
@@ -131,11 +131,11 @@ public class ExceptionLoggingIntegrationTests
         var analyzer = provider.GetAnalyzer();
 
         // Assert
-        Assert.NotNull(analyzer);
+        Assert.That(analyzer, Is.Not.Null);
         Assert.IsType<ExceptionLoggingAnalyzer>(analyzer);
     }
 
-    [Fact]
+    [Test]
     public void Provider_GetCodeFixProvider_ReturnsExceptionLoggingFixer()
     {
         // Arrange
@@ -146,11 +146,11 @@ public class ExceptionLoggingIntegrationTests
         var fixer = provider.GetCodeFixProvider();
 
         // Assert
-        Assert.NotNull(fixer);
+        Assert.That(fixer, Is.Not.Null);
         Assert.IsType<ExceptionLoggingFixer>(fixer);
     }
 
-    [Fact]
+    [Test]
     public void Registry_RegistersExceptionLoggingProvider()
     {
         // Arrange
@@ -161,10 +161,10 @@ public class ExceptionLoggingIntegrationTests
 
         // Assert
         var providers = registry.GetAllProviders();
-        Assert.Contains(providers, p => p.Id == "ExceptionLogging");
+        Assert.That(p => p.Id == "ExceptionLogging", Does.Contain(providers));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProviderById_ReturnsExceptionLoggingProvider()
     {
         // Arrange
@@ -175,12 +175,12 @@ public class ExceptionLoggingIntegrationTests
         var provider = registry.GetProvider("ExceptionLogging");
 
         // Assert
-        Assert.NotNull(provider);
-        Assert.Equal("ExceptionLogging", provider!.Id);
+        Assert.That(provider, Is.Not.Null);
+        Assert.That(provider!.Id, Is.EqualTo("ExceptionLogging"));
         Assert.IsType<ExceptionLoggingProvider>(provider);
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProvidersByProfile_IncludesExceptionLogging()
     {
         // Arrange
@@ -191,11 +191,11 @@ public class ExceptionLoggingIntegrationTests
         var providers = registry.GetProvidersByProfile(FixProfile.Balanced);
 
         // Assert
-        Assert.NotEmpty(providers);
-        Assert.Contains(providers, p => p.Id == "ExceptionLogging");
+        Assert.That(providers, Is.Not.Empty);
+        Assert.That(p => p.Id == "ExceptionLogging", Does.Contain(providers));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetFullyAutomatedProviders_IncludesExceptionLogging()
     {
         // Arrange
@@ -206,11 +206,11 @@ public class ExceptionLoggingIntegrationTests
         var providers = registry.GetFullyAutomatedProviders();
 
         // Assert
-        Assert.NotEmpty(providers);
-        Assert.Contains(providers, p => p.Id == "ExceptionLogging");
+        Assert.That(providers, Is.Not.Empty);
+        Assert.That(p => p.Id == "ExceptionLogging", Does.Contain(providers));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProvidersForDiagnostic_ReturnsMCP002()
     {
         // Arrange
@@ -222,10 +222,10 @@ public class ExceptionLoggingIntegrationTests
 
         // Assert
         Assert.Single(providers);
-        Assert.Equal("ExceptionLogging", providers[0].Id);
+        Assert.That(providers[0].Id, Is.EqualTo("ExceptionLogging"));
     }
 
-    [Fact]
+    [Test]
     public void Registry_Statistics_IncludesExceptionLoggingProvider()
     {
         // Arrange
@@ -236,8 +236,8 @@ public class ExceptionLoggingIntegrationTests
         var stats = registry.GetStatistics();
 
         // Assert
-        Assert.True(stats.TotalProviders >= 2); // At least AsyncAwait and ExceptionLogging
-        Assert.True(stats.FullyAutomatedCount >= 2);
-        Assert.Contains(FixProfile.Balanced, stats.ProvidersByProfile.Keys);
+        Assert.That(stats.TotalProviders >= 2, Is.True); // At least AsyncAwait and ExceptionLogging
+        Assert.That(stats.FullyAutomatedCount >= 2, Is.True);
+        Assert.That(stats.ProvidersByProfile.Keys, Does.Contain(FixProfile.Balanced));
     }
 }

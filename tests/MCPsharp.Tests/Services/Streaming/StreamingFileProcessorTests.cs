@@ -178,7 +178,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         {
             // If progress was reported, verify it's in order
             Assert.That(progressReports, Is.Ordered.By("ProgressPercentage").Ascending);
-            Assert.NotNull(progressReports.LastOrDefault());
+            Assert.That(progressReports.LastOrDefault(, Is.Not.Null));
             Assert.That(progressReports.Last().ProgressPercentage, Is.EqualTo(100));
         }
     }
@@ -236,7 +236,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         }
 
         // Assert
-        Assert.NotNull(results);
+        Assert.That(results, Is.Not.Null);
         if (results == null)
             throw new InvalidOperationException("Results should not be null");
         Assert.That(results.Count, Is.EqualTo(3));
@@ -297,7 +297,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         Assert.That(results.Count, Is.EqualTo(10));
         Assert.That(results.All(r => r.Success), Is.True);
         // With concurrency limit, processing should take longer than unlimited parallelism
-        Assert.That(endTime - startTime, Is.GreaterThan(TimeSpan.FromMilliseconds(100)));
+        Assert.That(endTime - Assert.That(startTime, Is.GreaterThan(TimeSpan.FromMilliseconds(100)));
     }
 
     [Test]
