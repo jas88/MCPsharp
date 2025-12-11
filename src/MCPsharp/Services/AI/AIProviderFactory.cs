@@ -82,6 +82,7 @@ public class AIProviderFactory
 
     private async Task<OllamaProvider?> CreateOllamaProviderAsync()
     {
+        OllamaProvider? provider = null;
         try
         {
             var baseUrl = _configuration?["AIProvider:Ollama:BaseUrl"]
@@ -90,7 +91,7 @@ public class AIProviderFactory
             var model = _configuration?["AIProvider:Ollama:Model"]
                 ?? Environment.GetEnvironmentVariable("OLLAMA_MODEL");
 
-            var provider = new OllamaProvider(baseUrl, model);
+            provider = new OllamaProvider(baseUrl, model);
 
             // Verify it's actually available
             if (!await provider.IsAvailableAsync())
@@ -105,6 +106,7 @@ public class AIProviderFactory
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Failed to create Ollama provider");
+            provider?.Dispose();
             return null;
         }
     }

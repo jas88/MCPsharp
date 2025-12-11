@@ -1631,6 +1631,7 @@ public class UnifiedAnalysisService
 
         return new ProjectStructure { ProjectPath = projectPath, ProjectType = "Unknown" };
     }
+    #pragma warning restore CS1998
 
     private async Task<List<ProjectFile>> GetProjectFileInventoryAsync(string projectPath, ToolOptions? options, CancellationToken ct)
     {

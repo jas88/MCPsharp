@@ -399,10 +399,11 @@ IMPORTANT:
             // Apply transformation
             newRoot = change.Type switch
             {
-                "replace" when change.NewCode != null => newRoot.ReplaceNode(
-                    targetNode,
-                    SyntaxFactory.ParseSyntaxTree(change.NewCode).GetRoot().DescendantNodes().First()
-                ),
+                "replace" when change.NewCode != null =>
+                    ReplaceNodeWithParsedCode(newRoot, targetNode, change.NewCode),
+
+                "insert" when change.NewCode != null =>
+                    InsertNodeWithParsedCode(newRoot, targetNode, change.NewCode),
 
                 "delete" => newRoot.RemoveNode(targetNode, SyntaxRemoveOptions.KeepNoTrivia)
                     ?? newRoot,
@@ -412,6 +413,37 @@ IMPORTANT:
         }
 
         return newRoot;
+    }
+
+    /// <summary>
+    /// Replace a node with parsed code, safely handling empty parse results.
+    /// </summary>
+    private static SyntaxNode ReplaceNodeWithParsedCode(SyntaxNode root, SyntaxNode targetNode, string newCode)
+    {
+        var parsedTree = SyntaxFactory.ParseSyntaxTree(newCode);
+        var parsedRoot = parsedTree.GetRoot();
+        var newNode = parsedRoot.DescendantNodes().FirstOrDefault();
+
+        if (newNode == null)
+            return root; // No valid node to insert, return unchanged
+
+        return root.ReplaceNode(targetNode, newNode);
+    }
+
+    /// <summary>
+    /// Insert a new node as a sibling after the target node.
+    /// </summary>
+    private static SyntaxNode InsertNodeWithParsedCode(SyntaxNode root, SyntaxNode targetNode, string newCode)
+    {
+        var parsedTree = SyntaxFactory.ParseSyntaxTree(newCode);
+        var parsedRoot = parsedTree.GetRoot();
+        var newNode = parsedRoot.DescendantNodes().FirstOrDefault();
+
+        if (newNode == null)
+            return root; // No valid node to insert, return unchanged
+
+        // Use Roslyn's InsertNodesAfter for proper node insertion
+        return root.InsertNodesAfter(targetNode, new[] { newNode });
     }
 
     /// <summary>

@@ -371,10 +371,12 @@ public partial class BulkEditService
             var oversizedFiles = new List<string>();
             var inaccessibleFiles = new List<string>();
 
-            // First, check which original files don't exist
+            // First, check which original files (not glob patterns) don't exist
             foreach (var originalFile in files)
             {
-                if (!File.Exists(originalFile) && !Directory.Exists(originalFile))
+                // Only check literal paths, not glob patterns (which contain wildcards)
+                if (!originalFile.Contains("*") && !originalFile.Contains("?") &&
+                    !File.Exists(originalFile) && !Directory.Exists(originalFile))
                 {
                     inaccessibleFiles.Add(originalFile);
                 }

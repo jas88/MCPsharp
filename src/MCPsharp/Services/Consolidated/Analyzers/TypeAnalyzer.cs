@@ -237,7 +237,7 @@ public class TypeAnalyzer
             var publicMembers = members.Count(m => m.Accessibility == "Public");
             var privateMembers = members.Count(m => m.Accessibility == "Private");
             var staticMembers = members.Count(m => m.IsStatic == true);
-            var abstractMembers = members.Count(m => m.Accessibility == "Abstract" || m.Accessibility == "Protected");
+            var abstractMembers = members.Count(m => m.Accessibility == "Protected" || m.Accessibility == "Internal");
 
             var complexMembers = members
                 .Where(m => m.Kind == "Method" || m.Kind == "Property")

@@ -163,12 +163,12 @@ Once configured, use the `ask_codebase` tool to ask natural language questions:
   "name": "ask_codebase",
   "arguments": {
     "question": "How does authentication work in this project?",
-    "focus_path": "src/Auth"  // optional
+    "focus_path": "src/Auth"
   }
 }
 ```
 
-The AI analyzes your codebase structure, code, and configuration internally and returns a concise answer with file:line references.
+The `focus_path` argument is optional. The AI analyzes your codebase structure, code, and configuration internally and returns a concise answer with file:line references.
 
 ### AI Code Transformation Tools
 
@@ -181,10 +181,12 @@ In addition to read-only queries, MCPsharp provides AI-powered code modification
     "file_path": "src/MyService.cs",
     "description": "Fix the null reference exception in ProcessData",
     "line_number": 42,
-    "apply_changes": false  // Preview first (default)
+    "apply_changes": false
   }
 }
 ```
+
+The `apply_changes` parameter defaults to `false` to preview changes before applying them.
 
 **Why Roslyn AST instead of text manipulation?**
 
@@ -240,7 +242,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | dotnet run -
 
 ### Available Tools
 
-The server provides 41 MCP tools:
+The server provides 40 MCP tools:
 
 **File Operations:**
 - `project_open` - Open a project directory

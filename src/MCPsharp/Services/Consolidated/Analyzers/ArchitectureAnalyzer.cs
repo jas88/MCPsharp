@@ -204,7 +204,7 @@ public class ArchitectureAnalyzer
             {
                 Name = l.Name,
                 Description = l.Description ?? "",
-                Level = l.Order,
+                Level = l.Level,
                 NamespacePatterns = l.NamespacePatterns?.ToList() ?? new List<string>(),
                 AllowedDependencies = new List<string>(),
                 ForbiddenDependencies = new List<string>()

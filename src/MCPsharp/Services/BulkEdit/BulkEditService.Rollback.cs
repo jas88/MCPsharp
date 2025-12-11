@@ -236,6 +236,7 @@ public partial class BulkEditService
 
         return cleanedCount;
     }
+    #pragma warning restore CS1998
 
     private async Task<RollbackInfo> CreateRollbackSession(
         string operationId,

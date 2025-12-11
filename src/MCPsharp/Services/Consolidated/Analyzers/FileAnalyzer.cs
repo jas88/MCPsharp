@@ -289,8 +289,10 @@ public class FileAnalyzer
 
             for (int i = 0; i < lines.Length; i++)
             {
-                var line = lines[i].Trim();
+                var line = lines[i];
+                var trimmedLine = line.Trim();
 
+                // Check line length on the original line (including indentation)
                 if (line.Length > 120)
                 {
                     issues.Add(new FileIssue
@@ -302,7 +304,7 @@ public class FileAnalyzer
                     });
                 }
 
-                if (line.Contains("TODO") || line.Contains("FIXME"))
+                if (trimmedLine.Contains("TODO") || trimmedLine.Contains("FIXME"))
                 {
                     issues.Add(new FileIssue
                     {
@@ -402,10 +404,19 @@ public class FileAnalyzer
     private static int CalculateCyclomaticComplexity(string methodContent)
     {
         var complexity = 1;
-        var decisionKeywords = new[] { "if", "else", "while", "for", "foreach", "switch", "case", "&&", "||", "?:" };
-        foreach (var keyword in decisionKeywords)
+
+        // Word-based keywords (use word boundary)
+        var wordKeywords = new[] { "if", "else", "while", "for", "foreach", "switch", "case" };
+        foreach (var keyword in wordKeywords)
         {
             complexity += Regex.Matches(methodContent, $@"\b{keyword}\b").Count;
+        }
+
+        // Operator-based keywords (no word boundary)
+        var operatorKeywords = new[] { "&&", @"\|\|", @"\?:" };
+        foreach (var keyword in operatorKeywords)
+        {
+            complexity += Regex.Matches(methodContent, keyword).Count;
         }
 
         return complexity;

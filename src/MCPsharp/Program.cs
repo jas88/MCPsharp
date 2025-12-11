@@ -40,7 +40,7 @@ class Program
             logger.LogInformation("MCPsharp starting, workspace: {Workspace}", workspaceRoot);
 
             // Database initialization
-            var projectDatabase = new ProjectDatabase(loggerFactory?.CreateLogger<ProjectDatabase>());
+            await using var projectDatabase = new ProjectDatabase(loggerFactory?.CreateLogger<ProjectDatabase>());
 
             // Resource and prompt registries
             var resourceRegistry = new McpResourceRegistry(loggerFactory?.CreateLogger<McpResourceRegistry>());
@@ -261,8 +261,7 @@ class Program
             // Run MCP server loop
             await handler.RunAsync(cts.Token);
 
-            // Cleanup
-            await projectDatabase.DisposeAsync();
+            // projectDatabase will be disposed automatically via await using
 
             logger.LogInformation("MCPsharp stopped");
             return 0;

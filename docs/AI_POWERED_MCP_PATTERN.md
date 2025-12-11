@@ -77,12 +77,13 @@ Claude Code can ask human-like questions instead of parsing structured data:
 from anthropic import Anthropic
 from mcp.server import Server
 
+server = Server("ai-database")
+
 class DatabaseMCP:
     def __init__(self):
         self.ai = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.server = Server("ai-database")
 
-    @self.server.tool()
+    @server.tool()
     def ask_database(self, question: str, database: str) -> str:
         """Ask natural language questions about database structure"""
 
@@ -113,13 +114,14 @@ Answer concisely with only the relevant information."""
 ### Pattern 2: Semantic Code Search
 
 ```python
+server = Server("ai-code")
+
 class CodeMCP:
     def __init__(self):
         self.ai = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.server = Server("ai-code")
         self.embeddings = {}  # Cache
 
-    @self.server.tool()
+    @server.tool()
     def find_relevant_code(self, query: str, repo: str) -> list[dict]:
         """Find code relevant to a natural language query"""
 
@@ -152,12 +154,13 @@ class CodeMCP:
 ### Pattern 3: Intelligent Log Analysis
 
 ```python
+server = Server("ai-logs")
+
 class LogsMCP:
     def __init__(self):
         self.ai = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.server = Server("ai-logs")
 
-    @self.server.tool()
+    @server.tool()
     def summarize_logs(self, time_range: str, focus: str = "errors") -> str:
         """Summarize log patterns for a time range"""
 
@@ -191,12 +194,13 @@ Summarize the key patterns in bullet points (max 10 items)."""
 ### Pattern 4: Schema Relationship Mapping
 
 ```python
+server = Server("ai-schema")
+
 class SchemaExplorerMCP:
     def __init__(self):
         self.ai = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.server = Server("ai-schema")
 
-    @self.server.tool()
+    @server.tool()
     def explain_data_flow(self, feature: str, database: str) -> str:
         """Explain how data flows for a feature"""
 
@@ -342,9 +346,10 @@ public class DatabaseExplorerMCP : IMCPServer
     private readonly AnthropicClient _ai;
     private readonly DatabaseConnection _db;
 
-    public DatabaseExplorerMCP()
+    public DatabaseExplorerMCP(DatabaseConnection db)
     {
         _ai = new AnthropicClient(Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY"));
+        _db = db ?? throw new ArgumentNullException(nameof(db));
     }
 
     [MCPTool]

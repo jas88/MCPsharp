@@ -37,7 +37,9 @@ public class DependencyAnalyzer
             {
                 var allTypes = await _symbolQuery.GetAllTypesAsync();
 
-                foreach (var type in allTypes.Take(50))
+                // Limit nodes based on depth parameter (depth * 10 nodes as heuristic)
+                var maxNodes = Math.Max(10, depth * 10);
+                foreach (var type in allTypes.Take(maxNodes))
                 {
                     var node = new DependencyNode
                     {
@@ -177,20 +179,49 @@ public class DependencyAnalyzer
             var edgeCount = graph.Edges.Count;
             var density = nodeCount > 1 ? (double)edgeCount / (nodeCount * (nodeCount - 1)) : 0;
 
+            // Calculate actual average path length using BFS
+            var avgPathLength = CalculateAveragePathLength(graph);
+
+            // Detect cycles
+            var visited = new HashSet<string>();
+            var recursionStack = new HashSet<string>();
+            var cycleCount = 0;
+            var nodesInCycles = new HashSet<string>();
+
+            foreach (var node in graph.Nodes)
+            {
+                if (HasCycle(node.Id, graph, visited, recursionStack, out var cycle))
+                {
+                    cycleCount++;
+                    foreach (var nodeId in cycle)
+                    {
+                        nodesInCycles.Add(nodeId);
+                    }
+                }
+            }
+
             return Task.FromResult<DependencyMetrics?>(new DependencyMetrics
             {
                 TotalNodes = nodeCount,
                 TotalEdges = edgeCount,
                 Density = density,
-                Cycles = 0,
-                AveragePathLength = 2.5,
-                NodeMetrics = graph.Nodes.Select(n => new NodeMetrics
+                Cycles = cycleCount,
+                AveragePathLength = avgPathLength,
+                NodeMetrics = graph.Nodes.Select(n =>
                 {
-                    NodeId = n.Id,
-                    InDegree = graph.Edges.Count(e => e.To == n.Id),
-                    OutDegree = graph.Edges.Count(e => e.From == n.Id),
-                    Centrality = 0.5,
-                    IsInCycle = false
+                    var inDegree = graph.Edges.Count(e => e.To == n.Id);
+                    var outDegree = graph.Edges.Count(e => e.From == n.Id);
+                    // Calculate centrality as normalized degree
+                    var centrality = nodeCount > 1 ? (inDegree + outDegree) / (2.0 * (nodeCount - 1)) : 0;
+
+                    return new NodeMetrics
+                    {
+                        NodeId = n.Id,
+                        InDegree = inDegree,
+                        OutDegree = outDegree,
+                        Centrality = centrality,
+                        IsInCycle = nodesInCycles.Contains(n.Id)
+                    };
                 }).ToList()
             });
         }
@@ -199,6 +230,41 @@ public class DependencyAnalyzer
             _logger.LogError(ex, "Error calculating dependency metrics");
             return Task.FromResult<DependencyMetrics?>(null);
         }
+    }
+
+    private static double CalculateAveragePathLength(DependencyGraph graph)
+    {
+        if (graph.Nodes.Count == 0) return 0;
+
+        var totalPathLength = 0.0;
+        var pathCount = 0;
+
+        // Use BFS to calculate shortest paths between all pairs
+        foreach (var startNode in graph.Nodes)
+        {
+            var distances = new Dictionary<string, int>();
+            var queue = new Queue<(string NodeId, int Distance)>();
+            queue.Enqueue((startNode.Id, 0));
+            distances[startNode.Id] = 0;
+
+            while (queue.Count > 0)
+            {
+                var (currentId, distance) = queue.Dequeue();
+
+                foreach (var edge in graph.Edges.Where(e => e.From == currentId))
+                {
+                    if (!distances.ContainsKey(edge.To))
+                    {
+                        distances[edge.To] = distance + 1;
+                        queue.Enqueue((edge.To, distance + 1));
+                        totalPathLength += distance + 1;
+                        pathCount++;
+                    }
+                }
+            }
+        }
+
+        return pathCount > 0 ? totalPathLength / pathCount : 0;
     }
 
     private static bool HasCycle(

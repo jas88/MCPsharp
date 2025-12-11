@@ -86,20 +86,104 @@ def fix_async_method(file_path: str, line_num: int) -> bool:
 
         if returns_task_t:
             # Wrap all return statements with Task.FromResult()
-            # This regex handles multi-line returns
-            def wrap_return(match):
-                return_value = match.group(1)
-                # Check if already wrapped
-                if 'Task.FromResult' in return_value:
-                    return match.group(0)
-                return f'return Task.FromResult({return_value});'
+            # Use a proper state machine to handle strings, chars, and nested braces
+            new_body = []
+            i = 0
+            while i < len(method_body):
+                # Check if we're at a return statement
+                if method_body[i:i+6] == 'return' and (i == 0 or not method_body[i-1].isalnum()):
+                    # Check if next char is whitespace
+                    if i + 6 < len(method_body) and method_body[i+6].isspace():
+                        # Found a return statement - need to find the full expression
+                        return_start = i
+                        i += 6
 
-            method_body = re.sub(
-                r'\breturn\s+((?:[^;]|;(?=\s*\}))+);',
-                wrap_return,
-                method_body,
-                flags=re.DOTALL
-            )
+                        # Skip whitespace
+                        while i < len(method_body) and method_body[i].isspace():
+                            i += 1
+
+                        # Find the semicolon that ends this return statement
+                        # Handle strings, chars, and nested parens/braces/brackets
+                        value_start = i
+                        in_string = False
+                        in_char = False
+                        in_verbatim = False
+                        escape_next = False
+                        paren_depth = 0
+                        brace_depth = 0
+                        bracket_depth = 0
+
+                        while i < len(method_body):
+                            char = method_body[i]
+
+                            if escape_next:
+                                escape_next = False
+                                i += 1
+                                continue
+
+                            if in_verbatim:
+                                if char == '"':
+                                    if i + 1 < len(method_body) and method_body[i+1] == '"':
+                                        i += 2  # Skip escaped quote in verbatim string
+                                        continue
+                                    else:
+                                        in_verbatim = False
+                                i += 1
+                                continue
+
+                            if char == '\\' and (in_string or in_char):
+                                escape_next = True
+                                i += 1
+                                continue
+
+                            if char == '@' and i + 1 < len(method_body) and method_body[i+1] == '"' and not in_string and not in_char:
+                                in_verbatim = True
+                                i += 2
+                                continue
+
+                            if char == '"' and not in_char:
+                                in_string = not in_string
+                                i += 1
+                                continue
+
+                            if char == "'" and not in_string:
+                                in_char = not in_char
+                                i += 1
+                                continue
+
+                            if not in_string and not in_char:
+                                if char == '(':
+                                    paren_depth += 1
+                                elif char == ')':
+                                    paren_depth -= 1
+                                elif char == '{':
+                                    brace_depth += 1
+                                elif char == '}':
+                                    brace_depth -= 1
+                                elif char == '[':
+                                    bracket_depth += 1
+                                elif char == ']':
+                                    bracket_depth -= 1
+                                elif char == ';' and paren_depth == 0 and brace_depth == 0 and bracket_depth == 0:
+                                    # Found the end of the return statement
+                                    return_value = method_body[value_start:i].strip()
+
+                                    # Check if already wrapped
+                                    if 'Task.FromResult' not in return_value:
+                                        new_body.append(f'return Task.FromResult({return_value});')
+                                    else:
+                                        new_body.append(method_body[return_start:i+1])
+
+                                    i += 1
+                                    break
+
+                            i += 1
+                        continue
+
+                new_body.append(method_body[i])
+                i += 1
+
+            method_body = ''.join(new_body)
 
         elif returns_plain_task:
             # Replace bare return with Task.CompletedTask
@@ -139,11 +223,6 @@ def main():
             files_dict[file_path] = []
         files_dict[file_path].append(line_num)
 
-    # Sort line numbers in ascending order (process from top to bottom)
-    # We'll reload the file for each method to avoid line number issues
-    for file_path in files_dict:
-        files_dict[file_path].sort()
-
     # Fix each file
     total_fixed = 0
     total_failed = 0
@@ -156,25 +235,15 @@ def main():
             rel_path = file_path
         print(f"\n📝 {rel_path} ({len(line_numbers)} warnings)")
 
-        # Process each warning (note: line numbers may shift after each fix)
-        # So we need to re-get warnings after each fix
-        for line_num in line_numbers:
-            # Re-check if this specific warning still exists
-            current_warnings = get_cs1998_warnings()
-            file_warnings = [w for w in current_warnings if w[0] == file_path]
-
-            if not file_warnings:
-                print(f"  ✓ All warnings in file resolved")
-                break
-
-            # Fix the first warning in this file
-            first_warning_line = file_warnings[0][1]
-            if fix_async_method(file_path, first_warning_line):
+        # Process warnings in reverse order (bottom to top) to avoid line number shifts
+        # This way, fixing a method lower in the file won't affect line numbers above it
+        for line_num in sorted(line_numbers, reverse=True):
+            if fix_async_method(file_path, line_num):
                 total_fixed += 1
-                print(f"  ✓ Line {first_warning_line}")
+                print(f"  ✓ Line {line_num}")
             else:
                 total_failed += 1
-                print(f"  ✗ Line {first_warning_line}")
+                print(f"  ✗ Line {line_num}")
 
     print(f"\n{'='*60}")
     print(f"✅ Fixed: {total_fixed}")
