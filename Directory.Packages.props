@@ -37,7 +37,7 @@
     <PackageVersion Include="YamlDotNet" Version="16.2.0" />
 
     <!-- SQLite database -->
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.1" />
 
     <!-- Roslyn Analyzers for code quality -->
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
