@@ -465,6 +465,7 @@ public class FixEngine : IFixEngine
             };
         }
     }
+    #pragma warning restore CS1998
 
     public async Task<Models.Analyzers.ValidationResult> ValidateFixesAsync(string sessionId, CancellationToken cancellationToken = default)
     {
@@ -550,6 +551,7 @@ public class FixEngine : IFixEngine
             .Take(maxSessions)
             .ToImmutableArray();
     }
+    #pragma warning restore CS1998
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<FixStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
@@ -587,6 +589,7 @@ public class FixEngine : IFixEngine
             PeriodEnd = now
         };
     }
+    #pragma warning restore CS1998
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<FixPreview> GeneratePreviewAsync(
@@ -623,6 +626,7 @@ public class FixEngine : IFixEngine
             Confidence = fix.Confidence
         };
     }
+    #pragma warning restore CS1998
 
     private async Task<IAsyncEnumerable<FixConflict>> DetectFixConflictsAsync(
         List<FixPreview> previews,
@@ -676,6 +680,7 @@ public class FixEngine : IFixEngine
 
         return conflicts;
     }
+    #pragma warning restore CS1998
 
     private static bool EditsOverlap(TextEdit edit1, TextEdit edit2)
     {
@@ -719,6 +724,7 @@ public class FixEngine : IFixEngine
             _ => null
         };
     }
+    #pragma warning restore CS1998
 
     private async Task<Dictionary<string, string>> CreateBackupsAsync(
         IEnumerable<string> filePaths,
@@ -872,6 +878,7 @@ public class FixEngine : IFixEngine
 
         return errors;
     }
+    #pragma warning restore CS1998
 
     /// <summary>
     /// Converts an AnalyzerFix to a FixPreview

@@ -88,6 +88,11 @@ public class StaticMethodAnalyzer : DiagnosticAnalyzer
         if (AccessesInstanceMembers(methodDeclaration, methodSymbol, context.Compilation))
             return;
 
+        // Check if method is used as a delegate or passed as a method group
+        // If it's assigned to a delegate variable, making it static could break the code
+        if (IsUsedAsDelegateOrMethodGroup(methodSymbol, context.Compilation, context.CancellationToken))
+            return;
+
         // Report diagnostic
         var diagnostic = Diagnostic.Create(
             Rule,
@@ -138,6 +143,59 @@ public class StaticMethodAnalyzer : DiagnosticAnalyzer
         };
 
         return specialAttributes.Any(sa => attributeNames.Contains(sa));
+    }
+
+    private static bool IsUsedAsDelegateOrMethodGroup(
+        IMethodSymbol methodSymbol,
+        Compilation compilation,
+        CancellationToken cancellationToken)
+    {
+        // This is a conservative check - if we can't determine usage patterns safely,
+        // we err on the side of not suggesting the change
+        // A full implementation would require finding all references to this method
+        // across the entire compilation, which could be expensive
+
+        // For now, we'll do a simpler check: look at the containing type's methods
+        // and see if this method is passed as a delegate
+        var containingType = methodSymbol.ContainingType;
+
+        foreach (var syntaxRef in containingType.DeclaringSyntaxReferences)
+        {
+            var typeDecl = syntaxRef.GetSyntax(cancellationToken);
+            if (typeDecl is not TypeDeclarationSyntax typeDeclarationSyntax)
+                continue;
+
+            var semanticModel = compilation.GetSemanticModel(typeDecl.SyntaxTree);
+
+            // Look for identifier references to this method that might be used as method groups
+            var identifiers = typeDeclarationSyntax.DescendantNodes()
+                .OfType<IdentifierNameSyntax>()
+                .Where(i => i.Identifier.Text == methodSymbol.Name);
+
+            foreach (var identifier in identifiers)
+            {
+                var symbolInfo = semanticModel.GetSymbolInfo(identifier, cancellationToken);
+                if (!SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol, methodSymbol))
+                    continue;
+
+                // Check if this identifier is used in a context where it's converted to a delegate
+                var parent = identifier.Parent;
+
+                // Assignment to a delegate variable
+                if (parent is AssignmentExpressionSyntax or EqualsValueClauseSyntax)
+                    return true;
+
+                // Passed as an argument (might be delegate parameter)
+                if (parent is ArgumentSyntax)
+                    return true;
+
+                // Used in a delegate creation expression
+                if (parent is ObjectCreationExpressionSyntax)
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool AccessesInstanceMembers(

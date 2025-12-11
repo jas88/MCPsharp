@@ -87,7 +87,7 @@ public partial class BulkEditService
                     ProcessStartTime = startTime,
                     ProcessEndTime = DateTime.UtcNow,
                     EditDuration = DateTime.UtcNow - startTime,
-                    BackupCreated = false,
+                    BackupCreated = false, // No backup in preview mode
                     Skipped = false
                 };
             }
@@ -203,17 +203,12 @@ public partial class BulkEditService
                 switch (edit)
                 {
                     case ReplaceEdit replaceEdit:
-                        if (replaceEdit.StartLine == 1 && replaceEdit.StartColumn == 1)
-                        {
-                            newContent = replaceEdit.NewText + newContent;
-                        }
-                        else
-                        {
-                            newContent = replaceEdit.NewText + newContent;
-                        }
+                        // TODO: Implement proper text replacement at specified positions
+                        // For now, this is a placeholder that prepends the new text
+                        newContent = replaceEdit.NewText + newContent;
                         changes.Add(new FileChange
                         {
-                            ChangeType = FileChangeType.Insert,
+                            ChangeType = FileChangeType.Replace,
                             StartLine = replaceEdit.StartLine,
                             StartColumn = replaceEdit.StartColumn,
                             EndLine = replaceEdit.EndLine,
@@ -420,8 +415,59 @@ public partial class BulkEditService
             var content = await File.ReadAllTextAsync(filePath, cancellationToken);
             originalSize = content.Length;
 
-            // Apply edits
+            // Apply edits from the operation
             var newContent = content;
+            var changes = new List<FileChange>();
+
+            foreach (var edit in operation.Edits)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                switch (edit)
+                {
+                    case ReplaceEdit replaceEdit:
+                        // TODO: Implement proper text replacement at specified positions
+                        newContent = replaceEdit.NewText + newContent;
+                        changes.Add(new FileChange
+                        {
+                            ChangeType = FileChangeType.Replace,
+                            StartLine = replaceEdit.StartLine,
+                            StartColumn = replaceEdit.StartColumn,
+                            EndLine = replaceEdit.EndLine,
+                            EndColumn = replaceEdit.EndColumn,
+                            NewText = replaceEdit.NewText
+                        });
+                        break;
+                    case InsertEdit insertEdit:
+                        newContent = insertEdit.NewText + newContent;
+                        changes.Add(new FileChange
+                        {
+                            ChangeType = FileChangeType.Insert,
+                            StartLine = insertEdit.StartLine,
+                            StartColumn = insertEdit.StartColumn,
+                            EndLine = insertEdit.StartLine,
+                            EndColumn = insertEdit.StartColumn,
+                            NewText = insertEdit.NewText
+                        });
+                        break;
+                    case DeleteEdit deleteEdit:
+                        var lines = newContent.Split('\n').ToList();
+                        if (deleteEdit.StartLine <= lines.Count)
+                        {
+                            lines.RemoveAt(deleteEdit.StartLine - 1);
+                            newContent = string.Join('\n', lines);
+                        }
+                        changes.Add(new FileChange
+                        {
+                            ChangeType = FileChangeType.Delete,
+                            StartLine = deleteEdit.StartLine,
+                            StartColumn = deleteEdit.StartColumn,
+                            EndLine = deleteEdit.EndLine,
+                            EndColumn = deleteEdit.EndColumn
+                        });
+                        break;
+                }
+            }
 
             newSize = newContent.Length;
 

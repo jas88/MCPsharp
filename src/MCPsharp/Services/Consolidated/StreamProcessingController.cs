@@ -516,6 +516,7 @@ public class StreamProcessingController
 
         return new StreamValidationResult { IsValid = true };
     }
+    #pragma warning restore CS1998
 
     private async Task<IStreamProcessor?> GetProcessorAsync(string processorType, ProcessorOptions? options, CancellationToken ct)
     {
@@ -691,6 +692,7 @@ public class StreamProcessingController
         // Implementation for processing data streams
         return new List<StreamProcessResult>();
     }
+    #pragma warning restore CS1998
 
     private static string GetOutputPath(string? outputPath, string inputFile, string? inputRoot = null)
     {
@@ -723,6 +725,7 @@ public class StreamProcessingController
             IOWaitTime = context.IOWaitTime
         };
     }
+    #pragma warning restore CS1998
 
     private static double CalculateProcessingRate(StreamOperationContext context)
     {
@@ -763,6 +766,7 @@ public class StreamProcessingController
             DiskWriteBytes = context.BytesWritten
         };
     }
+    #pragma warning restore CS1998
 
     private static List<string> GetRecentStreamLogs(StreamOperationContext context, int maxEntries)
     {
@@ -792,6 +796,7 @@ public class StreamProcessingController
 
         return streams;
     }
+    #pragma warning restore CS1998
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamCancelResult> CancelStreamAsync(string operationId, CancellationToken ct)
@@ -803,6 +808,7 @@ public class StreamProcessingController
             Message = "Stream operation cancelled"
         };
     }
+    #pragma warning restore CS1998
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamPauseResult> PauseStreamAsync(string operationId, CancellationToken ct)
@@ -814,6 +820,7 @@ public class StreamProcessingController
             Message = "Stream operation paused"
         };
     }
+    #pragma warning restore CS1998
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamResumeResult> ResumeStreamAsync(string operationId, CancellationToken ct)
@@ -825,6 +832,7 @@ public class StreamProcessingController
             Message = "Stream operation resumed"
         };
     }
+    #pragma warning restore CS1998
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamCleanupResult> CleanupStreamsAsync(TimeSpan? maxAge, CancellationToken ct)
@@ -853,6 +861,7 @@ public class StreamProcessingController
             Message = $"Cleaned up {cleanedCount} stream operations"
         };
     }
+    #pragma warning restore CS1998
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamRegisterResult> RegisterProcessorAsync(StreamProcessorDefinition definition, CancellationToken ct)
@@ -864,6 +873,7 @@ public class StreamProcessingController
             Message = $"Processor {definition.Name} registered successfully"
         };
     }
+    #pragma warning restore CS1998
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<StreamUnregisterResult> UnregisterProcessorAsync(string processorName, CancellationToken ct)
@@ -876,6 +886,7 @@ public class StreamProcessingController
             Message = success ? $"Processor {processorName} unregistered" : $"Processor {processorName} not found"
         };
     }
+    #pragma warning restore CS1998
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task CleanupStreamContextAsync(StreamOperationContext context, CancellationToken ct)
@@ -883,6 +894,7 @@ public class StreamProcessingController
         // Cleanup temporary files, close streams, etc.
         context.Status = context.Status == StreamStatus.Running ? StreamStatus.Completed : context.Status;
     }
+    #pragma warning restore CS1998
 
     #endregion
 }

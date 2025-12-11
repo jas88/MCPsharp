@@ -626,6 +626,7 @@ public class AnalyzerHost : IAnalyzerHost
             return ImmutableArray<AnalyzerHealthStatus>.Empty;
         }
     }
+    #pragma warning restore CS1998
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task<IAnalyzer?> CreateAnalyzerInstanceAsync(AnalyzerInfo info, string assemblyPath, CancellationToken cancellationToken)
@@ -667,6 +668,7 @@ public class AnalyzerHost : IAnalyzerHost
             return null;
         }
     }
+    #pragma warning restore CS1998
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     private async Task GenerateFixesAsync(AnalysisSessionResult sessionResult, CancellationToken cancellationToken)
@@ -682,6 +684,7 @@ public class AnalyzerHost : IAnalyzerHost
             _logger.LogError(ex, "Error generating fixes for session {SessionId}", sessionResult.SessionId);
         }
     }
+    #pragma warning restore CS1998
 
     public async Task<AnalyzerResult> RunAnalyzerAsync(string analyzerId, string targetPath, AnalyzerOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -873,6 +876,7 @@ public class AnalyzerHost : IAnalyzerHost
             return null;
         }
     }
+    #pragma warning restore CS1998
 
     public async Task<AnalyzerUnloadResult> UnloadAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default)
     {

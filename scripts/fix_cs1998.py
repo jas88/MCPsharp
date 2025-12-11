@@ -38,24 +38,75 @@ def find_method_body(lines: List[str], start_idx: int) -> Tuple[int, int, List[s
     found_brace = False
     end_idx = start_idx
     return_statements = []
+    in_string = False
+    in_char = False
+    in_single_comment = False
+    in_multi_comment = False
+    escape_next = False
 
     for i in range(start_idx, min(start_idx + 200, len(lines))):
         line = lines[i]
 
-        if '{' in line:
-            found_brace = True
-            brace_count += line.count('{')
+        # Simple state tracking for strings/comments (not perfect but better than nothing)
+        for j, char in enumerate(line):
+            if escape_next:
+                escape_next = False
+                continue
 
-        if '}' in line:
-            brace_count -= line.count('}')
+            if char == '\\' and (in_string or in_char):
+                escape_next = True
+                continue
+
+            # Track multi-line comments
+            if not in_string and not in_char and not in_single_comment:
+                if j < len(line) - 1 and line[j:j+2] == '/*':
+                    in_multi_comment = True
+                    continue
+                if in_multi_comment and j < len(line) - 1 and line[j:j+2] == '*/':
+                    in_multi_comment = False
+                    continue
+
+            # Track single-line comments
+            if not in_string and not in_char and not in_multi_comment:
+                if j < len(line) - 1 and line[j:j+2] == '//':
+                    in_single_comment = True
+                    break
+
+            if in_single_comment or in_multi_comment:
+                continue
+
+            # Track strings
+            if char == '"' and not in_char:
+                in_string = not in_string
+                continue
+
+            # Track character literals
+            if char == "'" and not in_string:
+                in_char = not in_char
+                continue
+
+            # Count braces only when not in strings/comments
+            if not in_string and not in_char:
+                if char == '{':
+                    found_brace = True
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+
+        # Reset single-line comment state at end of line
+        in_single_comment = False
 
         if found_brace and brace_count > 0:
-            # Look for return statements
+            # Look for return statements - match both "return value;" and bare "return;"
             return_match = re.search(r'\breturn\s+(.+?);', line)
+            bare_return_match = re.search(r'\breturn\s*;', line)
+
             if return_match:
                 return_value = return_match.group(1).strip()
-                if return_value:  # Not just "return;"
-                    return_statements.append((i, return_value))
+                return_statements.append((i, return_value))
+            elif bare_return_match:
+                # Add bare return statements with empty string as value
+                return_statements.append((i, ''))
 
         if found_brace and brace_count == 0:
             end_idx = i

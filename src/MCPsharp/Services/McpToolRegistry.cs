@@ -10,6 +10,7 @@ using MCPsharp.Services.Phase3;
 using MCPsharp.Services.Consolidated;
 using MCPsharp.Services.Analyzers;
 using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry;
+using MCPsharp.Services.AI;
 using MCPsharp.Models.LargeFileOptimization;
 using Microsoft.Extensions.Logging;
 
@@ -76,6 +77,11 @@ public partial class McpToolRegistry
     private readonly ResponseProcessor _responseProcessor;
     private readonly ILoggerFactory? _loggerFactory;
 
+    // AI-powered tools
+    private readonly CodebaseQueryService? _codebaseQuery;
+    private readonly AICodeTransformationService? _aiCodeTransformation;
+    private readonly ILogger? _logger;
+
     public McpToolRegistry(
         ProjectContextManager projectContext,
         RoslynWorkspace? workspace = null,
@@ -97,7 +103,9 @@ public partial class McpToolRegistry
         IRoslynAnalyzerService? roslynAnalyzerService = null,
         BuiltInCodeFixRegistry? codeFixRegistry = null,
         ISearchService? searchService = null,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        CodebaseQueryService? codebaseQuery = null,
+        AICodeTransformationService? aiCodeTransformation = null)
     {
         _projectContext = projectContext;
         _workspace = workspace;
@@ -123,6 +131,9 @@ public partial class McpToolRegistry
         _roslynAnalyzerService = roslynAnalyzerService;
         _searchService = searchService;
         _loggerFactory = loggerFactory;
+        _codebaseQuery = codebaseQuery;
+        _aiCodeTransformation = aiCodeTransformation;
+        _logger = loggerFactory?.CreateLogger<McpToolRegistry>();
 
         // Initialize response processor with configuration
         var responseConfig = ResponseConfiguration.LoadFromEnvironment();
@@ -130,6 +141,9 @@ public partial class McpToolRegistry
         _responseProcessor = new ResponseProcessor(responseConfig, responseLogger);
 
         _tools = RegisterTools();
+
+        // Register AI-powered tools if available
+        RegisterAITools();
     }
 
     /// <summary>
@@ -173,6 +187,11 @@ public partial class McpToolRegistry
                 "analyze_call_graph" => await ExecuteAnalyzeCallGraph(request.Arguments),
                 "find_recursive_calls" => await ExecuteFindRecursiveCalls(request.Arguments),
                 "analyze_type_dependencies" => await ExecuteAnalyzeTypeDependencies(request.Arguments),
+                // AI-powered tools
+                "ask_codebase" => await HandleAskCodebaseAsync(request.Arguments),
+                "ai_suggest_fix" => await HandleAISuggestFixAsync(request.Arguments),
+                "ai_refactor" => await HandleAIRefactorAsync(request.Arguments),
+                "ai_implement_feature" => await HandleAIImplementFeatureAsync(request.Arguments),
                 // Phase 2 tools
                 "get_workflows" => await ExecuteGetWorkflows(request.Arguments),
                 "parse_workflow" => await ExecuteParseWorkflow(request.Arguments),
@@ -406,7 +425,7 @@ public partial class McpToolRegistry
             new McpTool
             {
                 Name = "file_read",
-                Description = "Read the contents of a file",
+                Description = "Read the contents of a file. Consider using semantic tools (find_symbol, get_class_structure, find_references) first to understand code structure and relationships, then use file_read for full context when needed. Semantic tools provide structured data that's easier to process than raw file content.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -449,7 +468,19 @@ public partial class McpToolRegistry
             new McpTool
             {
                 Name = "file_edit",
-                Description = "Apply text edits to a file",
+                Description = @"Apply text edits to a file using line/column positions.
+
+**DEPRECATED: For C# code modifications, use AI-powered tools instead:**
+- Use `ai_suggest_fix` for bug fixes
+- Use `ai_refactor` for refactoring
+- Use `ai_implement_feature` for new features
+
+These tools use Roslyn AST and guarantee syntactically valid code.
+
+Edit types:
+- replace: Requires start_line, start_column, end_line, end_column, new_text
+- insert: Requires line, column, text
+- delete: Requires start_line, start_column, end_line, end_column",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -462,7 +493,7 @@ public partial class McpToolRegistry
                     {
                         Name = "edits",
                         Type = "array",
-                        Description = "Array of edit operations to apply",
+                        Description = "Array of edit operations with line/column positions",
                         Required = true,
                         Items = new Dictionary<string, object>
                         {
@@ -472,9 +503,51 @@ public partial class McpToolRegistry
                                 ["type"] = new Dictionary<string, object>
                                 {
                                     ["type"] = "string",
-                                    ["enum"] = new[] { "replace", "insert", "delete" }
+                                    ["enum"] = new[] { "replace", "insert", "delete" },
+                                    ["description"] = "Type of edit operation"
+                                },
+                                ["start_line"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Starting line number (0-indexed, required for replace/delete)"
+                                },
+                                ["start_column"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Starting column number (0-indexed, required for replace/delete)"
+                                },
+                                ["end_line"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Ending line number (0-indexed, required for replace/delete)"
+                                },
+                                ["end_column"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Ending column number (0-indexed, required for replace/delete)"
+                                },
+                                ["new_text"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "string",
+                                    ["description"] = "New text for replace operations"
+                                },
+                                ["line"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Line number for insert operations (0-indexed)"
+                                },
+                                ["column"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "integer",
+                                    ["description"] = "Column number for insert operations (0-indexed)"
+                                },
+                                ["text"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "string",
+                                    ["description"] = "Text to insert"
                                 }
-                            }
+                            },
+                            ["required"] = new[] { "type" }
                         }
                     }
                 )
@@ -482,7 +555,7 @@ public partial class McpToolRegistry
             new McpTool
             {
                 Name = "search_text",
-                Description = "Search for text or regex patterns across project files",
+                Description = "Search for text or regex patterns across project files. Use find_symbol for code elements (classes, methods, etc.) when possible as it provides semantic understanding. Text search is useful for comments, strings, documentation, and non-code content where semantic analysis isn't applicable.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -557,7 +630,7 @@ public partial class McpToolRegistry
             new McpTool
             {
                 Name = "find_symbol",
-                Description = "Find symbols (classes, methods, properties) by name",
+                Description = "Search for symbols (classes, methods, properties) by name using the semantic index. PREFERRED over reading files directly - returns structured symbol data with location info. Supports partial matching and kind filtering (class, method, property, field, etc.). Use this to locate code elements before examining them in detail.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -606,7 +679,7 @@ public partial class McpToolRegistry
             new McpTool
             {
                 Name = "get_class_structure",
-                Description = "Get complete structure of a class including all members",
+                Description = "Get complete structure of a class including all members, inheritance, and implementations. PREFERRED over reading the file directly - returns structured member data with types, accessibility, and relationships. Use to understand a class before modifying it or to analyze its design.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -729,7 +802,7 @@ public partial class McpToolRegistry
             new McpTool
             {
                 Name = "find_references",
-                Description = "Find all references to a symbol",
+                Description = "Find all references to a symbol across the codebase using semantic analysis. More accurate than text search as it understands symbol identity, not just text matches. Use for refactoring impact analysis or understanding how code is used. Preferred over grep for tracking symbol usage.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -1029,7 +1102,7 @@ public partial class McpToolRegistry
             new McpTool
             {
                 Name = "find_callers",
-                Description = "Find all callers of a specific method (who calls this method)",
+                Description = "Find all methods that call a specific method using call graph analysis. PREFERRED over grep/search for understanding code flow and dependencies. Returns structured caller information with file and line locations. Use to analyze method dependencies before refactoring or to trace execution paths.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {

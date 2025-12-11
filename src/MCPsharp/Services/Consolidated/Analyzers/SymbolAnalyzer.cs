@@ -31,6 +31,7 @@ public class SymbolAnalyzer
     {
         try
         {
+            ct.ThrowIfCancellationRequested();
             if (_symbolQuery == null || _workspace == null) return null;
 
             var symbols = await _symbolQuery.FindSymbolsAsync(symbolName, context);
@@ -191,10 +192,12 @@ public class SymbolAnalyzer
             var definition = await GetSymbolDefinitionAsync(symbolName, context, ct);
             if (definition == null) return null;
 
+            // Get all types once to avoid duplicate calls
+            var allTypes = await _symbolQuery.GetAllTypesAsync();
+
             if (!string.IsNullOrEmpty(definition.ContainingType))
             {
-                var allSymbols = await _symbolQuery.GetAllTypesAsync();
-                var sameTypeSymbols = allSymbols
+                var sameTypeSymbols = allTypes
                     .Where(s => s.ContainerName == definition.ContainingType)
                     .Take(20);
                 relatedSymbols.AddRange(sameTypeSymbols
@@ -233,8 +236,8 @@ public class SymbolAnalyzer
                     }));
             }
 
-            var allTypesForSimilarity = await _symbolQuery.GetAllTypesAsync();
-            var similarSymbols = allTypesForSimilarity
+            // Reuse the allTypes collection for similarity search
+            var similarSymbols = allTypes
                 .Where(s => Math.Abs(s.Name.Length - symbolName.Length) <= 2 &&
                            (s.Name.Contains(symbolName.Substring(0, Math.Min(3, symbolName.Length))) ||
                             symbolName.Contains(s.Name.Substring(0, Math.Min(3, s.Name.Length)))))

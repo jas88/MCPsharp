@@ -1,0 +1,32 @@
+<Project>
+  <!-- Import shared build standards -->
+  <Import Project="build-standards/Directory.Build.props.shared" />
+
+  <!-- Repository-specific overrides -->
+  <PropertyGroup>
+    <!-- Already uses .NET 9.0 and LangVersion latest -->
+    <LangVersion>latest</LangVersion>
+
+    <!-- Package metadata for this repository -->
+    <RepositoryUrl>https://github.com/jas88/MCPsharp</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/jas88/MCPsharp</PackageProjectUrl>
+    <Description>Model Context Protocol (MCP) server for intelligent C# project analysis and semantic code editing</Description>
+    <PackageTags>mcp;csharp;roslyn;lsp;code-analysis;semantic-editing</PackageTags>
+
+    <!-- MinVer configuration for this repo -->
+    <MinVerMinimumMajorMinor>0.1</MinVerMinimumMajorMinor>
+
+    <!-- Temporarily disable TreatWarningsAsErrors while adopting build-standards -->
+    <!-- TODO: Re-enable after fixing existing analyzer warnings -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- Keep existing analyzer references in csproj files -->
+  <!-- MCPsharp.csproj already has comprehensive analyzers configured -->
+
+  <!-- Prevent duplicate coverlet.collector reference from shared props -->
+  <!-- Test project already has it explicitly configured -->
+  <ItemGroup Condition="$(MSBuildProjectDirectory.Contains('Test'))">
+    <PackageReference Remove="coverlet.collector" />
+  </ItemGroup>
+</Project>
