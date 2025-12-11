@@ -10,8 +10,8 @@
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
 
     <!-- Core Roslyn packages for C# analysis -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.11.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.0.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.11.0" />
 
     <!-- File system utilities -->
