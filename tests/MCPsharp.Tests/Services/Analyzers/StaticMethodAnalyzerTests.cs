@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.Analyzers;
 
@@ -63,7 +63,7 @@ public class StaticMethodAnalyzerTests
         return newSolution.GetDocument(document.Id)!;
     }
 
-    [Fact]
+    [Test]
     public async Task NoDuplicateStaticModifier_WhenAppliedTwice()
     {
         // Arrange
@@ -80,24 +80,24 @@ class TestClass
 
         // Act - Apply fix once
         var diagnostics = await GetDiagnostics(document, compilation);
-        Assert.Single(diagnostics);
+        Assert.That(diagnostics, Has.Count.EqualTo(1));
 
         document = await ApplyCodeFix(document, diagnostics[0]);
         var text = (await document.GetTextAsync()).ToString();
 
         // Verify first application
-        Assert.Contains("private static", text);
-        Assert.DoesNotContain("static static", text);
+        Assert.That(text, Does.Contain("private static"));
+        Assert.That(text, Does.Not.Contain("static static"));
 
         // Act - Try to apply again (shouldn't produce duplicate)
         compilation = await document.Project.GetCompilationAsync();
         diagnostics = await GetDiagnostics(document, compilation!);
 
         // Should be no diagnostics since method is already static
-        Assert.Empty(diagnostics);
+        Assert.That(diagnostics, Is.Empty);
     }
 
-    [Fact]
+    [Test]
     public async Task DoesNotSuggestStatic_WhenMethodAccessesInstanceMember()
     {
         // Arrange
@@ -118,10 +118,10 @@ class TestClass
         var diagnostics = await GetDiagnostics(document, compilation);
 
         // Assert - Should not suggest making it static since it accesses _value
-        Assert.Empty(diagnostics);
+        Assert.That(diagnostics, Is.Empty);
     }
 
-    [Fact]
+    [Test]
     public async Task DoesNotSuggestStatic_WhenMethodUsedAsDelegate()
     {
         // Arrange
@@ -148,10 +148,10 @@ class TestClass
         var diagnostics = await GetDiagnostics(document, compilation);
 
         // Assert - Should not suggest making HelperMethod static since it's used as a delegate
-        Assert.Empty(diagnostics);
+        Assert.That(diagnostics, Is.Empty);
     }
 
-    [Fact]
+    [Test]
     public async Task SuggestsStatic_WhenMethodDoesNotAccessInstanceMembers()
     {
         // Arrange
@@ -170,11 +170,11 @@ class TestClass
         var diagnostics = await GetDiagnostics(document, compilation);
 
         // Assert
-        Assert.Single(diagnostics);
-        Assert.Equal(StaticMethodAnalyzer.DiagnosticId, diagnostics[0].Id);
+        Assert.That(diagnostics, Has.Count.EqualTo(1));
+        Assert.That(diagnostics[0].Id, Is.EqualTo(StaticMethodAnalyzer.DiagnosticId));
     }
 
-    [Fact]
+    [Test]
     public async Task ProperlyFormatsStaticModifier_WithMultipleModifiers()
     {
         // Arrange
@@ -192,15 +192,15 @@ class TestClass
 
         // Act
         var diagnostics = await GetDiagnostics(document, compilation);
-        Assert.Single(diagnostics);
+        Assert.That(diagnostics, Has.Count.EqualTo(1));
 
         document = await ApplyCodeFix(document, diagnostics[0]);
         var text = (await document.GetTextAsync()).ToString();
 
         // Assert - Should be "private static async" with proper spacing
-        Assert.Contains("private static async", text);
-        Assert.DoesNotContain("static static", text);
-        Assert.DoesNotContain("  static", text); // No double spaces before static
-        Assert.DoesNotContain("static  ", text); // No double spaces after static
+        Assert.That(text, Does.Contain("private static async"));
+        Assert.That(text, Does.Not.Contain("static static"));
+        Assert.That(text, Does.Not.Contain("  static")); // No double spaces before static
+        Assert.That(text, Does.Not.Contain("static  ")); // No double spaces after static
     }
 }

@@ -1,9 +1,8 @@
 using System.Text.Json;
-using FluentAssertions;
 using MCPsharp.Models;
 using MCPsharp.Services;
 using MCPsharp.Services.Roslyn;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 
@@ -19,7 +18,7 @@ public class JsonRpcHandlerTests
         };
     }
 
-    [Fact]
+    [Test]
     public async Task HandleRequest_ShouldParseValidRequest()
     {
         // Arrange
@@ -36,14 +35,14 @@ public class JsonRpcHandlerTests
         var response = await handler.HandleRequest(request);
 
         // Assert
-        response.Should().NotBeNull();
-        response.Jsonrpc.Should().Be("2.0");
-        response.Id.Should().Be("test-1");
-        response.Error.Should().BeNull();
-        response.Result.Should().NotBeNull();
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Jsonrpc, Is.EqualTo("2.0"));
+        Assert.That(response.Id, Is.EqualTo("test-1"));
+        Assert.That(response.Error, Is.Null);
+        Assert.That(response.Result, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task RunAsync_ShouldHandleInvalidJson()
     {
         // Arrange
@@ -57,13 +56,13 @@ public class JsonRpcHandlerTests
         var responseLine = output.ToString().Trim();
         var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseLine, _jsonOptions);
 
-        response.Should().NotBeNull();
-        response!.Error.Should().NotBeNull();
-        response.Error!.Code.Should().Be(JsonRpcErrorCodes.ParseError);
-        response.Error.Message.Should().Contain("Parse error");
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.Error, Is.Not.Null);
+        Assert.That(response.Error!.Code, Is.EqualTo(JsonRpcErrorCodes.ParseError));
+        Assert.That(response.Error.Message, Does.Contain("Parse error"));
     }
 
-    [Fact]
+    [Test]
     public async Task HandleRequest_ShouldReturnMethodNotFoundError()
     {
         // Arrange
@@ -80,13 +79,13 @@ public class JsonRpcHandlerTests
         var response = await handler.HandleRequest(request);
 
         // Assert
-        response.Error.Should().NotBeNull();
-        response.Error!.Code.Should().Be(JsonRpcErrorCodes.MethodNotFound);
-        response.Error.Message.Should().Contain("Method not found");
-        response.Result.Should().BeNull();
+        Assert.That(response.Error, Is.Not.Null);
+        Assert.That(response.Error!.Code, Is.EqualTo(JsonRpcErrorCodes.MethodNotFound));
+        Assert.That(response.Error.Message, Does.Contain("Method not found"));
+        Assert.That(response.Result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task HandleRequest_ShouldHandleInitializeMethod()
     {
         // Arrange
@@ -103,16 +102,16 @@ public class JsonRpcHandlerTests
         var response = await handler.HandleRequest(request);
 
         // Assert
-        response.Error.Should().BeNull();
-        response.Result.Should().NotBeNull();
+        Assert.That(response.Error, Is.Null);
+        Assert.That(response.Result, Is.Not.Null);
 
         var resultJson = JsonSerializer.Serialize(response.Result, _jsonOptions);
-        resultJson.Should().Contain("protocolVersion");
-        resultJson.Should().Contain("serverInfo");
-        resultJson.Should().Contain("MCPsharp");
+        Assert.That(resultJson, Does.Contain("protocolVersion"));
+        Assert.That(resultJson, Does.Contain("serverInfo"));
+        Assert.That(resultJson, Does.Contain("MCPsharp"));
     }
 
-    [Fact]
+    [Test]
     public async Task RunAsync_ShouldMatchRequestIdInResponse()
     {
         // Arrange
@@ -133,11 +132,11 @@ public class JsonRpcHandlerTests
         var responseLine = output.ToString().Trim();
         var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseLine, _jsonOptions);
 
-        response.Should().NotBeNull();
-        response!.Id.ToString().Should().Be("unique-id-123");
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.Id.ToString(), Is.EqualTo("unique-id-123"));
     }
 
-    [Fact]
+    [Test]
     public async Task RunAsync_ShouldHandleMultipleRequests()
     {
         // Arrange
@@ -158,18 +157,18 @@ public class JsonRpcHandlerTests
 
         // Assert
         var responseLines = output.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        responseLines.Should().HaveCount(3);
+        Assert.That(responseLines, Has.Length.EqualTo(3));
 
         var responses = responseLines
             .Select(line => JsonSerializer.Deserialize<JsonRpcResponse>(line, _jsonOptions))
             .ToList();
 
-        responses[0]!.Id.ToString().Should().Be("req-1");
-        responses[1]!.Id.ToString().Should().Be("req-2");
-        responses[2]!.Id.ToString().Should().Be("req-3");
+        Assert.That(responses[0]!.Id.ToString(), Is.EqualTo("req-1"));
+        Assert.That(responses[1]!.Id.ToString(), Is.EqualTo("req-2"));
+        Assert.That(responses[2]!.Id.ToString(), Is.EqualTo("req-3"));
     }
 
-    [Fact]
+    [Test]
     public async Task HandleRequest_ShouldReturnProperErrorStructure()
     {
         // Arrange
@@ -186,15 +185,15 @@ public class JsonRpcHandlerTests
         var response = await handler.HandleRequest(request);
 
         // Assert
-        response.Jsonrpc.Should().Be("2.0");
-        response.Id.Should().Be("error-test");
-        response.Result.Should().BeNull();
-        response.Error.Should().NotBeNull();
-        response.Error!.Code.Should().Be(JsonRpcErrorCodes.MethodNotFound);
-        response.Error.Message.Should().NotBeEmpty();
+        Assert.That(response.Jsonrpc, Is.EqualTo("2.0"));
+        Assert.That(response.Id, Is.EqualTo("error-test"));
+        Assert.That(response.Result, Is.Null);
+        Assert.That(response.Error, Is.Not.Null);
+        Assert.That(response.Error!.Code, Is.EqualTo(JsonRpcErrorCodes.MethodNotFound));
+        Assert.That(response.Error.Message, Is.Not.Empty);
     }
 
-    [Fact]
+    [Test]
     public async Task HandleRequest_ShouldRejectInvalidJsonRpcVersion()
     {
         // Arrange
@@ -211,12 +210,12 @@ public class JsonRpcHandlerTests
         var response = await handler.HandleRequest(request);
 
         // Assert
-        response.Error.Should().NotBeNull();
-        response.Error!.Code.Should().Be(JsonRpcErrorCodes.InvalidRequest);
-        response.Error.Message.Should().Contain("version");
+        Assert.That(response.Error, Is.Not.Null);
+        Assert.That(response.Error!.Code, Is.EqualTo(JsonRpcErrorCodes.InvalidRequest));
+        Assert.That(response.Error.Message, Does.Contain("version"));
     }
 
-    [Fact]
+    [Test]
     public async Task HandleRequest_ShouldHandleToolsListMethod()
     {
         // Arrange
@@ -233,14 +232,14 @@ public class JsonRpcHandlerTests
         var response = await handler.HandleRequest(request);
 
         // Assert
-        response.Error.Should().BeNull();
-        response.Result.Should().NotBeNull();
+        Assert.That(response.Error, Is.Null);
+        Assert.That(response.Result, Is.Not.Null);
 
         var resultJson = JsonSerializer.Serialize(response.Result, _jsonOptions);
-        resultJson.Should().Contain("tools");
+        Assert.That(resultJson, Does.Contain("tools"));
     }
 
-    [Fact]
+    [Test]
     public async Task RunAsync_ShouldSkipEmptyLines()
     {
         // Arrange
@@ -254,13 +253,13 @@ public class JsonRpcHandlerTests
 
         // Assert
         var responseLines = output.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        responseLines.Should().HaveCount(1);
+        Assert.That(responseLines, Has.Length.EqualTo(1));
 
         var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseLines[0], _jsonOptions);
-        response!.Id.ToString().Should().Be("skip-test");
+        Assert.That(response!.Id.ToString(), Is.EqualTo("skip-test"));
     }
 
-    [Fact]
+    [Test]
     public async Task HandleRequest_ShouldValidateJsonRpcField()
     {
         // Arrange
@@ -277,7 +276,7 @@ public class JsonRpcHandlerTests
         var response = await handler.HandleRequest(request);
 
         // Assert
-        response.Jsonrpc.Should().Be("2.0");
+        Assert.That(response.Jsonrpc, Is.EqualTo("2.0"));
     }
 
     private static JsonRpcHandler CreateHandler(string input, out StringWriter output)

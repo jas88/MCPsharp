@@ -1,5 +1,5 @@
 using MCPsharp.Services.Roslyn;
-using Xunit;
+using NUnit.Framework;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,7 +11,7 @@ namespace MCPsharp.Tests.Services.Roslyn;
 /// </summary>
 public class RoslynWorkspaceInitializationTests
 {
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithRealProject_LoadsWithoutErrors()
     {
         // Arrange
@@ -19,6 +19,7 @@ public class RoslynWorkspaceInitializationTests
         if (!Directory.Exists(projectPath))
         {
             // Skip test if project directory not found
+            Assert.Ignore("Project directory not found");
             return;
         }
 
@@ -29,30 +30,31 @@ public class RoslynWorkspaceInitializationTests
         var health = workspace.GetHealth();
 
         // Assert
-        Assert.True(health.IsInitialized, "Workspace should be initialized");
-        Assert.True(health.LoadedProjects > 0, "At least one project should be loaded");
-        Assert.True(health.TotalFiles > 0, "Should have source files");
-        Assert.True(health.ParseableFiles > 0, "Should have parseable files");
+        Assert.That(health.IsInitialized, Is.True, "Workspace should be initialized");
+        Assert.That(health.LoadedProjects > 0, Is.True, "At least one project should be loaded");
+        Assert.That(health.TotalFiles > 0, Is.True, "Should have source files");
+        Assert.That(health.ParseableFiles > 0, Is.True, "Should have parseable files");
 
         // The key assertion: error count should match actual build (0 errors)
         // Previously this was 179 errors due to missing NuGet references
-        Assert.True(health.ErrorCount < 50,
+        Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}. " +
             $"This indicates MSBuildWorkspace is loading references correctly.");
 
         // Verify semantic operations are available or close to being available
-        Assert.True(health.CanDoSyntaxOperations, "Should be able to do syntax operations");
+        Assert.That(health.CanDoSyntaxOperations, Is.True, "Should be able to do syntax operations");
 
         workspace.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithRealProject_CanFindSymbols()
     {
         // Arrange
         var projectPath = GetProjectPath();
         if (!Directory.Exists(projectPath))
         {
+            Assert.Ignore("Project directory not found");
             return;
         }
 
@@ -63,8 +65,8 @@ public class RoslynWorkspaceInitializationTests
         var compilation = workspace.GetCompilation();
 
         // Assert
-        Assert.NotNull(compilation);
-        Assert.True(compilation.References.Count() > 5,
+        Assert.That(compilation, Is.Not.Null);
+        Assert.That(compilation.References.Count() > 5, Is.True,
             $"Should have many references from NuGet packages, got {compilation.References.Count()}");
 
         // Verify we can find a known type (proves references are loaded)
@@ -72,12 +74,12 @@ public class RoslynWorkspaceInitializationTests
             n => n == "RoslynWorkspace",
             Microsoft.CodeAnalysis.SymbolFilter.Type);
 
-        Assert.NotEmpty(symbolsWithName);
+        Assert.That(symbolsWithName, Is.Not.Empty);
 
         workspace.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithSolutionFile_LoadsSuccessfully()
     {
         // Arrange
@@ -85,6 +87,7 @@ public class RoslynWorkspaceInitializationTests
         if (!File.Exists(slnPath))
         {
             // Skip test if solution not found
+            Assert.Ignore("Solution file not found");
             return;
         }
 
@@ -95,19 +98,19 @@ public class RoslynWorkspaceInitializationTests
         var health = workspace.GetHealth();
 
         // Assert
-        Assert.True(health.IsInitialized, "Workspace should be initialized from .sln file");
-        Assert.True(health.LoadedProjects > 0, "At least one project should be loaded from solution");
-        Assert.True(health.TotalFiles > 0, "Should have source files");
+        Assert.That(health.IsInitialized, Is.True, "Workspace should be initialized from .sln file");
+        Assert.That(health.LoadedProjects > 0, Is.True, "At least one project should be loaded from solution");
+        Assert.That(health.TotalFiles > 0, Is.True, "Should have source files");
 
         // The key fix: error count should be low, not 15k
-        Assert.True(health.ErrorCount < 50,
+        Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}. " +
             $"Regression test: Previously passing .sln file caused fallback to AdhocWorkspace with 15k errors.");
 
         workspace.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithCsprojFile_LoadsSuccessfully()
     {
         // Arrange
@@ -115,6 +118,7 @@ public class RoslynWorkspaceInitializationTests
         if (!File.Exists(csprojPath))
         {
             // Skip test if project file not found
+            Assert.Ignore("Project file not found");
             return;
         }
 
@@ -125,10 +129,10 @@ public class RoslynWorkspaceInitializationTests
         var health = workspace.GetHealth();
 
         // Assert
-        Assert.True(health.IsInitialized, "Workspace should be initialized from .csproj file");
-        Assert.True(health.LoadedProjects > 0, "At least one project should be loaded");
-        Assert.True(health.TotalFiles > 0, "Should have source files");
-        Assert.True(health.ErrorCount < 50,
+        Assert.That(health.IsInitialized, Is.True, "Workspace should be initialized from .csproj file");
+        Assert.That(health.LoadedProjects > 0, Is.True, "At least one project should be loaded");
+        Assert.That(health.TotalFiles > 0, Is.True, "Should have source files");
+        Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}");
 
         workspace.Dispose();

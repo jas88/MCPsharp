@@ -3,20 +3,22 @@ using MCPsharp.Models;
 using MCPsharp.Services;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Tests.TestFixtures;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Integration;
 
 /// <summary>
 /// Integration tests for reverse search MCP tools
 /// </summary>
-public class ReverseSearchMcpToolsTests : IDisposable
+[TestFixture]
+public class ReverseSearchMcpToolsTests
 {
-    private readonly ProjectContextManager _projectContext;
-    private readonly RoslynWorkspace _workspace;
-    private readonly McpToolRegistry _toolRegistry;
+    private ProjectContextManager _projectContext;
+    private RoslynWorkspace _workspace;
+    private McpToolRegistry _toolRegistry;
 
-    public ReverseSearchMcpToolsTests()
+    [SetUp]
+    public void SetUp()
     {
         _projectContext = new ProjectContextManager();
         _workspace = new RoslynWorkspace();
@@ -88,26 +90,26 @@ public class Consumer
         _projectContext.OpenProject(testDir);
     }
 
-    [Fact]
+    [Test]
     public void ToolRegistry_ShouldContainReverseSearchTools()
     {
         // Act
         var tools = _toolRegistry.GetTools();
 
         // Assert
-        Assert.Contains(tools, t => t.Name == "find_callers");
-        Assert.Contains(tools, t => t.Name == "find_call_chains");
-        Assert.Contains(tools, t => t.Name == "find_type_usages");
-        Assert.Contains(tools, t => t.Name == "analyze_call_patterns");
-        Assert.Contains(tools, t => t.Name == "analyze_inheritance");
-        Assert.Contains(tools, t => t.Name == "find_circular_dependencies");
-        Assert.Contains(tools, t => t.Name == "find_unused_methods");
-        Assert.Contains(tools, t => t.Name == "analyze_call_graph");
-        Assert.Contains(tools, t => t.Name == "find_recursive_calls");
-        Assert.Contains(tools, t => t.Name == "analyze_type_dependencies");
+        Assert.That(tools, Does.Contain(tools.FirstOrDefault(t => t.Name == "find_callers")));
+        Assert.That(tools, Does.Contain(tools.FirstOrDefault(t => t.Name == "find_call_chains")));
+        Assert.That(tools, Does.Contain(tools.FirstOrDefault(t => t.Name == "find_type_usages")));
+        Assert.That(tools, Does.Contain(tools.FirstOrDefault(t => t.Name == "analyze_call_patterns")));
+        Assert.That(tools, Does.Contain(tools.FirstOrDefault(t => t.Name == "analyze_inheritance")));
+        Assert.That(tools, Does.Contain(tools.FirstOrDefault(t => t.Name == "find_circular_dependencies")));
+        Assert.That(tools, Does.Contain(tools.FirstOrDefault(t => t.Name == "find_unused_methods")));
+        Assert.That(tools, Does.Contain(tools.FirstOrDefault(t => t.Name == "analyze_call_graph")));
+        Assert.That(tools, Does.Contain(tools.FirstOrDefault(t => t.Name == "find_recursive_calls")));
+        Assert.That(tools, Does.Contain(tools.FirstOrDefault(t => t.Name == "analyze_type_dependencies")));
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteFindCallers_ShouldReturnCallers()
     {
         // Arrange
@@ -127,12 +129,12 @@ public class Consumer
         Console.WriteLine($"Result: {result.Result?.GetType().Name ?? "null"}");
 
         // Assert
-        Assert.True(result.Success, $"Expected success but got: {result.Error}");
-        Assert.NotNull(result.Result);
-        Assert.True(result.Error == null, $"Expected null error but got: '{result.Error}'");
+        Assert.That(result.Success, Is.True, $"Expected success but got: {result.Error}");
+        Assert.That(result.Result, Is.Not.Null);
+        Assert.That(result.Error, Is.Null, $"Expected null error but got: '{result.Error}'");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteFindCallChains_ShouldReturnCallChains()
     {
         // Arrange
@@ -148,12 +150,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_call_chains", Arguments = arguments });
 
         // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.Result);
-        Assert.Null(result.Error);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Result, Is.Not.Null);
+        Assert.That(result.Error, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteFindTypeUsages_ShouldReturnTypeUsages()
     {
         // Arrange
@@ -166,12 +168,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_type_usages", Arguments = arguments });
 
         // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.Result);
-        Assert.Null(result.Error);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Result, Is.Not.Null);
+        Assert.That(result.Error, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAnalyzeCallPatterns_ShouldReturnPatternAnalysis()
     {
         // Arrange
@@ -185,12 +187,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_call_patterns", Arguments = arguments });
 
         // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.Result);
-        Assert.Null(result.Error);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Result, Is.Not.Null);
+        Assert.That(result.Error, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAnalyzeInheritance_ShouldReturnInheritanceAnalysis()
     {
         // Arrange
@@ -203,12 +205,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_inheritance", Arguments = arguments });
 
         // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.Result);
-        Assert.Null(result.Error);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Result, Is.Not.Null);
+        Assert.That(result.Error, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteFindCircularDependencies_ShouldReturnDependencies()
     {
         // Arrange
@@ -221,12 +223,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_circular_dependencies", Arguments = arguments });
 
         // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.Result);
-        Assert.Null(result.Error);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Result, Is.Not.Null);
+        Assert.That(result.Error, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteFindUnusedMethods_ShouldReturnUnusedMethods()
     {
         // Arrange
@@ -239,12 +241,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_unused_methods", Arguments = arguments });
 
         // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.Result);
-        Assert.Null(result.Error);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Result, Is.Not.Null);
+        Assert.That(result.Error, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAnalyzeCallGraph_ShouldReturnCallGraph()
     {
         // Arrange
@@ -257,12 +259,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_call_graph", Arguments = arguments });
 
         // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.Result);
-        Assert.Null(result.Error);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Result, Is.Not.Null);
+        Assert.That(result.Error, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteFindRecursiveCalls_ShouldReturnRecursiveCalls()
     {
         // Arrange
@@ -277,12 +279,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_recursive_calls", Arguments = arguments });
 
         // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.Result);
-        Assert.Null(result.Error);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Result, Is.Not.Null);
+        Assert.That(result.Error, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAnalyzeTypeDependencies_ShouldReturnDependencies()
     {
         // Arrange
@@ -295,12 +297,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_type_dependencies", Arguments = arguments });
 
         // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.Result);
-        Assert.Null(result.Error);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Result, Is.Not.Null);
+        Assert.That(result.Error, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteFindCallers_WithInvalidArguments_ShouldReturnError()
     {
         // Arrange
@@ -310,12 +312,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_callers", Arguments = arguments });
 
         // Assert
-        Assert.False(result.Success);
-        Assert.NotNull(result.Error);
-        Assert.Contains("MethodName is required", result.Error);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error, Does.Contain("MethodName is required"));
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteFindTypeUsages_WithInvalidArguments_ShouldReturnError()
     {
         // Arrange
@@ -325,12 +327,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_type_usages", Arguments = arguments });
 
         // Assert
-        Assert.False(result.Success);
-        Assert.NotNull(result.Error);
-        Assert.Contains("TypeName is required", result.Error);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error, Does.Contain("TypeName is required"));
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAnalyzeInheritance_WithInvalidArguments_ShouldReturnError()
     {
         // Arrange
@@ -340,12 +342,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_inheritance", Arguments = arguments });
 
         // Assert
-        Assert.False(result.Success);
-        Assert.NotNull(result.Error);
-        Assert.Contains("TypeName is required", result.Error);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error, Does.Contain("TypeName is required"));
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteUnknownTool_ShouldReturnError()
     {
         // Arrange
@@ -355,12 +357,12 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "unknown_tool", Arguments = arguments });
 
         // Assert
-        Assert.False(result.Success);
-        Assert.NotNull(result.Error);
-        Assert.Contains("Unknown tool", result.Error);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error, Does.Contain("Unknown tool"));
     }
 
-    [Fact]
+    [Test]
     public void ReverseSearchTools_ShouldHaveCorrectInputSchemas()
     {
         // Act
@@ -368,12 +370,12 @@ public class Consumer
         var findCallersTool = tools.FirstOrDefault(t => t.Name == "find_callers");
 
         // Assert
-        Assert.NotNull(findCallersTool);
-        Assert.NotNull(findCallersTool.InputSchema);
-        Assert.Equal("Find all methods that call a specific method using call graph analysis. PREFERRED over grep/search for understanding code flow and dependencies. Returns structured caller information with file and line locations. Use to analyze method dependencies before refactoring or to trace execution paths.", findCallersTool.Description);
+        Assert.That(findCallersTool, Is.Not.Null);
+        Assert.That(findCallersTool.InputSchema, Is.Not.Null);
+        Assert.That(findCallersTool.Description, Is.EqualTo("Find all methods that call a specific method using call graph analysis. PREFERRED over grep/search for understanding code flow and dependencies. Returns structured caller information with file and line locations. Use to analyze method dependencies before refactoring or to trace execution paths."));
     }
 
-    [Fact]
+    [Test]
     public void ReverseSearchTools_ShouldHaveValidSchemas()
     {
         // Act
@@ -386,16 +388,16 @@ public class Consumer
             t.Name == "find_recursive_calls").ToList();
 
         // Assert
-        Assert.True(reverseSearchTools.Count >= 10);
-        Assert.All(reverseSearchTools, tool =>
+        Assert.That(reverseSearchTools.Count, Is.GreaterThanOrEqualTo(10));
+        foreach (var tool in reverseSearchTools)
         {
-            Assert.NotNull(tool.Name);
-            Assert.NotNull(tool.Description);
-            Assert.NotNull(tool.InputSchema);
-        });
+            Assert.That(tool.Name, Is.Not.Null);
+            Assert.That(tool.Description, Is.Not.Null);
+            Assert.That(tool.InputSchema, Is.Not.Null);
+        }
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteFindCallChains_WithDirectionParameter_ShouldAcceptValidValues()
     {
         // Test backward direction
@@ -406,7 +408,7 @@ public class Consumer
         }");
 
         var backwardResult = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_call_chains", Arguments = backwardArgs });
-        Assert.True(backwardResult.Success);
+        Assert.That(backwardResult.Success, Is.True);
 
         // Test forward direction
         var forwardArgs = JsonDocument.Parse(@"
@@ -416,10 +418,10 @@ public class Consumer
         }");
 
         var forwardResult = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_call_chains", Arguments = forwardArgs });
-        Assert.True(forwardResult.Success);
+        Assert.That(forwardResult.Success, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteFindCallChains_WithMaxDepthParameter_ShouldAcceptValidValues()
     {
         // Arrange
@@ -433,11 +435,11 @@ public class Consumer
         var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_call_chains", Arguments = arguments });
 
         // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.Result);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Result, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteMultipleTools_Sequentially_ShouldWorkCorrectly()
     {
         // Act - Execute multiple tools in sequence
@@ -448,7 +450,7 @@ public class Consumer
         }");
 
         var callersResult = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_callers", Arguments = callersArgs });
-        Assert.True(callersResult.Success);
+        Assert.That(callersResult.Success, Is.True);
 
         var typeUsagesArgs = JsonDocument.Parse(@"
         {
@@ -456,7 +458,7 @@ public class Consumer
         }");
 
         var typeUsagesResult = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_type_usages", Arguments = typeUsagesArgs });
-        Assert.True(typeUsagesResult.Success);
+        Assert.That(typeUsagesResult.Success, Is.True);
 
         var patternsArgs = JsonDocument.Parse(@"
         {
@@ -465,10 +467,11 @@ public class Consumer
         }");
 
         var patternsResult = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_call_patterns", Arguments = patternsArgs });
-        Assert.True(patternsResult.Success);
+        Assert.That(patternsResult.Success, Is.True);
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         var context = _projectContext.GetProjectContext();
         if (context != null && Directory.Exists(context.RootPath))
@@ -483,6 +486,6 @@ public class Consumer
             }
         }
 
-        // RoslynWorkspace and ProjectContext no longer implement IDisposable
+        _workspace?.Dispose();
     }
 }

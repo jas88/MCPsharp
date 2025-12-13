@@ -1,4 +1,4 @@
-using Xunit;
+using NUnit.Framework;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
@@ -13,27 +13,28 @@ namespace MCPsharp.Tests.Services.Analyzers.BuiltIn.CodeFixes;
 /// </summary>
 public class UnusedCodeIntegrationTests
 {
-    private readonly ILoggerFactory _loggerFactory;
+    private ILoggerFactory _loggerFactory = null!;
 
-    public UnusedCodeIntegrationTests()
+    [SetUp]
+    public void SetUp()
     {
         _loggerFactory = NullLoggerFactory.Instance;
     }
 
-    [Fact]
+    [Test]
     public void Analyzer_CanBeCreated()
     {
         // Arrange & Act
         var analyzer = new UnusedCodeAnalyzer();
 
         // Assert
-        Assert.NotNull(analyzer);
-        Assert.Equal("MCP003", UnusedCodeAnalyzer.UnusedLocalDiagnosticId);
-        Assert.Equal("MCP004", UnusedCodeAnalyzer.UnusedFieldDiagnosticId);
-        Assert.Equal(2, analyzer.SupportedDiagnostics.Length);
+        Assert.That(analyzer, Is.Not.Null);
+        Assert.That(UnusedCodeAnalyzer.UnusedLocalDiagnosticId, Is.EqualTo("MCP003"));
+        Assert.That(UnusedCodeAnalyzer.UnusedFieldDiagnosticId, Is.EqualTo("MCP004"));
+        Assert.That(analyzer.SupportedDiagnostics.Length, Is.EqualTo(2));
     }
 
-    [Fact]
+    [Test]
     public void Analyzer_SupportedDiagnostics_ContainsBothRules()
     {
         // Arrange
@@ -43,12 +44,12 @@ public class UnusedCodeIntegrationTests
         var diagnostics = analyzer.SupportedDiagnostics;
 
         // Assert
-        Assert.Equal(2, diagnostics.Length);
-        Assert.Contains(diagnostics, d => d.Id == "MCP003");
-        Assert.Contains(diagnostics, d => d.Id == "MCP004");
+        Assert.That(diagnostics.Length, Is.EqualTo(2));
+        Assert.That(diagnostics, Does.Contain(diagnostics.First(d => d.Id == "MCP003")));
+        Assert.That(diagnostics, Does.Contain(diagnostics.First(d => d.Id == "MCP004")));
     }
 
-    [Fact]
+    [Test]
     public void Analyzer_DiagnosticDescriptors_HaveCorrectCategories()
     {
         // Arrange
@@ -58,22 +59,22 @@ public class UnusedCodeIntegrationTests
         var diagnostics = analyzer.SupportedDiagnostics;
 
         // Assert
-        Assert.All(diagnostics, d => Assert.Equal("CodeQuality", d.Category));
+        Assert.That(diagnostics, Has.All.Property("Category").EqualTo("CodeQuality"));
     }
 
-    [Fact]
+    [Test]
     public void Fixer_CanBeCreated()
     {
         // Arrange & Act
         var fixer = new UnusedCodeFixer();
 
         // Assert
-        Assert.NotNull(fixer);
-        Assert.Contains(UnusedCodeAnalyzer.UnusedLocalDiagnosticId, fixer.FixableDiagnosticIds);
-        Assert.Contains(UnusedCodeAnalyzer.UnusedFieldDiagnosticId, fixer.FixableDiagnosticIds);
+        Assert.That(fixer, Is.Not.Null);
+        Assert.That(fixer.FixableDiagnosticIds, Does.Contain(UnusedCodeAnalyzer.UnusedLocalDiagnosticId));
+        Assert.That(fixer.FixableDiagnosticIds, Does.Contain(UnusedCodeAnalyzer.UnusedFieldDiagnosticId));
     }
 
-    [Fact]
+    [Test]
     public void Fixer_FixableDiagnosticIds_ContainsBothMCP003AndMCP004()
     {
         // Arrange
@@ -83,12 +84,12 @@ public class UnusedCodeIntegrationTests
         var ids = fixer.FixableDiagnosticIds;
 
         // Assert
-        Assert.Equal(2, ids.Length);
-        Assert.Contains("MCP003", ids);
-        Assert.Contains("MCP004", ids);
+        Assert.That(ids.Length, Is.EqualTo(2));
+        Assert.That(ids, Does.Contain("MCP003"));
+        Assert.That(ids, Does.Contain("MCP004"));
     }
 
-    [Fact]
+    [Test]
     public void Provider_CanBeCreated()
     {
         // Arrange
@@ -98,15 +99,15 @@ public class UnusedCodeIntegrationTests
         var provider = new UnusedCodeProvider(logger);
 
         // Assert
-        Assert.NotNull(provider);
-        Assert.Equal("UnusedCode", provider.Id);
-        Assert.Equal(FixProfile.Conservative, provider.Profile);
-        Assert.True(provider.IsFullyAutomated);
-        Assert.NotNull(provider.GetAnalyzer());
-        Assert.NotNull(provider.GetCodeFixProvider());
+        Assert.That(provider, Is.Not.Null);
+        Assert.That(provider.Id, Is.EqualTo("UnusedCode"));
+        Assert.That(provider.Profile, Is.EqualTo(FixProfile.Conservative));
+        Assert.That(provider.IsFullyAutomated, Is.True);
+        Assert.That(provider.GetAnalyzer(), Is.Not.Null);
+        Assert.That(provider.GetCodeFixProvider(), Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public void Provider_Properties_AreCorrect()
     {
         // Arrange
@@ -114,14 +115,14 @@ public class UnusedCodeIntegrationTests
         var provider = new UnusedCodeProvider(logger);
 
         // Assert
-        Assert.Equal("UnusedCode", provider.Id);
-        Assert.Equal("Unused Code Remover", provider.Name);
-        Assert.Contains("unused", provider.Description.ToLowerInvariant());
-        Assert.Equal(FixProfile.Conservative, provider.Profile);
-        Assert.True(provider.IsFullyAutomated);
+        Assert.That(provider.Id, Is.EqualTo("UnusedCode"));
+        Assert.That(provider.Name, Is.EqualTo("Unused Code Remover"));
+        Assert.That(provider.Description.ToLowerInvariant(), Does.Contain("unused"));
+        Assert.That(provider.Profile, Is.EqualTo(FixProfile.Conservative));
+        Assert.That(provider.IsFullyAutomated, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void Provider_FixableDiagnosticIds_ContainsBothMCP003AndMCP004()
     {
         // Arrange
@@ -132,12 +133,12 @@ public class UnusedCodeIntegrationTests
         var ids = provider.FixableDiagnosticIds;
 
         // Assert
-        Assert.Equal(2, ids.Length);
-        Assert.Contains("MCP003", ids);
-        Assert.Contains("MCP004", ids);
+        Assert.That(ids.Length, Is.EqualTo(2));
+        Assert.That(ids, Does.Contain("MCP003"));
+        Assert.That(ids, Does.Contain("MCP004"));
     }
 
-    [Fact]
+    [Test]
     public void Provider_GetAnalyzer_ReturnsUnusedCodeAnalyzer()
     {
         // Arrange
@@ -148,11 +149,11 @@ public class UnusedCodeIntegrationTests
         var analyzer = provider.GetAnalyzer();
 
         // Assert
-        Assert.NotNull(analyzer);
-        Assert.IsType<UnusedCodeAnalyzer>(analyzer);
+        Assert.That(analyzer, Is.Not.Null);
+        Assert.That(analyzer, Is.TypeOf<UnusedCodeAnalyzer>());
     }
 
-    [Fact]
+    [Test]
     public void Provider_GetCodeFixProvider_ReturnsUnusedCodeFixer()
     {
         // Arrange
@@ -163,11 +164,11 @@ public class UnusedCodeIntegrationTests
         var fixer = provider.GetCodeFixProvider();
 
         // Assert
-        Assert.NotNull(fixer);
-        Assert.IsType<UnusedCodeFixer>(fixer);
+        Assert.That(fixer, Is.Not.Null);
+        Assert.That(fixer, Is.TypeOf<UnusedCodeFixer>());
     }
 
-    [Fact]
+    [Test]
     public void Registry_RegistersUnusedCodeProvider()
     {
         // Arrange
@@ -178,10 +179,10 @@ public class UnusedCodeIntegrationTests
 
         // Assert
         var providers = registry.GetAllProviders();
-        Assert.Contains(providers, p => p.Id == "UnusedCode");
+        Assert.That(providers, Does.Contain(providers.First(p => p.Id == "UnusedCode")));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProviderById_ReturnsUnusedCodeProvider()
     {
         // Arrange
@@ -192,12 +193,12 @@ public class UnusedCodeIntegrationTests
         var provider = registry.GetProvider("UnusedCode");
 
         // Assert
-        Assert.NotNull(provider);
-        Assert.Equal("UnusedCode", provider!.Id);
-        Assert.IsType<UnusedCodeProvider>(provider);
+        Assert.That(provider, Is.Not.Null);
+        Assert.That(provider!.Id, Is.EqualTo("UnusedCode"));
+        Assert.That(provider, Is.TypeOf<UnusedCodeProvider>());
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProvidersByProfile_IncludesUnusedCodeInConservative()
     {
         // Arrange
@@ -208,11 +209,11 @@ public class UnusedCodeIntegrationTests
         var providers = registry.GetProvidersByProfile(FixProfile.Conservative);
 
         // Assert
-        Assert.NotEmpty(providers);
-        Assert.Contains(providers, p => p.Id == "UnusedCode");
+        Assert.That(providers, Is.Not.Empty);
+        Assert.That(providers, Does.Contain(providers.First(p => p.Id == "UnusedCode")));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetFullyAutomatedProviders_IncludesUnusedCode()
     {
         // Arrange
@@ -223,11 +224,11 @@ public class UnusedCodeIntegrationTests
         var providers = registry.GetFullyAutomatedProviders();
 
         // Assert
-        Assert.NotEmpty(providers);
-        Assert.Contains(providers, p => p.Id == "UnusedCode");
+        Assert.That(providers, Is.Not.Empty);
+        Assert.That(providers, Does.Contain(providers.First(p => p.Id == "UnusedCode")));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProvidersForDiagnostic_ReturnsMCP003()
     {
         // Arrange
@@ -238,11 +239,11 @@ public class UnusedCodeIntegrationTests
         var providers = registry.GetProvidersForDiagnostic("MCP003");
 
         // Assert
-        Assert.Single(providers);
-        Assert.Equal("UnusedCode", providers[0].Id);
+        Assert.That(providers, Has.Length.EqualTo(1));
+        Assert.That(providers[0].Id, Is.EqualTo("UnusedCode"));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProvidersForDiagnostic_ReturnsMCP004()
     {
         // Arrange
@@ -253,11 +254,11 @@ public class UnusedCodeIntegrationTests
         var providers = registry.GetProvidersForDiagnostic("MCP004");
 
         // Assert
-        Assert.Single(providers);
-        Assert.Equal("UnusedCode", providers[0].Id);
+        Assert.That(providers, Has.Length.EqualTo(1));
+        Assert.That(providers[0].Id, Is.EqualTo("UnusedCode"));
     }
 
-    [Fact]
+    [Test]
     public void Registry_Statistics_IncludesUnusedCodeProvider()
     {
         // Arrange
@@ -268,8 +269,8 @@ public class UnusedCodeIntegrationTests
         var stats = registry.GetStatistics();
 
         // Assert
-        Assert.True(stats.TotalProviders >= 3); // AsyncAwait, ExceptionLogging, UnusedCode
-        Assert.True(stats.FullyAutomatedCount >= 3);
-        Assert.Contains(FixProfile.Conservative, stats.ProvidersByProfile.Keys);
+        Assert.That(stats.TotalProviders, Is.GreaterThanOrEqualTo(3)); // AsyncAwait, ExceptionLogging, UnusedCode
+        Assert.That(stats.FullyAutomatedCount, Is.GreaterThanOrEqualTo(3));
+        Assert.That(stats.ProvidersByProfile.Keys, Does.Contain(FixProfile.Conservative));
     }
 }

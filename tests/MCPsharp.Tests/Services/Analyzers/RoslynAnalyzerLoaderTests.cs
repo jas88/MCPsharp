@@ -71,7 +71,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = await _loader.LoadAnalyzersFromAssemblyAsync(nonExistentPath);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.EqualTo(0));
     }
 
@@ -85,7 +84,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = await _loader.LoadAnalyzersFromAssemblyAsync(invalidAssembly);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.EqualTo(0));
     }
 
@@ -99,7 +97,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         // May be zero if no analyzers in test assembly, that's ok
         Assert.That(result.Length, Is.GreaterThanOrEqualTo(0));
     }
@@ -146,7 +143,8 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath);
 
         // Assert - Just verify it completes without throwing
-        Assert.That(result, Is.Not.Null);
+        // Result is ImmutableArray, always has value
+        Assert.Pass();
     }
 
     #endregion
@@ -163,7 +161,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = await _loader.LoadAnalyzersFromAssembliesAsync(emptyList);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.EqualTo(0));
     }
 
@@ -179,7 +176,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = await _loader.LoadAnalyzersFromAssembliesAsync(assemblies);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.GreaterThanOrEqualTo(0));
     }
 
@@ -195,8 +191,8 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = await _loader.LoadAnalyzersFromAssembliesAsync(assemblies);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         // Should not throw, should handle invalid gracefully
+        Assert.Pass();
     }
 
     [Test]
@@ -226,7 +222,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = _loader.DiscoverAnalyzerAssemblies(nonExistentDir);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.EqualTo(0));
     }
 
@@ -240,7 +235,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = _loader.DiscoverAnalyzerAssemblies(emptyDir);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.EqualTo(0));
     }
 
@@ -256,8 +250,8 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = _loader.DiscoverAnalyzerAssemblies(dir);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         // Should handle invalid DLLs gracefully
+        Assert.Pass();
     }
 
     [Test]
@@ -276,8 +270,8 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = _loader.DiscoverAnalyzerAssemblies(rootDir, recursive: true);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         // Should find assemblies in subdirectories
+        Assert.Pass();
     }
 
     [Test]
@@ -296,7 +290,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = _loader.DiscoverAnalyzerAssemblies(rootDir, recursive: false);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.EqualTo(0)); // Should not find in subdirectory
     }
 
@@ -339,7 +332,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = await _loader.LoadAnalyzersFromNuGetCacheAsync();
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         // May be empty if no NuGet cache exists, that's ok
         Assert.That(result.Length, Is.GreaterThanOrEqualTo(0));
     }
@@ -403,7 +395,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
             Assert.That(result.AssemblyName, Is.Not.Empty);
             Assert.That(result.Version, Is.Not.Null);
             Assert.That(result.AnalyzerCount, Is.GreaterThan(0));
-            Assert.That(result.AnalyzerTypeNames, Is.Not.Null);
             Assert.That(result.AnalyzerTypeNames.Length, Is.EqualTo(result.AnalyzerCount));
         }
     }
@@ -435,7 +426,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var result = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath);
 
         // Assert - Should not throw, should return empty
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.EqualTo(0));
     }
 
@@ -470,9 +460,16 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var analyzers = await _loader.LoadAnalyzersFromAssembliesAsync(assemblies);
 
         // Assert
-        Assert.That(assemblies, Is.Not.Null);
-        Assert.That(analyzers, Is.Not.Null);
+        // Both ImmutableArrays always have values
+        Assert.Pass();
     }
 
     #endregion
+
+    [TearDown]
+    protected override void TearDown()
+    {
+        _mockLoggerFactory?.Dispose();
+        base.TearDown();
+    }
 }

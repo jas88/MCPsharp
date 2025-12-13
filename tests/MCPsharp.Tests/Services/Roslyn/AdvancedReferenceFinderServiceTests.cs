@@ -98,11 +98,11 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.FindCallersAsync(methodName, containingType, true);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         if (result == null)
             throw new InvalidOperationException("Result should not be null");
         Assert.That(result.TargetSymbol, Is.EqualTo(methodName));
-        Assert.NotNull(result.TargetSignature);
+        Assert.That(result.TargetSignature, Is.Not.Null);
         if (result.TargetSignature == null)
             throw new InvalidOperationException("TargetSignature should not be null");
         Assert.That(result.TargetSignature.ContainingType, Is.EqualTo(containingType));
@@ -197,10 +197,10 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.FindCallersAtLocationAsync(filePath, line, column, false);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         if (result == null)
             throw new InvalidOperationException("Result should not be null");
-        Assert.NotNull(result.TargetSignature);
+        Assert.That(result.TargetSignature, Is.Not.Null);
         if (result.TargetSignature == null)
             throw new InvalidOperationException("TargetSignature should not be null");
         Assert.That(result.TargetSignature.Name, Is.EqualTo("ProcessData"));
@@ -275,10 +275,10 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.FindCallersAtLocationAsync(filePath, line, column, false);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         if (result == null)
             throw new InvalidOperationException("Result should not be null");
-        Assert.NotNull(result.Callers);
+        Assert.That(result.Callers, Is.Not.Null);
         if (result.Callers == null)
             throw new InvalidOperationException("Callers should not be null");
         Assert.That(result.Callers.Count, Is.EqualTo(1));
@@ -330,10 +330,10 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.FindCallChainsAsync(methodName, containingType, direction, maxDepth);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         if (result == null)
             throw new InvalidOperationException("Result should not be null");
-        Assert.NotNull(result.TargetMethod);
+        Assert.That(result.TargetMethod, Is.Not.Null);
         if (result.TargetMethod == null)
             throw new InvalidOperationException("TargetMethod should not be null");
         Assert.That(result.TargetMethod.Name, Is.EqualTo(methodName));
@@ -532,8 +532,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.AnalyzeCallPatternsAsync(methodName, containingType);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.NotNull(result.TargetMethod);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TargetMethod, Is.Not.Null);
         Assert.That(result.TargetMethod.Name, Is.EqualTo(methodName));
         Assert.That(result.TargetMethod.ContainingType, Is.EqualTo(containingType));
 
@@ -729,9 +729,9 @@ public class AdvancedReferenceFinderServiceTests : TestBase
         var result = await _service.AnalyzeCallGraphAsync(typeName);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         Assert.That(result.Scope, Is.EqualTo(typeName));
-        Assert.NotNull(result.Methods);
+        Assert.That(result.Methods, Is.Not.Null);
         Assert.That(result.Methods.Count, Is.EqualTo(15));
 
         await _mockCallChain.Received(1).AnalyzeCallGraphAsync(typeName, null, Arg.Any<CancellationToken>());

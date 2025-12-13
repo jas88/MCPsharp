@@ -3,24 +3,22 @@ using MCPsharp.Models;
 using MCPsharp.Services;
 using MCPsharp.Services.Roslyn;
 using Microsoft.CodeAnalysis;
-using Xunit;
-using Xunit.Abstractions;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 
 /// <summary>
 /// Tests for incremental compilation integration between FileOperationsService and RoslynWorkspace
 /// </summary>
-public class IncrementalCompilationTests : IDisposable
+public class IncrementalCompilationTests
 {
-    private readonly string _testRoot;
-    private readonly RoslynWorkspace _workspace;
-    private readonly FileOperationsService _fileService;
-    private readonly ITestOutputHelper _output;
+    private string _testRoot = null!;
+    private RoslynWorkspace _workspace = null!;
+    private FileOperationsService _fileService = null!;
 
-    public IncrementalCompilationTests(ITestOutputHelper output)
+    [SetUp]
+    public void SetUp()
     {
-        _output = output;
         _testRoot = Path.Combine(Path.GetTempPath(), $"mcpsharp-incremental-test-{Guid.NewGuid()}");
         Directory.CreateDirectory(_testRoot);
 
@@ -28,7 +26,8 @@ public class IncrementalCompilationTests : IDisposable
         _fileService = new FileOperationsService(_testRoot, _workspace);
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         _workspace?.Dispose();
         if (Directory.Exists(_testRoot))
@@ -44,7 +43,7 @@ public class IncrementalCompilationTests : IDisposable
         }
     }
 
-    [Fact]
+    [Test]
     public async Task EditFileAsync_ShouldUpdateRoslynWorkspace_WhenEditingCSharpFile()
     {
         // Arrange
@@ -75,12 +74,12 @@ public class IncrementalCompilationTests : IDisposable
 
         // Verify original content is in workspace
         var originalDocument = _workspace.GetDocument(Path.Combine(_testRoot, testFile));
-        Assert.NotNull(originalDocument);
+        Assert.That(originalDocument, Is.Not.Null);
         var originalSemanticModel = await _workspace.GetSemanticModelAsync(originalDocument!);
-        Assert.NotNull(originalSemanticModel);
+        Assert.That(originalSemanticModel, Is.Not.Null);
         var originalText = await originalDocument!.GetTextAsync();
 
-        Assert.Contains("OriginalMethod", originalText.ToString());
+        Assert.That(originalText.ToString(), Does.Contain("OriginalMethod"));
 
         // Act - Edit the file
         var edits = new List<TextEdit>
@@ -102,29 +101,29 @@ public class IncrementalCompilationTests : IDisposable
         var result = await _fileService.EditFileAsync(testFile, edits);
 
         // Assert
-        Assert.True(result.Success, $"Edit failed with error: {result.Error}");
-        Assert.Equal(updatedContent.Trim(), result.NewContent?.Trim());
+        Assert.That(result.Success, Is.True, $"Edit failed with error: {result.Error}");
+        Assert.That(result.NewContent?.Trim(), Is.EqualTo(updatedContent.Trim()));
 
         // Verify workspace was updated with new content
         var updatedDocument = _workspace.GetDocument(Path.Combine(_testRoot, testFile));
-        Assert.NotNull(updatedDocument);
+        Assert.That(updatedDocument, Is.Not.Null);
         var updatedSemanticModel = await _workspace.GetSemanticModelAsync(updatedDocument!);
-        Assert.NotNull(updatedSemanticModel);
+        Assert.That(updatedSemanticModel, Is.Not.Null);
         var updatedText = await updatedDocument!.GetTextAsync();
-        Assert.Contains("UpdatedMethod", updatedText.ToString());
-        Assert.Contains("Updated", updatedText.ToString());
+        Assert.That(updatedText.ToString(), Does.Contain("UpdatedMethod"));
+        Assert.That(updatedText.ToString(), Does.Contain("Updated"));
 
         // Verify semantic model reflects the changes
         var root = await updatedDocument!.GetSyntaxRootAsync();
-        Assert.NotNull(root);
+        Assert.That(root, Is.Not.Null);
         var methodDeclaration = root.DescendantNodes()
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>()
             .FirstOrDefault();
-        Assert.NotNull(methodDeclaration);
-        Assert.Equal("UpdatedMethod", methodDeclaration.Identifier.Text);
+        Assert.That(methodDeclaration, Is.Not.Null);
+        Assert.That(methodDeclaration.Identifier.Text, Is.EqualTo("UpdatedMethod"));
     }
 
-    [Fact]
+    [Test]
     public async Task WriteFileAsync_ShouldUpdateRoslynWorkspace_WhenWritingCSharpFile()
     {
         // Arrange
@@ -148,29 +147,29 @@ public class IncrementalCompilationTests : IDisposable
         var result = await _fileService.WriteFileAsync(testFile, content);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.True(result.Created);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Created, Is.True);
 
         // Verify workspace was updated with new file
         var document = _workspace.GetDocument(Path.Combine(_testRoot, testFile));
-        Assert.NotNull(document);
+        Assert.That(document, Is.Not.Null);
         var semanticModel = await _workspace.GetSemanticModelAsync(document!);
-        Assert.NotNull(semanticModel);
+        Assert.That(semanticModel, Is.Not.Null);
         var text = await document!.GetTextAsync();
-        Assert.Contains("NewClass", text.ToString());
-        Assert.Contains("NewMethod", text.ToString());
+        Assert.That(text.ToString(), Does.Contain("NewClass"));
+        Assert.That(text.ToString(), Does.Contain("NewMethod"));
 
         // Verify semantic model has correct structure
         var root = await document!.GetSyntaxRootAsync();
-        Assert.NotNull(root);
+        Assert.That(root, Is.Not.Null);
         var classDeclaration = root.DescendantNodes()
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>()
             .FirstOrDefault();
-        Assert.NotNull(classDeclaration);
-        Assert.Equal("NewClass", classDeclaration.Identifier.Text);
+        Assert.That(classDeclaration, Is.Not.Null);
+        Assert.That(classDeclaration.Identifier.Text, Is.EqualTo("NewClass"));
     }
 
-    [Fact]
+    [Test]
     public async Task EditFileAsync_ShouldNotUpdateWorkspace_WhenEditingNonCSharpFile()
     {
         // Arrange
@@ -185,10 +184,10 @@ public class IncrementalCompilationTests : IDisposable
         var result = await _fileService.WriteFileAsync(testFile, updatedContent);
 
         // Assert
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
 
         // Verify workspace doesn't contain the .txt file
         var document = _workspace.GetDocument(Path.Combine(_testRoot, testFile));
-        Assert.Null(document);
+        Assert.That(document, Is.Null);
     }
 }

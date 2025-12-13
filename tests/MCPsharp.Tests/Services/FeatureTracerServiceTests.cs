@@ -1,4 +1,4 @@
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 
@@ -8,11 +8,11 @@ namespace MCPsharp.Tests.Services;
 /// </summary>
 public class FeatureTracerServiceTests
 {
-    [Fact]
+    [Test]
     public void Placeholder_Test()
     {
         // This is a placeholder to allow the project to compile
         // Phase 2 agents will implement actual tests
-        Assert.True(true);
+        Assert.That(true, Is.True);
     }
 }

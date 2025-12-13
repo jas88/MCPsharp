@@ -1,4 +1,4 @@
-using Xunit;
+using NUnit.Framework;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
@@ -13,26 +13,27 @@ namespace MCPsharp.Tests.Services.Analyzers.BuiltIn.CodeFixes;
 /// </summary>
 public class StaticMethodIntegrationTests
 {
-    private readonly ILoggerFactory _loggerFactory;
+    private ILoggerFactory _loggerFactory = null!;
 
-    public StaticMethodIntegrationTests()
+    [SetUp]
+    public void SetUp()
     {
         _loggerFactory = NullLoggerFactory.Instance;
     }
 
-    [Fact]
+    [Test]
     public void Analyzer_CanBeCreated()
     {
         // Arrange & Act
         var analyzer = new StaticMethodAnalyzer();
 
         // Assert
-        Assert.NotNull(analyzer);
-        Assert.Equal("MCP005", StaticMethodAnalyzer.DiagnosticId);
-        Assert.Single(analyzer.SupportedDiagnostics);
+        Assert.That(analyzer, Is.Not.Null);
+        Assert.That(StaticMethodAnalyzer.DiagnosticId, Is.EqualTo("MCP005"));
+        Assert.That(analyzer.SupportedDiagnostics, Has.Length.EqualTo(1));
     }
 
-    [Fact]
+    [Test]
     public void Analyzer_DiagnosticDescriptor_HasCorrectProperties()
     {
         // Arrange
@@ -42,23 +43,23 @@ public class StaticMethodIntegrationTests
         var descriptor = analyzer.SupportedDiagnostics[0];
 
         // Assert
-        Assert.Equal("MCP005", descriptor.Id);
-        Assert.Equal("Performance", descriptor.Category);
-        Assert.True(descriptor.IsEnabledByDefault);
+        Assert.That(descriptor.Id, Is.EqualTo("MCP005"));
+        Assert.That(descriptor.Category, Is.EqualTo("Performance"));
+        Assert.That(descriptor.IsEnabledByDefault, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void Fixer_CanBeCreated()
     {
         // Arrange & Act
         var fixer = new StaticMethodFixer();
 
         // Assert
-        Assert.NotNull(fixer);
-        Assert.Contains(StaticMethodAnalyzer.DiagnosticId, fixer.FixableDiagnosticIds);
+        Assert.That(fixer, Is.Not.Null);
+        Assert.That(fixer.FixableDiagnosticIds, Does.Contain(StaticMethodAnalyzer.DiagnosticId));
     }
 
-    [Fact]
+    [Test]
     public void Fixer_FixableDiagnosticIds_ContainsMCP005()
     {
         // Arrange
@@ -68,11 +69,11 @@ public class StaticMethodIntegrationTests
         var ids = fixer.FixableDiagnosticIds;
 
         // Assert
-        Assert.Single(ids);
-        Assert.Equal("MCP005", ids[0]);
+        Assert.That(ids, Has.Length.EqualTo(1));
+        Assert.That(ids[0], Is.EqualTo("MCP005"));
     }
 
-    [Fact]
+    [Test]
     public void Provider_CanBeCreated()
     {
         // Arrange
@@ -82,15 +83,15 @@ public class StaticMethodIntegrationTests
         var provider = new StaticMethodProvider(logger);
 
         // Assert
-        Assert.NotNull(provider);
-        Assert.Equal("StaticMethod", provider.Id);
-        Assert.Equal(FixProfile.Balanced, provider.Profile);
-        Assert.True(provider.IsFullyAutomated);
-        Assert.NotNull(provider.GetAnalyzer());
-        Assert.NotNull(provider.GetCodeFixProvider());
+        Assert.That(provider, Is.Not.Null);
+        Assert.That(provider.Id, Is.EqualTo("StaticMethod"));
+        Assert.That(provider.Profile, Is.EqualTo(FixProfile.Balanced));
+        Assert.That(provider.IsFullyAutomated, Is.True);
+        Assert.That(provider.GetAnalyzer(), Is.Not.Null);
+        Assert.That(provider.GetCodeFixProvider(), Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public void Provider_Properties_AreCorrect()
     {
         // Arrange
@@ -98,14 +99,14 @@ public class StaticMethodIntegrationTests
         var provider = new StaticMethodProvider(logger);
 
         // Assert
-        Assert.Equal("StaticMethod", provider.Id);
-        Assert.Equal("Static Method Converter", provider.Name);
-        Assert.Contains("static", provider.Description.ToLowerInvariant());
-        Assert.Equal(FixProfile.Balanced, provider.Profile);
-        Assert.True(provider.IsFullyAutomated);
+        Assert.That(provider.Id, Is.EqualTo("StaticMethod"));
+        Assert.That(provider.Name, Is.EqualTo("Static Method Converter"));
+        Assert.That(provider.Description.ToLowerInvariant(), Does.Contain("static"));
+        Assert.That(provider.Profile, Is.EqualTo(FixProfile.Balanced));
+        Assert.That(provider.IsFullyAutomated, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void Provider_FixableDiagnosticIds_ContainsMCP005()
     {
         // Arrange
@@ -116,11 +117,11 @@ public class StaticMethodIntegrationTests
         var ids = provider.FixableDiagnosticIds;
 
         // Assert
-        Assert.Single(ids);
-        Assert.Equal("MCP005", ids[0]);
+        Assert.That(ids, Has.Length.EqualTo(1));
+        Assert.That(ids[0], Is.EqualTo("MCP005"));
     }
 
-    [Fact]
+    [Test]
     public void Provider_GetAnalyzer_ReturnsStaticMethodAnalyzer()
     {
         // Arrange
@@ -131,11 +132,11 @@ public class StaticMethodIntegrationTests
         var analyzer = provider.GetAnalyzer();
 
         // Assert
-        Assert.NotNull(analyzer);
-        Assert.IsType<StaticMethodAnalyzer>(analyzer);
+        Assert.That(analyzer, Is.Not.Null);
+        Assert.That(analyzer, Is.TypeOf<StaticMethodAnalyzer>());
     }
 
-    [Fact]
+    [Test]
     public void Provider_GetCodeFixProvider_ReturnsStaticMethodFixer()
     {
         // Arrange
@@ -146,11 +147,11 @@ public class StaticMethodIntegrationTests
         var fixer = provider.GetCodeFixProvider();
 
         // Assert
-        Assert.NotNull(fixer);
-        Assert.IsType<StaticMethodFixer>(fixer);
+        Assert.That(fixer, Is.Not.Null);
+        Assert.That(fixer, Is.TypeOf<StaticMethodFixer>());
     }
 
-    [Fact]
+    [Test]
     public void Registry_RegistersStaticMethodProvider()
     {
         // Arrange
@@ -161,10 +162,10 @@ public class StaticMethodIntegrationTests
 
         // Assert
         var providers = registry.GetAllProviders();
-        Assert.Contains(providers, p => p.Id == "StaticMethod");
+        Assert.That(providers, Does.Contain(providers.First(p => p.Id == "StaticMethod")));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProviderById_ReturnsStaticMethodProvider()
     {
         // Arrange
@@ -175,12 +176,12 @@ public class StaticMethodIntegrationTests
         var provider = registry.GetProvider("StaticMethod");
 
         // Assert
-        Assert.NotNull(provider);
-        Assert.Equal("StaticMethod", provider!.Id);
-        Assert.IsType<StaticMethodProvider>(provider);
+        Assert.That(provider, Is.Not.Null);
+        Assert.That(provider!.Id, Is.EqualTo("StaticMethod"));
+        Assert.That(provider, Is.TypeOf<StaticMethodProvider>());
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProvidersByProfile_IncludesStaticMethod()
     {
         // Arrange
@@ -191,11 +192,11 @@ public class StaticMethodIntegrationTests
         var providers = registry.GetProvidersByProfile(FixProfile.Balanced);
 
         // Assert
-        Assert.NotEmpty(providers);
-        Assert.Contains(providers, p => p.Id == "StaticMethod");
+        Assert.That(providers, Is.Not.Empty);
+        Assert.That(providers, Does.Contain(providers.First(p => p.Id == "StaticMethod")));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetFullyAutomatedProviders_IncludesStaticMethod()
     {
         // Arrange
@@ -206,11 +207,11 @@ public class StaticMethodIntegrationTests
         var providers = registry.GetFullyAutomatedProviders();
 
         // Assert
-        Assert.NotEmpty(providers);
-        Assert.Contains(providers, p => p.Id == "StaticMethod");
+        Assert.That(providers, Is.Not.Empty);
+        Assert.That(providers, Does.Contain(providers.First(p => p.Id == "StaticMethod")));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetProvidersForDiagnostic_ReturnsMCP005()
     {
         // Arrange
@@ -221,11 +222,11 @@ public class StaticMethodIntegrationTests
         var providers = registry.GetProvidersForDiagnostic("MCP005");
 
         // Assert
-        Assert.Single(providers);
-        Assert.Equal("StaticMethod", providers[0].Id);
+        Assert.That(providers, Has.Length.EqualTo(1));
+        Assert.That(providers[0].Id, Is.EqualTo("StaticMethod"));
     }
 
-    [Fact]
+    [Test]
     public void Registry_Statistics_IncludesAllFourProviders()
     {
         // Arrange
@@ -236,14 +237,14 @@ public class StaticMethodIntegrationTests
         var stats = registry.GetStatistics();
 
         // Assert
-        Assert.Equal(4, stats.TotalProviders); // AsyncAwait, ExceptionLogging, UnusedCode, StaticMethod
-        Assert.Equal(4, stats.FullyAutomatedCount);
-        Assert.True(stats.TotalFixableDiagnostics >= 5); // MCP001, MCP002, MCP003, MCP004, MCP005
-        Assert.Contains(FixProfile.Conservative, stats.ProvidersByProfile.Keys);
-        Assert.Contains(FixProfile.Balanced, stats.ProvidersByProfile.Keys);
+        Assert.That(stats.TotalProviders, Is.EqualTo(4)); // AsyncAwait, ExceptionLogging, UnusedCode, StaticMethod
+        Assert.That(stats.FullyAutomatedCount, Is.EqualTo(4));
+        Assert.That(stats.TotalFixableDiagnostics, Is.GreaterThanOrEqualTo(5)); // MCP001, MCP002, MCP003, MCP004, MCP005
+        Assert.That(stats.ProvidersByProfile.Keys, Does.Contain(FixProfile.Conservative));
+        Assert.That(stats.ProvidersByProfile.Keys, Does.Contain(FixProfile.Balanced));
     }
 
-    [Fact]
+    [Test]
     public void Registry_AllProviders_AreRegistered()
     {
         // Arrange
@@ -254,14 +255,14 @@ public class StaticMethodIntegrationTests
         var allProviders = registry.GetAllProviders();
 
         // Assert
-        Assert.Equal(4, allProviders.Length);
-        Assert.Contains(allProviders, p => p.Id == "AsyncAwaitPattern");
-        Assert.Contains(allProviders, p => p.Id == "ExceptionLogging");
-        Assert.Contains(allProviders, p => p.Id == "UnusedCode");
-        Assert.Contains(allProviders, p => p.Id == "StaticMethod");
+        Assert.That(allProviders.Length, Is.EqualTo(4));
+        Assert.That(allProviders, Does.Contain(allProviders.First(p => p.Id == "AsyncAwaitPattern")));
+        Assert.That(allProviders, Does.Contain(allProviders.First(p => p.Id == "ExceptionLogging")));
+        Assert.That(allProviders, Does.Contain(allProviders.First(p => p.Id == "UnusedCode")));
+        Assert.That(allProviders, Does.Contain(allProviders.First(p => p.Id == "StaticMethod")));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetAnalyzers_ReturnsAllAnalyzers()
     {
         // Arrange
@@ -272,14 +273,14 @@ public class StaticMethodIntegrationTests
         var analyzers = registry.GetAllAnalyzers();
 
         // Assert
-        Assert.Equal(4, analyzers.Length);
-        Assert.Contains(analyzers, a => a is AsyncAwaitPatternAnalyzer);
-        Assert.Contains(analyzers, a => a is ExceptionLoggingAnalyzer);
-        Assert.Contains(analyzers, a => a is UnusedCodeAnalyzer);
-        Assert.Contains(analyzers, a => a is StaticMethodAnalyzer);
+        Assert.That(analyzers.Length, Is.EqualTo(4));
+        Assert.That(analyzers, Does.Contain(analyzers.OfType<AsyncAwaitPatternAnalyzer>().First()));
+        Assert.That(analyzers, Does.Contain(analyzers.OfType<ExceptionLoggingAnalyzer>().First()));
+        Assert.That(analyzers, Does.Contain(analyzers.OfType<UnusedCodeAnalyzer>().First()));
+        Assert.That(analyzers, Does.Contain(analyzers.OfType<StaticMethodAnalyzer>().First()));
     }
 
-    [Fact]
+    [Test]
     public void Registry_GetCodeFixProviders_ReturnsAllFixers()
     {
         // Arrange
@@ -290,10 +291,10 @@ public class StaticMethodIntegrationTests
         var fixers = registry.GetAllCodeFixProviders();
 
         // Assert
-        Assert.Equal(4, fixers.Length);
-        Assert.Contains(fixers, f => f is AsyncAwaitPatternFixer);
-        Assert.Contains(fixers, f => f is ExceptionLoggingFixer);
-        Assert.Contains(fixers, f => f is UnusedCodeFixer);
-        Assert.Contains(fixers, f => f is StaticMethodFixer);
+        Assert.That(fixers.Length, Is.EqualTo(4));
+        Assert.That(fixers, Does.Contain(fixers.OfType<AsyncAwaitPatternFixer>().First()));
+        Assert.That(fixers, Does.Contain(fixers.OfType<ExceptionLoggingFixer>().First()));
+        Assert.That(fixers, Does.Contain(fixers.OfType<UnusedCodeFixer>().First()));
+        Assert.That(fixers, Does.Contain(fixers.OfType<StaticMethodFixer>().First()));
     }
 }

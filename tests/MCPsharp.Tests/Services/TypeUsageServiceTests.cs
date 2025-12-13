@@ -3,20 +3,22 @@ using Microsoft.CodeAnalysis.CSharp;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Tests.TestFixtures;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 
 /// <summary>
 /// Unit tests for TypeUsageService
 /// </summary>
-public class TypeUsageServiceTests : IDisposable
+[TestFixture]
+public class TypeUsageServiceTests
 {
-    private readonly RoslynWorkspace _workspace;
-    private readonly SymbolQueryService _symbolQuery;
-    private readonly TypeUsageService _typeUsage;
+    private RoslynWorkspace _workspace;
+    private SymbolQueryService _symbolQuery;
+    private TypeUsageService _typeUsage;
 
-    public TypeUsageServiceTests()
+    [SetUp]
+    public void SetUp()
     {
         _workspace = new RoslynWorkspace();
         _symbolQuery = new SymbolQueryService(_workspace);
@@ -185,143 +187,143 @@ public class DerivedClass : BaseClass
         }
     }
 
-    [Fact]
+    [Test]
     public async Task FindTypeUsages_ShouldFindAllUsages()
     {
         // Act
         var result = await _typeUsage.FindTypeUsagesAsync("Service");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Service", result.TypeName);
-        Assert.True(result.TotalUsages >= 0); // Allow for 0 if symbol finding fails
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TypeName, Is.EqualTo("Service"));
+        Assert.That(result.TotalUsages, Is.GreaterThanOrEqualTo(0)); // Allow for 0 if symbol finding fails
         if (result.TotalUsages > 0)
         {
-            Assert.Contains(result.Usages, u => u.UsageKind == TypeUsageKind.TypeDeclaration);
+            Assert.That(result.Usages, Has.Some.Property("UsageKind").EqualTo(TypeUsageKind.TypeDeclaration));
         }
     }
 
-    [Fact]
+    [Test]
     public async Task FindTypeUsagesByFullName_ShouldFindExactMatch()
     {
         // Act
         var result = await _typeUsage.FindTypeUsagesByFullNameAsync("MCPsharp.Tests.TestFixtures.Service");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("MCPsharp.Tests.TestFixtures.Service", result.FullTypeName);
-        Assert.True(result.TotalUsages >= 0); // Allow for 0 if symbol finding fails
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.FullTypeName, Is.EqualTo("MCPsharp.Tests.TestFixtures.Service"));
+        Assert.That(result.TotalUsages, Is.GreaterThanOrEqualTo(0)); // Allow for 0 if symbol finding fails
     }
 
-    [Fact]
+    [Test]
     public async Task FindInstantiations_ShouldFindOnlyInstantiations()
     {
         // Act
         var result = await _typeUsage.FindInstantiationsAsync("Service");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.All(result, u => Assert.Equal(TypeUsageKind.Instantiation, u.UsageKind));
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.All.Property("UsageKind").EqualTo(TypeUsageKind.Instantiation));
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeInheritance_ShouldAnalyzeInheritance()
     {
         // Act
         var result = await _typeUsage.AnalyzeInheritanceAsync("DerivedClass");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("DerivedClass", result.TargetType);
-        Assert.True(result.BaseClasses.Count >= 0); // Allow for 0 if inheritance analysis fails
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TargetType, Is.EqualTo("DerivedClass"));
+        Assert.That(result.BaseClasses.Count, Is.GreaterThanOrEqualTo(0)); // Allow for 0 if inheritance analysis fails
         if (result.BaseClasses.Count > 0)
         {
-            Assert.Contains(result.BaseClasses, b => b.UsageKind == TypeUsageKind.BaseClass);
+            Assert.That(result.BaseClasses, Has.Some.Property("UsageKind").EqualTo(TypeUsageKind.BaseClass));
         }
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeInheritance_ForInterface_ShouldAnalyzeInterface()
     {
         // Act
         var result = await _typeUsage.AnalyzeInheritanceAsync("IService");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("IService", result.TargetType);
-        Assert.True(result.IsInterface);
-        Assert.True(result.InterfaceImplementations.Count >= 0); // Allow for 0 if implementation analysis fails
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TargetType, Is.EqualTo("IService"));
+        Assert.That(result.IsInterface, Is.True);
+        Assert.That(result.InterfaceImplementations.Count, Is.GreaterThanOrEqualTo(0)); // Allow for 0 if implementation analysis fails
     }
 
-    [Fact]
+    [Test]
     public async Task FindInterfaceImplementations_ShouldFindImplementations()
     {
         // Act
         var result = await _typeUsage.FindInterfaceImplementationsAsync("IService");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.All(result, u => Assert.Equal(TypeUsageKind.InterfaceImplementation, u.UsageKind));
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.All.Property("UsageKind").EqualTo(TypeUsageKind.InterfaceImplementation));
     }
 
-    [Fact]
+    [Test]
     public async Task FindGenericUsages_ShouldFindGenericUsages()
     {
         // Act
         var result = await _typeUsage.FindGenericUsagesAsync("GenericService");
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         // May contain generic argument usages
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeTypeDependencies_ShouldAnalyzeDependencies()
     {
         // Act
         var result = await _typeUsage.AnalyzeTypeDependenciesAsync("Consumer");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Consumer", result.TargetType);
-        Assert.True(result.TotalDependencies >= 0);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TargetType, Is.EqualTo("Consumer"));
+        Assert.That(result.TotalDependencies, Is.GreaterThanOrEqualTo(0));
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeUsagePatterns_ShouldAnalyzePatterns()
     {
         // Act
         var result = await _typeUsage.AnalyzeUsagePatternsAsync("MCPsharp.Tests.TestFixtures");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.True(result.TypeStatistics.Count >= 0); // Allow for 0 if pattern analysis fails
-        Assert.True(result.TotalTypesAnalyzed >= 0);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TypeStatistics.Count, Is.GreaterThanOrEqualTo(0)); // Allow for 0 if pattern analysis fails
+        Assert.That(result.TotalTypesAnalyzed, Is.GreaterThanOrEqualTo(0));
     }
 
-    [Fact]
+    [Test]
     public async Task FindRefactoringOpportunities_ShouldFindOpportunities()
     {
         // Act
         var result = await _typeUsage.FindRefactoringOpportunitiesAsync("MCPsharp.Tests.TestFixtures");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.True(result.TotalOpportunities >= 0);
-        Assert.NotNull(result.OpportunityBreakdown);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalOpportunities, Is.GreaterThanOrEqualTo(0));
+        Assert.That(result.OpportunityBreakdown, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task FindTypeUsages_WithNonExistentType_ShouldReturnNull()
     {
         // Act
         var result = await _typeUsage.FindTypeUsagesAsync("NonExistentType");
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task FindTypeUsagesAtLocation_ShouldFindTypeAtLocation()
     {
         // This test would require more setup to get actual file locations
@@ -329,10 +331,10 @@ public class DerivedClass : BaseClass
         var result = await _typeUsage.FindTypeUsagesAtLocationAsync("TestFile.cs", 10, 5);
 
         // Should return null for non-existent file/location
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void TypeUsageInfo_ShouldGenerateCorrectDescription()
     {
         // Arrange
@@ -353,12 +355,12 @@ public class DerivedClass : BaseClass
         var description = usage.GetDescription();
 
         // Assert
-        Assert.Contains("instantiation", description.ToLower());
-        Assert.Contains("testmethod", description.ToLower());
-        Assert.Contains("testclass", description.ToLower());
+        Assert.That(description.ToLower(), Does.Contain("instantiation"));
+        Assert.That(description.ToLower(), Does.Contain("testmethod"));
+        Assert.That(description.ToLower(), Does.Contain("testclass"));
     }
 
-    [Fact]
+    [Test]
     public void TypeUsageInfo_WithGeneric_ShouldIncludeGenericInfo()
     {
         // Arrange
@@ -378,11 +380,11 @@ public class DerivedClass : BaseClass
         var description = usage.GetDescription();
 
         // Assert
-        Assert.Contains("generic", description.ToLower());
-        Assert.Contains("string", description);
+        Assert.That(description.ToLower(), Does.Contain("generic"));
+        Assert.That(description, Does.Contain("string"));
     }
 
-    [Fact]
+    [Test]
     public void InheritanceAnalysis_ShouldCalculateCorrectProperties()
     {
         // Arrange
@@ -423,14 +425,14 @@ public class DerivedClass : BaseClass
         };
 
         // Assert
-        Assert.Equal("DerivedClass", analysis.TargetType);
-        Assert.Single(analysis.BaseClasses);
-        Assert.Single(analysis.DerivedClasses);
-        Assert.Equal(1, analysis.InheritanceDepth);
-        Assert.Equal(2, analysis.InheritanceChain.Count);
+        Assert.That(analysis.TargetType, Is.EqualTo("DerivedClass"));
+        Assert.That(analysis.BaseClasses, Has.Count.EqualTo(1));
+        Assert.That(analysis.DerivedClasses, Has.Count.EqualTo(1));
+        Assert.That(analysis.InheritanceDepth, Is.EqualTo(1));
+        Assert.That(analysis.InheritanceChain.Count, Is.EqualTo(2));
     }
 
-    [Fact]
+    [Test]
     public void TypeDependencyAnalysis_ShouldCalculateCorrectProperties()
     {
         // Arrange
@@ -459,13 +461,13 @@ public class DerivedClass : BaseClass
         };
 
         // Assert
-        Assert.Equal("Service", analysis.TargetType);
-        Assert.Single(analysis.Dependencies);
-        Assert.Equal(1, analysis.TotalDependencies);
-        Assert.False(analysis.HasCircularDependencies);
+        Assert.That(analysis.TargetType, Is.EqualTo("Service"));
+        Assert.That(analysis.Dependencies, Has.Count.EqualTo(1));
+        Assert.That(analysis.TotalDependencies, Is.EqualTo(1));
+        Assert.That(analysis.HasCircularDependencies, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void TypeRefactoringOpportunities_ShouldCalculateCorrectBreakdown()
     {
         // Arrange
@@ -489,14 +491,15 @@ public class DerivedClass : BaseClass
         };
 
         // Assert
-        Assert.Equal(1, opportunities.TotalOpportunities);
-        Assert.Single(opportunities.UnusedTypes);
-        Assert.True(opportunities.OpportunityBreakdown.ContainsKey("Unused Types"));
-        Assert.Equal(1, opportunities.OpportunityBreakdown["Unused Types"]);
+        Assert.That(opportunities.TotalOpportunities, Is.EqualTo(1));
+        Assert.That(opportunities.UnusedTypes, Has.Count.EqualTo(1));
+        Assert.That(opportunities.OpportunityBreakdown.ContainsKey("Unused Types"), Is.True);
+        Assert.That(opportunities.OpportunityBreakdown["Unused Types"], Is.EqualTo(1));
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
-        // RoslynWorkspace no longer implements IDisposable
+        _workspace?.Dispose();
     }
 }

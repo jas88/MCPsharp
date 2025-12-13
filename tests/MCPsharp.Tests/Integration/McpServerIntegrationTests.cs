@@ -1,21 +1,23 @@
 using System.Text;
 using System.Text.Json;
-using FluentAssertions;
 using MCPsharp.Services;
 using MCPsharp.Models;
-using Xunit;
+using NUnit.Framework;
+using FileInfo = MCPsharp.Models.FileInfo;
 
 namespace MCPsharp.Tests.Integration;
 
 /// <summary>
 /// Integration tests that test the full MCP server workflow including JSON-RPC protocol compliance
 /// </summary>
-public class McpServerIntegrationTests : IDisposable
+[TestFixture]
+public class McpServerIntegrationTests
 {
-    private readonly string _testProjectRoot;
+    private string _testProjectRoot = null!;
     private FileOperationsService _fileService = null!;
 
-    public McpServerIntegrationTests()
+    [SetUp]
+    public void SetUp()
     {
         // Create a temporary test project with sample C# files
         _testProjectRoot = Path.Combine(Path.GetTempPath(), $"mcpsharp-integration-test-{Guid.NewGuid()}");
@@ -23,7 +25,8 @@ public class McpServerIntegrationTests : IDisposable
         SetupTestProject();
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         // Clean up test project
         if (Directory.Exists(_testProjectRoot))
@@ -99,7 +102,7 @@ public class McpServerIntegrationTests : IDisposable
             """);
     }
 
-    [Fact]
+    [Test]
     public void Test01_BasicProjectWorkflow_OpenAndListFiles()
     {
         // Arrange - Open project (simulated via direct service instantiation)
@@ -109,14 +112,14 @@ public class McpServerIntegrationTests : IDisposable
         var listResult = _fileService.ListFiles();
 
         // Assert
-        listResult.Should().NotBeNull();
-        listResult.TotalFiles.Should().BeGreaterThan(0);
-        listResult.Files.Should().Contain(f => f.RelativePath.Contains("Program.cs"));
-        listResult.Files.Should().Contain(f => f.RelativePath.Contains("Helper.cs"));
-        listResult.Files.Should().Contain(f => f.RelativePath.Contains("README.md"));
+        Assert.That(listResult, Is.Not.Null);
+        Assert.That(listResult.TotalFiles, Is.GreaterThan(0));
+        Assert.That(listResult.Files, Has.Some.Matches<FileInfo>(f => f.RelativePath.Contains("Program.cs")));
+        Assert.That(listResult.Files, Has.Some.Matches<FileInfo>(f => f.RelativePath.Contains("Helper.cs")));
+        Assert.That(listResult.Files, Has.Some.Matches<FileInfo>(f => f.RelativePath.Contains("README.md")));
     }
 
-    [Fact]
+    [Test]
     public void Test02_BasicProjectWorkflow_ListCSharpFilesWithGlob()
     {
         // Arrange
@@ -126,13 +129,13 @@ public class McpServerIntegrationTests : IDisposable
         var listResult = _fileService.ListFiles("**/*.cs");
 
         // Assert
-        listResult.Should().NotBeNull();
-        listResult.TotalFiles.Should().Be(3); // Program.cs, Helper.cs, ProgramTests.cs
-        listResult.Files.Should().OnlyContain(f => f.RelativePath.EndsWith(".cs"));
-        listResult.Pattern.Should().Be("**/*.cs");
+        Assert.That(listResult, Is.Not.Null);
+        Assert.That(listResult.TotalFiles, Is.EqualTo(3)); // Program.cs, Helper.cs, ProgramTests.cs
+        Assert.That(listResult.Files, Has.All.Matches<FileInfo>(f => f.RelativePath.EndsWith(".cs")));
+        Assert.That(listResult.Pattern, Is.EqualTo("**/*.cs"));
     }
 
-    [Fact]
+    [Test]
     public async Task Test03_BasicProjectWorkflow_ReadFile()
     {
         // Arrange
@@ -142,16 +145,16 @@ public class McpServerIntegrationTests : IDisposable
         var readResult = await _fileService.ReadFileAsync("src/Program.cs");
 
         // Assert
-        readResult.Should().NotBeNull();
-        readResult.Success.Should().BeTrue();
-        readResult.Content.Should().Contain("Hello, World!");
-        readResult.Content.Should().Contain("namespace TestProject");
-        readResult.LineCount.Should().BeGreaterThan(5);
-        readResult.Encoding.Should().Be("utf-8");
-        readResult.Error.Should().BeNull();
+        Assert.That(readResult, Is.Not.Null);
+        Assert.That(readResult.Success, Is.True);
+        Assert.That(readResult.Content, Does.Contain("Hello, World!"));
+        Assert.That(readResult.Content, Does.Contain("namespace TestProject"));
+        Assert.That(readResult.LineCount, Is.GreaterThan(5));
+        Assert.That(readResult.Encoding, Is.EqualTo("utf-8"));
+        Assert.That(readResult.Error, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task Test04_FileEditingWorkflow_CreateAndReadFile()
     {
         // Arrange
@@ -171,20 +174,20 @@ public class McpServerIntegrationTests : IDisposable
         var writeResult = await _fileService.WriteFileAsync(newFileName, newContent);
 
         // Assert - Write succeeded
-        writeResult.Should().NotBeNull();
-        writeResult.Success.Should().BeTrue();
-        writeResult.Created.Should().BeTrue();
-        writeResult.BytesWritten.Should().BeGreaterThan(0);
+        Assert.That(writeResult, Is.Not.Null);
+        Assert.That(writeResult.Success, Is.True);
+        Assert.That(writeResult.Created, Is.True);
+        Assert.That(writeResult.BytesWritten, Is.GreaterThan(0));
 
         // Act - Read it back
         var readResult = await _fileService.ReadFileAsync(newFileName);
 
         // Assert - Content matches
-        readResult.Success.Should().BeTrue();
-        readResult.Content.Should().Be(newContent);
+        Assert.That(readResult.Success, Is.True);
+        Assert.That(readResult.Content, Is.EqualTo(newContent));
     }
 
-    [Fact]
+    [Test]
     public async Task Test05_FileEditingWorkflow_EditFile()
     {
         // Arrange
@@ -193,7 +196,7 @@ public class McpServerIntegrationTests : IDisposable
 
         // Read original content
         var originalContent = await _fileService.ReadFileAsync(fileName);
-        originalContent.Success.Should().BeTrue();
+        Assert.That(originalContent.Success, Is.True);
 
         // Act - Edit the file (add a comment)
         var edits = new List<TextEdit>
@@ -211,19 +214,19 @@ public class McpServerIntegrationTests : IDisposable
         var editResult = await _fileService.EditFileAsync(fileName, edits);
 
         // Assert - Edit succeeded
-        editResult.Success.Should().BeTrue();
-        editResult.EditsApplied.Should().Be(1);
-        editResult.NewContent.Should().Contain("// This is a helper class");
+        Assert.That(editResult.Success, Is.True);
+        Assert.That(editResult.EditsApplied, Is.EqualTo(1));
+        Assert.That(editResult.NewContent, Does.Contain("// This is a helper class"));
 
         // Act - Read back to verify
         var readResult = await _fileService.ReadFileAsync(fileName);
 
         // Assert - Content was modified
-        readResult.Success.Should().BeTrue();
-        readResult.Content.Should().Contain("// This is a helper class");
+        Assert.That(readResult.Success, Is.True);
+        Assert.That(readResult.Content, Does.Contain("// This is a helper class"));
     }
 
-    [Fact]
+    [Test]
     public async Task Test06_MultipleOperations_SequentialReads()
     {
         // Arrange
@@ -235,17 +238,17 @@ public class McpServerIntegrationTests : IDisposable
         var readmeResult = await _fileService.ReadFileAsync("README.md");
 
         // Assert - All reads succeeded
-        programResult.Success.Should().BeTrue();
-        programResult.Content.Should().Contain("Main");
+        Assert.That(programResult.Success, Is.True);
+        Assert.That(programResult.Content, Does.Contain("Main"));
 
-        helperResult.Success.Should().BeTrue();
-        helperResult.Content.Should().Contain("Helper");
+        Assert.That(helperResult.Success, Is.True);
+        Assert.That(helperResult.Content, Does.Contain("Helper"));
 
-        readmeResult.Success.Should().BeTrue();
-        readmeResult.Content.Should().Contain("Test Project");
+        Assert.That(readmeResult.Success, Is.True);
+        Assert.That(readmeResult.Content, Does.Contain("Test Project"));
     }
 
-    [Fact]
+    [Test]
     public async Task Test07_ErrorHandling_ReadNonExistentFile()
     {
         // Arrange
@@ -255,14 +258,14 @@ public class McpServerIntegrationTests : IDisposable
         var result = await _fileService.ReadFileAsync("src/DoesNotExist.cs");
 
         // Assert - Proper error response
-        result.Should().NotBeNull();
-        result.Success.Should().BeFalse();
-        result.Error.Should().NotBeNullOrEmpty();
-        result.Error.Should().Contain("not found");
-        result.Content.Should().BeNull();
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Error, Does.Contain("not found"));
+        Assert.That(result.Content, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task Test08_ErrorHandling_ReadFileOutsideProject()
     {
         // Arrange
@@ -272,25 +275,24 @@ public class McpServerIntegrationTests : IDisposable
         var result = await _fileService.ReadFileAsync("../outside.cs");
 
         // Assert - Security error
-        result.Should().NotBeNull();
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("outside project root");
-        result.Content.Should().BeNull();
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("outside project root"));
+        Assert.That(result.Content, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void Test09_ErrorHandling_OpenNonExistentProject()
     {
         // Arrange
         var nonExistentPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
 
         // Act & Assert
-        Action act = () => new FileOperationsService(nonExistentPath);
-        act.Should().Throw<DirectoryNotFoundException>()
-            .WithMessage($"Root path does not exist: {nonExistentPath}");
+        var ex = Assert.Throws<DirectoryNotFoundException>(() => new FileOperationsService(nonExistentPath));
+        Assert.That(ex.Message, Is.EqualTo($"Root path does not exist: {nonExistentPath}"));
     }
 
-    [Fact]
+    [Test]
     public async Task Test10_ErrorHandling_WriteFileOutsideProject()
     {
         // Arrange
@@ -300,12 +302,12 @@ public class McpServerIntegrationTests : IDisposable
         var result = await _fileService.WriteFileAsync("../outside.cs", "content");
 
         // Assert - Security error
-        result.Should().NotBeNull();
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("outside project root");
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("outside project root"));
     }
 
-    [Fact]
+    [Test]
     public async Task Test11_CompleteWorkflow_CreateEditRead()
     {
         // Arrange
@@ -315,8 +317,8 @@ public class McpServerIntegrationTests : IDisposable
 
         // Act 1 - Create file
         var createResult = await _fileService.WriteFileAsync(fileName, initialContent);
-        createResult.Success.Should().BeTrue();
-        createResult.Created.Should().BeTrue();
+        Assert.That(createResult.Success, Is.True);
+        Assert.That(createResult.Created, Is.True);
 
         // Act 2 - Edit file (add method before closing brace)
         var edits = new List<TextEdit>
@@ -337,18 +339,18 @@ public class McpServerIntegrationTests : IDisposable
         {
             throw new Exception($"Edit failed: {editResult.Error}");
         }
-        editResult.Success.Should().BeTrue();
+        Assert.That(editResult.Success, Is.True);
 
         // Act 3 - Read back final content
         var readResult = await _fileService.ReadFileAsync(fileName);
 
         // Assert - Verify complete workflow
-        readResult.Success.Should().BeTrue();
-        readResult.Content.Should().Contain("public class Workflow");
-        readResult.Content.Should().Contain("public void Execute()");
+        Assert.That(readResult.Success, Is.True);
+        Assert.That(readResult.Content, Does.Contain("public class Workflow"));
+        Assert.That(readResult.Content, Does.Contain("public void Execute()"));
     }
 
-    [Fact]
+    [Test]
     public void Test12_GlobPatterns_CsprojFiles()
     {
         // Arrange
@@ -358,11 +360,11 @@ public class McpServerIntegrationTests : IDisposable
         var result = _fileService.ListFiles("**/*.csproj");
 
         // Assert
-        result.TotalFiles.Should().Be(1);
-        result.Files.Should().ContainSingle(f => f.RelativePath.Contains("TestProject.csproj"));
+        Assert.That(result.TotalFiles, Is.EqualTo(1));
+        Assert.That(result.Files, Has.Exactly(1).Matches<FileInfo>(f => f.RelativePath.Contains("TestProject.csproj")));
     }
 
-    [Fact]
+    [Test]
     public void Test13_GlobPatterns_TestFiles()
     {
         // Arrange
@@ -372,11 +374,11 @@ public class McpServerIntegrationTests : IDisposable
         var result = _fileService.ListFiles("tests/**/*.cs");
 
         // Assert
-        result.TotalFiles.Should().Be(1);
-        result.Files.Should().ContainSingle(f => f.RelativePath.Contains("ProgramTests.cs"));
+        Assert.That(result.TotalFiles, Is.EqualTo(1));
+        Assert.That(result.Files, Has.Exactly(1).Matches<FileInfo>(f => f.RelativePath.Contains("ProgramTests.cs")));
     }
 
-    [Fact]
+    [Test]
     public async Task Test14_ComplexEdits_MultipleEditsInOneFile()
     {
         // Arrange
@@ -399,13 +401,13 @@ public class McpServerIntegrationTests : IDisposable
         var editResult = await _fileService.EditFileAsync(fileName, edits);
 
         // Assert
-        editResult.Success.Should().BeTrue();
-        editResult.EditsApplied.Should().Be(3);
-        editResult.NewContent.Should().Contain("// Header");
-        editResult.NewContent.Should().Contain("Modified Line 3");
+        Assert.That(editResult.Success, Is.True);
+        Assert.That(editResult.EditsApplied, Is.EqualTo(3));
+        Assert.That(editResult.NewContent, Does.Contain("// Header"));
+        Assert.That(editResult.NewContent, Does.Contain("Modified Line 3"));
     }
 
-    [Fact]
+    [Test]
     public async Task Test15_DirectoryCreation_NestedDirectories()
     {
         // Arrange
@@ -417,17 +419,17 @@ public class McpServerIntegrationTests : IDisposable
         var result = await _fileService.WriteFileAsync(fileName, content, createDirectories: true);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.Created.Should().BeTrue();
-        File.Exists(Path.Combine(_testProjectRoot, fileName)).Should().BeTrue();
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Created, Is.True);
+        Assert.That(File.Exists(Path.Combine(_testProjectRoot, fileName)), Is.True);
 
         // Verify can read it back
         var readResult = await _fileService.ReadFileAsync(fileName);
-        readResult.Success.Should().BeTrue();
-        readResult.Content.Should().Be(content);
+        Assert.That(readResult.Success, Is.True);
+        Assert.That(readResult.Content, Is.EqualTo(content));
     }
 
-    [Fact]
+    [Test]
     public void Test16_JsonSerialization_FileListResult()
     {
         // Arrange
@@ -442,9 +444,9 @@ public class McpServerIntegrationTests : IDisposable
         });
 
         // Assert - Valid JSON structure
-        json.Should().Contain("\"files\":");
-        json.Should().Contain("\"totalFiles\":");
-        json.Should().Contain("\"pattern\":");
+        Assert.That(json, Does.Contain("\"files\":"));
+        Assert.That(json, Does.Contain("\"totalFiles\":"));
+        Assert.That(json, Does.Contain("\"pattern\":"));
 
         // Deserialize back
         var deserialized = JsonSerializer.Deserialize<FileListResult>(json, new JsonSerializerOptions
@@ -452,11 +454,11 @@ public class McpServerIntegrationTests : IDisposable
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
 
-        deserialized.Should().NotBeNull();
-        deserialized!.TotalFiles.Should().Be(listResult.TotalFiles);
+        Assert.That(deserialized, Is.Not.Null);
+        Assert.That(deserialized!.TotalFiles, Is.EqualTo(listResult.TotalFiles));
     }
 
-    [Fact]
+    [Test]
     public async Task Test17_JsonSerialization_FileReadResult()
     {
         // Arrange
@@ -471,10 +473,10 @@ public class McpServerIntegrationTests : IDisposable
         });
 
         // Assert
-        json.Should().Contain("\"success\": true");
-        json.Should().Contain("\"content\":");
-        json.Should().Contain("\"encoding\":");
-        json.Should().Contain("\"lineCount\":");
+        Assert.That(json, Does.Contain("\"success\": true"));
+        Assert.That(json, Does.Contain("\"content\":"));
+        Assert.That(json, Does.Contain("\"encoding\":"));
+        Assert.That(json, Does.Contain("\"lineCount\":"));
 
         // Deserialize back
         var deserialized = JsonSerializer.Deserialize<FileReadResult>(json, new JsonSerializerOptions
@@ -482,12 +484,12 @@ public class McpServerIntegrationTests : IDisposable
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
 
-        deserialized.Should().NotBeNull();
-        deserialized!.Success.Should().BeTrue();
-        deserialized.Content.Should().Be(readResult.Content);
+        Assert.That(deserialized, Is.Not.Null);
+        Assert.That(deserialized!.Success, Is.True);
+        Assert.That(deserialized.Content, Is.EqualTo(readResult.Content));
     }
 
-    [Fact]
+    [Test]
     public async Task Test18_Performance_ListManyFiles()
     {
         // Arrange - Create many test files
@@ -503,11 +505,11 @@ public class McpServerIntegrationTests : IDisposable
         var duration = DateTime.UtcNow - startTime;
 
         // Assert - Should be fast
-        result.TotalFiles.Should().BeGreaterThan(50);
-        duration.Should().BeLessThan(TimeSpan.FromSeconds(1));
+        Assert.That(result.TotalFiles, Is.GreaterThan(50));
+        Assert.That(duration, Is.LessThan(TimeSpan.FromSeconds(1)));
     }
 
-    [Fact]
+    [Test]
     public async Task Test19_ConcurrentOperations_MultipleReads()
     {
         // Arrange
@@ -525,11 +527,11 @@ public class McpServerIntegrationTests : IDisposable
         var results = await Task.WhenAll(tasks);
 
         // Assert - All should succeed
-        results.Should().AllSatisfy(r => r.Success.Should().BeTrue());
-        results.Should().HaveCount(4);
+        Assert.That(results, Has.All.Matches<FileReadResult>(r => r.Success == true));
+        Assert.That(results, Has.Length.EqualTo(4));
     }
 
-    [Fact]
+    [Test]
     public async Task Test20_EdgeCase_EmptyFile()
     {
         // Arrange
@@ -541,10 +543,10 @@ public class McpServerIntegrationTests : IDisposable
         var result = await _fileService.ReadFileAsync(fileName);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.Content.Should().BeEmpty();
-        result.LineCount.Should().Be(1); // Empty file has 1 line
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Content, Is.Empty);
+        Assert.That(result.LineCount, Is.EqualTo(1)); // Empty file has 1 line
         // Note: Size may be > 0 due to UTF-8 BOM, so we just check it's small
-        result.Size.Should().BeLessThan(10);
+        Assert.That(result.Size, Is.LessThan(10));
     }
 }

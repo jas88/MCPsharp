@@ -1,4 +1,4 @@
-using Xunit;
+using NUnit.Framework;
 using Microsoft.Extensions.Logging;
 using Microsoft.CodeAnalysis;
 using NSubstitute;
@@ -12,11 +12,12 @@ namespace MCPsharp.Tests.Services.Roslyn;
 /// </summary>
 public class RenameSymbolServiceTests : TestBase
 {
-    private readonly RenameSymbolService _service;
-    private readonly RoslynWorkspace _workspace;
-    private readonly ILogger<RenameSymbolService> _logger;
+    private RenameSymbolService _service = null!;
+    private RoslynWorkspace _workspace = null!;
+    private ILogger<RenameSymbolService> _logger = null!;
 
-    public RenameSymbolServiceTests()
+    [SetUp]
+    public void SetUp()
     {
         _workspace = new RoslynWorkspace();
         var referenceFinder = new AdvancedReferenceFinderService(
@@ -45,7 +46,7 @@ public class RenameSymbolServiceTests : TestBase
 
     #region Basic Rename Tests
 
-    [Fact]
+    [Test]
     public async Task RenameLocalVariable_Success()
     {
         // Arrange
@@ -66,8 +67,8 @@ public class TestClass
         // DEBUG: Check workspace state
         var documents = _workspace.GetAllDocuments().ToList();
         var compilation = _workspace.GetCompilation();
-        Assert.NotEmpty(documents); // Should have 1 document
-        Assert.NotNull(compilation); // Should have a compilation
+        Assert.That(documents, Is.Not.Empty); // Should have 1 document
+        Assert.That(compilation, Is.Not.Null); // Should have a compilation
 
         var request = new RenameRequest
         {
@@ -86,13 +87,13 @@ public class TestClass
         Console.WriteLine($"Errors: {string.Join(", ", result.Errors)}");
 
         // Assert with diagnostic information
-        Assert.True(result.Success, $"Rename failed. Errors: [{string.Join(", ", result.Errors)}], Conflicts: {result.Conflicts.Count}");
+        Assert.That(result.Success, Is.True, $"Rename failed. Errors: [{string.Join(", ", result.Errors)}], Conflicts: {result.Conflicts.Count}");
         // TODO: Figure out why only 1 reference is being renamed instead of 3
-        //Assert.Equal(3, result.RenamedCount); // 3 references to the variable
-        Assert.Single(result.FilesModified);
+        //Assert.That(result.RenamedCount, Is.EqualTo(3)); // 3 references to the variable
+        Assert.That(result.FilesModified, Has.Count.EqualTo(1));
     }
 
-    [Fact]
+    [Test]
     public async Task RenameParameter_UpdatesAllReferences()
     {
         // Arrange
@@ -126,16 +127,16 @@ public class TestClass
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success, $"Rename failed. Errors: [{string.Join(", ", result.Errors)}], Conflicts: {result.Conflicts.Count}");
+        Assert.That(result.Success, Is.True, $"Rename failed. Errors: [{string.Join(", ", result.Errors)}], Conflicts: {result.Conflicts.Count}");
         // TODO: Check renamed count
-        //Assert.True(result.RenamedCount >= 4); // Declaration + 3 uses + named argument
+        //Assert.That(result.RenamedCount >= 4, Is.True); // Declaration + 3 uses + named argument
     }
 
     #endregion
 
     #region Class Rename Tests
 
-    [Fact]
+    [Test]
     public async Task RenameClass_UpdatesAllReferences()
     {
         // Arrange
@@ -179,11 +180,11 @@ public class Consumer
         Console.WriteLine($"Errors: {string.Join(", ", result.Errors)}");
 
         // Assert
-        Assert.True(result.Success, $"Rename failed. Errors: [{string.Join(", ", result.Errors)}], Conflicts: [{string.Join("; ", result.Conflicts.Select(c => c.Description))}]");
-        Assert.True(result.RenamedCount >= 6, $"Expected >= 6 renames, got {result.RenamedCount}"); // Class declaration, constructor, return types, instantiations
+        Assert.That(result.Success, Is.True, $"Rename failed. Errors: [{string.Join(", ", result.Errors)}], Conflicts: [{string.Join("; ", result.Conflicts.Select(c => c.Description))}]");
+        Assert.That(result.RenamedCount >= 6, Is.True, $"Expected >= 6 renames, got {result.RenamedCount}"); // Class declaration, constructor, return types, instantiations
     }
 
-    [Fact]
+    [Test]
     public async Task RenamePartialClass_UpdatesAllParts()
     {
         // Arrange
@@ -215,15 +216,15 @@ public partial class PartialClass
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.Equal(2, result.FilesModified.Count); // Both files should be modified
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.FilesModified.Count, Is.EqualTo(2)); // Both files should be modified
     }
 
     #endregion
 
     #region Interface and Implementation Tests
 
-    [Fact]
+    [Test]
     public async Task RenameInterface_UpdatesImplementations()
     {
         // Arrange
@@ -261,11 +262,11 @@ public class Consumer
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.True(result.RenamedCount >= 3); // Interface declaration, implementation, parameter type
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.RenamedCount >= 3, Is.True); // Interface declaration, implementation, parameter type
     }
 
-    [Fact]
+    [Test]
     public async Task RenameInterfaceMethod_UpdatesImplementations()
     {
         // Arrange
@@ -307,15 +308,15 @@ public class ExplicitImpl : IService
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.True(result.RenamedCount >= 3); // Interface method + implicit impl + explicit impl
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.RenamedCount >= 3, Is.True); // Interface method + implicit impl + explicit impl
     }
 
     #endregion
 
     #region Method Rename Tests
 
-    [Fact]
+    [Test]
     public async Task RenameVirtualMethod_UpdatesOverrides()
     {
         // Arrange
@@ -358,11 +359,11 @@ public class Consumer
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success, $"Rename failed. Errors: [{string.Join(", ", result.Errors)}], Conflicts: [{string.Join("; ", result.Conflicts.Select(c => c.Description))}]");
-        Assert.True(result.RenamedCount >= 4); // Virtual declaration, override, base call, instance call
+        Assert.That(result.Success, Is.True, $"Rename failed. Errors: [{string.Join(", ", result.Errors)}], Conflicts: [{string.Join("; ", result.Conflicts.Select(c => c.Description))}]");
+        Assert.That(result.RenamedCount >= 4, Is.True); // Virtual declaration, override, base call, instance call
     }
 
-    [Fact]
+    [Test]
     public async Task RenameOverloadedMethod_SingleOverload()
     {
         // Arrange
@@ -397,7 +398,7 @@ public class TestClass
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
         // Should rename only one overload and its calls
     }
 
@@ -405,7 +406,7 @@ public class TestClass
 
     #region Property Rename Tests
 
-    [Fact]
+    [Test]
     public async Task RenameProperty_WithBackingField()
     {
         // Arrange
@@ -442,11 +443,11 @@ public class TestClass
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.True(result.RenamedCount >= 3); // Property declaration + 2 uses
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.RenamedCount >= 3, Is.True); // Property declaration + 2 uses
     }
 
-    [Fact]
+    [Test]
     public async Task RenameAutoProperty_Success()
     {
         // Arrange
@@ -477,15 +478,15 @@ public class TestClass
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success, $"Rename failed. Errors: [{string.Join(", ", result.Errors)}], Conflicts: {result.Conflicts.Count}");
-        Assert.True(result.RenamedCount >= 3); // Property declaration + 2 uses
+        Assert.That(result.Success, Is.True, $"Rename failed. Errors: [{string.Join(", ", result.Errors)}], Conflicts: {result.Conflicts.Count}");
+        Assert.That(result.RenamedCount >= 3, Is.True); // Property declaration + 2 uses
     }
 
     #endregion
 
     #region Conflict Detection Tests
 
-    [Fact]
+    [Test]
     public async Task RenameWithNameCollision_ReturnsError()
     {
         // Arrange
@@ -511,12 +512,12 @@ public class TestClass
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.False(result.Success);
-        Assert.NotEmpty(result.Conflicts);
-        Assert.Contains(result.Conflicts, c => c.Type == ConflictType.NameCollision);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Conflicts, Is.Not.Empty);
+        Assert.That(result.Conflicts, Does.Contain(result.Conflicts.FirstOrDefault(c => c.Type == ConflictType.NameCollision)));
     }
 
-    [Fact]
+    [Test]
     public async Task RenameHidingInheritedMember_ReturnsWarning()
     {
         // Arrange
@@ -548,14 +549,14 @@ public class DerivedClass : BaseClass
 
         // Assert
         // Should have warning about hiding inherited member
-        Assert.Contains(result.Conflicts, c => c.Type == ConflictType.HidesInheritedMember);
+        Assert.That(result.Conflicts, Does.Contain(result.Conflicts.FirstOrDefault(c => c.Type == ConflictType.HidesInheritedMember)));
     }
 
     #endregion
 
     #region Validation Tests
 
-    [Fact]
+    [Test]
     public async Task RenameToInvalidIdentifier_ReturnsError()
     {
         // Arrange
@@ -573,11 +574,11 @@ public class DerivedClass : BaseClass
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.False(result.Success);
-        Assert.Contains("not a valid C# identifier", result.Errors[0]);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Errors[0], Does.Contain("not a valid C# identifier"));
     }
 
-    [Fact]
+    [Test]
     public async Task RenameToKeyword_RequiresFlag()
     {
         // Arrange
@@ -596,11 +597,11 @@ public class DerivedClass : BaseClass
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.False(result.Success);
-        Assert.Contains("is a C# keyword", result.Errors[0]);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Errors[0], Does.Contain("is a C# keyword"));
     }
 
-    [Fact]
+    [Test]
     public async Task RenameNonExistentSymbol_ReturnsError()
     {
         // Arrange
@@ -618,15 +619,15 @@ public class DerivedClass : BaseClass
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.False(result.Success);
-        Assert.Contains("not found", result.Errors[0]);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Errors[0], Does.Contain("not found"));
     }
 
     #endregion
 
     #region Preview Mode Tests
 
-    [Fact]
+    [Test]
     public async Task RenameInPreviewMode_DoesNotApplyChanges()
     {
         // Arrange
@@ -655,23 +656,23 @@ public class OldName
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.Preview);
-        Assert.NotEmpty(result.Preview);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Preview, Is.Not.Null);
+        Assert.That(result.Preview, Is.Not.Empty);
 
         // Verify original code is unchanged
         var document = _workspace.GetDocument("test.cs");
-        Assert.NotNull(document);
+        Assert.That(document, Is.Not.Null);
         var text = await document.GetTextAsync();
-        Assert.Contains("OldName", text.ToString());
-        Assert.DoesNotContain("NewName", text.ToString());
+        Assert.That(text.ToString(), Does.Contain("OldName"));
+        Assert.That(text.ToString(), Does.Not.Contain("NewName"));
     }
 
     #endregion
 
     #region Edge Case Tests
 
-    [Fact]
+    [Test]
     public async Task RenameConstructor_HandledSpecially()
     {
         // Arrange
@@ -697,11 +698,11 @@ public class OldClass
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
         // Constructors should be renamed with the class
     }
 
-    [Fact]
+    [Test]
     public async Task RenameNamespace_Success()
     {
         // Arrange
@@ -736,11 +737,11 @@ namespace Consumer
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.True(result.RenamedCount >= 2); // Namespace declaration + using statement
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.RenamedCount >= 2, Is.True); // Namespace declaration + using statement
     }
 
-    [Fact]
+    [Test]
     public async Task RenameGenericTypeParameter_Success()
     {
         // Arrange
@@ -768,9 +769,15 @@ public class Container<TOld>
         var result = await _service.RenameSymbolAsync(request);
 
         // Assert
-        Assert.True(result.Success);
-        Assert.True(result.RenamedCount >= 4); // Declaration + 3 uses
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.RenamedCount >= 4, Is.True); // Declaration + 3 uses
     }
 
     #endregion
+
+    [TearDown]
+    public void TearDown()
+    {
+        _workspace?.Dispose();
+    }
 }

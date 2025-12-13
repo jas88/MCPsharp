@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
 using NSubstitute;
-using Xunit;
-using FluentAssertions;
+using NUnit.Framework;
 using MCPsharp.Models.SqlMigration;
 using MCPsharp.Services.Phase3;
 
@@ -24,7 +23,7 @@ public class SqlMigrationAnalyzerServiceTests
         _service = new SqlMigrationAnalyzerService(_mockLogger, _mockLoggerFactory);
     }
 
-    [Fact]
+    [Test]
     public async Task DetectDatabaseProvider_ShouldReturnSqlServer_WhenSqlServerPackageExists()
     {
         // Arrange
@@ -42,13 +41,13 @@ public class SqlMigrationAnalyzerServiceTests
         var result = await _service.DetectDatabaseProviderAsync(tempDir);
 
         // Assert
-        result.Should().Be(DatabaseProvider.SqlServer);
+        Assert.That(result, Is.EqualTo(DatabaseProvider.SqlServer));
 
         // Cleanup
         Directory.Delete(tempDir, true);
     }
 
-    [Fact]
+    [Test]
     public async Task GetMigrationFiles_ShouldReturnEmptyList_WhenNoMigrationsExist()
     {
         // Arrange
@@ -58,24 +57,24 @@ public class SqlMigrationAnalyzerServiceTests
         var result = await _service.GetMigrationFilesAsync(tempDir);
 
         // Assert
-        result.Should().BeEmpty();
+        Assert.That(result, Is.Empty);
 
         // Cleanup
         Directory.Delete(tempDir, true);
     }
 
-    [Fact]
+    [Test]
     public async Task ParseMigrationFile_ShouldThrowFileNotFoundException_WhenFileDoesNotExist()
     {
         // Arrange
         var nonExistentFile = Path.Combine(Path.GetTempPath(), "nonexistent.cs");
 
         // Act & Assert
-        await Assert.ThrowsAsync<FileNotFoundException>(
-            () => _service.ParseMigrationFileAsync(nonExistentFile));
+        Assert.ThrowsAsync<FileNotFoundException>(async () =>
+            await _service.ParseMigrationFileAsync(nonExistentFile));
     }
 
-    [Fact]
+    [Test]
     public async Task GenerateMigrationReport_ShouldReturnValidReport_WhenProjectIsValid()
     {
         // Arrange
@@ -85,17 +84,17 @@ public class SqlMigrationAnalyzerServiceTests
         var result = await _service.GenerateMigrationReportAsync(tempDir, false);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Metadata.Should().NotBeNull();
-        result.Metadata.ProjectPath.Should().Be(tempDir);
-        result.Metadata.GeneratedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
-        result.Metadata.TotalMigrations.Should().Be(0);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Metadata, Is.Not.Null);
+        Assert.That(result.Metadata.ProjectPath, Is.EqualTo(tempDir));
+        Assert.That(result.Metadata.GeneratedAt, Is.EqualTo(DateTime.UtcNow).Within(TimeSpan.FromMinutes(1)));
+        Assert.That(result.Metadata.TotalMigrations, Is.EqualTo(0));
 
         // Cleanup
         Directory.Delete(tempDir, true);
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateMigrations_ShouldReturnEmptyList_WhenNoMigrationsExist()
     {
         // Arrange
@@ -105,13 +104,13 @@ public class SqlMigrationAnalyzerServiceTests
         var result = await _service.ValidateMigrationsAsync(tempDir);
 
         // Assert
-        result.Should().BeEmpty();
+        Assert.That(result, Is.Empty);
 
         // Cleanup
         Directory.Delete(tempDir, true);
     }
 
-    [Fact]
+    [Test]
     public async Task EstimateMigrationExecution_ShouldReturnValidEstimate_ForValidInputs()
     {
         // Arrange
@@ -121,15 +120,15 @@ public class SqlMigrationAnalyzerServiceTests
         var result = await _service.EstimateMigrationExecutionAsync("TestMigration", tempDir);
 
         // Assert
-        result.Should().NotBeNull();
-        result.MigrationName.Should().Be("TestMigration");
-        result.EstimatedExecutionTime.Should().BeGreaterOrEqualTo(TimeSpan.Zero);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MigrationName, Is.EqualTo("TestMigration"));
+        Assert.That(result.EstimatedExecutionTime, Is.GreaterThanOrEqualTo(TimeSpan.Zero));
 
         // Cleanup
         Directory.Delete(tempDir, true);
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeMigrations_ShouldReturnValidAnalysis_WhenProjectIsValid()
     {
         // Arrange
@@ -139,19 +138,19 @@ public class SqlMigrationAnalyzerServiceTests
         var result = await _service.AnalyzeMigrationsAsync(tempDir);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Summary.Should().NotBeNull();
-        result.Summary.TotalMigrations.Should().Be(0);
-        result.Summary.AppliedMigrations.Should().Be(0);
-        result.Summary.PendingMigrations.Should().Be(0);
-        result.Migrations.Should().BeEmpty();
-        result.BreakingChanges.Should().BeEmpty();
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Summary, Is.Not.Null);
+        Assert.That(result.Summary.TotalMigrations, Is.EqualTo(0));
+        Assert.That(result.Summary.AppliedMigrations, Is.EqualTo(0));
+        Assert.That(result.Summary.PendingMigrations, Is.EqualTo(0));
+        Assert.That(result.Migrations, Is.Empty);
+        Assert.That(result.BreakingChanges, Is.Empty);
 
         // Cleanup
         Directory.Delete(tempDir, true);
     }
 
-    [Fact]
+    [Test]
     public async Task TrackSchemaEvolution_ShouldReturnEmptyEvolution_WhenNoMigrationsExist()
     {
         // Arrange
@@ -161,16 +160,16 @@ public class SqlMigrationAnalyzerServiceTests
         var result = await _service.TrackSchemaEvolutionAsync(tempDir);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Snapshots.Should().BeEmpty();
-        result.Changes.Should().BeEmpty();
-        result.Metrics.Should().BeEmpty();
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Snapshots, Is.Empty);
+        Assert.That(result.Changes, Is.Empty);
+        Assert.That(result.Metrics, Is.Empty);
 
         // Cleanup
         Directory.Delete(tempDir, true);
     }
 
-    [Fact]
+    [Test]
     public async Task DetectBreakingChanges_ShouldReturnEmptyList_WhenMigrationsNotFound()
     {
         // Arrange
@@ -180,13 +179,13 @@ public class SqlMigrationAnalyzerServiceTests
         var result = await _service.DetectBreakingChangesAsync("NonExistent1", "NonExistent2", tempDir);
 
         // Assert
-        result.Should().BeEmpty();
+        Assert.That(result, Is.Empty);
 
         // Cleanup
         Directory.Delete(tempDir, true);
     }
 
-    [Fact]
+    [Test]
     public async Task GetMigrationDependencies_ShouldReturnValidDependency_ForValidInputs()
     {
         // Arrange
@@ -196,16 +195,16 @@ public class SqlMigrationAnalyzerServiceTests
         var result = await _service.GetMigrationDependenciesAsync("TestMigration", tempDir);
 
         // Assert
-        result.Should().NotBeNull();
-        result.MigrationName.Should().Be("TestMigration");
-        result.DependsOn.Should().BeEmpty();
-        result.RequiredBy.Should().BeEmpty();
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MigrationName, Is.EqualTo("TestMigration"));
+        Assert.That(result.DependsOn, Is.Empty);
+        Assert.That(result.RequiredBy, Is.Empty);
 
         // Cleanup
         Directory.Delete(tempDir, true);
     }
 
-    [Fact]
+    [Test]
     public async Task GetMigrationHistory_ShouldReturnEmptyList_WhenDbContextDoesNotExist()
     {
         // Arrange
@@ -215,7 +214,7 @@ public class SqlMigrationAnalyzerServiceTests
         var result = await _service.GetMigrationHistoryAsync(nonExistentDbContext);
 
         // Assert
-        result.Should().BeEmpty();
+        Assert.That(result, Is.Empty);
     }
 
     private string CreateTempProjectDirectory()
@@ -278,7 +277,7 @@ namespace TestProject.Migrations
         return migrationPath;
     }
 
-    [Fact]
+    [Test]
     public async Task ParseMigrationFile_ShouldReturnValidMigrationInfo_ForValidMigrationFile()
     {
         // Arrange
@@ -289,17 +288,17 @@ namespace TestProject.Migrations
         var result = await _service.ParseMigrationFileAsync(migrationPath);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Name.Should().Be("CreateTestTable");
-        result.FilePath.Should().Be(migrationPath);
-        result.Operations.Should().NotBeEmpty();
-        result.Operations.Should().Contain(o => o.Type.Equals("CreateTable", StringComparison.OrdinalIgnoreCase));
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Name, Is.EqualTo("CreateTestTable"));
+        Assert.That(result.FilePath, Is.EqualTo(migrationPath));
+        Assert.That(result.Operations, Is.Not.Empty);
+        Assert.That(result.Operations, Has.Some.Matches<dynamic>(o => o.Type.Equals("CreateTable", StringComparison.OrdinalIgnoreCase)));
 
         // Cleanup
         Directory.Delete(tempDir, true);
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeMigrations_ShouldDetectMigrations_WhenMigrationsExist()
     {
         // Arrange
@@ -311,13 +310,19 @@ namespace TestProject.Migrations
         var result = await _service.AnalyzeMigrationsAsync(tempDir);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Summary.TotalMigrations.Should().Be(2);
-        result.Migrations.Should().HaveCount(2);
-        result.Migrations.Should().Contain(m => m.Name == "CreateTestTable");
-        result.Migrations.Should().Contain(m => m.Name == "AddColumnToTestTable");
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Summary.TotalMigrations, Is.EqualTo(2));
+        Assert.That(result.Migrations, Has.Count.EqualTo(2));
+        Assert.That(result.Migrations, Has.Some.Matches<dynamic>(m => m.Name == "CreateTestTable"));
+        Assert.That(result.Migrations, Has.Some.Matches<dynamic>(m => m.Name == "AddColumnToTestTable"));
 
         // Cleanup
         Directory.Delete(tempDir, true);
+    }
+
+    [OneTimeTearDown]
+    public void OneTimeTearDown()
+    {
+        _mockLoggerFactory?.Dispose();
     }
 }
