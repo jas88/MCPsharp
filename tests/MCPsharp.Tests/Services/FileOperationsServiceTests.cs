@@ -1,16 +1,18 @@
-using FluentAssertions;
 using MCPsharp.Models;
 using MCPsharp.Services;
-using Xunit;
+using NUnit.Framework;
+using FileInfo = MCPsharp.Models.FileInfo;
 
 namespace MCPsharp.Tests.Services;
 
-public class FileOperationsServiceTests : IDisposable
+[TestFixture]
+public class FileOperationsServiceTests
 {
-    private readonly string _testRoot;
-    private readonly FileOperationsService _service;
+    private string _testRoot = null!;
+    private FileOperationsService _service = null!;
 
-    public FileOperationsServiceTests()
+    [SetUp]
+    public void SetUp()
     {
         // Create a temporary test directory
         _testRoot = Path.Combine(Path.GetTempPath(), $"mcpsharp-test-{Guid.NewGuid()}");
@@ -18,7 +20,8 @@ public class FileOperationsServiceTests : IDisposable
         _service = new FileOperationsService(_testRoot);
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         // Clean up test directory
         if (Directory.Exists(_testRoot))
@@ -27,18 +30,17 @@ public class FileOperationsServiceTests : IDisposable
         }
     }
 
-    [Fact]
+    [Test]
     public void Constructor_ShouldThrowException_WhenDirectoryDoesNotExist()
     {
         // Arrange
         var nonExistentPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
 
         // Act & Assert
-        Action act = () => new FileOperationsService(nonExistentPath);
-        act.Should().Throw<DirectoryNotFoundException>();
+        Assert.Throws<DirectoryNotFoundException>(() => new FileOperationsService(nonExistentPath));
     }
 
-    [Fact]
+    [Test]
     public void ListFiles_ShouldReturnAllFiles_WhenNoPatternSpecified()
     {
         // Arrange
@@ -50,12 +52,12 @@ public class FileOperationsServiceTests : IDisposable
         var result = _service.ListFiles();
 
         // Assert
-        result.TotalFiles.Should().Be(3);
-        result.Files.Should().HaveCount(3);
-        result.Pattern.Should().BeNull();
+        Assert.That(result.TotalFiles, Is.EqualTo(3));
+        Assert.That(result.Files, Has.Count.EqualTo(3));
+        Assert.That(result.Pattern, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void ListFiles_ShouldFilterByCsFiles_WhenPatternSpecified()
     {
         // Arrange
@@ -67,13 +69,13 @@ public class FileOperationsServiceTests : IDisposable
         var result = _service.ListFiles("**/*.cs");
 
         // Assert
-        result.TotalFiles.Should().Be(2);
-        result.Files.Should().HaveCount(2);
-        result.Files.Should().OnlyContain(f => f.RelativePath.EndsWith(".cs"));
-        result.Pattern.Should().Be("**/*.cs");
+        Assert.That(result.TotalFiles, Is.EqualTo(2));
+        Assert.That(result.Files, Has.Count.EqualTo(2));
+        Assert.That(result.Files, Has.All.Matches<FileInfo>(f => f.RelativePath.EndsWith(".cs")));
+        Assert.That(result.Pattern, Is.EqualTo("**/*.cs"));
     }
 
-    [Fact]
+    [Test]
     public void ListFiles_ShouldExcludeHiddenFiles_ByDefault()
     {
         // Arrange
@@ -85,11 +87,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = _service.ListFiles();
 
         // Assert
-        result.Files.Should().HaveCount(1);
-        result.Files.Should().OnlyContain(f => !f.IsHidden);
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files, Has.All.Matches<FileInfo>(f => !f.IsHidden));
     }
 
-    [Fact]
+    [Test]
     public void ListFiles_ShouldIncludeHiddenFiles_WhenRequested()
     {
         // Arrange
@@ -100,10 +102,10 @@ public class FileOperationsServiceTests : IDisposable
         var result = _service.ListFiles(includeHidden: true);
 
         // Assert
-        result.Files.Should().HaveCount(2);
+        Assert.That(result.Files, Has.Count.EqualTo(2));
     }
 
-    [Fact]
+    [Test]
     public async Task ReadFileAsync_ShouldReturnContent_WhenFileExists()
     {
         // Arrange
@@ -114,37 +116,37 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.ReadFileAsync("test.txt");
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.Content.Should().Be(content);
-        result.LineCount.Should().Be(3);
-        result.Encoding.Should().Be("utf-8");
-        result.Error.Should().BeNull();
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Content, Is.EqualTo(content));
+        Assert.That(result.LineCount, Is.EqualTo(3));
+        Assert.That(result.Encoding, Is.EqualTo("utf-8"));
+        Assert.That(result.Error, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ReadFileAsync_ShouldFail_WhenFileDoesNotExist()
     {
         // Act
         var result = await _service.ReadFileAsync("nonexistent.txt");
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("not found");
-        result.Content.Should().BeNull();
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("not found"));
+        Assert.That(result.Content, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ReadFileAsync_ShouldFail_WhenPathOutsideRoot()
     {
         // Act
         var result = await _service.ReadFileAsync("../outside.txt");
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("outside project root");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("outside project root"));
     }
 
-    [Fact]
+    [Test]
     public async Task WriteFileAsync_ShouldCreateNewFile()
     {
         // Arrange
@@ -154,15 +156,15 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.WriteFileAsync("newfile.txt", content);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.Created.Should().BeTrue();
-        result.BytesWritten.Should().BeGreaterThan(0);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Created, Is.True);
+        Assert.That(result.BytesWritten, Is.GreaterThan(0));
 
         var fileContent = File.ReadAllText(Path.Combine(_testRoot, "newfile.txt"));
-        fileContent.Should().Be(content);
+        Assert.That(fileContent, Is.EqualTo(content));
     }
 
-    [Fact]
+    [Test]
     public async Task WriteFileAsync_ShouldOverwriteExistingFile()
     {
         // Arrange
@@ -173,14 +175,14 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.WriteFileAsync("existing.txt", newContent);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.Created.Should().BeFalse();
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Created, Is.False);
 
         var fileContent = File.ReadAllText(Path.Combine(_testRoot, "existing.txt"));
-        fileContent.Should().Be(newContent);
+        Assert.That(fileContent, Is.EqualTo(newContent));
     }
 
-    [Fact]
+    [Test]
     public async Task WriteFileAsync_ShouldCreateDirectories_WhenRequested()
     {
         // Arrange
@@ -190,25 +192,25 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.WriteFileAsync("subdir1/subdir2/file.txt", content, createDirectories: true);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.Created.Should().BeTrue();
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Created, Is.True);
 
         var filePath = Path.Combine(_testRoot, "subdir1/subdir2/file.txt");
-        File.Exists(filePath).Should().BeTrue();
+        Assert.That(File.Exists(filePath), Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task WriteFileAsync_ShouldFail_WhenPathOutsideRoot()
     {
         // Act
         var result = await _service.WriteFileAsync("../outside.txt", "content");
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("outside project root");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("outside project root"));
     }
 
-    [Fact]
+    [Test]
     public async Task EditFileAsync_ShouldApplyReplaceEdit_SingleLine()
     {
         // Arrange
@@ -230,12 +232,12 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.EditsApplied.Should().Be(1);
-        result.NewContent.Should().Be("int x = 10;");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.EditsApplied, Is.EqualTo(1));
+        Assert.That(result.NewContent, Is.EqualTo("int x = 10;"));
     }
 
-    [Fact]
+    [Test]
     public async Task EditFileAsync_ShouldApplyInsertEdit()
     {
         // Arrange
@@ -257,11 +259,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.NewContent.Should().Be("int x = 5; // comment");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.NewContent, Is.EqualTo("int x = 5; // comment"));
     }
 
-    [Fact]
+    [Test]
     public async Task EditFileAsync_ShouldApplyDeleteEdit()
     {
         // Arrange
@@ -283,11 +285,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.NewContent.Should().Be("int x = 5; ");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.NewContent, Is.EqualTo("int x = 5; "));
     }
 
-    [Fact]
+    [Test]
     public async Task EditFileAsync_ShouldApplyMultipleEdits_InCorrectOrder()
     {
         // Arrange
@@ -305,12 +307,12 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.txt", edits);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.EditsApplied.Should().Be(3);
-        result.NewContent.Should().Be("Line 1 INSERTED\nModified 2\nLine ");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.EditsApplied, Is.EqualTo(3));
+        Assert.That(result.NewContent, Is.EqualTo("Line 1 INSERTED\nModified 2\nLine "));
     }
 
-    [Fact]
+    [Test]
     public async Task EditFileAsync_ShouldApplyMultiLineReplace()
     {
         // Arrange
@@ -333,11 +335,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.txt", edits);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.NewContent.Should().Be("Line 1\nReplaced\nMultiple\nLines\nLine 4");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.NewContent, Is.EqualTo("Line 1\nReplaced\nMultiple\nLines\nLine 4"));
     }
 
-    [Fact]
+    [Test]
     public async Task EditFileAsync_ShouldFail_WhenFileDoesNotExist()
     {
         // Arrange
@@ -350,11 +352,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("nonexistent.txt", edits);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("not found");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("not found"));
     }
 
-    [Fact]
+    [Test]
     public async Task EditFileAsync_ShouldFail_WhenPathOutsideRoot()
     {
         // Arrange
@@ -367,13 +369,13 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("../outside.txt", edits);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("outside project root");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("outside project root"));
     }
 
     // Column Indexing Validation Tests
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldFail_WhenStartLineIsNegative()
     {
         // Arrange
@@ -387,13 +389,13 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("StartLine -1 is out of range");
-        result.Error.Should().Contain("Invalid edit position");
-        result.Error.Should().Contain("0-based indexing");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("StartLine -1 is out of range"));
+        Assert.That(result.Error, Does.Contain("Invalid edit position"));
+        Assert.That(result.Error, Does.Contain("0-based indexing"));
     }
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldFail_WhenStartLineExceedsFileLength()
     {
         // Arrange
@@ -407,12 +409,12 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("StartLine 5 is out of range");
-        result.Error.Should().Contain("File has 1 lines (0-0)");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("StartLine 5 is out of range"));
+        Assert.That(result.Error, Does.Contain("File has 1 lines (0-0)"));
     }
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldFail_WhenEndLineExceedsFileLength()
     {
         // Arrange
@@ -426,11 +428,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("EndLine 5 is out of range");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("EndLine 5 is out of range"));
     }
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldFail_WhenStartColumnIsNegative()
     {
         // Arrange
@@ -444,12 +446,12 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("StartColumn -1 is out of range for line 0");
-        result.Error.Should().Contain("Line 0 has 10 characters. Valid positions: 0-9 for replacements, 0-10 for insertions.");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("StartColumn -1 is out of range for line 0"));
+        Assert.That(result.Error, Does.Contain("Line 0 has 10 characters. Valid positions: 0-9 for replacements, 0-10 for insertions."));
     }
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldFail_WhenStartColumnExceedsLineLength()
     {
         // Arrange
@@ -463,12 +465,12 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("StartColumn 15 is out of range for line 0");
-        result.Error.Should().Contain("Line 0 has 10 characters. Valid positions: 0-9 for replacements, 0-10 for insertions.");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("StartColumn 15 is out of range for line 0"));
+        Assert.That(result.Error, Does.Contain("Line 0 has 10 characters. Valid positions: 0-9 for replacements, 0-10 for insertions."));
     }
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldFail_WhenEndColumnExceedsLineLength()
     {
         // Arrange
@@ -482,11 +484,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("EndColumn 15 is out of range for line 0");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("EndColumn 15 is out of range for line 0"));
     }
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldFail_WhenStartColumnGreaterThanEndColumn()
     {
         // Arrange
@@ -500,11 +502,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("Invalid edit range: start position (0,8) is after end position (0,5)");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("Invalid edit range: start position (0,8) is after end position (0,5)"));
     }
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldFail_WhenStartLineGreaterThanEndLine()
     {
         // Arrange
@@ -518,11 +520,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("Invalid edit range: start position (1,0) is after end position (0,1)");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("Invalid edit range: start position (1,0) is after end position (0,1)"));
     }
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldSucceed_WhenEditAtValidBounds()
     {
         // Arrange - test editing at exact line boundaries
@@ -536,11 +538,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.NewContent.Should().Be("xyz");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.NewContent, Is.EqualTo("xyz"));
     }
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldSucceed_WhenEditAtStartOfLine()
     {
         // Arrange
@@ -554,11 +556,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.NewContent.Should().Be("// comment\nint x = 5;");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.NewContent, Is.EqualTo("// comment\nint x = 5;"));
     }
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldSucceed_WhenEditAtEndOfLine()
     {
         // Arrange
@@ -572,11 +574,11 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.NewContent.Should().Be("int x = 5; // comment");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.NewContent, Is.EqualTo("int x = 5; // comment"));
     }
-    
-    [Fact]
+
+    [Test]
     public async Task EditFileAsync_ShouldSucceed_WhenEditEmptyLine()
     {
         // Arrange
@@ -590,8 +592,8 @@ public class FileOperationsServiceTests : IDisposable
         var result = await _service.EditFileAsync("test.cs", edits);
 
         // Assert
-        result.Success.Should().BeTrue();
-        result.NewContent.Should().Be("\ncontent");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.NewContent, Is.EqualTo("\ncontent"));
     }
 
     private string CreateTestFile(string relativePath, string content)

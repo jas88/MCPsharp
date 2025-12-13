@@ -292,8 +292,8 @@ public class TestClass
             recursive: false);
 
         // Assert: Should find some assemblies (at minimum the test assembly)
-        Assert.That(discoveredPaths, Is.Not.Null);
         // Note: May not find actual analyzer assemblies in test environment
+        Assert.That(discoveredPaths.Length, Is.GreaterThanOrEqualTo(0));
     }
 
     [Test]
@@ -307,7 +307,6 @@ public class TestClass
             fakeAssemblyPath);
 
         // Assert: Should return empty array, not throw
-        Assert.That(loadedAnalyzers, Is.Not.Null);
         Assert.That(loadedAnalyzers.IsEmpty, Is.True);
     }
 
@@ -562,7 +561,6 @@ public class TestClass
         var healthStatuses = await _analyzerHost.GetHealthStatusAsync();
 
         // Assert: Should have health status for loaded analyzer
-        Assert.That(healthStatuses, Is.Not.Null);
         Assert.That(healthStatuses.Length, Is.GreaterThan(0));
 
         var analyzerHealth = healthStatuses.FirstOrDefault(h => h.AnalyzerId == adapter.Id);

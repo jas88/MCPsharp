@@ -529,7 +529,6 @@ public class AnalyzerHostTests : FileServiceTestBase
         var result = _analyzerHost.GetLoadedAnalyzers();
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.EqualTo(2));
         Assert.That(result.Any(ai => ai.Id == "analyzer-1"), Is.True);
         Assert.That(result.Any(ai => ai.Id == "analyzer-2"), Is.True);
@@ -550,7 +549,6 @@ public class AnalyzerHostTests : FileServiceTestBase
         var result = await _analyzerHost.GetHealthStatusAsync();
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.GreaterThanOrEqualTo(0));
     }
 
@@ -567,7 +565,7 @@ public class AnalyzerHostTests : FileServiceTestBase
         var result = _analyzerHost.GetAnalyzer(analyzerId);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
         if (result == null)
             throw new InvalidOperationException("Result should not be null");
         Assert.That(result.Id, Is.EqualTo(analyzerId));
@@ -654,6 +652,14 @@ public class AnalyzerHostTests : FileServiceTestBase
         Assert.That(result1.Success, Is.EqualTo(result2.Success));
         Assert.That(result1.AnalyzerId, Is.EqualTo(result2.AnalyzerId));
         Assert.That(result1.Findings.Count, Is.EqualTo(result2.Findings.Count));
+    }
+
+    [TearDown]
+    protected override void TearDown()
+    {
+        _mockSandbox?.Dispose();
+        _mockLoggerFactory?.Dispose();
+        base.TearDown();
     }
 
     private IAnalyzer CreateMockAnalyzer(string id, string name, string version)

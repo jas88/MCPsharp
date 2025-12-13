@@ -1,5 +1,5 @@
 using MCPsharp.Services;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests;
 
@@ -7,12 +7,14 @@ namespace MCPsharp.Tests;
 /// Standalone tests for WorkflowAnalyzerService that don't depend on the main project building.
 /// These tests verify the core workflow parsing functionality in isolation.
 /// </summary>
-public class WorkflowAnalyzerStandaloneTests : IDisposable
+[TestFixture]
+public class WorkflowAnalyzerStandaloneTests
 {
-    private readonly string _testWorkflowDir;
-    private readonly WorkflowAnalyzerService _service;
+    private string _testWorkflowDir;
+    private WorkflowAnalyzerService _service;
 
-    public WorkflowAnalyzerStandaloneTests()
+    [SetUp]
+    public void SetUp()
     {
         _service = new WorkflowAnalyzerService();
         _testWorkflowDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString(), ".github", "workflows");
@@ -22,7 +24,8 @@ public class WorkflowAnalyzerStandaloneTests : IDisposable
         CreateTestWorkflows();
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         var rootDir = Path.GetDirectoryName(Path.GetDirectoryName(_testWorkflowDir));
         if (rootDir != null && Directory.Exists(rootDir))
@@ -73,130 +76,130 @@ jobs:
 ");
     }
 
-    [Fact]
+    [Test]
     public async Task FindWorkflowsAsync_FindsYmlFiles()
     {
         var projectRoot = Path.GetDirectoryName(Path.GetDirectoryName(_testWorkflowDir))!;
         var workflows = await _service.FindWorkflowsAsync(projectRoot);
 
-        Assert.Equal(2, workflows.Count);
-        Assert.Contains(workflows, w => w.EndsWith("build.yml"));
-        Assert.Contains(workflows, w => w.EndsWith("deploy.yml"));
+        Assert.That(workflows.Count, Is.EqualTo(2));
+        Assert.That(workflows, Has.Some.Matches<string>(w => w.EndsWith("build.yml")));
+        Assert.That(workflows, Has.Some.Matches<string>(w => w.EndsWith("deploy.yml")));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsBasicInfo()
     {
         var buildPath = Path.Combine(_testWorkflowDir, "build.yml");
         var workflow = await _service.ParseWorkflowAsync(buildPath);
 
-        Assert.Equal("Build", workflow.Name);
-        Assert.Equal(buildPath, workflow.FilePath);
+        Assert.That(workflow.Name, Is.EqualTo("Build"));
+        Assert.That(workflow.FilePath, Is.EqualTo(buildPath));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsTriggers()
     {
         var buildPath = Path.Combine(_testWorkflowDir, "build.yml");
         var workflow = await _service.ParseWorkflowAsync(buildPath);
 
-        Assert.NotNull(workflow.Triggers);
-        Assert.Equal(2, workflow.Triggers.Count);
-        Assert.Contains("push", workflow.Triggers);
-        Assert.Contains("pull_request", workflow.Triggers);
+        Assert.That(workflow.Triggers, Is.Not.Null);
+        Assert.That(workflow.Triggers.Count, Is.EqualTo(2));
+        Assert.That(workflow.Triggers, Does.Contain("push"));
+        Assert.That(workflow.Triggers, Does.Contain("pull_request"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsEnvironmentVariables()
     {
         var buildPath = Path.Combine(_testWorkflowDir, "build.yml");
         var workflow = await _service.ParseWorkflowAsync(buildPath);
 
-        Assert.NotNull(workflow.Environment);
-        Assert.True(workflow.Environment.ContainsKey("DOTNET_VERSION"));
-        Assert.Equal("9.0.x", workflow.Environment["DOTNET_VERSION"]);
+        Assert.That(workflow.Environment, Is.Not.Null);
+        Assert.That(workflow.Environment.ContainsKey("DOTNET_VERSION"), Is.True);
+        Assert.That(workflow.Environment["DOTNET_VERSION"], Is.EqualTo("9.0.x"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsJobs()
     {
         var buildPath = Path.Combine(_testWorkflowDir, "build.yml");
         var workflow = await _service.ParseWorkflowAsync(buildPath);
 
-        Assert.NotNull(workflow.Jobs);
-        Assert.Single(workflow.Jobs);
+        Assert.That(workflow.Jobs, Is.Not.Null);
+        Assert.That(workflow.Jobs, Has.Count.EqualTo(1));
 
         var job = workflow.Jobs[0];
-        Assert.Equal("build", job.Name);
-        Assert.Equal("ubuntu-latest", job.RunsOn);
+        Assert.That(job.Name, Is.EqualTo("build"));
+        Assert.That(job.RunsOn, Is.EqualTo("ubuntu-latest"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsSteps()
     {
         var buildPath = Path.Combine(_testWorkflowDir, "build.yml");
         var workflow = await _service.ParseWorkflowAsync(buildPath);
 
         var job = workflow.Jobs![0];
-        Assert.NotNull(job.Steps);
-        Assert.Equal(4, job.Steps.Count);
+        Assert.That(job.Steps, Is.Not.Null);
+        Assert.That(job.Steps.Count, Is.EqualTo(4));
 
-        Assert.Equal("actions/checkout@v4", job.Steps[0].Uses);
-        Assert.Equal("actions/setup-dotnet@v4", job.Steps[1].Uses);
-        Assert.Equal("dotnet build", job.Steps[2].Run);
-        Assert.Equal("dotnet test", job.Steps[3].Run);
+        Assert.That(job.Steps[0].Uses, Is.EqualTo("actions/checkout@v4"));
+        Assert.That(job.Steps[1].Uses, Is.EqualTo("actions/setup-dotnet@v4"));
+        Assert.That(job.Steps[2].Run, Is.EqualTo("dotnet build"));
+        Assert.That(job.Steps[3].Run, Is.EqualTo("dotnet test"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsStepParameters()
     {
         var buildPath = Path.Combine(_testWorkflowDir, "build.yml");
         var workflow = await _service.ParseWorkflowAsync(buildPath);
 
         var setupStep = workflow.Jobs![0].Steps![1];
-        Assert.NotNull(setupStep.With);
-        Assert.True(setupStep.With.ContainsKey("dotnet-version"));
-        Assert.Equal("9.0.x", setupStep.With["dotnet-version"]);
+        Assert.That(setupStep.With, Is.Not.Null);
+        Assert.That(setupStep.With.ContainsKey("dotnet-version"), Is.True);
+        Assert.That(setupStep.With["dotnet-version"], Is.EqualTo("9.0.x"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsJobLevelEnvironment()
     {
         var deployPath = Path.Combine(_testWorkflowDir, "deploy.yml");
         var workflow = await _service.ParseWorkflowAsync(deployPath);
 
         var job = workflow.Jobs![0];
-        Assert.NotNull(job.Environment);
-        Assert.True(job.Environment.ContainsKey("DEPLOY_ENV"));
-        Assert.Equal("production", job.Environment["DEPLOY_ENV"]);
+        Assert.That(job.Environment, Is.Not.Null);
+        Assert.That(job.Environment.ContainsKey("DEPLOY_ENV"), Is.True);
+        Assert.That(job.Environment["DEPLOY_ENV"], Is.EqualTo("production"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsSecrets()
     {
         var deployPath = Path.Combine(_testWorkflowDir, "deploy.yml");
         var workflow = await _service.ParseWorkflowAsync(deployPath);
 
-        Assert.NotNull(workflow.Secrets);
-        Assert.Single(workflow.Secrets);
-        Assert.Contains("NUGET_API_KEY", workflow.Secrets);
+        Assert.That(workflow.Secrets, Is.Not.Null);
+        Assert.That(workflow.Secrets, Has.Count.EqualTo(1));
+        Assert.That(workflow.Secrets, Does.Contain("NUGET_API_KEY"));
     }
 
-    [Fact]
+    [Test]
     public async Task GetAllWorkflowsAsync_ReturnsAllWorkflows()
     {
         var projectRoot = Path.GetDirectoryName(Path.GetDirectoryName(_testWorkflowDir))!;
         var workflows = await _service.GetAllWorkflowsAsync(projectRoot);
 
-        Assert.Equal(2, workflows.Count);
-        Assert.Contains(workflows, w => w.Name == "Build");
-        Assert.Contains(workflows, w => w.Name == "Deploy");
+        Assert.That(workflows.Count, Is.EqualTo(2));
+        Assert.That(workflows, Has.Some.Matches<dynamic>(w => w.Name == "Build"));
+        Assert.That(workflows, Has.Some.Matches<dynamic>(w => w.Name == "Deploy"));
     }
 
-    [Fact]
+    [Test]
     public void Constructor_CreatesServiceSuccessfully()
     {
         var service = new WorkflowAnalyzerService();
-        Assert.NotNull(service);
+        Assert.That(service, Is.Not.Null);
     }
 }

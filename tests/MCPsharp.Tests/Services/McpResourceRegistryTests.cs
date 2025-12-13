@@ -1,6 +1,6 @@
 using MCPsharp.Models;
 using MCPsharp.Services;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 
@@ -14,7 +14,7 @@ public class McpResourceRegistryTests
 
     // ===== Resource Registration Tests =====
 
-    [Fact]
+    [Test]
     public void RegisterResource_AddsNewResource()
     {
         // Arrange
@@ -34,11 +34,11 @@ public class McpResourceRegistryTests
         });
 
         // Assert
-        Assert.True(registry.HasResource("test://resource"));
-        Assert.Equal(1, registry.Count);
+        Assert.That(registry.HasResource("test://resource"), Is.True);
+        Assert.That(registry.Count, Is.EqualTo(1));
     }
 
-    [Fact]
+    [Test]
     public void RegisterResource_UpdatesExistingResource()
     {
         // Arrange
@@ -69,13 +69,13 @@ public class McpResourceRegistryTests
         });
 
         // Assert
-        Assert.Equal(1, registry.Count); // Should still be 1, not 2
+        Assert.That(registry.Count, Is.EqualTo(1)); // Should still be 1, not 2
         var result = registry.ListResources();
-        Assert.Single(result.Resources);
-        Assert.Equal("Updated Name", result.Resources[0].Name);
+        Assert.That(result.Resources, Has.Count.EqualTo(1));
+        Assert.That(result.Resources[0].Name, Is.EqualTo("Updated Name"));
     }
 
-    [Fact]
+    [Test]
     public async Task RegisterResource_WithAsyncContentProvider_Works()
     {
         // Arrange
@@ -99,11 +99,11 @@ public class McpResourceRegistryTests
 
         // Assert
         var result = await registry.ReadResourceAsync("test://async");
-        Assert.Single(result.Contents);
-        Assert.Equal("async content", result.Contents[0].Text);
+        Assert.That(result.Contents, Has.Count.EqualTo(1));
+        Assert.That(result.Contents[0].Text, Is.EqualTo("async content"));
     }
 
-    [Fact]
+    [Test]
     public void RegisterResource_WithSyncContentProvider_Works()
     {
         // Arrange
@@ -122,10 +122,10 @@ public class McpResourceRegistryTests
         });
 
         // Assert
-        Assert.True(registry.HasResource("test://sync"));
+        Assert.That(registry.HasResource("test://sync"), Is.True);
     }
 
-    [Fact]
+    [Test]
     public void RegisterStaticResource_Works()
     {
         // Arrange
@@ -140,10 +140,10 @@ public class McpResourceRegistryTests
         registry.RegisterStaticResource(resource, "Hello World");
 
         // Assert
-        Assert.True(registry.HasResource("test://static"));
+        Assert.That(registry.HasResource("test://static"), Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task RegisterStaticResource_PreservesContent()
     {
         // Arrange
@@ -159,10 +159,10 @@ public class McpResourceRegistryTests
         var result = await registry.ReadResourceAsync("test://static");
 
         // Assert
-        Assert.Equal("Hello World", result.Contents[0].Text);
+        Assert.That(result.Contents[0].Text, Is.EqualTo("Hello World"));
     }
 
-    [Fact]
+    [Test]
     public async Task RegisterStaticResource_SetsDefaultMimeType()
     {
         // Arrange
@@ -178,10 +178,10 @@ public class McpResourceRegistryTests
         var result = await registry.ReadResourceAsync("test://plain");
 
         // Assert
-        Assert.Equal("text/plain", result.Contents[0].MimeType);
+        Assert.That(result.Contents[0].MimeType, Is.EqualTo("text/plain"));
     }
 
-    [Fact]
+    [Test]
     public async Task RegisterStaticResource_PreservesCustomMimeType()
     {
         // Arrange
@@ -198,10 +198,10 @@ public class McpResourceRegistryTests
         var result = await registry.ReadResourceAsync("test://json");
 
         // Assert
-        Assert.Equal("application/json", result.Contents[0].MimeType);
+        Assert.That(result.Contents[0].MimeType, Is.EqualTo("application/json"));
     }
 
-    [Fact]
+    [Test]
     public void RegisterResource_ThrowsOnNullResource()
     {
         // Arrange
@@ -216,7 +216,7 @@ public class McpResourceRegistryTests
             }));
     }
 
-    [Fact]
+    [Test]
     public void RegisterResource_ThrowsOnNullAsyncContentProvider()
     {
         // Arrange
@@ -233,7 +233,7 @@ public class McpResourceRegistryTests
             registry.RegisterResource(resource, nullFunc!));
     }
 
-    [Fact]
+    [Test]
     public void UnregisterResource_RemovesExistingResource()
     {
         // Arrange
@@ -249,12 +249,12 @@ public class McpResourceRegistryTests
         var removed = registry.UnregisterResource("test://resource");
 
         // Assert
-        Assert.True(removed);
-        Assert.False(registry.HasResource("test://resource"));
-        Assert.Equal(0, registry.Count);
+        Assert.That(removed, Is.True);
+        Assert.That(registry.HasResource("test://resource"), Is.False);
+        Assert.That(registry.Count, Is.EqualTo(0));
     }
 
-    [Fact]
+    [Test]
     public void UnregisterResource_ReturnsFalseForNonExistentResource()
     {
         // Arrange
@@ -264,10 +264,10 @@ public class McpResourceRegistryTests
         var removed = registry.UnregisterResource("test://nonexistent");
 
         // Assert
-        Assert.False(removed);
+        Assert.That(removed, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void UnregisterResource_CanRemoveAndReRegister()
     {
         // Arrange
@@ -284,13 +284,13 @@ public class McpResourceRegistryTests
         registry.RegisterStaticResource(resource, "new content");
 
         // Assert
-        Assert.True(registry.HasResource("test://resource"));
-        Assert.Equal(1, registry.Count);
+        Assert.That(registry.HasResource("test://resource"), Is.True);
+        Assert.That(registry.Count, Is.EqualTo(1));
     }
 
     // ===== Resource Listing Tests =====
 
-    [Fact]
+    [Test]
     public void ListResources_ReturnsAllResources()
     {
         // Arrange
@@ -307,11 +307,11 @@ public class McpResourceRegistryTests
         var result = registry.ListResources();
 
         // Assert
-        Assert.NotNull(result.Resources);
-        Assert.Equal(3, result.Resources.Count);
+        Assert.That(result.Resources, Is.Not.Null);
+        Assert.That(result.Resources, Has.Count.EqualTo(3));
     }
 
-    [Fact]
+    [Test]
     public void ListResources_ReturnsEmptyWhenNoResources()
     {
         // Arrange
@@ -321,11 +321,11 @@ public class McpResourceRegistryTests
         var result = registry.ListResources();
 
         // Assert
-        Assert.NotNull(result.Resources);
-        Assert.Empty(result.Resources);
+        Assert.That(result.Resources, Is.Not.Null);
+        Assert.That(result.Resources, Is.Empty);
     }
 
-    [Fact]
+    [Test]
     public void ListResources_ResourcesAreSortedByUri()
     {
         // Arrange
@@ -343,12 +343,12 @@ public class McpResourceRegistryTests
         var result = registry.ListResources();
 
         // Assert
-        Assert.Equal("test://a", result.Resources[0].Uri);
-        Assert.Equal("test://m", result.Resources[1].Uri);
-        Assert.Equal("test://z", result.Resources[2].Uri);
+        Assert.That(result.Resources[0].Uri, Is.EqualTo("test://a"));
+        Assert.That(result.Resources[1].Uri, Is.EqualTo("test://m"));
+        Assert.That(result.Resources[2].Uri, Is.EqualTo("test://z"));
     }
 
-    [Fact]
+    [Test]
     public void ListResources_ContainsResourceMetadata()
     {
         // Arrange
@@ -367,15 +367,15 @@ public class McpResourceRegistryTests
 
         // Assert
         var listed = result.Resources[0];
-        Assert.Equal("test://resource", listed.Uri);
-        Assert.Equal("Test Resource", listed.Name);
-        Assert.Equal("A test resource", listed.Description);
-        Assert.Equal("text/plain", listed.MimeType);
+        Assert.That(listed.Uri, Is.EqualTo("test://resource"));
+        Assert.That(listed.Name, Is.EqualTo("Test Resource"));
+        Assert.That(listed.Description, Is.EqualTo("A test resource"));
+        Assert.That(listed.MimeType, Is.EqualTo("text/plain"));
     }
 
     // ===== Resource Reading Tests =====
 
-    [Fact]
+    [Test]
     public async Task ReadResourceAsync_ReturnsContent()
     {
         // Arrange
@@ -387,26 +387,26 @@ public class McpResourceRegistryTests
         var result = await registry.ReadResourceAsync("test://res");
 
         // Assert
-        Assert.NotNull(result.Contents);
-        Assert.Single(result.Contents);
-        Assert.Equal("Hello World", result.Contents[0].Text);
+        Assert.That(result.Contents, Is.Not.Null);
+        Assert.That(result.Contents, Has.Count.EqualTo(1));
+        Assert.That(result.Contents[0].Text, Is.EqualTo("Hello World"));
     }
 
-    [Fact]
+    [Test]
     public async Task ReadResourceAsync_ThrowsForUnknownUri()
     {
         // Arrange
         var registry = CreateRegistry();
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(
+        var exception = Assert.ThrowsAsync<KeyNotFoundException>(
             async () => await registry.ReadResourceAsync("unknown://uri"));
 
-        Assert.Contains("Resource not found", exception.Message);
-        Assert.Contains("unknown://uri", exception.Message);
+        Assert.That(exception!.Message, Does.Contain("Resource not found"));
+        Assert.That(exception.Message, Does.Contain("unknown://uri"));
     }
 
-    [Fact]
+    [Test]
     public async Task ReadResourceAsync_ContentProviderIsInvokedEachTime()
     {
         // Arrange
@@ -425,11 +425,11 @@ public class McpResourceRegistryTests
         var result2 = await registry.ReadResourceAsync("test://counter");
 
         // Assert
-        Assert.Equal("Count: 1", result1.Contents[0].Text);
-        Assert.Equal("Count: 2", result2.Contents[0].Text);
+        Assert.That(result1.Contents[0].Text, Is.EqualTo("Count: 1"));
+        Assert.That(result2.Contents[0].Text, Is.EqualTo("Count: 2"));
     }
 
-    [Fact]
+    [Test]
     public async Task ReadResourceAsync_PreservesContentUri()
     {
         // Arrange
@@ -441,10 +441,10 @@ public class McpResourceRegistryTests
         var result = await registry.ReadResourceAsync("test://res");
 
         // Assert
-        Assert.Equal("test://res", result.Contents[0].Uri);
+        Assert.That(result.Contents[0].Uri, Is.EqualTo("test://res"));
     }
 
-    [Fact]
+    [Test]
     public async Task ReadResourceAsync_SupportsTextContent()
     {
         // Arrange
@@ -461,11 +461,11 @@ public class McpResourceRegistryTests
         var result = await registry.ReadResourceAsync("test://text");
 
         // Assert
-        Assert.Equal("text content", result.Contents[0].Text);
-        Assert.Null(result.Contents[0].Blob);
+        Assert.That(result.Contents[0].Text, Is.EqualTo("text content"));
+        Assert.That(result.Contents[0].Blob, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ReadResourceAsync_SupportsBlobContent()
     {
         // Arrange
@@ -484,13 +484,13 @@ public class McpResourceRegistryTests
         var result = await registry.ReadResourceAsync("test://blob");
 
         // Assert
-        Assert.Equal(base64Data, result.Contents[0].Blob);
-        Assert.Null(result.Contents[0].Text);
+        Assert.That(result.Contents[0].Blob, Is.EqualTo(base64Data));
+        Assert.That(result.Contents[0].Text, Is.Null);
     }
 
     // ===== Utility Methods Tests =====
 
-    [Fact]
+    [Test]
     public void HasResource_ReturnsTrueForExistingResource()
     {
         // Arrange
@@ -502,10 +502,10 @@ public class McpResourceRegistryTests
         var exists = registry.HasResource("test://exists");
 
         // Assert
-        Assert.True(exists);
+        Assert.That(exists, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void HasResource_ReturnsFalseForNonExistentResource()
     {
         // Arrange
@@ -515,10 +515,10 @@ public class McpResourceRegistryTests
         var exists = registry.HasResource("test://nonexistent");
 
         // Assert
-        Assert.False(exists);
+        Assert.That(exists, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void HasResource_ReturnsFalseAfterUnregister()
     {
         // Arrange
@@ -531,38 +531,38 @@ public class McpResourceRegistryTests
         var exists = registry.HasResource("test://temp");
 
         // Assert
-        Assert.False(exists);
+        Assert.That(exists, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void Count_IsAccurate()
     {
         // Arrange
         var registry = CreateRegistry();
 
         // Act & Assert - empty
-        Assert.Equal(0, registry.Count);
+        Assert.That(registry.Count, Is.EqualTo(0));
 
         // Add resources
         registry.RegisterStaticResource(new McpResource { Uri = "test://1", Name = "1" }, "1");
-        Assert.Equal(1, registry.Count);
+        Assert.That(registry.Count, Is.EqualTo(1));
 
         registry.RegisterStaticResource(new McpResource { Uri = "test://2", Name = "2" }, "2");
-        Assert.Equal(2, registry.Count);
+        Assert.That(registry.Count, Is.EqualTo(2));
 
         registry.RegisterStaticResource(new McpResource { Uri = "test://3", Name = "3" }, "3");
-        Assert.Equal(3, registry.Count);
+        Assert.That(registry.Count, Is.EqualTo(3));
 
         // Update existing (count should not change)
         registry.RegisterStaticResource(new McpResource { Uri = "test://1", Name = "Updated" }, "updated");
-        Assert.Equal(3, registry.Count);
+        Assert.That(registry.Count, Is.EqualTo(3));
 
         // Remove resource
         registry.UnregisterResource("test://2");
-        Assert.Equal(2, registry.Count);
+        Assert.That(registry.Count, Is.EqualTo(2));
     }
 
-    [Fact]
+    [Test]
     public void Clear_RemovesAllResources()
     {
         // Arrange
@@ -575,14 +575,14 @@ public class McpResourceRegistryTests
         registry.Clear();
 
         // Assert
-        Assert.Equal(0, registry.Count);
-        Assert.False(registry.HasResource("test://1"));
-        Assert.False(registry.HasResource("test://2"));
-        Assert.False(registry.HasResource("test://3"));
-        Assert.Empty(registry.ListResources().Resources);
+        Assert.That(registry.Count, Is.EqualTo(0));
+        Assert.That(registry.HasResource("test://1"), Is.False);
+        Assert.That(registry.HasResource("test://2"), Is.False);
+        Assert.That(registry.HasResource("test://3"), Is.False);
+        Assert.That(registry.ListResources().Resources, Is.Empty);
     }
 
-    [Fact]
+    [Test]
     public void Clear_OnEmptyRegistry_DoesNotThrow()
     {
         // Arrange
@@ -590,12 +590,12 @@ public class McpResourceRegistryTests
 
         // Act & Assert
         registry.Clear();
-        Assert.Equal(0, registry.Count);
+        Assert.That(registry.Count, Is.EqualTo(0));
     }
 
     // ===== Edge Case Tests =====
 
-    [Fact]
+    [Test]
     public async Task RegisterResource_WithEmptyContent_Works()
     {
         // Arrange
@@ -607,10 +607,10 @@ public class McpResourceRegistryTests
         var result = await registry.ReadResourceAsync("test://empty");
 
         // Assert
-        Assert.Equal("", result.Contents[0].Text);
+        Assert.That(result.Contents[0].Text, Is.EqualTo(""));
     }
 
-    [Fact]
+    [Test]
     public async Task RegisterResource_WithVeryLongContent_Works()
     {
         // Arrange
@@ -623,10 +623,10 @@ public class McpResourceRegistryTests
         var result = await registry.ReadResourceAsync("test://long");
 
         // Assert
-        Assert.Equal(longContent, result.Contents[0].Text);
+        Assert.That(result.Contents[0].Text, Is.EqualTo(longContent));
     }
 
-    [Fact]
+    [Test]
     public void RegisterResource_WithSpecialCharactersInUri_Works()
     {
         // Arrange
@@ -641,10 +641,10 @@ public class McpResourceRegistryTests
         registry.RegisterStaticResource(resource, "content");
 
         // Assert
-        Assert.True(registry.HasResource("test://resource-with-dashes_and_underscores/path?query=value#fragment"));
+        Assert.That(registry.HasResource("test://resource-with-dashes_and_underscores/path?query=value#fragment"), Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task RegisterResource_WithContentProviderException_ThrowsOnRead()
     {
         // Arrange
@@ -655,13 +655,13 @@ public class McpResourceRegistryTests
             new InvalidOperationException("Content provider failed")));
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+        var exception = Assert.ThrowsAsync<InvalidOperationException>(
             async () => await registry.ReadResourceAsync("test://error"));
 
-        Assert.Equal("Content provider failed", exception.Message);
+        Assert.That(exception!.Message, Is.EqualTo("Content provider failed"));
     }
 
-    [Fact]
+    [Test]
     public async Task RegisterResource_ConcurrentRegistration_ThreadSafe()
     {
         // Arrange
@@ -686,14 +686,14 @@ public class McpResourceRegistryTests
         await Task.WhenAll(tasks);
 
         // Assert
-        Assert.Equal(100, registry.Count);
+        Assert.That(registry.Count, Is.EqualTo(100));
         for (int i = 0; i < 100; i++)
         {
-            Assert.True(registry.HasResource($"test://concurrent{i}"));
+            Assert.That(registry.HasResource($"test://concurrent{i}"), Is.True);
         }
     }
 
-    [Fact]
+    [Test]
     public async Task RegisterResource_ConcurrentReadAndWrite_ThreadSafe()
     {
         // Arrange
@@ -734,11 +734,22 @@ public class McpResourceRegistryTests
         }
 
         // Assert - Should complete without exceptions
-        var aggregateException = await Record.ExceptionAsync(async () => await Task.WhenAll(tasks));
-        Assert.Null(aggregateException);
+        var exception = await Task.Run(async () =>
+        {
+            try
+            {
+                await Task.WhenAll(tasks);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return ex;
+            }
+        });
+        Assert.That(exception, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void ListResources_WithManyResources_PerformanceTest()
     {
         // Arrange
@@ -759,7 +770,7 @@ public class McpResourceRegistryTests
         sw.Stop();
 
         // Assert
-        Assert.Equal(1000, result.Resources.Count);
-        Assert.True(sw.ElapsedMilliseconds < 1000, $"ListResources took {sw.ElapsedMilliseconds}ms (expected < 1000ms)");
+        Assert.That(result.Resources.Count, Is.EqualTo(1000));
+        Assert.That(sw.ElapsedMilliseconds, Is.LessThan(1000), $"ListResources took {sw.ElapsedMilliseconds}ms (expected < 1000ms)");
     }
 }

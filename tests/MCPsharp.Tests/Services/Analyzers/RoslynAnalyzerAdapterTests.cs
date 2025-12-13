@@ -238,7 +238,6 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
         Assert.That(result.Success, Is.True);
         Assert.That(result.FilePath, Is.EqualTo(filePath));
         Assert.That(result.AnalyzerId, Is.EqualTo(adapter.Id));
-        Assert.That(result.Issues, Is.Not.Null);
         Assert.That(result.Statistics, Is.Not.Null);
         Assert.That(result.Statistics["IssuesFound"], Is.GreaterThanOrEqualTo(0));
     }
@@ -256,7 +255,6 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
         var result = await adapter.AnalyzeAsync(filePath, content);
 
         // Assert - Analysis completes even with invalid syntax
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
     }
 
@@ -280,7 +278,6 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
         Assert.That(issue.RuleId, Is.EqualTo("TEST001"));
         Assert.That(issue.AnalyzerId, Is.EqualTo(adapter.Id));
         Assert.That(issue.FilePath, Is.EqualTo(filePath));
-        Assert.That(issue.Severity, Is.Not.Null);
         Assert.That(issue.Confidence, Is.EqualTo(Confidence.High));
     }
 
@@ -332,14 +329,11 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
         var rules = adapter.GetRules();
 
         // Assert
-        Assert.That(rules, Is.Not.Null);
         Assert.That(rules.Length, Is.GreaterThan(0));
 
         var rule = rules[0];
         Assert.That(rule.Id, Is.EqualTo("TEST001"));
         Assert.That(rule.Title, Is.Not.Empty);
-        Assert.That(rule.Category, Is.Not.Null);
-        Assert.That(rule.DefaultSeverity, Is.Not.Null);
     }
 
     [Test]
@@ -353,7 +347,6 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
         var rules = adapter.GetRules();
 
         // Assert
-        Assert.That(rules, Is.Not.Null);
         Assert.That(rules.Length, Is.EqualTo(0));
     }
 
@@ -404,7 +397,6 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
         var fixes = adapter.GetFixes("TEST001");
 
         // Assert
-        Assert.That(fixes, Is.Not.Null);
         Assert.That(fixes.Length, Is.EqualTo(0));
     }
 

@@ -178,7 +178,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         {
             // If progress was reported, verify it's in order
             Assert.That(progressReports, Is.Ordered.By("ProgressPercentage").Ascending);
-            Assert.NotNull(progressReports.LastOrDefault());
+            Assert.That(progressReports.LastOrDefault(), Is.Not.Null);
             Assert.That(progressReports.Last().ProgressPercentage, Is.EqualTo(100));
         }
     }
@@ -236,7 +236,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         }
 
         // Assert
-        Assert.NotNull(results);
+        Assert.That(results, Is.Not.Null);
         if (results == null)
             throw new InvalidOperationException("Results should not be null");
         Assert.That(results.Count, Is.EqualTo(3));
@@ -596,5 +596,12 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         Assert.That(result1.Success, Is.EqualTo(result2.Success));
         Assert.That(result1.OriginalSize, Is.EqualTo(result2.OriginalSize));
         Assert.That(result1.ProcessedSize, Is.EqualTo(result2.ProcessedSize));
+    }
+
+    [TearDown]
+    protected override void TearDown()
+    {
+        _processor?.Dispose();
+        base.TearDown();
     }
 }

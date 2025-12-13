@@ -92,7 +92,6 @@ public class RoslynAnalyzerServiceTests : FileServiceTestBase
         var result = await _service.LoadAnalyzersAsync(assemblyPath);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.EqualTo(2));
         Assert.That(result[0].Id, Is.EqualTo("analyzer1"));
         Assert.That(result[1].Id, Is.EqualTo("analyzer2"));
@@ -114,7 +113,6 @@ public class RoslynAnalyzerServiceTests : FileServiceTestBase
         var result = await _service.LoadAnalyzersAsync(assemblyPath);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.EqualTo(0));
     }
 
@@ -451,7 +449,6 @@ public class RoslynAnalyzerServiceTests : FileServiceTestBase
         var result = _service.GetLoadedAnalyzers();
 
         // Assert
-        Assert.That(result, Is.Not.Null);
         Assert.That(result.Length, Is.EqualTo(0));
     }
 

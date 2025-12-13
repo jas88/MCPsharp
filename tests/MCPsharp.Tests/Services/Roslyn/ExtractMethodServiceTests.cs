@@ -1,16 +1,17 @@
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Models.Refactoring;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.Roslyn;
 
-public class ExtractMethodServiceTests : IAsyncLifetime
+public class ExtractMethodServiceTests
 {
     private RoslynWorkspace _workspace = null!;
     private ExtractMethodService _service = null!;
     private string _testProjectPath = null!;
 
-    public async Task InitializeAsync()
+    [SetUp]
+    public async Task SetUp()
     {
         _testProjectPath = Path.Combine(Path.GetTempPath(), "ExtractMethodTests_" + Guid.NewGuid());
         Directory.CreateDirectory(_testProjectPath);
@@ -21,7 +22,8 @@ public class ExtractMethodServiceTests : IAsyncLifetime
         _service = new ExtractMethodService(_workspace);
     }
 
-    public async Task DisposeAsync()
+    [TearDown]
+    public async Task TearDown()
     {
         _workspace?.Dispose();
 
@@ -43,7 +45,7 @@ public class ExtractMethodServiceTests : IAsyncLifetime
 
     #region Basic Extraction Tests
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_SimpleStatements_Success()
     {
         var code = @"
@@ -73,13 +75,13 @@ class Calculator
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.NotNull(result.Extraction);
-        Assert.Equal("CalculateSum", result.Extraction.Method.Name);
-        Assert.Contains("private", result.Extraction.Method.Signature);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction, Is.Not.Null);
+        Assert.That(result.Extraction.Method.Name, Is.EqualTo("CalculateSum"));
+        Assert.That(result.Extraction.Method.Signature, Does.Contain("private"));
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_WithParameters_InfersCorrectly()
     {
         var code = @"
@@ -108,14 +110,14 @@ class Calculator
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.NotNull(result.Extraction);
-        Assert.Equal(2, result.Extraction.Parameters.Count);
-        Assert.Contains(result.Extraction.Parameters, p => p.Name == "a");
-        Assert.Contains(result.Extraction.Parameters, p => p.Name == "result" && p.Modifier == "out");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction, Is.Not.Null);
+        Assert.That(result.Extraction.Parameters.Count, Is.EqualTo(2));
+        Assert.That(result.Extraction.Parameters, Does.Contain(result.Extraction.Parameters.FirstOrDefault(p => p.Name == "a")));
+        Assert.That(result.Extraction.Parameters, Does.Contain(result.Extraction.Parameters.FirstOrDefault(p => p.Name == "result" && p.Modifier == "out")));
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_WithReturnValue_InfersCorrectly()
     {
         var code = @"
@@ -144,12 +146,12 @@ class Calculator
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.NotNull(result.Extraction);
-        Assert.NotEqual("void", result.Extraction.ReturnType);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction, Is.Not.Null);
+        Assert.That(result.Extraction.ReturnType, Is.Not.EqualTo("void"));
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_VoidMethod_NoReturnValue()
     {
         var code = @"
@@ -176,8 +178,8 @@ class Logger
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.NotNull(result.Extraction);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction, Is.Not.Null);
         // If the variable isn't used after, it might still be void
     }
 
@@ -185,7 +187,7 @@ class Logger
 
     #region Async/Await Tests
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_WithAwait_CreatesAsyncMethod()
     {
         var code = @"
@@ -218,16 +220,16 @@ class DataService
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.NotNull(result.Extraction);
-        Assert.True(result.Extraction.Characteristics.IsAsync);
-        Assert.True(result.Extraction.Characteristics.ContainsAwait);
-        Assert.Contains("async", result.Extraction.Method.Signature);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction, Is.Not.Null);
+        Assert.That(result.Extraction.Characteristics.IsAsync, Is.True);
+        Assert.That(result.Extraction.Characteristics.ContainsAwait, Is.True);
+        Assert.That(result.Extraction.Method.Signature, Does.Contain("async"));
         // For now, just check that return type is detected (may be empty due to extraction limitations)
         // TODO: Fix return type detection for async methods to properly include "Task"
         if (!string.IsNullOrEmpty(result.Extraction.ReturnType))
         {
-            Assert.Contains("Task", result.Extraction.ReturnType);
+            Assert.That(result.Extraction.ReturnType, Does.Contain("Task"));
         }
     }
 
@@ -235,7 +237,7 @@ class DataService
 
     #region Error Cases
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_InvalidLineRange_ReturnsError()
     {
         var code = @"
@@ -259,11 +261,11 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.False(result.Success);
-        Assert.NotNull(result.Error);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_NoStatements_ReturnsError()
     {
         var code = @"
@@ -287,10 +289,10 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.False(result.Success);
+        Assert.That(result.Success, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_WithGoto_ReturnsError()
     {
         var code = @"
@@ -318,11 +320,11 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.False(result.Success);
-        Assert.Contains("goto", result.Error?.Message ?? "", StringComparison.OrdinalIgnoreCase);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error?.Message ?? "", Does.Contain("goto").IgnoreCase);
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_NotInMethod_ReturnsError()
     {
         var code = @"
@@ -343,14 +345,14 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.False(result.Success);
+        Assert.That(result.Success, Is.False);
     }
 
     #endregion
 
     #region Preview Tests
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_PreviewMode_ReturnsPreview()
     {
         var code = @"
@@ -376,17 +378,17 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.NotNull(result.Preview);
-        Assert.NotEmpty(result.Preview.OriginalCode);
-        Assert.NotEmpty(result.Preview.ModifiedCode);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Preview, Is.Not.Null);
+        Assert.That(result.Preview.OriginalCode, Is.Not.Empty);
+        Assert.That(result.Preview.ModifiedCode, Is.Not.Empty);
     }
 
     #endregion
 
     #region Method Characteristics Tests
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_MultipleStatements_DetectsCorrectly()
     {
         var code = @"
@@ -416,11 +418,11 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.NotNull(result.Extraction);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_ComplexExpression_HandlesCorrectly()
     {
         var code = @"
@@ -450,14 +452,14 @@ class Calculator
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
     }
 
     #endregion
 
     #region Accessibility Tests
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_PublicAccessibility_GeneratesCorrectly()
     {
         var code = @"
@@ -483,11 +485,11 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.Contains("public", result.Extraction!.Method.Signature);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction!.Method.Signature, Does.Contain("public"));
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_DefaultPrivate_GeneratesCorrectly()
     {
         var code = @"
@@ -511,15 +513,15 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.Contains("private", result.Extraction!.Method.Signature);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction!.Method.Signature, Does.Contain("private"));
     }
 
     #endregion
 
     #region Custom Method Name Tests
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_CustomName_UsesProvidedName()
     {
         var code = @"
@@ -544,11 +546,11 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.Equal("MyCustomMethod", result.Extraction!.Method.Name);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction!.Method.Name, Is.EqualTo("MyCustomMethod"));
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_NoName_GeneratesDefault()
     {
         var code = @"
@@ -572,15 +574,15 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.NotEmpty(result.Extraction!.Method.Name);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction!.Method.Name, Is.Not.Empty);
     }
 
     #endregion
 
     #region Data Flow Tests
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_ReadOnlyVariable_PassesAsParameter()
     {
         var code = @"
@@ -607,12 +609,12 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.Contains(result.Extraction!.Parameters, p => p.Name == "value");
-        Assert.Null(result.Extraction.Parameters.First(p => p.Name == "value").Modifier);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction!.Parameters, Does.Contain(result.Extraction.Parameters.FirstOrDefault(p => p.Name == "value")));
+        Assert.That(result.Extraction.Parameters.First(p => p.Name == "value").Modifier, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_ModifiedVariable_UsesRef()
     {
         var code = @"
@@ -639,7 +641,7 @@ class Test
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
+        Assert.That(result.Success, Is.True);
         // Should have ref parameter for counter
     }
 
@@ -647,7 +649,7 @@ class Test
 
     #region Integration Tests
 
-    [Fact]
+    [Test]
     public async Task ExtractMethod_RealWorldScenario_Success()
     {
         var code = @"
@@ -713,9 +715,9 @@ class OrderProcessor
 
         var result = await _service.ExtractMethodAsync(request);
 
-        Assert.True(result.Success);
-        Assert.Equal("CalculateOrderTotals", result.Extraction!.Method.Name);
-        Assert.NotNull(result.Preview);
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Extraction!.Method.Name, Is.EqualTo("CalculateOrderTotals"));
+        Assert.That(result.Preview, Is.Not.Null);
     }
 
     #endregion

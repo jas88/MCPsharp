@@ -1,5 +1,4 @@
 using NUnit.Framework;
-using FluentAssertions;
 using MCPsharp.Services;
 using MCPsharp.Services.Database;
 using MCPsharp.Models;
@@ -77,13 +76,13 @@ public class SqliteCacheIntegrationTests
         var result = await _resourceRegistry.ReadResourceAsync("project://overview");
 
         // Assert
-        result.Contents.Should().HaveCount(1);
-        result.Contents[0].Text.Should().Contain("Project Overview");
-        result.Contents[0].MimeType.Should().Be("text/markdown");
+        Assert.That(result.Contents, Has.Count.EqualTo(1));
+        Assert.That(result.Contents[0].Text, Does.Contain("Project Overview"));
+        Assert.That(result.Contents[0].MimeType, Is.EqualTo("text/markdown"));
         // Note: ResourceContentGenerators expects "root_path" but ProjectContextManager returns "rootPath"
         // This test documents the current behavior - the resource shows "no project" message
         // until the field name mismatch is fixed in production code
-        result.Contents[0].Text.Should().Contain("project");
+        Assert.That(result.Contents[0].Text, Does.Contain("project"));
     }
 
     [Test]
@@ -134,21 +133,21 @@ public class SqliteCacheIntegrationTests
         var foundSymbols = await _database.FindSymbolsByNameAsync("Test");
 
         // Assert
-        foundSymbols.Should().HaveCount(2);
-        foundSymbols.Select(s => s.Name).Should().Contain("TestClass");
-        foundSymbols.Select(s => s.Name).Should().Contain("TestMethod");
+        Assert.That(foundSymbols, Has.Count.EqualTo(2));
+        Assert.That(foundSymbols.Any(s => s.Name == "TestClass"), Is.True);
+        Assert.That(foundSymbols.Any(s => s.Name == "TestMethod"), Is.True);
 
         // Verify class details
         var testClass = foundSymbols.First(s => s.Name == "TestClass");
-        testClass.Kind.Should().Be("Class");
-        testClass.Namespace.Should().Be("TestNamespace");
-        testClass.Accessibility.Should().Be("public");
+        Assert.That(testClass.Kind, Is.EqualTo("Class"));
+        Assert.That(testClass.Namespace, Is.EqualTo("TestNamespace"));
+        Assert.That(testClass.Accessibility, Is.EqualTo("public"));
 
         // Verify method details
         var testMethod = foundSymbols.First(s => s.Name == "TestMethod");
-        testMethod.Kind.Should().Be("Method");
-        testMethod.ContainingType.Should().Be("TestClass");
-        testMethod.Signature.Should().Be("void TestMethod()");
+        Assert.That(testMethod.Kind, Is.EqualTo("Method"));
+        Assert.That(testMethod.ContainingType, Is.EqualTo("TestClass"));
+        Assert.That(testMethod.Signature, Is.EqualTo("void TestMethod()"));
     }
 
     [Test]
@@ -206,14 +205,14 @@ public class SqliteCacheIntegrationTests
         var callChain = await _database.GetCallChainAsync(idA, ProjectDatabase.CallChainDirection.Forward, 5);
 
         // Assert
-        callChain.Should().HaveCountGreaterOrEqualTo(2); // B and C
-        callChain.Select(s => s.Name).Should().Contain("MethodB");
-        callChain.Select(s => s.Name).Should().Contain("MethodC");
+        Assert.That(callChain, Has.Count.GreaterThanOrEqualTo(2)); // B and C
+        Assert.That(callChain.Any(s => s.Name == "MethodB"), Is.True);
+        Assert.That(callChain.Any(s => s.Name == "MethodC"), Is.True);
 
         // Verify backward call chain from C
         var backwardChain = await _database.GetCallChainAsync(idC, ProjectDatabase.CallChainDirection.Backward, 5);
-        backwardChain.Select(s => s.Name).Should().Contain("MethodA");
-        backwardChain.Select(s => s.Name).Should().Contain("MethodB");
+        Assert.That(backwardChain.Any(s => s.Name == "MethodA"), Is.True);
+        Assert.That(backwardChain.Any(s => s.Name == "MethodB"), Is.True);
     }
 
     [Test]
@@ -227,19 +226,19 @@ public class SqliteCacheIntegrationTests
             new Dictionary<string, string> { { "issue", "null reference exception" } });
 
         // Assert - Prompts contain practical guidance
-        analyzePrompt.Messages[0].Content.Text.Should().Contain("find_symbol");
-        analyzePrompt.Messages[0].Content.Text.Should().Contain("semantic");
+        Assert.That(analyzePrompt.Messages[0].Content.Text, Does.Contain("find_symbol"));
+        Assert.That(analyzePrompt.Messages[0].Content.Text, Does.Contain("semantic"));
 
-        implementPrompt.Messages[0].Content.Text.Should().Contain("user authentication");
-        implementPrompt.Messages[0].Content.Text.Should().Contain("find_symbol");
+        Assert.That(implementPrompt.Messages[0].Content.Text, Does.Contain("user authentication"));
+        Assert.That(implementPrompt.Messages[0].Content.Text, Does.Contain("find_symbol"));
 
-        fixPrompt.Messages[0].Content.Text.Should().Contain("null reference exception");
-        fixPrompt.Messages[0].Content.Text.Should().Contain("find_call_chains");
+        Assert.That(fixPrompt.Messages[0].Content.Text, Does.Contain("null reference exception"));
+        Assert.That(fixPrompt.Messages[0].Content.Text, Does.Contain("find_call_chains"));
 
         // Verify prompt structure
-        analyzePrompt.Messages.Should().HaveCount(1);
-        analyzePrompt.Messages[0].Role.Should().Be("user");
-        analyzePrompt.Messages[0].Content.Type.Should().Be("text");
+        Assert.That(analyzePrompt.Messages, Has.Count.EqualTo(1));
+        Assert.That(analyzePrompt.Messages[0].Role, Is.EqualTo("user"));
+        Assert.That(analyzePrompt.Messages[0].Content.Type, Is.EqualTo("text"));
     }
 
     [Test]
@@ -262,14 +261,14 @@ public class SqliteCacheIntegrationTests
         var result = _resourceRegistry.ListResources();
 
         // Assert
-        result.Resources.Should().HaveCount(3);
-        result.Resources.Select(r => r.Uri).Should().Contain("project://overview");
-        result.Resources.Select(r => r.Uri).Should().Contain("project://structure");
-        result.Resources.Select(r => r.Uri).Should().Contain("project://guidance");
+        Assert.That(result.Resources, Has.Count.EqualTo(3));
+        Assert.That(result.Resources.Any(r => r.Uri == "project://overview"), Is.True);
+        Assert.That(result.Resources.Any(r => r.Uri == "project://structure"), Is.True);
+        Assert.That(result.Resources.Any(r => r.Uri == "project://guidance"), Is.True);
 
         // Verify resources are ordered
         var uris = result.Resources.Select(r => r.Uri).ToList();
-        uris.Should().BeInAscendingOrder();
+        Assert.That(uris, Is.Ordered);
     }
 
     [Test]
@@ -296,12 +295,12 @@ public class SqliteCacheIntegrationTests
             new HashSet<string> { "file1.cs", "file2.cs" });
 
         // Assert
-        staleFiles.Select(f => f.RelativePath).Should().Contain("file2.cs");
-        staleFiles.Select(f => f.RelativePath).Should().NotContain("file1.cs");
+        Assert.That(staleFiles.Any(f => f.RelativePath == "file2.cs"), Is.True);
+        Assert.That(staleFiles.Any(f => f.RelativePath == "file1.cs"), Is.False);
 
-        deletedFiles.Select(f => f.RelativePath).Should().Contain("file3.cs");
-        deletedFiles.Select(f => f.RelativePath).Should().NotContain("file1.cs");
-        deletedFiles.Select(f => f.RelativePath).Should().NotContain("file2.cs");
+        Assert.That(deletedFiles.Any(f => f.RelativePath == "file3.cs"), Is.True);
+        Assert.That(deletedFiles.Any(f => f.RelativePath == "file1.cs"), Is.False);
+        Assert.That(deletedFiles.Any(f => f.RelativePath == "file2.cs"), Is.False);
     }
 
     [Test]
@@ -321,12 +320,12 @@ public class SqliteCacheIntegrationTests
         var keys = await _database.GetProjectStructureKeysAsync(projectId);
 
         // Assert
-        retrieved.Should().Be(solutionInfo);
-        keys.Should().Contain("solution_info");
+        Assert.That(retrieved, Is.EqualTo(solutionInfo));
+        Assert.That(keys.Contains("solution_info"), Is.True);
 
         // Verify the JSON can be deserialized
         var deserialized = JsonSerializer.Deserialize<Dictionary<string, object>>(retrieved!);
-        deserialized.Should().NotBeNull();
+        Assert.That(deserialized, Is.Not.Null);
     }
 
     [Test]
@@ -344,23 +343,23 @@ public class SqliteCacheIntegrationTests
         var guidance = generators.GenerateGuidance();
 
         // Assert - All resources generate valid content
-        overview.Uri.Should().Be("project://overview");
-        overview.MimeType.Should().Be("text/markdown");
-        overview.Text.Should().NotBeNullOrEmpty();
+        Assert.That(overview.Uri, Is.EqualTo("project://overview"));
+        Assert.That(overview.MimeType, Is.EqualTo("text/markdown"));
+        Assert.That(overview.Text, Is.Not.Null.And.Not.Empty);
         // Note: Field name mismatch means project info may not be shown
-        overview.Text.Should().Contain("Project Overview");
+        Assert.That(overview.Text, Does.Contain("Project Overview"));
 
-        structure.Uri.Should().Be("project://structure");
-        structure.Text.Should().Contain("Project Structure");
+        Assert.That(structure.Uri, Is.EqualTo("project://structure"));
+        Assert.That(structure.Text, Does.Contain("Project Structure"));
 
-        dependencies.Uri.Should().Be("project://dependencies");
-        dependencies.Text.Should().Contain("Dependencies");
+        Assert.That(dependencies.Uri, Is.EqualTo("project://dependencies"));
+        Assert.That(dependencies.Text, Does.Contain("Dependencies"));
 
-        symbols.Uri.Should().Be("project://symbols");
-        symbols.Text.Should().Contain("Symbols Summary");
+        Assert.That(symbols.Uri, Is.EqualTo("project://symbols"));
+        Assert.That(symbols.Text, Does.Contain("Symbols Summary"));
 
-        guidance.Uri.Should().Be("project://guidance");
-        guidance.Text.Should().Contain("Usage Guide");
+        Assert.That(guidance.Uri, Is.EqualTo("project://guidance"));
+        Assert.That(guidance.Text, Does.Contain("Usage Guide"));
     }
 
     [Test]
@@ -415,16 +414,16 @@ public class SqliteCacheIntegrationTests
         var projectInfo = _projectManager.GetProjectInfo();
 
         // Assert - Verify integrated workflow
-        symbolSearch.Should().HaveCount(2);
-        symbolSearch.Any(s => s.Name == "UserService").Should().BeTrue();
-        symbolSearch.Any(s => s.Name == "GetUser").Should().BeTrue();
+        Assert.That(symbolSearch, Has.Count.EqualTo(2));
+        Assert.That(symbolSearch.Any(s => s.Name == "UserService"), Is.True);
+        Assert.That(symbolSearch.Any(s => s.Name == "GetUser"), Is.True);
 
         // Note: Field name mismatch means project name may not be shown
-        resourceRead.Contents[0].Text.Should().Contain("Project Overview");
+        Assert.That(resourceRead.Contents[0].Text, Does.Contain("Project Overview"));
 
-        projectInfo.Should().NotBeNull();
-        projectInfo!["rootPath"].Should().Be(_testProjectPath);
-        projectInfo["fileCount"].Should().BeOfType<int>();
+        Assert.That(projectInfo, Is.Not.Null);
+        Assert.That(projectInfo!["rootPath"], Is.EqualTo(_testProjectPath));
+        Assert.That(projectInfo["fileCount"], Is.TypeOf<int>());
     }
 
     [Test]
@@ -483,13 +482,13 @@ public class SqliteCacheIntegrationTests
         var callees = await _database.FindCalleesAsync(targetId);
 
         // Assert
-        callers.Should().HaveCount(1);
-        callers[0].Caller.Name.Should().Be("Caller");
-        callers[0].Reference.ReferenceKind.Should().Be("Call");
+        Assert.That(callers, Has.Count.EqualTo(1));
+        Assert.That(callers[0].Caller.Name, Is.EqualTo("Caller"));
+        Assert.That(callers[0].Reference.ReferenceKind, Is.EqualTo("Call"));
 
-        callees.Should().HaveCount(1);
-        callees[0].Callee.Name.Should().Be("Callee");
-        callees[0].Reference.ReferenceKind.Should().Be("Call");
+        Assert.That(callees, Has.Count.EqualTo(1));
+        Assert.That(callees[0].Callee.Name, Is.EqualTo("Callee"));
+        Assert.That(callees[0].Reference.ReferenceKind, Is.EqualTo("Call"));
     }
 
     [Test]
@@ -499,14 +498,14 @@ public class SqliteCacheIntegrationTests
         var result = _promptRegistry.ListPrompts();
 
         // Assert
-        result.Prompts.Should().HaveCountGreaterOrEqualTo(3);
-        result.Prompts.Any(p => p.Name == "analyze-codebase").Should().BeTrue();
-        result.Prompts.Any(p => p.Name == "implement-feature").Should().BeTrue();
-        result.Prompts.Any(p => p.Name == "fix-bug").Should().BeTrue();
+        Assert.That(result.Prompts, Has.Count.GreaterThanOrEqualTo(3));
+        Assert.That(result.Prompts.Any(p => p.Name == "analyze-codebase"), Is.True);
+        Assert.That(result.Prompts.Any(p => p.Name == "implement-feature"), Is.True);
+        Assert.That(result.Prompts.Any(p => p.Name == "fix-bug"), Is.True);
 
         // Verify prompts are ordered
         var names = result.Prompts.Select(p => p.Name).ToList();
-        names.Should().BeInAscendingOrder();
+        Assert.That(names, Is.Ordered);
     }
 
     [Test]
@@ -521,9 +520,9 @@ public class SqliteCacheIntegrationTests
         var files = await _database.GetAllFilesAsync(projectId);
 
         // Assert - Should return empty results, not throw exceptions
-        symbols.Should().BeEmpty();
-        callChain.Should().BeEmpty();
-        files.Should().BeEmpty();
+        Assert.That(symbols, Is.Empty);
+        Assert.That(callChain, Is.Empty);
+        Assert.That(files, Is.Empty);
     }
 
     [Test]
@@ -534,15 +533,15 @@ public class SqliteCacheIntegrationTests
         var context = _projectManager.GetProjectContext();
 
         // Assert
-        context.Should().NotBeNull();
-        context!.RootPath.Should().Be(_testProjectPath);
-        context.FileCount.Should().BeGreaterThan(0);
-        context.KnownFiles.Should().NotBeEmpty();
-        context.OpenedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        Assert.That(context, Is.Not.Null);
+        Assert.That(context!.RootPath, Is.EqualTo(_testProjectPath));
+        Assert.That(context.FileCount, Is.GreaterThan(0));
+        Assert.That(context.KnownFiles, Is.Not.Empty);
+        Assert.That(context.OpenedAt, Is.EqualTo(DateTime.UtcNow).Within(TimeSpan.FromSeconds(5)));
 
         // Verify files we created exist in the context
-        context.KnownFiles.Any(f => f.Contains("Test.cs")).Should().BeTrue();
-        context.KnownFiles.Any(f => f.Contains("Program.cs")).Should().BeTrue();
+        Assert.That(context.KnownFiles.Any(f => f.Contains("Test.cs")), Is.True);
+        Assert.That(context.KnownFiles.Any(f => f.Contains("Program.cs")), Is.True);
     }
 
     [Test]
@@ -558,8 +557,9 @@ public class SqliteCacheIntegrationTests
             });
 
         // Act & Assert
-        var act = async () => await _resourceRegistry.ReadResourceAsync("test://error");
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("Test error");
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _resourceRegistry.ReadResourceAsync("test://error"));
+        Assert.That(ex!.Message, Is.EqualTo("Test error"));
     }
 
     [Test]
@@ -586,6 +586,6 @@ public class SqliteCacheIntegrationTests
         var count = await _database.FindSymbolsByNameAsync("Method");
 
         // Assert
-        count.Should().HaveCount(100);
+        Assert.That(count, Has.Count.EqualTo(100));
     }
 }

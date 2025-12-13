@@ -1,16 +1,17 @@
 using Microsoft.Extensions.Logging;
 using MCPsharp.Models;
 using MCPsharp.Services;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 
 public class ResponseProcessorTests
 {
-    private readonly ResponseConfiguration _defaultConfig;
-    private readonly ResponseProcessor _processor;
+    private ResponseConfiguration _defaultConfig = null!;
+    private ResponseProcessor _processor = null!;
 
-    public ResponseProcessorTests()
+    [SetUp]
+    public void SetUp()
     {
         _defaultConfig = new ResponseConfiguration
         {
@@ -21,7 +22,7 @@ public class ResponseProcessorTests
         _processor = new ResponseProcessor(_defaultConfig);
     }
 
-    [Fact]
+    [Test]
     public void ProcessResponse_SmallResponse_ShouldNotTruncate()
     {
         // Arrange
@@ -32,12 +33,12 @@ public class ResponseProcessorTests
         var result = _processor.ProcessResponse(smallResponse, toolName);
 
         // Assert
-        Assert.False(result.WasTruncated);
-        Assert.Equal(result.EstimatedTokenCount, result.OriginalTokenCount);
-        Assert.Null(result.Warning);
+        Assert.That(result.WasTruncated, Is.False);
+        Assert.That(result.EstimatedTokenCount, Is.EqualTo(result.OriginalTokenCount));
+        Assert.That(result.Warning, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void ProcessResponse_LargeResponse_ShouldTruncate()
     {
         // Arrange
@@ -52,13 +53,13 @@ public class ResponseProcessorTests
         var result = _processor.ProcessResponse(largeResponse, toolName);
 
         // Assert
-        Assert.True(result.WasTruncated);
-        Assert.True(result.EstimatedTokenCount <= _defaultConfig.MaxTokens);
-        Assert.True(result.OriginalTokenCount > _defaultConfig.MaxTokens);
-        Assert.NotNull(result.Warning);
+        Assert.That(result.WasTruncated, Is.True);
+        Assert.That(result.EstimatedTokenCount, Is.LessThanOrEqualTo(_defaultConfig.MaxTokens));
+        Assert.That(result.OriginalTokenCount, Is.GreaterThan(_defaultConfig.MaxTokens));
+        Assert.That(result.Warning, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public void ProcessResponse_ExemptTool_ShouldNotTruncate()
     {
         // Arrange
@@ -76,12 +77,12 @@ public class ResponseProcessorTests
         var result = processor.ProcessResponse(largeResponse, toolName);
 
         // Assert
-        Assert.False(result.WasTruncated);
-        Assert.True(result.EstimatedTokenCount > config.MaxTokens);
-        Assert.True(result.Metadata.ContainsKey("exempt"));
+        Assert.That(result.WasTruncated, Is.False);
+        Assert.That(result.EstimatedTokenCount, Is.GreaterThan(config.MaxTokens));
+        Assert.That(result.Metadata.ContainsKey("exempt"), Is.True);
     }
 
-    [Fact]
+    [Test]
     public void ProcessResponse_TruncationDisabled_ShouldReturnError()
     {
         // Arrange
@@ -98,17 +99,16 @@ public class ResponseProcessorTests
         var result = processor.ProcessResponse(largeResponse, toolName);
 
         // Assert
-        Assert.False(result.WasTruncated);
-        Assert.True(result.EstimatedTokenCount > config.MaxTokens);
-        Assert.NotNull(result.Warning);
-        Assert.Contains("exceeds token limit", result.Warning);
+        Assert.That(result.WasTruncated, Is.False);
+        Assert.That(result.EstimatedTokenCount, Is.GreaterThan(config.MaxTokens));
+        Assert.That(result.Warning, Is.Not.Null);
+        Assert.That(result.Warning, Does.Contain("exceeds token limit"));
     }
 
-    [Theory]
-    [InlineData(SummaryStyle.Ellipsis)]
-    [InlineData(SummaryStyle.Paragraphs)]
-    [InlineData(SummaryStyle.JsonStructure)]
-    [InlineData(SummaryStyle.LineBased)]
+    [TestCase(SummaryStyle.Ellipsis)]
+    [TestCase(SummaryStyle.Paragraphs)]
+    [TestCase(SummaryStyle.JsonStructure)]
+    [TestCase(SummaryStyle.LineBased)]
     public void ProcessResponse_DifferentSummaryStyles_ShouldProduceValidResults(SummaryStyle style)
     {
         // Arrange
@@ -132,12 +132,12 @@ public class ResponseProcessorTests
         var result = processor.ProcessResponse(largeResponse, toolName);
 
         // Assert
-        Assert.True(result.EstimatedTokenCount <= config.MaxTokens);
-        Assert.NotNull(result.Content);
-        Assert.Contains(style.ToString(), result.Metadata.GetValueOrDefault("truncationStyle")?.ToString() ?? "");
+        Assert.That(result.EstimatedTokenCount, Is.LessThanOrEqualTo(config.MaxTokens));
+        Assert.That(result.Content, Is.Not.Null);
+        Assert.That(result.Metadata.GetValueOrDefault("truncationStyle")?.ToString() ?? "", Does.Contain(style.ToString()));
     }
 
-    [Fact]
+    [Test]
     public void ProcessResponse_NearWarningThreshold_ShouldIncludeWarning()
     {
         // Arrange
@@ -154,12 +154,12 @@ public class ResponseProcessorTests
         var result = processor.ProcessResponse(mediumResponse, toolName);
 
         // Assert
-        Assert.False(result.WasTruncated);
-        Assert.NotNull(result.Warning);
-        Assert.Contains("using", result.Warning);
+        Assert.That(result.WasTruncated, Is.False);
+        Assert.That(result.Warning, Is.Not.Null);
+        Assert.That(result.Warning, Does.Contain("using"));
     }
 
-    [Fact]
+    [Test]
     public void LoadFromEnvironment_ShouldApplyEnvironmentVariables()
     {
         // Arrange
@@ -172,12 +172,12 @@ public class ResponseProcessorTests
         var config = ResponseConfiguration.LoadFromEnvironment();
 
         // Assert
-        Assert.Equal(500, config.MaxTokens);
-        Assert.False(config.EnableTruncation);
-        Assert.Equal(SummaryStyle.JsonStructure, config.SummaryStyle);
-        Assert.Contains("tool1", config.ExemptTools);
-        Assert.Contains("tool2", config.ExemptTools);
-        Assert.Contains("tool3", config.ExemptTools);
+        Assert.That(config.MaxTokens, Is.EqualTo(500));
+        Assert.That(config.EnableTruncation, Is.False);
+        Assert.That(config.SummaryStyle, Is.EqualTo(SummaryStyle.JsonStructure));
+        Assert.That(config.ExemptTools, Does.Contain("tool1"));
+        Assert.That(config.ExemptTools, Does.Contain("tool2"));
+        Assert.That(config.ExemptTools, Does.Contain("tool3"));
 
         // Cleanup
         Environment.SetEnvironmentVariable("MCP_MAX_TOKENS", null);
@@ -186,7 +186,7 @@ public class ResponseProcessorTests
         Environment.SetEnvironmentVariable("MCP_EXEMPT_TOOLS", null);
     }
 
-    [Fact]
+    [Test]
     public void ProcessResponse_WildcardExemption_ShouldMatchPattern()
     {
         // Arrange
@@ -200,14 +200,14 @@ public class ResponseProcessorTests
 
         // Act & Assert - stream tools should be exempt
         var streamResult = processor.ProcessResponse(largeResponse, "stream_process_file");
-        Assert.False(streamResult.WasTruncated);
+        Assert.That(streamResult.WasTruncated, Is.False);
 
         // Act & Assert - bulk tools should be exempt
         var bulkResult = processor.ProcessResponse(largeResponse, "bulk_replace");
-        Assert.False(bulkResult.WasTruncated);
+        Assert.That(bulkResult.WasTruncated, Is.False);
 
         // Act & Assert - other tools should not be exempt
         var otherResult = processor.ProcessResponse(largeResponse, "other_tool");
-        Assert.True(otherResult.WasTruncated);
+        Assert.That(otherResult.WasTruncated, Is.True);
     }
 }

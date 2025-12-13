@@ -1,6 +1,6 @@
 using MCPsharp.Models;
 using MCPsharp.Services;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 
@@ -15,7 +15,7 @@ public class WorkflowAnalyzerServiceTests
         _testDataPath = Path.Combine(Directory.GetCurrentDirectory(), "TestData", "Workflows");
     }
 
-    [Fact]
+    [Test]
     public async Task FindWorkflowsAsync_WithNoWorkflowsDirectory_ReturnsEmptyList()
     {
         // Arrange
@@ -25,10 +25,10 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.FindWorkflowsAsync(nonExistentPath);
 
         // Assert
-        Assert.Empty(result);
+        Assert.That(result, Is.Empty);
     }
 
-    [Fact]
+    [Test]
     public async Task FindWorkflowsAsync_WithWorkflowsDirectory_ReturnsWorkflowFiles()
     {
         // Arrange
@@ -46,8 +46,8 @@ public class WorkflowAnalyzerServiceTests
             var result = await _service.FindWorkflowsAsync(tempPath);
 
             // Assert
-            Assert.Equal(2, result.Count);
-            Assert.All(result, path => Assert.True(path.EndsWith(".yml") || path.EndsWith(".yaml")));
+            Assert.That(result, Has.Count.EqualTo(2));
+            Assert.That(result, Has.All.Matches<string>(path => path.EndsWith(".yml") || path.EndsWith(".yaml")));
         }
         finally
         {
@@ -55,7 +55,7 @@ public class WorkflowAnalyzerServiceTests
         }
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_WithValidWorkflow_ParsesCorrectly()
     {
         // Arrange
@@ -65,36 +65,36 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ParseWorkflowAsync(workflowPath);
 
         // Assert
-        Assert.Equal("Build", result.Name);
-        Assert.Equal(workflowPath, result.FilePath);
-        Assert.NotNull(result.Triggers);
-        Assert.Contains("push", result.Triggers);
-        Assert.Contains("pull_request", result.Triggers);
+        Assert.That(result.Name, Is.EqualTo("Build"));
+        Assert.That(result.FilePath, Is.EqualTo(workflowPath));
+        Assert.That(result.Triggers, Is.Not.Null);
+        Assert.That(result.Triggers, Does.Contain("push"));
+        Assert.That(result.Triggers, Does.Contain("pull_request"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_WithNonExistentFile_ThrowsFileNotFoundException()
     {
         // Arrange
         var nonExistentPath = Path.Combine(_testDataPath, "nonexistent.yml");
 
         // Act & Assert
-        await Assert.ThrowsAsync<FileNotFoundException>(
+        Assert.ThrowsAsync<FileNotFoundException>(
             async () => await _service.ParseWorkflowAsync(nonExistentPath));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_WithInvalidYaml_ThrowsException()
     {
         // Arrange
         var invalidPath = Path.Combine(_testDataPath, "invalid.yml");
 
         // Act & Assert
-        await Assert.ThrowsAsync<YamlDotNet.Core.SemanticErrorException>(
+        Assert.ThrowsAsync<YamlDotNet.Core.SemanticErrorException>(
             async () => await _service.ParseWorkflowAsync(invalidPath));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsTriggers_FromSimpleList()
     {
         // Arrange
@@ -104,13 +104,13 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ParseWorkflowAsync(workflowPath);
 
         // Assert
-        Assert.NotNull(result.Triggers);
-        Assert.Equal(2, result.Triggers.Count);
-        Assert.Contains("push", result.Triggers);
-        Assert.Contains("pull_request", result.Triggers);
+        Assert.That(result.Triggers, Is.Not.Null);
+        Assert.That(result.Triggers, Has.Count.EqualTo(2));
+        Assert.That(result.Triggers, Does.Contain("push"));
+        Assert.That(result.Triggers, Does.Contain("pull_request"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsTriggers_FromDictionary()
     {
         // Arrange
@@ -120,12 +120,12 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ParseWorkflowAsync(workflowPath);
 
         // Assert
-        Assert.NotNull(result.Triggers);
-        Assert.Contains("push", result.Triggers);
-        Assert.Contains("pull_request", result.Triggers);
+        Assert.That(result.Triggers, Is.Not.Null);
+        Assert.That(result.Triggers, Does.Contain("push"));
+        Assert.That(result.Triggers, Does.Contain("pull_request"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsEnvironmentVariables()
     {
         // Arrange
@@ -135,12 +135,12 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ParseWorkflowAsync(workflowPath);
 
         // Assert
-        Assert.NotNull(result.Environment);
-        Assert.Contains("DOTNET_VERSION", result.Environment.Keys);
-        Assert.Equal("9.0.x", result.Environment["DOTNET_VERSION"]);
+        Assert.That(result.Environment, Is.Not.Null);
+        Assert.That(result.Environment.Keys, Does.Contain("DOTNET_VERSION"));
+        Assert.That(result.Environment["DOTNET_VERSION"], Is.EqualTo("9.0.x"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsJobs()
     {
         // Arrange
@@ -150,13 +150,13 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ParseWorkflowAsync(workflowPath);
 
         // Assert
-        Assert.NotNull(result.Jobs);
-        Assert.Single(result.Jobs);
-        Assert.Equal("build", result.Jobs[0].Name);
-        Assert.Equal("ubuntu-latest", result.Jobs[0].RunsOn);
+        Assert.That(result.Jobs, Is.Not.Null);
+        Assert.That(result.Jobs, Has.Count.EqualTo(1));
+        Assert.That(result.Jobs[0].Name, Is.EqualTo("build"));
+        Assert.That(result.Jobs[0].RunsOn, Is.EqualTo("ubuntu-latest"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsSteps()
     {
         // Arrange
@@ -167,26 +167,26 @@ public class WorkflowAnalyzerServiceTests
 
         // Assert
         var job = result.Jobs?.FirstOrDefault();
-        Assert.NotNull(job);
-        Assert.NotNull(job.Steps);
-        Assert.Equal(4, job.Steps.Count);
+        Assert.That(job, Is.Not.Null);
+        Assert.That(job.Steps, Is.Not.Null);
+        Assert.That(job.Steps, Has.Count.EqualTo(4));
 
         var checkoutStep = job.Steps[0];
-        Assert.Equal("actions/checkout@v4", checkoutStep.Uses);
+        Assert.That(checkoutStep.Uses, Is.EqualTo("actions/checkout@v4"));
 
         var setupDotnetStep = job.Steps[1];
-        Assert.Equal("actions/setup-dotnet@v4", setupDotnetStep.Uses);
-        Assert.NotNull(setupDotnetStep.With);
-        Assert.Equal("9.0.x", setupDotnetStep.With["dotnet-version"]);
+        Assert.That(setupDotnetStep.Uses, Is.EqualTo("actions/setup-dotnet@v4"));
+        Assert.That(setupDotnetStep.With, Is.Not.Null);
+        Assert.That(setupDotnetStep.With["dotnet-version"], Is.EqualTo("9.0.x"));
 
         var buildStep = job.Steps[2];
-        Assert.Equal("dotnet build", buildStep.Run);
+        Assert.That(buildStep.Run, Is.EqualTo("dotnet build"));
 
         var testStep = job.Steps[3];
-        Assert.Equal("dotnet test", testStep.Run);
+        Assert.That(testStep.Run, Is.EqualTo("dotnet test"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsSecrets()
     {
         // Arrange
@@ -196,13 +196,13 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ParseWorkflowAsync(workflowPath);
 
         // Assert
-        Assert.NotNull(result.Secrets);
-        Assert.Equal(2, result.Secrets.Count);
-        Assert.Contains("NUGET_API_KEY", result.Secrets);
-        Assert.Contains("DEPLOY_TOKEN", result.Secrets);
+        Assert.That(result.Secrets, Is.Not.Null);
+        Assert.That(result.Secrets, Has.Count.EqualTo(2));
+        Assert.That(result.Secrets, Does.Contain("NUGET_API_KEY"));
+        Assert.That(result.Secrets, Does.Contain("DEPLOY_TOKEN"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_ExtractsJobLevelEnvironment()
     {
         // Arrange
@@ -213,13 +213,13 @@ public class WorkflowAnalyzerServiceTests
 
         // Assert
         var job = result.Jobs?.FirstOrDefault();
-        Assert.NotNull(job);
-        Assert.NotNull(job.Environment);
-        Assert.Contains("DEPLOY_ENV", job.Environment.Keys);
-        Assert.Equal("production", job.Environment["DEPLOY_ENV"]);
+        Assert.That(job, Is.Not.Null);
+        Assert.That(job.Environment, Is.Not.Null);
+        Assert.That(job.Environment.Keys, Does.Contain("DEPLOY_ENV"));
+        Assert.That(job.Environment["DEPLOY_ENV"], Is.EqualTo("production"));
     }
 
-    [Fact]
+    [Test]
     public async Task ParseWorkflowAsync_WithNamedSteps_ExtractsStepNames()
     {
         // Arrange
@@ -230,18 +230,18 @@ public class WorkflowAnalyzerServiceTests
 
         // Assert
         var job = result.Jobs?.FirstOrDefault();
-        Assert.NotNull(job);
-        Assert.NotNull(job.Steps);
+        Assert.That(job, Is.Not.Null);
+        Assert.That(job.Steps, Is.Not.Null);
 
         var checkoutStep = job.Steps.FirstOrDefault(s => s.Name == "Checkout code");
-        Assert.NotNull(checkoutStep);
-        Assert.Equal("actions/checkout@v4", checkoutStep.Uses);
+        Assert.That(checkoutStep, Is.Not.Null);
+        Assert.That(checkoutStep.Uses, Is.EqualTo("actions/checkout@v4"));
 
         var setupStep = job.Steps.FirstOrDefault(s => s.Name == "Setup .NET");
-        Assert.NotNull(setupStep);
+        Assert.That(setupStep, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task GetAllWorkflowsAsync_ReturnsAllValidWorkflows()
     {
         // Arrange
@@ -259,9 +259,9 @@ public class WorkflowAnalyzerServiceTests
             var result = await _service.GetAllWorkflowsAsync(tempPath);
 
             // Assert - should skip invalid.yml
-            Assert.Equal(2, result.Count);
-            Assert.Contains(result, w => w.Name == "Build");
-            Assert.Contains(result, w => w.Name == "Deploy");
+            Assert.That(result, Has.Count.EqualTo(2));
+            Assert.That(result, Has.Some.Property("Name").EqualTo("Build"));
+            Assert.That(result, Has.Some.Property("Name").EqualTo("Deploy"));
         }
         finally
         {
@@ -269,7 +269,7 @@ public class WorkflowAnalyzerServiceTests
         }
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateWorkflowConsistencyAsync_WithMatchingVersions_ReturnsNoIssues()
     {
         // Arrange
@@ -314,10 +314,10 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ValidateWorkflowConsistencyAsync(workflow, project);
 
         // Assert
-        Assert.Empty(result);
+        Assert.That(result, Is.Empty);
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateWorkflowConsistencyAsync_WithMismatchedVersions_ReturnsWarning()
     {
         // Arrange
@@ -362,14 +362,14 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ValidateWorkflowConsistencyAsync(workflow, project);
 
         // Assert
-        Assert.Single(result);
-        Assert.Equal("VersionMismatch", result[0].Type);
-        Assert.Equal("Warning", result[0].Severity);
-        Assert.Contains("8.0", result[0].Message);
-        Assert.Contains("net9.0", result[0].Message);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Type, Is.EqualTo("VersionMismatch"));
+        Assert.That(result[0].Severity, Is.EqualTo("Warning"));
+        Assert.That(result[0].Message, Does.Contain("8.0"));
+        Assert.That(result[0].Message, Does.Contain("net9.0"));
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateWorkflowConsistencyAsync_WithMissingBuildSteps_ReturnsWarning()
     {
         // Arrange
@@ -408,13 +408,13 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ValidateWorkflowConsistencyAsync(workflow, project);
 
         // Assert
-        Assert.Contains(result, issue => issue.Type == "MissingBuildStep");
+        Assert.That(result, Has.Some.Property("Type").EqualTo("MissingBuildStep"));
         var buildStepIssue = result.First(issue => issue.Type == "MissingBuildStep");
-        Assert.Equal("Warning", buildStepIssue.Severity);
-        Assert.Contains("dotnet build", buildStepIssue.Message);
+        Assert.That(buildStepIssue.Severity, Is.EqualTo("Warning"));
+        Assert.That(buildStepIssue.Message, Does.Contain("dotnet build"));
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateWorkflowConsistencyAsync_WithLibraryProject_DoesNotRequireBuildSteps()
     {
         // Arrange
@@ -453,6 +453,6 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ValidateWorkflowConsistencyAsync(workflow, project);
 
         // Assert
-        Assert.DoesNotContain(result, issue => issue.Type == "MissingBuildStep");
+        Assert.That(result, Has.None.Property("Type").EqualTo("MissingBuildStep"));
     }
 }

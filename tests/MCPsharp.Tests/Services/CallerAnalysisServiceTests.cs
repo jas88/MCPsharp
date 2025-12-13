@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.Text;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Tests.TestFixtures;
-using Xunit;
+using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,13 +16,15 @@ namespace MCPsharp.Tests.Services;
 /// <summary>
 /// Unit tests for CallerAnalysisService
 /// </summary>
+[TestFixture]
 public class CallerAnalysisServiceTests
 {
-    private readonly RoslynWorkspace _workspace;
-    private readonly SymbolQueryService _symbolQuery;
-    private readonly CallerAnalysisService _callerAnalysis;
+    private RoslynWorkspace _workspace;
+    private SymbolQueryService _symbolQuery;
+    private CallerAnalysisService _callerAnalysis;
 
-    public CallerAnalysisServiceTests()
+    [SetUp]
+    public void SetUp()
     {
         _workspace = new RoslynWorkspace();
         _symbolQuery = new SymbolQueryService(_workspace);
@@ -130,20 +132,26 @@ public class DerivedService : IService
         // Cleanup of tempDir would happen in a Dispose method if we had one
     }
 
-    [Fact]
+    [TearDown]
+    public void TearDown()
+    {
+        _workspace?.Dispose();
+    }
+
+    [Test]
     public async Task FindCallers_ShouldFindDirectCallers()
     {
         // Act
         var result = await _callerAnalysis.FindCallersAsync("Execute", "IService");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Execute", result.TargetSymbol);
-        Assert.True(result.TotalCallers >= 1);
-        Assert.Contains(result.Callers, c => c.CallerType.Contains("Consumer"));
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TargetSymbol, Is.EqualTo("Execute"));
+        Assert.That(result.TotalCallers, Is.GreaterThanOrEqualTo(1));
+        Assert.That(result.Callers, Has.Some.Property("CallerType").Contains("Consumer"));
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallersBySignature_ShouldFindMatchingMethods()
     {
         // Arrange
@@ -160,57 +168,57 @@ public class DerivedService : IService
         var result = await _callerAnalysis.FindCallersBySignatureAsync(signature);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Execute", result.TargetSymbol);
-        Assert.True(result.TotalCallers >= 1);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TargetSymbol, Is.EqualTo("Execute"));
+        Assert.That(result.TotalCallers, Is.GreaterThanOrEqualTo(1));
     }
 
-    [Fact]
+    [Test]
     public async Task FindDirectCallers_ShouldExcludeIndirectCalls()
     {
         // Act - Look for direct calls to implementation instead of interface
         var result = await _callerAnalysis.FindDirectCallersAsync("Execute", "ServiceImpl");
 
         // Assert - Should be null since Consumer calls through interface (indirect)
-        Assert.Null(result); // Interface calls are classified as indirect
+        Assert.That(result, Is.Null); // Interface calls are classified as indirect
     }
 
-    [Fact]
+    [Test]
     public async Task FindIndirectCallers_ShouldIncludeInterfaceCalls()
     {
         // Act
         var result = await _callerAnalysis.FindIndirectCallersAsync("Execute", "IService");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.True(result.TotalCallers >= 1);
-        Assert.Contains(result.Callers, c => c.CallType == CallType.Indirect);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalCallers, Is.GreaterThanOrEqualTo(1));
+        Assert.That(result.Callers, Has.Some.Property("CallType").EqualTo(CallType.Indirect));
     }
 
-    [Fact]
+    [Test]
     public async Task AnalyzeCallPatterns_ShouldReturnPatternAnalysis()
     {
         // Act - Look for calls to the interface method instead of implementation
         var result = await _callerAnalysis.AnalyzeCallPatternsAsync("Execute", "IService");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Execute", result.TargetMethod.Name);
-        Assert.True(result.TotalCallSites >= 1);
-        Assert.NotNull(result.CallFrequencyByFile);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TargetMethod.Name, Is.EqualTo("Execute"));
+        Assert.That(result.TotalCallSites, Is.GreaterThanOrEqualTo(1));
+        Assert.That(result.CallFrequencyByFile, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallers_WithNonExistentMethod_ShouldReturnNull()
     {
         // Act
         var result = await _callerAnalysis.FindCallersAsync("NonExistentMethod");
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task FindCallersAtLocation_ShouldFindCallersForSymbolAtLocation()
     {
         // This test would require more setup to get actual file locations
@@ -218,10 +226,10 @@ public class DerivedService : IService
         var result = await _callerAnalysis.FindCallersAtLocationAsync("TestFile.cs", 10, 5);
 
         // Should return null for non-existent file/location
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void CreateMethodSignature_ShouldCreateCorrectSignature()
     {
         // This tests a private method through reflection or by testing public behavior
@@ -246,10 +254,10 @@ public class DerivedService : IService
             Accessibility = "public"
         });
 
-        Assert.True(matches);
+        Assert.That(matches, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void MethodSignature_WithParameters_ShouldMatchCorrectly()
     {
         // Arrange
@@ -280,10 +288,10 @@ public class DerivedService : IService
         };
 
         // Act & Assert
-        Assert.True(signature1.Matches(signature2));
+        Assert.That(signature1.Matches(signature2), Is.True);
     }
 
-    [Fact]
+    [Test]
     public void MethodSignature_WithDifferentParameters_ShouldNotMatch()
     {
         // Arrange
@@ -312,8 +320,6 @@ public class DerivedService : IService
         };
 
         // Act & Assert
-        Assert.False(signature1.Matches(signature2));
+        Assert.That(signature1.Matches(signature2), Is.False);
     }
-
-    // Dispose() method removed since RoslynWorkspace no longer implements IDisposable
 }

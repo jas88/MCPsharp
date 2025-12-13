@@ -5,7 +5,7 @@ using MCPsharp.Models;
 using MCPsharp.Services;
 using MCPsharp.Services.Phase2;
 using MCPsharp.Services.Roslyn;
-using Xunit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Integration;
 
@@ -13,17 +13,19 @@ namespace MCPsharp.Tests.Integration;
 /// Phase 2 Integration Tests - Tests complete workflows across multiple Phase 2 features
 /// These tests create realistic project structures and verify end-to-end functionality
 /// </summary>
-[Trait("Category", "Phase2Integration")]
-public class Phase2IntegrationTests : IDisposable
+[TestFixture]
+[Category("Phase2Integration")]
+public class Phase2IntegrationTests
 {
-    private readonly string _testRoot;
-    private readonly RoslynWorkspace _workspace;
-    private readonly ReferenceFinderService _referenceFinder;
-    private readonly MCPsharp.Services.Phase2.WorkflowAnalyzerService _workflowAnalyzer;
-    private readonly ConfigAnalyzerService _configAnalyzer;
-    private readonly ImpactAnalyzerService _impactAnalyzer;
+    private string _testRoot;
+    private RoslynWorkspace _workspace;
+    private ReferenceFinderService _referenceFinder;
+    private MCPsharp.Services.Phase2.WorkflowAnalyzerService _workflowAnalyzer;
+    private ConfigAnalyzerService _configAnalyzer;
+    private ImpactAnalyzerService _impactAnalyzer;
 
-    public Phase2IntegrationTests()
+    [SetUp]
+    public void SetUp()
     {
         _testRoot = Path.Combine(Path.GetTempPath(), $"mcpsharp_phase2_tests_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_testRoot);
@@ -41,17 +43,20 @@ public class Phase2IntegrationTests : IDisposable
         await _workspace.InitializeAsync(projectDir);
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         if (Directory.Exists(_testRoot))
         {
             Directory.Delete(_testRoot, true);
         }
+
+        _workspace?.Dispose();
     }
 
     #region Workflow Analysis Integration Tests
 
-    [Fact]
+    [Test]
     public async Task WorkflowAnalysis_GetAllWorkflows_ReturnsProjectWorkflows()
     {
         // Arrange: Create project with multiple workflows
@@ -86,12 +91,12 @@ jobs:
         var workflows = await _workflowAnalyzer.GetAllWorkflowsAsync(projectDir);
 
         // Assert: Verify workflows are detected
-        Assert.Equal(2, workflows.Count);
-        Assert.Contains(workflows, w => w.Name == "CI");
-        Assert.Contains(workflows, w => w.Name == "Deploy");
+        Assert.That(workflows, Has.Count.EqualTo(2));
+        Assert.That(workflows.Any(w => w.Name == "CI"), Is.True);
+        Assert.That(workflows.Any(w => w.Name == "Deploy"), Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task WorkflowAnalysis_ParseWorkflow_ExtractsCompleteStructure()
     {
         // Arrange: Create complex workflow
@@ -127,17 +132,17 @@ jobs:
         var details = await _workflowAnalyzer.ParseWorkflowAsync(workflowPath);
 
         // Assert: Verify workflow structure is extracted
-        Assert.NotNull(details);
-        Assert.Equal("Complex Build", details.Name);
-        Assert.NotNull(details.Triggers);
-        Assert.Contains(details.Triggers, t => t == "push");
-        Assert.Contains(details.Triggers, t => t == "pull_request");
-        Assert.NotNull(details.Jobs);
-        Assert.Contains(details.Jobs, j => j.Name == "build");
-        Assert.Contains(details.Jobs, j => j.Name == "deploy");
+        Assert.That(details, Is.Not.Null);
+        Assert.That(details.Name, Is.EqualTo("Complex Build"));
+        Assert.That(details.Triggers, Is.Not.Null);
+        Assert.That(details.Triggers, Does.Contain("push"));
+        Assert.That(details.Triggers, Does.Contain("pull_request"));
+        Assert.That(details.Jobs, Is.Not.Null);
+        Assert.That(details.Jobs, Has.Some.Matches<dynamic>(j => j.Name == "build"));
+        Assert.That(details.Jobs, Has.Some.Matches<dynamic>(j => j.Name == "deploy"));
     }
 
-    [Fact]
+    [Test]
     public async Task WorkflowAnalysis_ValidateConsistency_DetectsVersionMismatch()
     {
         // Arrange: Create project with mismatched .NET versions
@@ -167,15 +172,15 @@ jobs:
         var issues = await _workflowAnalyzer.ValidateWorkflowConsistencyAsync(workflowPath, projectDir);
 
         // Assert: Verify version mismatch is detected
-        Assert.NotEmpty(issues);
-        Assert.Contains(issues, i => i.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) && i.Message.Contains("version mismatch"));
+        Assert.That(issues, Is.Not.Empty);
+        Assert.That(issues, Has.Some.Matches<dynamic>(i => i.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) && i.Message.Contains("version mismatch")));
     }
 
     #endregion
 
     #region Config Analysis Integration Tests
 
-    [Fact]
+    [Test]
     public async Task ConfigAnalysis_MergeConfigs_ProducesCorrectHierarchy()
     {
         // Arrange: Create config hierarchy
@@ -221,29 +226,29 @@ jobs:
         var mergedConfig = await _configAnalyzer.MergeConfigsAsync(configPaths);
 
         // Assert: Verify merged config hierarchy
-        Assert.NotNull(mergedConfig);
-        Assert.Equal(3, mergedConfig.SourceFiles.Count);
+        Assert.That(mergedConfig, Is.Not.Null);
+        Assert.That(mergedConfig.SourceFiles, Has.Count.EqualTo(3));
 
         // Check that config merging worked (keys may be in different format)
-        Assert.True(mergedConfig.MergedSettings.Any());
+        Assert.That(mergedConfig.MergedSettings.Any(), Is.True);
 
         // Look for keys that should exist after merging
         var logLevelDefault = mergedConfig.MergedSettings.Keys.FirstOrDefault(k => k.Contains("Default") && k.Contains("Logging"));
         var logLevelMicrosoft = mergedConfig.MergedSettings.Keys.FirstOrDefault(k => k.Contains("Microsoft") && k.Contains("Logging"));
         var databaseConnection = mergedConfig.MergedSettings.Keys.FirstOrDefault(k => k.Contains("Database") && k.Contains("Connection"));
 
-        Assert.NotNull(logLevelDefault);
-        Assert.NotNull(logLevelMicrosoft);
-        Assert.NotNull(databaseConnection);
+        Assert.That(logLevelDefault, Is.Not.Null);
+        Assert.That(logLevelMicrosoft, Is.Not.Null);
+        Assert.That(databaseConnection, Is.Not.Null);
 
         // Development config should override default log level to Debug
-        Assert.Equal("Debug", mergedConfig.MergedSettings[logLevelDefault]);
+        Assert.That(mergedConfig.MergedSettings[logLevelDefault], Is.EqualTo("Debug"));
 
         // Staging config should override connection string
-        Assert.Equal("Server=staging;", mergedConfig.MergedSettings[databaseConnection]);
+        Assert.That(mergedConfig.MergedSettings[databaseConnection], Is.EqualTo("Server=staging;"));
     }
 
-    [Fact]
+    [Test]
     public async Task ConfigAnalysis_GetSchema_ExtractsStructure()
     {
         // Arrange: Create nested config
@@ -275,9 +280,9 @@ jobs:
         var schema = await _configAnalyzer.GetConfigSchemaAsync(configPath);
 
         // Assert: Verify schema structure is extracted with types
-        Assert.NotNull(schema);
-        Assert.Equal(configPath, schema.FilePath);
-        Assert.True(schema.Properties.Count > 0);
+        Assert.That(schema, Is.Not.Null);
+        Assert.That(schema.FilePath, Is.EqualTo(configPath));
+        Assert.That(schema.Properties, Is.Not.Empty);
 
         // Verify nested structure extraction (handle potential double prefixing)
         var dbConnectionString = schema.Properties.Keys.FirstOrDefault(k => k.Contains("ConnectionString"));
@@ -285,23 +290,23 @@ jobs:
         var dbTimeout = schema.Properties.Keys.FirstOrDefault(k => k.Contains("Timeout"));
         var dbEnableRetry = schema.Properties.Keys.FirstOrDefault(k => k.Contains("EnableRetry"));
 
-        Assert.NotNull(dbConnectionString);
-        Assert.NotNull(dbMaxConnections);
-        Assert.NotNull(dbTimeout);
-        Assert.NotNull(dbEnableRetry);
+        Assert.That(dbConnectionString, Is.Not.Null);
+        Assert.That(dbMaxConnections, Is.Not.Null);
+        Assert.That(dbTimeout, Is.Not.Null);
+        Assert.That(dbEnableRetry, Is.Not.Null);
 
         // Verify type detection
-        Assert.Equal("string", schema.Properties[dbConnectionString].Type);
-        Assert.Equal("integer", schema.Properties[dbMaxConnections].Type);
-        Assert.Equal("integer", schema.Properties[dbTimeout].Type);
-        Assert.Equal("boolean", schema.Properties[dbEnableRetry].Type);
+        Assert.That(schema.Properties[dbConnectionString].Type, Is.EqualTo("string"));
+        Assert.That(schema.Properties[dbMaxConnections].Type, Is.EqualTo("integer"));
+        Assert.That(schema.Properties[dbTimeout].Type, Is.EqualTo("integer"));
+        Assert.That(schema.Properties[dbEnableRetry].Type, Is.EqualTo("boolean"));
     }
 
     #endregion
 
     #region Impact Analysis Integration Tests
 
-    [Fact]
+    [Test]
     public async Task ImpactAnalysis_ModelChange_DetectsMultiFileImpact()
     {
         // Arrange: Create multi-layer architecture
@@ -386,17 +391,17 @@ public class UserController
         var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
 
         // Assert: Verify all affected files are detected
-        Assert.NotNull(result);
-        Assert.True(result.TotalImpactedFiles > 0);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalImpactedFiles > 0, Is.True);
 
         // Should detect impacts in related C# files
         var csharpImpacts = result.CSharpImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
-        Assert.Contains("UserRepository.cs", csharpImpacts);
-        Assert.Contains("UserService.cs", csharpImpacts);
-        Assert.Contains("UserController.cs", csharpImpacts);
+        Assert.That(csharpImpacts, Does.Contain("UserRepository.cs"));
+        Assert.That(csharpImpacts, Does.Contain("UserService.cs"));
+        Assert.That(csharpImpacts, Does.Contain("UserController.cs"));
     }
 
-    [Fact]
+    [Test]
     public async Task ImpactAnalysis_InterfaceChange_DetectsImplementations()
     {
         // Arrange: Create interface with multiple implementations
@@ -443,18 +448,18 @@ public class PaymentService
         var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
 
         // Assert: Verify both implementations and callers are detected
-        Assert.NotNull(result);
-        Assert.True(result.TotalImpactedFiles > 0);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalImpactedFiles > 0, Is.True);
 
         // Should detect both implementations
         var csharpImpacts = result.CSharpImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
 
-        Assert.Contains("CreditCardProcessor.cs", csharpImpacts);
-        Assert.Contains("PayPalProcessor.cs", csharpImpacts);
-        Assert.Contains("PaymentService.cs", csharpImpacts);
+        Assert.That(csharpImpacts, Does.Contain("CreditCardProcessor.cs"));
+        Assert.That(csharpImpacts, Does.Contain("PayPalProcessor.cs"));
+        Assert.That(csharpImpacts, Does.Contain("PaymentService.cs"));
     }
 
-    [Fact]
+    [Test]
     public async Task ImpactAnalysis_ConfigChange_DetectsCodeReferences()
     {
         // Arrange: Create service referencing config
@@ -496,23 +501,23 @@ public class EmailService
         var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
 
         // Assert: Verify EmailService.cs is detected as affected
-        Assert.NotNull(result);
-        Assert.True(result.TotalImpactedFiles > 0);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalImpactedFiles > 0, Is.True);
 
         // Should detect config impacts
         var configImpacts = result.ConfigImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
-        Assert.Contains("appsettings.json", configImpacts);
+        Assert.That(configImpacts, Does.Contain("appsettings.json"));
 
         // Should detect code references to config
         var csharpImpacts = result.CSharpImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
-        Assert.Contains("EmailService.cs", csharpImpacts);
+        Assert.That(csharpImpacts, Does.Contain("EmailService.cs"));
     }
 
     #endregion
 
     #region Feature Tracing Integration Tests
 
-    [Fact]
+    [Test]
     public async Task FeatureTracing_DiscoverComponents_FindsCompleteFeature()
     {
         // Arrange: Create complete feature
@@ -572,12 +577,12 @@ public class ProductController
         await File.WriteAllTextAsync(Path.Combine(testsDir, "ProductServiceTests.cs"), @"
 public class ProductServiceTests
 {
-    [Fact]
+    [Test]
     public void GetProduct_ReturnsProduct()
     {
         var service = new ProductService(new ProductRepository());
         var product = service.GetProduct(1);
-        Assert.NotNull(product);
+        Assert.That(product);
     }
 }");
 
@@ -604,7 +609,7 @@ public class ProductServiceTests
         // Model, Repository, Service, Controller, Tests, Config, Docs
     }
 
-    [Fact]
+    [Test]
     public async Task FeatureTracing_TraceFeature_BuildsDependencyGraph()
     {
         // Arrange: Create multi-layer feature
@@ -651,7 +656,7 @@ public class ProductServiceTests
 
     #region Cross-Feature Integration Tests
 
-    [Fact]
+    [Test]
     public async Task PolyglotAnalysis_TracksAcrossAllFileTypes()
     {
         // Arrange: Create polyglot project with C#, JSON, YAML, Markdown
@@ -718,28 +723,28 @@ service.ProcessPayment(payment);
         var result = await _impactAnalyzer.AnalyzeImpactAsync(change);
 
         // Assert: Verify polyglot impact detection
-        Assert.NotNull(result);
-        Assert.True(result.TotalImpactedFiles > 0);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalImpactedFiles > 0, Is.True);
 
         // Should detect impacts in C# files
         var csharpFiles = result.CSharpImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
-        Assert.Contains("PaymentService.cs", csharpFiles);
+        Assert.That(csharpFiles, Does.Contain("PaymentService.cs"));
 
         // Should detect impacts in config files
         var configFiles = result.ConfigImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
         Console.WriteLine($"[TEST DEBUG] Config files found: [{string.Join(", ", configFiles)}]");
-        Assert.Contains("appsettings.json", configFiles);
+        Assert.That(configFiles, Does.Contain("appsettings.json"));
 
         // Should detect impacts in workflow files
         var workflowFiles = result.WorkflowImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
-        Assert.Contains("payment-tests.yml", workflowFiles);
+        Assert.That(workflowFiles, Does.Contain("payment-tests.yml"));
 
         // Should detect impacts in documentation
         var docFiles = result.DocumentationImpacts.Select(i => Path.GetFileName(i.FilePath)).ToList();
-        Assert.Contains("Payments.md", docFiles);
+        Assert.That(docFiles, Does.Contain("Payments.md"));
     }
 
-    [Fact]
+    [Test]
     public async Task CompleteWorkflow_AnalyzeProjectStructure()
     {
         // Arrange: Create realistic project
@@ -786,18 +791,11 @@ jobs:
         await File.WriteAllTextAsync(Path.Combine(testsDir, "ServiceTests.cs"),
             "public class ServiceTests { [Fact] public void Test() { } }");
 
-        // Act: Perform various analyses
-        var workflowsTask = Assert.ThrowsAsync<NotImplementedException>(async () =>
-            await _workflowAnalyzer.GetAllWorkflowsAsync(projectDir));
+        // Act: Perform workflow analysis
+        var workflows = await _workflowAnalyzer.GetAllWorkflowsAsync(projectDir);
 
-        // NOTE: ConfigAnalyzerService and WorkflowAnalyzerService are now implemented, FeatureTracerService is not
-        // WorkflowAnalyzerService and ConfigAnalyzerService should work now
-        // await workflowsTask; // This should NOT throw anymore
-
-        // NOTE: These services are now functional - tests should be updated
-        // TODO: Update this test to verify actual functionality instead of expecting NotImplementedException
-
-        // TODO: Once implemented, verify complete project analysis
+        // Assert: Verify workflows were found and analyzed
+        Assert.That(workflows, Is.Not.Empty, "Should find workflows in the project");
     }
 
     #endregion
