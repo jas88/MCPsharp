@@ -398,8 +398,8 @@ public class SearchServiceTests
             Pattern = "line"
         };
 
-        // Act & Assert
-        Assert.ThrowsAsync<TaskCanceledException>(
+        // Act & Assert - use CatchAsync to accept both OperationCanceledException and TaskCanceledException
+        Assert.CatchAsync<OperationCanceledException>(
             async () => await _searchService.SearchTextAsync(request, cts.Token));
     }
 
