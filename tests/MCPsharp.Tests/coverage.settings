@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="Code Coverage" uri="datacollector://Microsoft/CodeCoverage/2.0">
+        <Configuration>
+          <CodeCoverage>
+            <!-- Disable restore step which may be causing async cleanup crash -->
+            <EnableStaticManagedInstrumentationRestore>false</EnableStaticManagedInstrumentationRestore>
+            <EnableStaticNativeInstrumentationRestore>false</EnableStaticNativeInstrumentationRestore>
+            <!-- Use only dynamic instrumentation -->
+            <EnableStaticManagedInstrumentation>false</EnableStaticManagedInstrumentation>
+            <EnableStaticNativeInstrumentation>false</EnableStaticNativeInstrumentation>
+            <!-- Exclude test assembly from coverage -->
+            <IncludeTestAssembly>false</IncludeTestAssembly>
+          </CodeCoverage>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
