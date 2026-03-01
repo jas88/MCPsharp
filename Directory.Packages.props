@@ -15,7 +15,7 @@
     <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.3" />
 
     <!-- Logging -->
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.2" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
 
