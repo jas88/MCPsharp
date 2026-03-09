@@ -5,6 +5,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "sunday"
+    groups:
+      microsoft-extensions:
+        patterns:
+          - "Microsoft.Extensions.*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
