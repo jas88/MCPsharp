@@ -344,6 +344,10 @@ public class SearchService : ISearchService
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Error reading file: {FilePath}", filePath);
