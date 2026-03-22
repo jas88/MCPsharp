@@ -113,6 +113,10 @@ public class SearchService : ISearchService
 
                     Interlocked.Increment(ref filesSearched);
                 }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Error searching file: {FilePath}", file);
