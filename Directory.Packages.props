@@ -28,7 +28,7 @@
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.3" />
 
     <!-- Immutable collections -->
-    <PackageVersion Include="System.Collections.Immutable" Version="10.0.6" />
+    <PackageVersion Include="System.Collections.Immutable" Version="10.0.7" />
 
     <!-- YAML parsing -->
     <PackageVersion Include="YamlDotNet" Version="17.0.1" />
