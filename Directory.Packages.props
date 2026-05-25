@@ -31,7 +31,7 @@
     <PackageVersion Include="System.Collections.Immutable" Version="10.0.8" />
 
     <!-- YAML parsing -->
-    <PackageVersion Include="YamlDotNet" Version="17.1.0" />
+    <PackageVersion Include="YamlDotNet" Version="18.0.0" />
 
     <!-- SQLite database -->
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.8" />
