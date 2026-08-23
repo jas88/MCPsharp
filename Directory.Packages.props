@@ -9,7 +9,7 @@
     <!-- Core Roslyn packages for C# analysis -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.6.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
 
     <!-- File system utilities -->
     <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.9" />
