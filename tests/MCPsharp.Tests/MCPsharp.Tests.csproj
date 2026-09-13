@@ -10,6 +10,9 @@
 
   <ItemGroup>
     <!-- MTP (Microsoft Testing Platform) packages -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
     <PackageReference Include="Microsoft.Testing.Platform.MSBuild" />
     <PackageReference Include="Microsoft.Testing.Extensions.Telemetry" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
