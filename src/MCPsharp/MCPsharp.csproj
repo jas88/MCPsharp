@@ -43,9 +43,6 @@
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
 
-    <!-- Immutable collections -->
-    <PackageReference Include="System.Collections.Immutable" />
-
     <!-- YAML parsing -->
     <PackageReference Include="YamlDotNet" />
 
@@ -67,7 +64,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-  <PackageReference Include="Microsoft.Extensions.Configuration" VersionOverride="10.0.5" />
+  <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="Roslynator.Analyzers">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
