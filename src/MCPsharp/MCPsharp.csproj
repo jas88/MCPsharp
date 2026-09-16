@@ -43,9 +43,6 @@
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
 
-    <!-- Immutable collections -->
-    <PackageReference Include="System.Collections.Immutable" />
-
     <!-- YAML parsing -->
     <PackageReference Include="YamlDotNet" />
 
