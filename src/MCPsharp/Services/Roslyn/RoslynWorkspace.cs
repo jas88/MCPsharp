@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
@@ -15,6 +16,8 @@ namespace MCPsharp.Services.Roslyn;
 /// </summary>
 public partial class RoslynWorkspace : IDisposable
 {
+    private const int MaxErrorSamples = 10;
+
     private Workspace? _workspace;
     private WorkspaceEventRegistration? _workspaceFailedRegistration;
     private ProjectId? _adhocProjectId;
@@ -265,13 +268,21 @@ public partial class RoslynWorkspace : IDisposable
         _health.LoadedProjects = state.PrimaryProjectIds.Count(state.Compilations.ContainsKey);
         _health.ErrorCount = 0;
         _health.WarningCount = 0;
+        var errorSamples = new List<string>();
 
         foreach (var compilation in GetCompilations())
         {
             var diagnostics = compilation.GetDiagnostics(ct);
-            _health.ErrorCount += diagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);
+            var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+            _health.ErrorCount += errors.Count;
             _health.WarningCount += diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
+            errorSamples.AddRange(errors
+                .Select(d => $"{compilation.AssemblyName}: {d.Id} {d.GetMessage(CultureInfo.InvariantCulture)}")
+                .Distinct(StringComparer.Ordinal)
+                .Take(MaxErrorSamples - errorSamples.Count));
         }
+
+        _health.ErrorSamples = errorSamples;
     }
 
     /// <summary>

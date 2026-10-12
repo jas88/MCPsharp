@@ -49,10 +49,7 @@
     </PackageReference>
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Analyzer release tracking (RS2008) -->
-    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
-    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
-  </ItemGroup>
+  <!-- AnalyzerReleases.{Shipped,Unshipped}.md (RS2008 release tracking) are picked up automatically
+       as AdditionalFiles by Microsoft.CodeAnalysis.Analyzers -->
 
 </Project>

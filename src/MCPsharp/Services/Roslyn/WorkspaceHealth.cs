@@ -46,6 +46,11 @@ public class WorkspaceHealth
     public int WarningCount { get; set; }
     
     /// <summary>
+    /// A few distinct compilation errors ("Assembly: ID message"), to explain a non-zero <see cref="ErrorCount"/>.
+    /// </summary>
+    public IReadOnlyList<string> ErrorSamples { get; set; } = [];
+
+    /// <summary>
     /// Per-file health status.
     /// </summary>
     public Dictionary<string, FileHealth> FileStatus { get; set; } = new();

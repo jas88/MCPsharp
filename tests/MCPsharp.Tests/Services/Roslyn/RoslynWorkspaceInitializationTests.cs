@@ -39,7 +39,8 @@ public class RoslynWorkspaceInitializationTests
         // Previously this was 179 errors due to missing NuGet references
         Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}. " +
-            $"This indicates MSBuildWorkspace is loading references correctly.");
+            $"This indicates MSBuildWorkspace is loading references correctly." +
+            $" Sample errors:\n{string.Join("\n", health.ErrorSamples)}");
 
         // Verify semantic operations are available or close to being available
         Assert.That(health.CanDoSyntaxOperations, Is.True, "Should be able to do syntax operations");
@@ -106,7 +107,8 @@ public class RoslynWorkspaceInitializationTests
         // The key fix: error count should be low, not 15k
         Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}. " +
-            $"Regression test: Previously passing .sln file caused fallback to AdhocWorkspace with 15k errors.");
+            $"Regression test: Previously passing .sln file caused fallback to AdhocWorkspace with 15k errors." +
+            $" Sample errors:\n{string.Join("\n", health.ErrorSamples)}");
 
         workspace.Dispose();
     }
@@ -134,7 +136,8 @@ public class RoslynWorkspaceInitializationTests
         Assert.That(health.LoadedProjects > 0, Is.True, "At least one project should be loaded");
         Assert.That(health.TotalFiles > 0, Is.True, "Should have source files");
         Assert.That(health.ErrorCount < 50, Is.True,
-            $"Error count should be low (< 50), but got {health.ErrorCount}");
+            $"Error count should be low (< 50), but got {health.ErrorCount}." +
+            $" Sample errors:\n{string.Join("\n", health.ErrorSamples)}");
 
         workspace.Dispose();
     }
