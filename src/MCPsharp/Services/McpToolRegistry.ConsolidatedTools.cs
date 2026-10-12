@@ -78,8 +78,9 @@ public partial class McpToolRegistry
     private static PropertyDefinition IncludeProp() =>
         Prop("include", "array", "Additional data to include in the response", items: EnumItems(IncludeOptionValues));
 
-    private static PropertyDefinition EditsProp() =>
-        Prop("edits", "array", "Text edits for 'edit' operations, same shape as file_edit edits (0-indexed lines/columns)",
+    private static PropertyDefinition EditsProp(
+        string description = "Text edits for 'edit' operations, same shape as file_edit edits (0-indexed lines/columns)") =>
+        Prop("edits", "array", description,
             items: new Dictionary<string, object>
             {
                 ["type"] = "object",
@@ -97,6 +98,28 @@ public partial class McpToolRegistry
                 },
                 ["required"] = EditRequiredProperties
             });
+
+    private static readonly string[] EditConditionTypeValues =
+        { "contains", "notcontains", "regex", "notregex", "extension", "directory" };
+    private static readonly string[] EditConditionOperatorValues = { "not" };
+
+    private static PropertyDefinition ConditionsProp() =>
+        Prop("conditions", "array",
+            "conditional: conditions every file must satisfy before the edits are applied. contains/notcontains: case-sensitive text; regex/notregex: regular expression; extension: file extension (e.g. .cs); directory: containing directory. operator \"not\" negates a condition.",
+            items: new Dictionary<string, object>
+            {
+                ["type"] = "object",
+                ["properties"] = new Dictionary<string, object>
+                {
+                    ["type"] = EnumItems(EditConditionTypeValues),
+                    ["value"] = new Dictionary<string, object> { ["type"] = "string" },
+                    ["operator"] = EnumItems(EditConditionOperatorValues)
+                },
+                ["required"] = EditConditionRequiredProperties
+            });
+
+    private static PropertyDefinition BulkEditsProp() =>
+        EditsProp("conditional: text edits applied to every file meeting the conditions, same shape as file_edit edits (0-indexed lines/columns)");
 
     private static Dictionary<string, object> FileOperationItems() => new()
     {
@@ -254,18 +277,8 @@ public partial class McpToolRegistry
                 Prop("files", "array", "Files to process (relative to project root or absolute within it)", items: StringItems),
                 Prop("pattern", "string", "replace: regex pattern"),
                 Prop("replacement", "string", "replace: replacement text"),
-                Prop("conditions", "array", "conditional: conditions every file must satisfy (type: contains, notcontains, regex)",
-                    items: new Dictionary<string, object>
-                    {
-                        ["type"] = "object",
-                        ["properties"] = new Dictionary<string, object>
-                        {
-                            ["type"] = new Dictionary<string, object> { ["type"] = "string" },
-                            ["value"] = new Dictionary<string, object> { ["type"] = "string" },
-                            ["operator"] = new Dictionary<string, object> { ["type"] = "string" }
-                        },
-                        ["required"] = EditConditionRequiredProperties
-                    }),
+                ConditionsProp(),
+                BulkEditsProp(),
                 Prop("refactor_type", "string", "refactor: refactoring type name (e.g. RenameSymbol)"),
                 Prop("target_pattern", "string", "refactor: pattern to match"),
                 Prop("replacement_pattern", "string", "refactor: replacement pattern"),
@@ -284,6 +297,8 @@ public partial class McpToolRegistry
                 Prop("files", "array", "Files to process (relative to project root or absolute within it)", items: StringItems),
                 Prop("pattern", "string", "replace: regex pattern"),
                 Prop("replacement", "string", "replace: replacement text"),
+                ConditionsProp(),
+                BulkEditsProp(),
                 Prop("refactor_type", "string", "refactor: refactoring type name (e.g. RenameSymbol)"),
                 Prop("target_pattern", "string", "refactor: pattern to match"),
                 Prop("replacement_pattern", "string", "refactor: replacement pattern"),

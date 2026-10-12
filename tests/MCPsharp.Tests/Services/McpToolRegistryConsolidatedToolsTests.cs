@@ -80,17 +80,18 @@ public class Calculator
     /// </summary>
     internal static McpToolRegistry CreateRegistry(
         ProjectContextManager projectContext, RoslynWorkspace workspace,
-        IRoslynAnalyzerService analyzerService, string startupRoot)
+        IRoslynAnalyzerService analyzerService, string startupRoot, IBulkEditService? bulkEditService = null)
     {
         var fileOperations = new FileOperationsService(startupRoot);
-        var universalFileOps = new UniversalFileOperations(startupRoot, fileOperations);
+        var universalFileOps = new UniversalFileOperations(startupRoot, fileOperations, bulkEditService);
         return new McpToolRegistry(
             projectContext,
             workspace,
+            bulkEditService: bulkEditService,
             fileOperationsService: fileOperations,
             universalFileOps: universalFileOps,
             unifiedAnalysis: new UnifiedAnalysisService(workspace: workspace),
-            bulkOperationsHub: new BulkOperationsHub(fileOps: universalFileOps),
+            bulkOperationsHub: new BulkOperationsHub(bulkEditService, universalFileOps),
             streamController: new StreamProcessingController(),
             roslynAnalyzerService: analyzerService);
     }

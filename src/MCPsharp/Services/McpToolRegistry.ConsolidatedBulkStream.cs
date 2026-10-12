@@ -66,6 +66,11 @@ public partial class McpToolRegistry
         }).ToList();
     }
 
+    private static List<TextEdit>? ParseBulkEdits(JsonDocument arguments) =>
+        arguments.RootElement.TryGetProperty("edits", out var edits) && edits.ValueKind == JsonValueKind.Array
+            ? ParseTextEdits(edits)
+            : null;
+
     private async Task<ToolCallResult> ExecuteBulkOperation(JsonDocument arguments, CancellationToken ct)
     {
         if (_bulkOperationsHub == null)
@@ -87,6 +92,7 @@ public partial class McpToolRegistry
             Pattern = GetStringArgument(arguments, "pattern"),
             Replacement = GetStringArgument(arguments, "replacement"),
             Conditions = ParseEditConditions(arguments),
+            Edits = ParseBulkEdits(arguments),
             RefactorType = GetStringArgument(arguments, "refactor_type"),
             TargetPattern = GetStringArgument(arguments, "target_pattern"),
             ReplacementPattern = GetStringArgument(arguments, "replacement_pattern"),
@@ -121,6 +127,8 @@ public partial class McpToolRegistry
             Operations = bulk.Operations,
             Pattern = GetStringArgument(arguments, "pattern"),
             Replacement = GetStringArgument(arguments, "replacement"),
+            Conditions = ParseEditConditions(arguments),
+            Edits = ParseBulkEdits(arguments),
             RefactorType = GetStringArgument(arguments, "refactor_type"),
             TargetPattern = GetStringArgument(arguments, "target_pattern"),
             ReplacementPattern = GetStringArgument(arguments, "replacement_pattern"),

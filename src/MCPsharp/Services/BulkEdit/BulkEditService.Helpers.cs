@@ -159,7 +159,7 @@ public sealed partial class BulkEditService
         }
     }
 
-    private static bool CheckCondition(string content, BulkEditCondition condition, string filePath)
+    internal static bool CheckCondition(string content, BulkEditCondition condition, string filePath)
     {
         var result = condition.ConditionType switch
         {

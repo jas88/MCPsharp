@@ -32,9 +32,11 @@ public class Calculator
 ";
 
     private static readonly string[] OutsideProjectFiles = { "../elsewhere.cs" };
+    private static readonly string[] BulkTargetFiles = { "Calculator.cs", "data.txt" };
     private static readonly string[] TestAnalyzerIds = { "Test" };
 
     private string _projectPath = null!;
+    private BulkEditService _bulkEditService = null!;
     private RoslynWorkspace _workspace = null!;
     private IRoslynAnalyzerService _analyzerService = null!;
     private McpToolRegistry _registry = null!;
@@ -49,8 +51,9 @@ public class Calculator
 
         _workspace = new RoslynWorkspace();
         _analyzerService = Substitute.For<IRoslynAnalyzerService>();
+        _bulkEditService = new BulkEditService();
         _registry = McpToolRegistryConsolidatedToolsTests.CreateRegistry(
-            new ProjectContextManager(), _workspace, _analyzerService, Path.GetTempPath());
+            new ProjectContextManager(), _workspace, _analyzerService, Path.GetTempPath(), _bulkEditService);
 
         var open = await Execute("project_open", new { path = _projectPath });
         Assert.That(open.Success, Is.True, open.Error);
@@ -60,6 +63,7 @@ public class Calculator
     public void TearDown()
     {
         _workspace.Dispose();
+        _bulkEditService.Dispose();
         if (Directory.Exists(_projectPath))
         {
             Directory.Delete(_projectPath, true);
@@ -90,6 +94,38 @@ public class Calculator
         await AssertSucceeds("execute_bulk_operation", new { operation_type = "file_operation", operations });
         await AssertSucceeds("preview_bulk_operation", new { operation_type = "file_operation", operations });
         await AssertSucceeds("manage_bulk_operation", new { action = "list" });
+    }
+
+    [Test]
+    public async Task ExecuteBulkOperation_Conditional_AppliesEditsToMatchingFiles()
+    {
+        var result = await Execute("execute_bulk_operation", new
+        {
+            operation_type = "conditional",
+            files = BulkTargetFiles,
+            conditions = new[] { new { type = "contains", value = "Calculator" } },
+            edits = new[] { new { type = "insert", line = 0, column = 0, text = "// edited\n" } }
+        });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(File.ReadAllText(Path.Combine(_projectPath, "Calculator.cs")), Does.StartWith("// edited\nusing System;"));
+        Assert.That(File.ReadAllText(Path.Combine(_projectPath, "data.txt")), Is.EqualTo("alpha\nbeta\ngamma\n"));
+    }
+
+    [Test]
+    public async Task ExecuteBulkOperation_ConditionalDryRun_LeavesFilesUnchanged()
+    {
+        var result = await Execute("execute_bulk_operation", new
+        {
+            operation_type = "conditional",
+            files = BulkTargetFiles,
+            conditions = new[] { new { type = "contains", value = "Calculator" } },
+            edits = new[] { new { type = "insert", line = 0, column = 0, text = "// edited\n" } },
+            dry_run = true
+        });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(File.ReadAllText(Path.Combine(_projectPath, "Calculator.cs")), Is.EqualTo(CalculatorSource));
     }
 
     [Test]
