@@ -155,7 +155,7 @@ public class RoslynWorkspaceInitializationTests
             $"{p.Name} ({(p.ParseOptions as CSharpParseOptions)?.LanguageVersion}): " +
             string.Join(", ", p.AnalyzerReferences.Select(r => r.FullPath).Where(n => n != null && n.Contains("Generator", StringComparison.OrdinalIgnoreCase))));
 
-        // Show the start of the generated logging source, to compare its signatures with the declarations
+        // Show the generated logging source's namespaces and classes, to compare them with the declarations
         var generatedSample = string.Empty;
         var main = projects.FirstOrDefault(p => p.Name == "MCPsharp");
         if (main != null)
@@ -164,8 +164,10 @@ public class RoslynWorkspaceInitializationTests
                 .FirstOrDefault(d => d.Name.Contains("LoggerMessage", StringComparison.OrdinalIgnoreCase));
             if (generated != null)
             {
-                var text = (await generated.GetTextAsync()).ToString();
-                generatedSample = $"{generated.FilePath}\n{string.Join("\n", text.Split('\n').Take(60))}";
+                var lines = (await generated.GetTextAsync()).Lines.Select(l => l.ToString())
+                    .Where(l => l.Contains("namespace", StringComparison.Ordinal) || l.Contains("partial class", StringComparison.Ordinal))
+                    .Take(20);
+                generatedSample = $"{generated.FilePath}\n{string.Join("\n", lines)}";
             }
         }
 

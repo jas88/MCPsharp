@@ -46,7 +46,7 @@ public class WorkspaceHealth
     public int WarningCount { get; set; }
     
     /// <summary>
-    /// A few distinct compilation errors ("Assembly: ID message"), to explain a non-zero <see cref="ErrorCount"/>.
+    /// Compilation errors with distinct IDs ("Assembly: ID message at location"), to explain a non-zero <see cref="ErrorCount"/>.
     /// </summary>
     public IReadOnlyList<string> ErrorSamples { get; set; } = [];
 

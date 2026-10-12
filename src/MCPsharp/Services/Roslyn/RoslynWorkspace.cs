@@ -280,9 +280,10 @@ public partial class RoslynWorkspace : IDisposable
             _health.ErrorCount += errors.Count;
             _health.WarningCount += diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
             // Generator failures are warnings but explain the errors that follow, so list them first
+            // One error per distinct ID first, so a flood of one error doesn't hide the others
             errorSamples.AddRange(diagnostics
                 .Where(d => d.Id is "CS8784" or "CS8785")
-                .Concat(errors)
+                .Concat(errors.DistinctBy(d => d.Id, StringComparer.Ordinal))
                 .Select(d => $"{compilation.AssemblyName}: {d.Id} {d.GetMessage(CultureInfo.InvariantCulture)} at {d.Location.GetLineSpan()}")
                 .Distinct(StringComparer.Ordinal)
                 .Take(MaxErrorSamples - errorSamples.Count));
