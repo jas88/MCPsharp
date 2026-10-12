@@ -29,6 +29,11 @@ public partial class RoslynAnalyzerAdapter : IAnalyzer
     public bool IsEnabled { get; set; } = true;
     public AnalyzerConfiguration Configuration { get; set; } = new();
 
+    /// <summary>
+    /// The wrapped Roslyn analyzer, used to recompute diagnostics while applying code fixes
+    /// </summary>
+    public DiagnosticAnalyzer DiagnosticAnalyzer => _roslynAnalyzer;
+
     public RoslynAnalyzerAdapter(
         DiagnosticAnalyzer roslynAnalyzer,
         ILogger<RoslynAnalyzerAdapter> logger,

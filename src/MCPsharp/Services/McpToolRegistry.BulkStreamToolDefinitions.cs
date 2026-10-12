@@ -294,7 +294,7 @@ public partial class McpToolRegistry
         new McpTool
         {
             Name = "apply_roslyn_fixes",
-            Description = "Apply the code fixes from loaded Roslyn code fix providers for the given diagnostics in a file. Previews by default.",
+            Description = "Apply the code fixes from loaded Roslyn code fix providers for the given diagnostics in a file. Previews (diff, no write) by default; when applied, files are backed up and the returned rollbackId can be passed to rollback_bulk_edit.",
             InputSchema = JsonSchemaHelper.CreateSchema(
                 Prop("diagnostic_ids", "array", "Diagnostic IDs to fix (e.g. CA1822)", required: true, items: StringItems),
                 Prop("target_path", "string", "File to fix (relative to the project root or absolute within it)", required: true),

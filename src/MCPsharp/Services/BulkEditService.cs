@@ -306,7 +306,7 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
             return null;
         }
 
-        return await CreateRollbackSession(operationId, files, cancellationToken);
+        return await CreateRollbackSession(operationId, files, "BulkEdit", cancellationToken);
     }
 
     /// <summary>

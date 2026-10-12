@@ -143,6 +143,9 @@ public partial class McpToolRegistry
             return ToolError(result.ErrorMessage ?? "Roslyn analyzer run failed");
         }
 
+        // Cache the most recent successful run so generate_analysis_report can use it
+        _lastAnalysisResult = result;
+
         return new ToolCallResult
         {
             Success = true,

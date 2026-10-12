@@ -87,6 +87,19 @@ public interface IBulkEditService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Back up files and register a rollback session for them, so an edit made by another tool can be
+    /// undone with <see cref="RollbackBulkEditAsync"/>. Call before writing the files.
+    /// </summary>
+    /// <param name="operationType">Short name of the operation that will modify the files</param>
+    /// <param name="files">Existing files to back up</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The registered rollback session; files that could not be backed up are absent from its file list</returns>
+    Task<RollbackInfo> CreateRollbackSessionAsync(
+        string operationType,
+        IReadOnlyList<string> files,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Validate a bulk edit request before execution
     /// </summary>
     /// <param name="request">Bulk edit request to validate</param>

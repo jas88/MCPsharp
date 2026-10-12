@@ -236,9 +236,21 @@ public sealed partial class BulkEditService
         return Task.FromResult(cleanedCount);
     }
 
+    /// <inheritdoc />
+    public Task<RollbackInfo> CreateRollbackSessionAsync(
+        string operationType,
+        IReadOnlyList<string> files,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(operationType);
+        ArgumentNullException.ThrowIfNull(files);
+        return CreateRollbackSession(Guid.NewGuid().ToString(), files, operationType, cancellationToken);
+    }
+
     private async Task<RollbackInfo> CreateRollbackSession(
         string operationId,
         IReadOnlyList<string> files,
+        string operationType,
         CancellationToken cancellationToken)
     {
         var rollbackId = Guid.NewGuid().ToString();
@@ -288,7 +300,7 @@ public sealed partial class BulkEditService
         {
             RollbackId = rollbackId,
             OriginalOperationId = operationId,
-            OperationType = "BulkEdit",
+            OperationType = operationType,
             ModifiedFiles = files.Select(f => f).ToList(),
             BackupLocations = files.ToDictionary(f => f, f => string.Empty),
             OperationTimestamp = DateTime.UtcNow,

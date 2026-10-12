@@ -14,6 +14,12 @@ public interface IRoslynAnalyzerService
     Task<AnalyzerRunResult> RunAnalyzersAsync(string targetPath, IEnumerable<string>? analyzerIds = null, CancellationToken cancellationToken = default);
     ImmutableArray<IAnalyzer> GetLoadedAnalyzers();
     IAnalyzer? GetAnalyzer(string analyzerId);
+
+    /// <summary>
+    /// Run the configured analyzer auto-load (if any) so <see cref="GetLoadedAnalyzers"/> reflects it
+    /// without having to run the analyzers first.
+    /// </summary>
+    Task EnsureAnalyzersLoadedAsync(CancellationToken cancellationToken = default);
 }
 
 public partial class RoslynAnalyzerService : IRoslynAnalyzerService
@@ -270,6 +276,10 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
             return _loadedAnalyzers.Values.ToImmutableArray();
         }
     }
+
+    /// <inheritdoc />
+    public Task EnsureAnalyzersLoadedAsync(CancellationToken cancellationToken = default) =>
+        EnsureAnalyzersAutoLoadedAsync(cancellationToken);
 
     public IAnalyzer? GetAnalyzer(string analyzerId)
     {
