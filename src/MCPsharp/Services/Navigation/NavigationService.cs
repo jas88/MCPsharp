@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models.Navigation;
 using MCPsharp.Services.Roslyn;
 
@@ -12,12 +13,12 @@ namespace MCPsharp.Services.Navigation;
 /// <summary>
 /// Implementation of navigation service for code navigation features
 /// </summary>
-public class NavigationService : INavigationService
+public partial class NavigationService : INavigationService
 {
     private readonly RoslynWorkspace _workspace;
     private readonly ISymbolResolutionService _symbolResolver;
     private readonly INavigationCache _cache;
-    private readonly ILogger<NavigationService>? _logger;
+    private readonly ILogger<NavigationService> _logger;
 
     public NavigationService(
         RoslynWorkspace workspace,
@@ -28,7 +29,7 @@ public class NavigationService : INavigationService
         _workspace = workspace;
         _symbolResolver = symbolResolver;
         _cache = cache;
-        _logger = logger;
+        _logger = logger ?? NullLogger<NavigationService>.Instance;
     }
 
     /// <summary>
@@ -78,7 +79,7 @@ public class NavigationService : INavigationService
             List<NavigationLocation>? alternatives = null;
             if (resolved.Confidence == SymbolConfidence.Ambiguous && resolved.AlternativeSymbols != null)
             {
-                alternatives = await GetAlternativeLocationsAsync(resolved.AlternativeSymbols);
+                alternatives = GetAlternativeLocations(resolved.AlternativeSymbols);
             }
 
             return new NavigationResult
@@ -92,8 +93,7 @@ public class NavigationService : INavigationService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error in GoToDefinition for {FilePath}:{Line}:{Column}",
-                filePath, line, column);
+            LogGoToDefinitionError(_logger, ex, filePath, line, column);
 
             return new NavigationResult
             {
@@ -135,18 +135,16 @@ public class NavigationService : INavigationService
             var locations = new List<NavigationLocation>();
 
             // Check if symbol can be overridden
-            if (!symbol.IsVirtual && !symbol.IsAbstract && !symbol.IsOverride)
+            // (interface members are allowed even though they are not virtual/abstract)
+            if (!symbol.IsVirtual && !symbol.IsAbstract && !symbol.IsOverride &&
+                symbol.ContainingType?.TypeKind != TypeKind.Interface)
             {
-                // Check if it's an interface member
-                if (symbol.ContainingType?.TypeKind != TypeKind.Interface)
+                return new MultiNavigationResult
                 {
-                    return new MultiNavigationResult
-                    {
-                        Success = false,
-                        Message = "Symbol is not virtual, abstract, or an interface member",
-                        ExecutionTimeMs = stopwatch.ElapsedMilliseconds
-                    };
-                }
+                    Success = false,
+                    Message = "Symbol is not virtual, abstract, or an interface member",
+                    ExecutionTimeMs = stopwatch.ElapsedMilliseconds
+                };
             }
 
             // Get the original virtual/abstract definition
@@ -204,8 +202,7 @@ public class NavigationService : INavigationService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error finding overrides for {FilePath}:{Line}:{Column}",
-                filePath, line, column);
+            LogFindOverridesError(_logger, ex, filePath, line, column);
 
             return new MultiNavigationResult
             {
@@ -296,8 +293,7 @@ public class NavigationService : INavigationService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error finding overloads for {FilePath}:{Line}:{Column}",
-                filePath, line, column);
+            LogFindOverloadsError(_logger, ex, filePath, line, column);
 
             return new MultiNavigationResult
             {
@@ -419,8 +415,7 @@ public class NavigationService : INavigationService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error finding base symbol for {FilePath}:{Line}:{Column}",
-                filePath, line, column);
+            LogFindBaseSymbolError(_logger, ex, filePath, line, column);
 
             return new NavigationResult
             {
@@ -518,8 +513,7 @@ public class NavigationService : INavigationService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error finding derived types for {FilePath}:{Line}:{Column}",
-                filePath, line, column);
+            LogFindDerivedTypesError(_logger, ex, filePath, line, column);
 
             return new MultiNavigationResult
             {
@@ -632,8 +626,7 @@ public class NavigationService : INavigationService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error going to implementation for {FilePath}:{Line}:{Column}",
-                filePath, line, column);
+            LogGoToImplementationError(_logger, ex, filePath, line, column);
 
             return new NavigationResult
             {
@@ -706,8 +699,7 @@ public class NavigationService : INavigationService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error finding all related symbols for {FilePath}:{Line}:{Column}",
-                filePath, line, column);
+            LogFindAllRelatedError(_logger, ex, filePath, line, column);
 
             return new MultiNavigationResult
             {
@@ -720,7 +712,7 @@ public class NavigationService : INavigationService
 
     // Helper methods
 
-    private NavigationResult CreateExternalSymbolResult(ISymbol symbol, long elapsedMs)
+    private static NavigationResult CreateExternalSymbolResult(ISymbol symbol, long elapsedMs)
     {
         return new NavigationResult
         {
@@ -739,7 +731,7 @@ public class NavigationService : INavigationService
         };
     }
 
-    private NavigationLocation? CreateNavigationLocation(ISymbol symbol)
+    private static NavigationLocation? CreateNavigationLocation(ISymbol symbol)
     {
         var location = symbol.Locations.FirstOrDefault(l => l.IsInSource);
         if (location == null)
@@ -758,7 +750,7 @@ public class NavigationService : INavigationService
         };
     }
 
-    private NavigationSymbolInfo CreateNavigationSymbolInfo(ISymbol symbol)
+    private static NavigationSymbolInfo CreateNavigationSymbolInfo(ISymbol symbol)
     {
         // Add method-specific information
         if (symbol is IMethodSymbol method)
@@ -770,7 +762,7 @@ public class NavigationService : INavigationService
                 Signature = symbol.ToDisplayString(),
                 ContainingType = symbol.ContainingType?.Name,
                 Namespace = symbol.ContainingNamespace?.ToDisplayString(),
-                Accessibility = symbol.DeclaredAccessibility.ToString().ToLower(),
+                Accessibility = symbol.DeclaredAccessibility.ToString().ToLowerInvariant(),
                 Documentation = GetDocumentationSummary(symbol),
                 IsAbstract = symbol.IsAbstract,
                 IsVirtual = symbol.IsVirtual,
@@ -790,7 +782,7 @@ public class NavigationService : INavigationService
             Signature = symbol.ToDisplayString(),
             ContainingType = symbol.ContainingType?.Name,
             Namespace = symbol.ContainingNamespace?.ToDisplayString(),
-            Accessibility = symbol.DeclaredAccessibility.ToString().ToLower(),
+            Accessibility = symbol.DeclaredAccessibility.ToString().ToLowerInvariant(),
             Documentation = GetDocumentationSummary(symbol),
             IsAbstract = symbol.IsAbstract,
             IsVirtual = symbol.IsVirtual,
@@ -800,20 +792,20 @@ public class NavigationService : INavigationService
         };
     }
 
-    private string GetSymbolKind(ISymbol symbol)
+    private static string GetSymbolKind(ISymbol symbol)
     {
         return symbol switch
         {
-            INamedTypeSymbol type => type.TypeKind.ToString().ToLower(),
+            INamedTypeSymbol type => type.TypeKind.ToString().ToLowerInvariant(),
             IMethodSymbol => "method",
             IPropertySymbol => "property",
             IFieldSymbol => "field",
             IEventSymbol => "event",
-            _ => symbol.Kind.ToString().ToLower()
+            _ => symbol.Kind.ToString().ToLowerInvariant()
         };
     }
 
-    private string? GetDocumentationSummary(ISymbol symbol)
+    private static string? GetDocumentationSummary(ISymbol symbol)
     {
         var xml = symbol.GetDocumentationCommentXml();
         if (string.IsNullOrWhiteSpace(xml))
@@ -821,8 +813,8 @@ public class NavigationService : INavigationService
             return null;
         }
 
-        var summaryStart = xml.IndexOf("<summary>");
-        var summaryEnd = xml.IndexOf("</summary>");
+        var summaryStart = xml.IndexOf("<summary>", StringComparison.Ordinal);
+        var summaryEnd = xml.IndexOf("</summary>", StringComparison.Ordinal);
         if (summaryStart >= 0 && summaryEnd > summaryStart)
         {
             return xml.Substring(summaryStart + 9, summaryEnd - summaryStart - 9).Trim();
@@ -831,7 +823,7 @@ public class NavigationService : INavigationService
         return null;
     }
 
-    private ISymbol? GetOriginalVirtualSymbol(ISymbol symbol)
+    private static ISymbol? GetOriginalVirtualSymbol(ISymbol symbol)
     {
         return symbol switch
         {
@@ -842,7 +834,7 @@ public class NavigationService : INavigationService
         };
     }
 
-    private IMethodSymbol GetOriginalVirtualMethod(IMethodSymbol method)
+    private static IMethodSymbol GetOriginalVirtualMethod(IMethodSymbol method)
     {
         while (method.OverriddenMethod != null)
         {
@@ -851,7 +843,7 @@ public class NavigationService : INavigationService
         return method;
     }
 
-    private IPropertySymbol GetOriginalVirtualProperty(IPropertySymbol property)
+    private static IPropertySymbol GetOriginalVirtualProperty(IPropertySymbol property)
     {
         while (property.OverriddenProperty != null)
         {
@@ -860,7 +852,7 @@ public class NavigationService : INavigationService
         return property;
     }
 
-    private IEventSymbol GetOriginalVirtualEvent(IEventSymbol eventSymbol)
+    private static IEventSymbol GetOriginalVirtualEvent(IEventSymbol eventSymbol)
     {
         while (eventSymbol.OverriddenEvent != null)
         {
@@ -922,14 +914,13 @@ public class NavigationService : INavigationService
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "Failed to add code context for {FilePath}", location.FilePath);
+            LogAddCodeContextFailed(_logger, ex, location.FilePath);
         }
 
         return location;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<NavigationLocation>> GetAlternativeLocationsAsync(
+    private static List<NavigationLocation> GetAlternativeLocations(
         IEnumerable<ISymbol> symbols)
     {
         var locations = new List<NavigationLocation>();
@@ -977,23 +968,19 @@ public class NavigationService : INavigationService
             foreach (var typeDecl in typeDeclarations)
             {
                 var declaredSymbol = semanticModel.GetDeclaredSymbol(typeDecl);
-                if (declaredSymbol is INamedTypeSymbol derivedType)
+                // Check if it derives from our base type (optionally excluding sealed types)
+                if (declaredSymbol is INamedTypeSymbol derivedType &&
+                    DerivesFrom(derivedType, baseType) &&
+                    (includeSealedTypes || !derivedType.IsSealed))
                 {
-                    // Check if it derives from our base type
-                    if (DerivesFrom(derivedType, baseType))
-                    {
-                        if (includeSealedTypes || !derivedType.IsSealed)
-                        {
-                            derivedTypes.Add(derivedType);
+                    derivedTypes.Add(derivedType);
 
-                            // Recursively find types derived from this one
-                            if (maxDepth == -1 || currentDepth + 1 < maxDepth)
-                            {
-                                var furtherDerived = await FindDerivedTypesRecursiveAsync(
-                                    derivedType, includeSealedTypes, maxDepth, currentDepth + 1);
-                                derivedTypes.AddRange(furtherDerived);
-                            }
-                        }
+                    // Recursively find types derived from this one
+                    if (maxDepth == -1 || currentDepth + 1 < maxDepth)
+                    {
+                        var furtherDerived = await FindDerivedTypesRecursiveAsync(
+                            derivedType, includeSealedTypes, maxDepth, currentDepth + 1);
+                        derivedTypes.AddRange(furtherDerived);
                     }
                 }
             }
@@ -1002,7 +989,7 @@ public class NavigationService : INavigationService
         return derivedTypes.Distinct(SymbolEqualityComparer.Default).Cast<INamedTypeSymbol>().ToList();
     }
 
-    private bool DerivesFrom(INamedTypeSymbol derivedType, INamedTypeSymbol baseType)
+    private static bool DerivesFrom(INamedTypeSymbol derivedType, INamedTypeSymbol baseType)
     {
         // Check direct base type
         if (SymbolEqualityComparer.Default.Equals(derivedType.BaseType, baseType))
@@ -1030,7 +1017,7 @@ public class NavigationService : INavigationService
         return false;
     }
 
-    private async Task<List<IMethodSymbol>> FindExtensionMethodOverloadsAsync(
+    private static async Task<List<IMethodSymbol>> FindExtensionMethodOverloadsAsync(
         Compilation compilation,
         string methodName,
         INamedTypeSymbol extendedType)
@@ -1069,7 +1056,7 @@ public class NavigationService : INavigationService
         return extensionMethods;
     }
 
-    private bool IsAssignableFrom(ITypeSymbol targetType, ITypeSymbol sourceType)
+    private static bool IsAssignableFrom(ITypeSymbol targetType, ITypeSymbol sourceType)
     {
         // Check if sourceType can be assigned to targetType
         if (SymbolEqualityComparer.Default.Equals(targetType, sourceType))
@@ -1101,7 +1088,7 @@ public class NavigationService : INavigationService
     /// <summary>
     /// Comparer for navigation locations to avoid duplicates
     /// </summary>
-    private class NavigationLocationComparer : IEqualityComparer<NavigationLocation>
+    private sealed class NavigationLocationComparer : IEqualityComparer<NavigationLocation>
     {
         public bool Equals(NavigationLocation? x, NavigationLocation? y)
         {
@@ -1114,4 +1101,28 @@ public class NavigationService : INavigationService
             return HashCode.Combine(obj.FilePath, obj.Line, obj.Column);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error in GoToDefinition for {FilePath}:{Line}:{Column}")]
+    private static partial void LogGoToDefinitionError(ILogger logger, Exception exception, string filePath, int line, int column);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error finding overrides for {FilePath}:{Line}:{Column}")]
+    private static partial void LogFindOverridesError(ILogger logger, Exception exception, string filePath, int line, int column);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error finding overloads for {FilePath}:{Line}:{Column}")]
+    private static partial void LogFindOverloadsError(ILogger logger, Exception exception, string filePath, int line, int column);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error finding base symbol for {FilePath}:{Line}:{Column}")]
+    private static partial void LogFindBaseSymbolError(ILogger logger, Exception exception, string filePath, int line, int column);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error finding derived types for {FilePath}:{Line}:{Column}")]
+    private static partial void LogFindDerivedTypesError(ILogger logger, Exception exception, string filePath, int line, int column);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error going to implementation for {FilePath}:{Line}:{Column}")]
+    private static partial void LogGoToImplementationError(ILogger logger, Exception exception, string filePath, int line, int column);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error finding all related symbols for {FilePath}:{Line}:{Column}")]
+    private static partial void LogFindAllRelatedError(ILogger logger, Exception exception, string filePath, int line, int column);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to add code context for {FilePath}")]
+    private static partial void LogAddCodeContextFailed(ILogger logger, Exception exception, string filePath);
 }

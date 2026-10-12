@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services.Roslyn.SymbolSearch;
 
@@ -8,12 +9,11 @@ namespace MCPsharp.Services.Roslyn.SymbolSearch;
 /// Orchestrates multiple search strategies to handle different symbol types
 /// (compilation-level symbols, scope-local symbols, position-based lookup).
 /// </summary>
-public class SymbolFinderService
+public partial class SymbolFinderService
 {
-    private readonly RoslynWorkspace _workspace;
     private readonly List<ISymbolSearchStrategy> _strategies;
     private readonly SymbolSelector _selector;
-    private readonly ILogger<SymbolFinderService>? _logger;
+    private readonly ILogger<SymbolFinderService> _logger;
 
     public SymbolFinderService(
         RoslynWorkspace workspace,
@@ -23,8 +23,7 @@ public class SymbolFinderService
         ILogger<PositionBasedStrategy>? positionLogger = null,
         ILogger<SymbolSelector>? selectorLogger = null)
     {
-        _workspace = workspace;
-        _logger = logger;
+        _logger = logger ?? NullLogger<SymbolFinderService>.Instance;
 
         // Initialize selector
         _selector = new SymbolSelector(selectorLogger);
@@ -33,13 +32,13 @@ public class SymbolFinderService
         _strategies = new List<ISymbolSearchStrategy>
         {
             // Position-based is most precise when location is available
-            new PositionBasedStrategy(_workspace, positionLogger),
+            new PositionBasedStrategy(workspace, positionLogger),
 
             // Compilation strategy for types, members, namespaces
-            new CompilationStrategy(_workspace, compilationLogger),
+            new CompilationStrategy(workspace, compilationLogger),
 
             // Scope-local strategy for locals and parameters
-            new ScopeLocalStrategy(_workspace, scopeLocalLogger)
+            new ScopeLocalStrategy(workspace, scopeLocalLogger)
         };
     }
 
@@ -53,12 +52,11 @@ public class SymbolFinderService
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Name))
         {
-            _logger?.LogWarning("Invalid symbol search request");
+            LogInvalidRequest(_logger);
             return SymbolSearchResult.NotFound();
         }
 
-        _logger?.LogDebug("Searching for symbol '{Name}' (kind: {Kind})",
-            request.Name, request.SymbolKind);
+        LogSearching(_logger, request.Name, request.SymbolKind);
 
         var allCandidates = new List<ISymbol>();
         string? usedStrategy = null;
@@ -69,23 +67,21 @@ public class SymbolFinderService
             // Skip if strategy doesn't apply to this symbol kind
             if (!strategy.IsApplicableFor(request.SymbolKind))
             {
-                _logger?.LogDebug("Skipping {Strategy} - not applicable for {Kind}",
-                    strategy.StrategyName, request.SymbolKind);
+                LogSkippingStrategy(_logger, strategy.StrategyName, request.SymbolKind);
                 continue;
             }
 
             try
             {
-                _logger?.LogDebug("Trying {Strategy} strategy", strategy.StrategyName);
+                LogTryingStrategy(_logger, strategy.StrategyName);
                 var candidates = await strategy.SearchAsync(request, ct);
 
-                if (candidates.Any())
+                if (candidates.Count > 0)
                 {
                     allCandidates.AddRange(candidates);
                     usedStrategy ??= strategy.StrategyName;
 
-                    _logger?.LogDebug("{Strategy} found {Count} candidates",
-                        strategy.StrategyName, candidates.Count);
+                    LogStrategyFound(_logger, strategy.StrategyName, candidates.Count);
 
                     // If position-based strategy found something, use it immediately
                     // (most precise)
@@ -97,19 +93,18 @@ public class SymbolFinderService
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error in {Strategy} strategy", strategy.StrategyName);
+                LogStrategyError(_logger, ex, strategy.StrategyName);
             }
         }
 
         // Remove duplicates
         allCandidates = allCandidates
             .Distinct(SymbolEqualityComparer.Default)
-            .Cast<ISymbol>()
             .ToList();
 
-        if (!allCandidates.Any())
+        if (allCandidates.Count == 0)
         {
-            _logger?.LogDebug("No symbols found for '{Name}'", request.Name);
+            LogNoSymbolsFound(_logger, request.Name);
             return SymbolSearchResult.NotFound();
         }
 
@@ -118,13 +113,11 @@ public class SymbolFinderService
 
         if (bestSymbol == null)
         {
-            _logger?.LogWarning("Found {Count} candidates but could not select best for '{Name}'",
-                allCandidates.Count, request.Name);
+            LogCouldNotSelectBest(_logger, allCandidates.Count, request.Name);
             return SymbolSearchResult.NotFound();
         }
 
-        _logger?.LogInformation("Found symbol '{Name}' using {Strategy} ({Count} total candidates)",
-            bestSymbol.Name, usedStrategy, allCandidates.Count);
+        LogFoundSymbol(_logger, bestSymbol.Name, usedStrategy, allCandidates.Count);
 
         return SymbolSearchResult.Multiple(allCandidates, bestSymbol, usedStrategy ?? "Unknown");
     }
@@ -158,14 +151,13 @@ public class SymbolFinderService
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error in {Strategy} strategy", strategy.StrategyName);
+                LogStrategyError(_logger, ex, strategy.StrategyName);
             }
         }
 
         // Remove duplicates
         return allCandidates
             .Distinct(SymbolEqualityComparer.Default)
-            .Cast<ISymbol>()
             .ToList();
     }
 
@@ -175,10 +167,39 @@ public class SymbolFinderService
     /// </summary>
     public void RegisterStrategy(ISymbolSearchStrategy strategy)
     {
-        if (strategy == null)
-            throw new ArgumentNullException(nameof(strategy));
+        ArgumentNullException.ThrowIfNull(strategy);
 
         _strategies.Add(strategy);
-        _logger?.LogInformation("Registered custom strategy: {Strategy}", strategy.StrategyName);
+        LogRegisteredStrategy(_logger, strategy.StrategyName);
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Invalid symbol search request")]
+    private static partial void LogInvalidRequest(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Searching for symbol '{Name}' (kind: {Kind})")]
+    private static partial void LogSearching(ILogger logger, string name, SymbolKind kind);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Skipping {Strategy} - not applicable for {Kind}")]
+    private static partial void LogSkippingStrategy(ILogger logger, string strategy, SymbolKind kind);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Trying {Strategy} strategy")]
+    private static partial void LogTryingStrategy(ILogger logger, string strategy);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{Strategy} found {Count} candidates")]
+    private static partial void LogStrategyFound(ILogger logger, string strategy, int count);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error in {Strategy} strategy")]
+    private static partial void LogStrategyError(ILogger logger, Exception exception, string strategy);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "No symbols found for '{Name}'")]
+    private static partial void LogNoSymbolsFound(ILogger logger, string name);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Found {Count} candidates but could not select best for '{Name}'")]
+    private static partial void LogCouldNotSelectBest(ILogger logger, int count, string name);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Found symbol '{Name}' using {Strategy} ({Count} total candidates)")]
+    private static partial void LogFoundSymbol(ILogger logger, string name, string? strategy, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Registered custom strategy: {Strategy}")]
+    private static partial void LogRegisteredStrategy(ILogger logger, string strategy);
 }

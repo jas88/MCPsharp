@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models.Navigation;
 using MCPsharp.Services.Roslyn;
 
@@ -12,17 +13,17 @@ namespace MCPsharp.Services.Navigation;
 /// <summary>
 /// Service responsible for resolving symbols from positions in source code
 /// </summary>
-public class SymbolResolutionService : ISymbolResolutionService
+public partial class SymbolResolutionService : ISymbolResolutionService
 {
     private readonly RoslynWorkspace _workspace;
-    private readonly ILogger<SymbolResolutionService>? _logger;
+    private readonly ILogger<SymbolResolutionService> _logger;
 
     public SymbolResolutionService(
         RoslynWorkspace workspace,
         ILogger<SymbolResolutionService>? logger = null)
     {
         _workspace = workspace;
-        _logger = logger;
+        _logger = logger ?? NullLogger<SymbolResolutionService>.Instance;
     }
 
     /// <summary>
@@ -42,7 +43,7 @@ public class SymbolResolutionService : ISymbolResolutionService
             var document = _workspace.GetDocument(filePath);
             if (document == null)
             {
-                _logger?.LogWarning("Document not found: {FilePath}", filePath);
+                LogDocumentNotFound(_logger, filePath);
                 return null;
             }
 
@@ -50,7 +51,7 @@ public class SymbolResolutionService : ISymbolResolutionService
             var semanticModel = await document.GetSemanticModelAsync();
             if (syntaxTree == null || semanticModel == null)
             {
-                _logger?.LogWarning("Could not get syntax tree or semantic model for: {FilePath}", filePath);
+                LogNoSemanticModel(_logger, filePath);
                 return null;
             }
 
@@ -59,7 +60,7 @@ public class SymbolResolutionService : ISymbolResolutionService
             var position = GetTextPosition(text, line, column);
             if (position == -1)
             {
-                _logger?.LogWarning("Invalid position: line {Line}, column {Column} in {FilePath}", line, column, filePath);
+                LogInvalidPosition(_logger, line, column, filePath);
                 return null;
             }
 
@@ -73,7 +74,7 @@ public class SymbolResolutionService : ISymbolResolutionService
 
             if (symbol == null)
             {
-                _logger?.LogDebug("No symbol found at position {Line}:{Column} in {FilePath}", line, column, filePath);
+                LogNoSymbolAtPosition(_logger, line, column, filePath);
                 return null;
             }
 
@@ -81,7 +82,7 @@ public class SymbolResolutionService : ISymbolResolutionService
             var declarationLocation = GetDeclarationLocation(symbol, options);
             if (declarationLocation == null)
             {
-                _logger?.LogDebug("Symbol {Symbol} has no source location", symbol.Name);
+                LogNoSourceLocation(_logger, symbol.Name);
                 return null;
             }
 
@@ -99,7 +100,7 @@ public class SymbolResolutionService : ISymbolResolutionService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error resolving symbol at {FilePath}:{Line}:{Column}", filePath, line, column);
+            LogResolveError(_logger, ex, filePath, line, column);
             return null;
         }
     }
@@ -107,8 +108,7 @@ public class SymbolResolutionService : ISymbolResolutionService
     /// <summary>
     /// Resolve a symbol by name with optional context
     /// </summary>
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<ISymbol?> ResolveSymbolByNameAsync(
+    public Task<ISymbol?> ResolveSymbolByNameAsync(
         string symbolName,
         string? containingType = null,
         string? containingNamespace = null)
@@ -116,7 +116,7 @@ public class SymbolResolutionService : ISymbolResolutionService
         var compilation = _workspace.GetCompilation();
         if (compilation == null)
         {
-            return null;
+            return Task.FromResult<ISymbol?>(null);
         }
 
         // Find all symbols with the given name
@@ -125,30 +125,15 @@ public class SymbolResolutionService : ISymbolResolutionService
             SymbolFilter.All,
             CancellationToken.None);
 
-        // Filter by context if provided
-        foreach (var symbol in symbols)
-        {
-            if (containingType != null)
-            {
-                if (symbol.ContainingType?.Name != containingType &&
-                    symbol.ContainingType?.ToDisplayString() != containingType)
-                {
-                    continue;
-                }
-            }
+        // Return the first symbol matching the optional context filters
+        var match = symbols.FirstOrDefault(symbol =>
+            (containingType == null ||
+             symbol.ContainingType?.Name == containingType ||
+             symbol.ContainingType?.ToDisplayString() == containingType) &&
+            (containingNamespace == null ||
+             symbol.ContainingNamespace?.ToDisplayString() == containingNamespace));
 
-            if (containingNamespace != null)
-            {
-                if (symbol.ContainingNamespace?.ToDisplayString() != containingNamespace)
-                {
-                    continue;
-                }
-            }
-
-            return symbol;
-        }
-
-        return null;
+        return Task.FromResult(match);
     }
 
     private async Task<(ISymbol? symbol, SymbolConfidence confidence, List<ISymbol>? alternatives)>
@@ -181,8 +166,9 @@ public class SymbolResolutionService : ISymbolResolutionService
                 else if (symbolInfo.CandidateSymbols.Length > 0)
                 {
                     // Multiple candidates - ambiguous
-                    symbol = SelectBestCandidate(symbolInfo.CandidateSymbols, node, options);
-                    alternatives.AddRange(symbolInfo.CandidateSymbols.Where(s => s != symbol));
+                    symbol = SelectBestCandidate(symbolInfo.CandidateSymbols, options);
+                    alternatives.AddRange(symbolInfo.CandidateSymbols
+                        .Where(s => !SymbolEqualityComparer.Default.Equals(s, symbol)));
                     confidence = symbolInfo.CandidateSymbols.Length == 1
                         ? SymbolConfidence.Exact
                         : SymbolConfidence.Ambiguous;
@@ -258,12 +244,11 @@ public class SymbolResolutionService : ISymbolResolutionService
             symbol = symbol.OriginalDefinition;
         }
 
-        return (symbol, confidence, alternatives.Any() ? alternatives : null);
+        return (symbol, confidence, alternatives.Count > 0 ? alternatives : null);
     }
 
-    private ISymbol SelectBestCandidate(
+    private static ISymbol SelectBestCandidate(
         IEnumerable<ISymbol> candidates,
-        SyntaxNode node,
         SymbolResolutionOptions options)
     {
         var candidateList = candidates.ToList();
@@ -303,7 +288,8 @@ public class SymbolResolutionService : ISymbolResolutionService
         {
             var types = candidateList.Cast<INamedTypeSymbol>().ToList();
             var mostDerived = types.FirstOrDefault(t =>
-                types.All(other => !t.AllInterfaces.Contains(other) && t.BaseType != other));
+                types.All(other => !t.AllInterfaces.Contains(other, SymbolEqualityComparer.Default) &&
+                                   !SymbolEqualityComparer.Default.Equals(t.BaseType, other)));
 
             if (mostDerived != null)
             {
@@ -315,7 +301,7 @@ public class SymbolResolutionService : ISymbolResolutionService
         return candidateList[0];
     }
 
-    private NavigationLocation? GetDeclarationLocation(ISymbol symbol, SymbolResolutionOptions options)
+    private static NavigationLocation? GetDeclarationLocation(ISymbol symbol, SymbolResolutionOptions options)
     {
         var location = symbol.Locations.FirstOrDefault(l => l.IsInSource);
         if (location == null)
@@ -347,7 +333,7 @@ public class SymbolResolutionService : ISymbolResolutionService
         };
     }
 
-    private List<NavigationLocation> GetAllSymbolLocations(ISymbol symbol)
+    private static List<NavigationLocation> GetAllSymbolLocations(ISymbol symbol)
     {
         var locations = new List<NavigationLocation>();
 
@@ -368,7 +354,7 @@ public class SymbolResolutionService : ISymbolResolutionService
         return locations.OrderBy(l => l.FilePath).ThenBy(l => l.Line).ToList();
     }
 
-    private NavigationSymbolInfo CreateNavigationSymbolInfo(ISymbol symbol)
+    private static NavigationSymbolInfo CreateNavigationSymbolInfo(ISymbol symbol)
     {
         // Add method-specific information
         if (symbol is IMethodSymbol method)
@@ -380,7 +366,7 @@ public class SymbolResolutionService : ISymbolResolutionService
                 Signature = symbol.ToDisplayString(),
                 ContainingType = symbol.ContainingType?.Name,
                 Namespace = symbol.ContainingNamespace?.ToDisplayString(),
-                Accessibility = symbol.DeclaredAccessibility.ToString().ToLower(),
+                Accessibility = symbol.DeclaredAccessibility.ToString().ToLowerInvariant(),
                 Documentation = GetDocumentationSummary(symbol),
                 IsAbstract = symbol.IsAbstract,
                 IsVirtual = symbol.IsVirtual,
@@ -406,7 +392,7 @@ public class SymbolResolutionService : ISymbolResolutionService
                 Signature = symbol.ToDisplayString(),
                 ContainingType = symbol.ContainingType?.Name,
                 Namespace = symbol.ContainingNamespace?.ToDisplayString(),
-                Accessibility = symbol.DeclaredAccessibility.ToString().ToLower(),
+                Accessibility = symbol.DeclaredAccessibility.ToString().ToLowerInvariant(),
                 Documentation = GetDocumentationSummary(symbol),
                 IsAbstract = symbol.IsAbstract,
                 IsVirtual = symbol.IsVirtual,
@@ -425,7 +411,7 @@ public class SymbolResolutionService : ISymbolResolutionService
             Signature = symbol.ToDisplayString(),
             ContainingType = symbol.ContainingType?.Name,
             Namespace = symbol.ContainingNamespace?.ToDisplayString(),
-            Accessibility = symbol.DeclaredAccessibility.ToString().ToLower(),
+            Accessibility = symbol.DeclaredAccessibility.ToString().ToLowerInvariant(),
             Documentation = GetDocumentationSummary(symbol),
             IsAbstract = symbol.IsAbstract,
             IsVirtual = symbol.IsVirtual,
@@ -435,7 +421,7 @@ public class SymbolResolutionService : ISymbolResolutionService
         };
     }
 
-    private string GetSymbolKind(ISymbol symbol)
+    private static string GetSymbolKind(ISymbol symbol)
     {
         return symbol switch
         {
@@ -464,11 +450,11 @@ public class SymbolResolutionService : ISymbolResolutionService
             INamespaceSymbol => "namespace",
             IParameterSymbol => "parameter",
             ILocalSymbol => "local",
-            _ => symbol.Kind.ToString().ToLower()
+            _ => symbol.Kind.ToString().ToLowerInvariant()
         };
     }
 
-    private string? GetDocumentationSummary(ISymbol symbol)
+    private static string? GetDocumentationSummary(ISymbol symbol)
     {
         var xml = symbol.GetDocumentationCommentXml();
         if (string.IsNullOrWhiteSpace(xml))
@@ -477,8 +463,8 @@ public class SymbolResolutionService : ISymbolResolutionService
         }
 
         // Simple extraction of summary tag content
-        var summaryStart = xml.IndexOf("<summary>");
-        var summaryEnd = xml.IndexOf("</summary>");
+        var summaryStart = xml.IndexOf("<summary>", StringComparison.Ordinal);
+        var summaryEnd = xml.IndexOf("</summary>", StringComparison.Ordinal);
         if (summaryStart >= 0 && summaryEnd > summaryStart)
         {
             var summary = xml.Substring(summaryStart + 9, summaryEnd - summaryStart - 9);
@@ -489,12 +475,12 @@ public class SymbolResolutionService : ISymbolResolutionService
         return null;
     }
 
-    private bool IsPartialSymbol(ISymbol symbol)
+    private static bool IsPartialSymbol(ISymbol symbol)
     {
         return symbol.Locations.Count(l => l.IsInSource) > 1;
     }
 
-    private bool IsPrimaryLocation(ISymbol symbol, Location location)
+    private static bool IsPrimaryLocation(ISymbol symbol, Location location)
     {
         // For partial symbols, the primary location is usually the first one
         // or the one with the most complete definition
@@ -504,20 +490,12 @@ public class SymbolResolutionService : ISymbolResolutionService
             return true;
         }
 
-        // For methods, prefer the one with implementation
-        if (symbol is IMethodSymbol method)
-        {
-            // Check if this location has the method body
-            // This would require parsing the syntax tree at each location
-            // For now, just use the first location as primary
-            return sourceLocations[0] == location;
-        }
-
-        // Default to first location as primary
+        // The first source location is treated as primary for every symbol kind
+        // (including partial methods, where it is usually the defining declaration)
         return sourceLocations[0] == location;
     }
 
-    private int GetTextPosition(Microsoft.CodeAnalysis.Text.SourceText text, int line, int column)
+    private static int GetTextPosition(Microsoft.CodeAnalysis.Text.SourceText text, int line, int column)
     {
         if (line < 0 || line >= text.Lines.Count)
         {
@@ -532,6 +510,24 @@ public class SymbolResolutionService : ISymbolResolutionService
 
         return textLine.Start + column;
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Document not found: {FilePath}")]
+    private static partial void LogDocumentNotFound(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not get syntax tree or semantic model for: {FilePath}")]
+    private static partial void LogNoSemanticModel(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Invalid position: line {Line}, column {Column} in {FilePath}")]
+    private static partial void LogInvalidPosition(ILogger logger, int line, int column, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "No symbol found at position {Line}:{Column} in {FilePath}")]
+    private static partial void LogNoSymbolAtPosition(ILogger logger, int line, int column, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Symbol {Symbol} has no source location")]
+    private static partial void LogNoSourceLocation(ILogger logger, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error resolving symbol at {FilePath}:{Line}:{Column}")]
+    private static partial void LogResolveError(ILogger logger, Exception exception, string filePath, int line, int column);
 }
 
 /// <summary>

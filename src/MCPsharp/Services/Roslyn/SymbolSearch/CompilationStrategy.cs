@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services.Roslyn.SymbolSearch;
 
@@ -8,17 +9,17 @@ namespace MCPsharp.Services.Roslyn.SymbolSearch;
 /// Uses Roslyn's GetSymbolsWithName() API which is efficient for symbols
 /// in the compilation's symbol table.
 /// </summary>
-public class CompilationStrategy : ISymbolSearchStrategy
+public partial class CompilationStrategy : ISymbolSearchStrategy
 {
     private readonly RoslynWorkspace _workspace;
-    private readonly ILogger<CompilationStrategy>? _logger;
+    private readonly ILogger<CompilationStrategy> _logger;
 
     public string StrategyName => "Compilation";
 
     public CompilationStrategy(RoslynWorkspace workspace, ILogger<CompilationStrategy>? logger = null)
     {
         _workspace = workspace;
-        _logger = logger;
+        _logger = logger ?? NullLogger<CompilationStrategy>.Instance;
     }
 
     public bool IsApplicableFor(SymbolKind kind)
@@ -48,14 +49,14 @@ public class CompilationStrategy : ISymbolSearchStrategy
         var project = _workspace.Solution.Projects.FirstOrDefault();
         if (project == null)
         {
-            _logger?.LogWarning("No project available for symbol search");
+            LogNoProject(_logger);
             return new List<ISymbol>();
         }
 
         var compilation = await project.GetCompilationAsync(ct);
         if (compilation == null)
         {
-            _logger?.LogWarning("No compilation available for symbol search");
+            LogNoCompilation(_logger);
             return new List<ISymbol>();
         }
 
@@ -83,7 +84,7 @@ public class CompilationStrategy : ISymbolSearchStrategy
             }
             catch (Exception ex)
             {
-                _logger?.LogDebug(ex, "Error searching symbols with filter {Filter}", filter);
+                LogFilterSearchError(_logger, ex, filter);
             }
         }
 
@@ -101,45 +102,44 @@ public class CompilationStrategy : ISymbolSearchStrategy
                 foreach (var typeSymbol in allTypes.OfType<INamedTypeSymbol>())
                 {
                     // Check type parameters on the type itself
-                    foreach (var typeParam in typeSymbol.TypeParameters)
-                    {
-                        if (string.Equals(typeParam.Name, request.Name, StringComparison.OrdinalIgnoreCase))
-                        {
-                            results.Add(typeParam);
-                        }
-                    }
+                    results.AddRange(typeSymbol.TypeParameters
+                        .Where(typeParam => string.Equals(typeParam.Name, request.Name, StringComparison.OrdinalIgnoreCase)));
 
                     // Check type parameters on methods within the type
-                    foreach (var member in typeSymbol.GetMembers())
-                    {
-                        if (member is IMethodSymbol methodSymbol)
-                        {
-                            foreach (var methodTypeParam in methodSymbol.TypeParameters)
-                            {
-                                if (string.Equals(methodTypeParam.Name, request.Name, StringComparison.OrdinalIgnoreCase))
-                                {
-                                    results.Add(methodTypeParam);
-                                }
-                            }
-                        }
-                    }
+                    results.AddRange(typeSymbol.GetMembers()
+                        .OfType<IMethodSymbol>()
+                        .SelectMany(methodSymbol => methodSymbol.TypeParameters)
+                        .Where(methodTypeParam => string.Equals(methodTypeParam.Name, request.Name, StringComparison.OrdinalIgnoreCase)));
                 }
             }
             catch (Exception ex)
             {
-                _logger?.LogDebug(ex, "Error searching type parameters");
+                LogTypeParameterSearchError(_logger, ex);
             }
         }
 
         // Remove duplicates
         results = results
             .Distinct(SymbolEqualityComparer.Default)
-            .Cast<ISymbol>()
             .ToList();
 
-        _logger?.LogDebug("CompilationStrategy found {Count} candidates for '{Name}'",
-            results.Count, request.Name);
+        LogCandidatesFound(_logger, results.Count, request.Name);
 
         return results;
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No project available for symbol search")]
+    private static partial void LogNoProject(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No compilation available for symbol search")]
+    private static partial void LogNoCompilation(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Error searching symbols with filter {Filter}")]
+    private static partial void LogFilterSearchError(ILogger logger, Exception exception, SymbolFilter filter);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Error searching type parameters")]
+    private static partial void LogTypeParameterSearchError(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "CompilationStrategy found {Count} candidates for '{Name}'")]
+    private static partial void LogCandidatesFound(ILogger logger, int count, string name);
 }

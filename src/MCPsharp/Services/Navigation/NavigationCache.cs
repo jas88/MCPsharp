@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
-using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models.Navigation;
 
 namespace MCPsharp.Services.Navigation;
@@ -10,17 +10,18 @@ namespace MCPsharp.Services.Navigation;
 /// <summary>
 /// Multi-level cache for navigation operations to improve performance
 /// </summary>
-public class NavigationCache : INavigationCache
+public partial class NavigationCache : INavigationCache, IDisposable
 {
-    private readonly IMemoryCache _symbolCache;
-    private readonly IMemoryCache _hierarchyCache;
-    private readonly IMemoryCache _overloadCache;
+    private readonly MemoryCache _symbolCache;
+    private readonly MemoryCache _hierarchyCache;
+    private readonly MemoryCache _overloadCache;
     private readonly ConcurrentDictionary<string, HashSet<string>> _fileToSymbolKeys;
-    private readonly ILogger<NavigationCache>? _logger;
+    private readonly ILogger<NavigationCache> _logger;
+    private bool _disposed;
 
     public NavigationCache(ILogger<NavigationCache>? logger = null)
     {
-        _logger = logger;
+        _logger = logger ?? NullLogger<NavigationCache>.Instance;
 
         var cacheOptions = new MemoryCacheOptions
         {
@@ -55,8 +56,7 @@ public class NavigationCache : INavigationCache
             TrackSymbolInFile(filePath, key);
         }
 
-        _logger?.LogDebug("Cached hierarchy for type {TypeName} with key {Key}",
-            type.Name, key);
+        LogCachedHierarchy(_logger, type.Name, key);
     }
 
     /// <summary>
@@ -68,11 +68,11 @@ public class NavigationCache : INavigationCache
 
         if (_hierarchyCache.TryGetValue(key, out HierarchyInfo? cachedInfo))
         {
-            _logger?.LogDebug("Cache hit for hierarchy {TypeName}", type.Name);
+            LogHierarchyCacheHit(_logger, type.Name);
             return cachedInfo;
         }
 
-        _logger?.LogDebug("Cache miss for hierarchy {TypeName}", type.Name);
+        LogHierarchyCacheMiss(_logger, type.Name);
         return null;
     }
 
@@ -81,7 +81,7 @@ public class NavigationCache : INavigationCache
     /// </summary>
     public void InvalidateForFile(string filePath)
     {
-        _logger?.LogInformation("Invalidating cache for file {FilePath}", filePath);
+        LogInvalidatingFile(_logger, filePath);
 
         if (_fileToSymbolKeys.TryRemove(filePath, out var symbolKeys))
         {
@@ -92,8 +92,7 @@ public class NavigationCache : INavigationCache
                 _overloadCache.Remove(key);
             }
 
-            _logger?.LogDebug("Invalidated {Count} cache entries for file {FilePath}",
-                symbolKeys.Count, filePath);
+            LogInvalidatedEntries(_logger, symbolKeys.Count, filePath);
         }
     }
 
@@ -102,12 +101,12 @@ public class NavigationCache : INavigationCache
     /// </summary>
     public void Clear()
     {
-        _logger?.LogInformation("Clearing all navigation caches");
+        LogClearingCaches(_logger);
 
-        // Dispose and recreate caches
-        (_symbolCache as MemoryCache)?.Compact(1.0);
-        (_hierarchyCache as MemoryCache)?.Compact(1.0);
-        (_overloadCache as MemoryCache)?.Compact(1.0);
+        // Evict every entry from each cache
+        _symbolCache.Compact(1.0);
+        _hierarchyCache.Compact(1.0);
+        _overloadCache.Compact(1.0);
 
         _fileToSymbolKeys.Clear();
     }
@@ -127,8 +126,7 @@ public class NavigationCache : INavigationCache
         _symbolCache.Set(key, symbol, entryOptions);
         TrackSymbolInFile(filePath, key);
 
-        _logger?.LogDebug("Cached resolved symbol at {FilePath}:{Line}:{Column}",
-            filePath, line, column);
+        LogCachedResolvedSymbol(_logger, filePath, line, column);
     }
 
     /// <summary>
@@ -140,8 +138,7 @@ public class NavigationCache : INavigationCache
 
         if (_symbolCache.TryGetValue(key, out ResolvedSymbol? symbol))
         {
-            _logger?.LogDebug("Cache hit for symbol at {FilePath}:{Line}:{Column}",
-                filePath, line, column);
+            LogSymbolCacheHit(_logger, filePath, line, column);
             return symbol;
         }
 
@@ -151,7 +148,7 @@ public class NavigationCache : INavigationCache
     /// <summary>
     /// Cache method overloads
     /// </summary>
-    public void CacheOverloads(IMethodSymbol method, OverloadInfo overloads)
+    public void CacheOverloads(IMethodSymbol method, OverloadInfo overloadInfo)
     {
         var key = GetOverloadKey(method);
 
@@ -160,7 +157,7 @@ public class NavigationCache : INavigationCache
             .SetSlidingExpiration(TimeSpan.FromMinutes(10))
             .RegisterPostEvictionCallback(OnOverloadCacheEviction);
 
-        _overloadCache.Set(key, overloads, entryOptions);
+        _overloadCache.Set(key, overloadInfo, entryOptions);
 
         // Track in file mapping
         foreach (var location in method.Locations.Where(l => l.IsInSource))
@@ -169,8 +166,7 @@ public class NavigationCache : INavigationCache
             TrackSymbolInFile(filePath, key);
         }
 
-        _logger?.LogDebug("Cached {Count} overloads for method {MethodName}",
-            overloads.Overloads.Count, method.Name);
+        LogCachedOverloads(_logger, overloadInfo.Overloads.Count, method.Name);
     }
 
     /// <summary>
@@ -182,7 +178,7 @@ public class NavigationCache : INavigationCache
 
         if (_overloadCache.TryGetValue(key, out OverloadInfo? overloads))
         {
-            _logger?.LogDebug("Cache hit for overloads of {MethodName}", method.Name);
+            LogOverloadCacheHit(_logger, method.Name);
             return overloads;
         }
 
@@ -196,9 +192,9 @@ public class NavigationCache : INavigationCache
     {
         return new CacheStatistics
         {
-            SymbolCacheCount = (_symbolCache as MemoryCache)?.Count ?? 0,
-            HierarchyCacheCount = (_hierarchyCache as MemoryCache)?.Count ?? 0,
-            OverloadCacheCount = (_overloadCache as MemoryCache)?.Count ?? 0,
+            SymbolCacheCount = _symbolCache.Count,
+            HierarchyCacheCount = _hierarchyCache.Count,
+            OverloadCacheCount = _overloadCache.Count,
             TrackedFiles = _fileToSymbolKeys.Count,
             TotalTrackedSymbols = _fileToSymbolKeys.Values.Sum(v => v.Count)
         };
@@ -218,35 +214,35 @@ public class NavigationCache : INavigationCache
             });
     }
 
-    private string GetHierarchyKey(INamedTypeSymbol type)
+    private static string GetHierarchyKey(INamedTypeSymbol type)
     {
         // Create a unique key for the type hierarchy
         return $"hierarchy:{type.ContainingAssembly?.Name}:{type.ToDisplayString()}";
     }
 
-    private string GetPositionKey(string filePath, int line, int column)
+    private static string GetPositionKey(string filePath, int line, int column)
     {
         return $"position:{filePath}:{line}:{column}";
     }
 
-    private string GetOverloadKey(IMethodSymbol method)
+    private static string GetOverloadKey(IMethodSymbol method)
     {
         return $"overload:{method.ContainingType?.ToDisplayString()}:{method.Name}";
     }
 
     private void OnSymbolCacheEviction(object key, object? value, EvictionReason reason, object? state)
     {
-        _logger?.LogDebug("Symbol cache entry evicted: {Key}, Reason: {Reason}", key, reason);
+        LogSymbolEvicted(_logger, key, reason);
     }
 
     private void OnHierarchyCacheEviction(object key, object? value, EvictionReason reason, object? state)
     {
-        _logger?.LogDebug("Hierarchy cache entry evicted: {Key}, Reason: {Reason}", key, reason);
+        LogHierarchyEvicted(_logger, key, reason);
     }
 
     private void OnOverloadCacheEviction(object key, object? value, EvictionReason reason, object? state)
     {
-        _logger?.LogDebug("Overload cache entry evicted: {Key}, Reason: {Reason}", key, reason);
+        LogOverloadEvicted(_logger, key, reason);
     }
 
     /// <summary>
@@ -254,10 +250,66 @@ public class NavigationCache : INavigationCache
     /// </summary>
     public void Dispose()
     {
-        (_symbolCache as IDisposable)?.Dispose();
-        (_hierarchyCache as IDisposable)?.Dispose();
-        (_overloadCache as IDisposable)?.Dispose();
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
+
+    /// <summary>
+    /// Releases the underlying memory caches when <paramref name="disposing"/> is true.
+    /// </summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            _symbolCache.Dispose();
+            _hierarchyCache.Dispose();
+            _overloadCache.Dispose();
+        }
+
+        _disposed = true;
+    }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cached hierarchy for type {TypeName} with key {Key}")]
+    private static partial void LogCachedHierarchy(ILogger logger, string typeName, string key);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cache hit for hierarchy {TypeName}")]
+    private static partial void LogHierarchyCacheHit(ILogger logger, string typeName);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cache miss for hierarchy {TypeName}")]
+    private static partial void LogHierarchyCacheMiss(ILogger logger, string typeName);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Invalidating cache for file {FilePath}")]
+    private static partial void LogInvalidatingFile(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Invalidated {Count} cache entries for file {FilePath}")]
+    private static partial void LogInvalidatedEntries(ILogger logger, int count, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Clearing all navigation caches")]
+    private static partial void LogClearingCaches(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cached resolved symbol at {FilePath}:{Line}:{Column}")]
+    private static partial void LogCachedResolvedSymbol(ILogger logger, string filePath, int line, int column);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cache hit for symbol at {FilePath}:{Line}:{Column}")]
+    private static partial void LogSymbolCacheHit(ILogger logger, string filePath, int line, int column);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cached {Count} overloads for method {MethodName}")]
+    private static partial void LogCachedOverloads(ILogger logger, int count, string methodName);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cache hit for overloads of {MethodName}")]
+    private static partial void LogOverloadCacheHit(ILogger logger, string methodName);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Symbol cache entry evicted: {Key}, Reason: {Reason}")]
+    private static partial void LogSymbolEvicted(ILogger logger, object key, EvictionReason reason);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Hierarchy cache entry evicted: {Key}, Reason: {Reason}")]
+    private static partial void LogHierarchyEvicted(ILogger logger, object key, EvictionReason reason);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Overload cache entry evicted: {Key}, Reason: {Reason}")]
+    private static partial void LogOverloadEvicted(ILogger logger, object key, EvictionReason reason);
 }
 
 /// <summary>
@@ -271,7 +323,7 @@ public interface INavigationCache
     void Clear();
     void CacheResolvedSymbol(string filePath, int line, int column, ResolvedSymbol symbol);
     ResolvedSymbol? GetCachedResolvedSymbol(string filePath, int line, int column);
-    void CacheOverloads(IMethodSymbol method, OverloadInfo overloads);
+    void CacheOverloads(IMethodSymbol method, OverloadInfo overloadInfo);
     OverloadInfo? GetCachedOverloads(IMethodSymbol method);
     CacheStatistics GetStatistics();
 }

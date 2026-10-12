@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services.Roslyn.SymbolSearch;
 
@@ -7,13 +8,13 @@ namespace MCPsharp.Services.Roslyn.SymbolSearch;
 /// Selects the best symbol from a list of candidates based on
 /// search criteria and scoring heuristics.
 /// </summary>
-public class SymbolSelector
+public partial class SymbolSelector
 {
-    private readonly ILogger<SymbolSelector>? _logger;
+    private readonly ILogger<SymbolSelector> _logger;
 
     public SymbolSelector(ILogger<SymbolSelector>? logger = null)
     {
-        _logger = logger;
+        _logger = logger ?? NullLogger<SymbolSelector>.Instance;
     }
 
     /// <summary>
@@ -21,7 +22,7 @@ public class SymbolSelector
     /// </summary>
     public ISymbol? SelectBest(List<ISymbol> candidates, SymbolSearchRequest request)
     {
-        if (candidates == null || !candidates.Any())
+        if (candidates == null || candidates.Count == 0)
         {
             return null;
         }
@@ -42,7 +43,7 @@ public class SymbolSelector
                     .Where(s => MatchesSymbolKind(s, request.SymbolKind))
                     .ToList();
 
-                if (filtered.Any())
+                if (filtered.Count > 0)
                 {
                     normalized = filtered;
                 }
@@ -55,7 +56,7 @@ public class SymbolSelector
                     .Where(s => s.ContainingType?.Name == request.ContainingType)
                     .ToList();
 
-                if (filtered.Any())
+                if (filtered.Count > 0)
                 {
                     normalized = filtered;
                 }
@@ -66,7 +67,7 @@ public class SymbolSelector
                 .Where(s => s.Locations.Any(l => l.IsInSource))
                 .ToList();
 
-            if (sourceSymbols.Any())
+            if (sourceSymbols.Count > 0)
             {
                 normalized = sourceSymbols;
             }
@@ -78,7 +79,7 @@ public class SymbolSelector
                     .Where(s => s.Locations.Any(l => l.GetLineSpan().Path == request.FilePath))
                     .ToList();
 
-                if (fileSymbols.Any())
+                if (fileSymbols.Count > 0)
                 {
                     normalized = fileSymbols;
                 }
@@ -94,15 +95,14 @@ public class SymbolSelector
 
             if (best != null)
             {
-                _logger?.LogDebug("Selected symbol '{Name}' with score {Score} from {Count} candidates",
-                    best.Symbol.Name, best.Score, candidates.Count);
+                LogSelectedSymbol(_logger, best.Symbol.Name, best.Score, candidates.Count);
             }
 
             return best?.Symbol;
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error selecting best symbol from {Count} candidates", candidates.Count);
+            LogSelectionError(_logger, ex, candidates.Count);
             return candidates.FirstOrDefault();
         }
     }
@@ -110,7 +110,7 @@ public class SymbolSelector
     /// <summary>
     /// Normalize symbol (convert accessors to properties, constructors to types)
     /// </summary>
-    private ISymbol? NormalizeSymbol(ISymbol? symbol)
+    private static ISymbol? NormalizeSymbol(ISymbol? symbol)
     {
         if (symbol == null)
             return null;
@@ -137,7 +137,7 @@ public class SymbolSelector
     /// <summary>
     /// Check if symbol matches the requested kind
     /// </summary>
-    private bool MatchesSymbolKind(ISymbol symbol, SymbolKind requestedKind)
+    private static bool MatchesSymbolKind(ISymbol symbol, SymbolKind requestedKind)
     {
         if (symbol == null)
             return false;
@@ -172,7 +172,7 @@ public class SymbolSelector
     /// <summary>
     /// Calculate score for a symbol based on how well it matches the request
     /// </summary>
-    private int CalculateScore(ISymbol symbol, SymbolSearchRequest request)
+    private static int CalculateScore(ISymbol symbol, SymbolSearchRequest request)
     {
         if (symbol == null || request == null)
             return 0;
@@ -212,4 +212,10 @@ public class SymbolSelector
 
         return score;
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Selected symbol '{Name}' with score {Score} from {Count} candidates")]
+    private static partial void LogSelectedSymbol(ILogger logger, string name, int score, int count);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error selecting best symbol from {Count} candidates")]
+    private static partial void LogSelectionError(ILogger logger, Exception exception, int count);
 }
