@@ -21,12 +21,11 @@ public partial class McpToolRegistry
         if (_codebaseQuery == null || !_codebaseQuery.IsAvailable)
         {
             // AI tools not available - this is normal if no AI provider configured
-            _logger?.LogDebug("AI-powered tools not registered (no AI provider available)");
+            LogAIPoweredToolsNotRegistered(_logger);
             return;
         }
 
-        _logger?.LogInformation("Registering AI-powered tools using {Provider}",
-            "Ollama"); // TODO: Get from provider
+        LogRegisteringAIPoweredToolsUsing(_logger, "Ollama"); // TODO: Get from provider
 
         // Read-only codebase query tool
         _tools.Add(new McpTool
@@ -242,7 +241,7 @@ Returns generated code for review before applying.",
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error processing codebase query: {Question}", question);
+            LogErrorProcessingCodebaseQuery(_logger, ex, question);
 
             return new ToolCallResult
             {
@@ -276,9 +275,7 @@ Returns generated code for review before applying.",
             ? lineElem.GetInt32()
             : (int?)null;
 
-        var applyChanges = root.TryGetProperty("apply_changes", out var applyElem)
-            ? applyElem.GetBoolean()
-            : false;
+        var applyChanges = root.TryGetProperty("apply_changes", out var applyElem) && applyElem.GetBoolean();
 
         try
         {
@@ -315,7 +312,7 @@ Returns generated code for review before applying.",
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error processing AI fix suggestion: {Description}", description);
+            LogErrorProcessingAIFixSuggestion(_logger, ex, description);
 
             return new ToolCallResult
             {
@@ -345,9 +342,7 @@ Returns generated code for review before applying.",
         var refactoringGoal = root.GetProperty("refactoring_goal").GetString()
             ?? throw new ArgumentException("refactoring_goal is required");
 
-        var applyChanges = root.TryGetProperty("apply_changes", out var applyElem)
-            ? applyElem.GetBoolean()
-            : false;
+        var applyChanges = root.TryGetProperty("apply_changes", out var applyElem) && applyElem.GetBoolean();
 
         try
         {
@@ -384,7 +379,7 @@ Returns generated code for review before applying.",
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error processing AI refactoring: {Goal}", refactoringGoal);
+            LogErrorProcessingAIRefactoring(_logger, ex, refactoringGoal);
 
             return new ToolCallResult
             {
@@ -414,9 +409,7 @@ Returns generated code for review before applying.",
         var featureDescription = root.GetProperty("feature_description").GetString()
             ?? throw new ArgumentException("feature_description is required");
 
-        var applyChanges = root.TryGetProperty("apply_changes", out var applyElem)
-            ? applyElem.GetBoolean()
-            : false;
+        var applyChanges = root.TryGetProperty("apply_changes", out var applyElem) && applyElem.GetBoolean();
 
         try
         {
@@ -453,7 +446,7 @@ Returns generated code for review before applying.",
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error implementing feature: {Feature}", featureDescription);
+            LogErrorImplementingFeature(_logger, ex, featureDescription);
 
             return new ToolCallResult
             {
@@ -462,4 +455,22 @@ Returns generated code for review before applying.",
             };
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "AI-powered tools not registered (no AI provider available)")]
+    private static partial void LogAIPoweredToolsNotRegistered(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Registering AI-powered tools using {Provider}")]
+    private static partial void LogRegisteringAIPoweredToolsUsing(ILogger logger, string provider);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error processing codebase query: {Question}")]
+    private static partial void LogErrorProcessingCodebaseQuery(ILogger logger, Exception exception, string question);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error processing AI fix suggestion: {Description}")]
+    private static partial void LogErrorProcessingAIFixSuggestion(ILogger logger, Exception exception, string description);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error processing AI refactoring: {Goal}")]
+    private static partial void LogErrorProcessingAIRefactoring(ILogger logger, Exception exception, string goal);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error implementing feature: {Feature}")]
+    private static partial void LogErrorImplementingFeature(ILogger logger, Exception exception, string feature);
 }

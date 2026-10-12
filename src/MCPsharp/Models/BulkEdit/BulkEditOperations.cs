@@ -198,7 +198,7 @@ public class MultiFileEditOperation
     /// <summary>
     /// Order priority for this operation (lower = earlier)
     /// </summary>
-    public int Priority { get; init; } = 0;
+    public int Priority { get; init; }
 
     /// <summary>
     /// Whether this operation depends on other operations completing first

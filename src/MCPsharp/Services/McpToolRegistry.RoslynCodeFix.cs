@@ -148,6 +148,9 @@ public partial class McpToolRegistry
                 };
             }
 
+            // Cache the most recent successful run so generate_analysis_report can use it
+            _lastAnalysisResult = analysisResult;
+
             // Find issues matching the diagnostic IDs
             var issues = analysisResult.Results
                 .SelectMany(r => r.Issues)
@@ -282,6 +285,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteApplyRoslynFixes));
             return new ToolCallResult
             {
                 Success = false,
@@ -389,6 +393,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteConfigureAnalyzer));
             return new ToolCallResult
             {
                 Success = false,
@@ -401,7 +406,7 @@ public partial class McpToolRegistry
     /// Execute get_analyzer_config tool
     /// </summary>
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<ToolCallResult> ExecuteGetAnalyzerConfig(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetAnalyzerConfig()
     {
         try
         {
@@ -437,6 +442,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetAnalyzerConfig));
             return new ToolCallResult
             {
                 Success = false,
@@ -448,7 +454,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// Execute reset_analyzer_config tool
     /// </summary>
-    private async Task<ToolCallResult> ExecuteResetAnalyzerConfig(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteResetAnalyzerConfig(CancellationToken ct)
     {
         try
         {
@@ -469,6 +475,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteResetAnalyzerConfig));
             return new ToolCallResult
             {
                 Success = false,
@@ -540,7 +547,7 @@ public partial class McpToolRegistry
             }
 
             // Get analysis results (either from recent run or run new analysis)
-            var results = analysisResult?.Results ?? System.Collections.Immutable.ImmutableArray<AnalysisResult>.Empty;
+            var results = _lastAnalysisResult?.Results ?? System.Collections.Immutable.ImmutableArray<AnalysisResult>.Empty;
 
             if (results.IsEmpty)
             {
@@ -554,6 +561,18 @@ public partial class McpToolRegistry
             // Generate report
             var reportResult = await _reportGenerator.GenerateReportAsync(results, format, outputPath, null, ct);
 
+            var statistics = reportResult.Statistics != null
+                ? new
+                {
+                    totalFiles = reportResult.Statistics.TotalFiles,
+                    totalIssues = reportResult.Statistics.TotalIssues,
+                    errors = reportResult.Statistics.ErrorCount,
+                    warnings = reportResult.Statistics.WarningCount,
+                    info = reportResult.Statistics.InfoCount,
+                    critical = reportResult.Statistics.CriticalCount
+                }
+                : null;
+
             return new ToolCallResult
             {
                 Success = reportResult.Success,
@@ -562,21 +581,14 @@ public partial class McpToolRegistry
                     filePath = reportResult.FilePath,
                     format = reportResult.Format.ToString(),
                     generatedAt = reportResult.GeneratedAt,
-                    statistics = reportResult.Statistics != null ? new
-                    {
-                        totalFiles = reportResult.Statistics.TotalFiles,
-                        totalIssues = reportResult.Statistics.TotalIssues,
-                        errors = reportResult.Statistics.ErrorCount,
-                        warnings = reportResult.Statistics.WarningCount,
-                        info = reportResult.Statistics.InfoCount,
-                        critical = reportResult.Statistics.CriticalCount
-                    } : null
+                    statistics = statistics
                 } : null,
                 Error = reportResult.ErrorMessage
             };
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateAnalysisReport));
             return new ToolCallResult
             {
                 Success = false,
@@ -585,8 +597,6 @@ public partial class McpToolRegistry
         }
     }
 
-    // Field to store analysis result for caching (currently not populated; TODO: implement result caching)
-    #pragma warning disable CS0649 // Field is never assigned - placeholder for future result caching implementation
-    private AnalyzerRunResult? analysisResult;
-    #pragma warning restore CS0649
+    // Most recent successful analyzer run, reused by generate_analysis_report
+    private AnalyzerRunResult? _lastAnalysisResult;
 }

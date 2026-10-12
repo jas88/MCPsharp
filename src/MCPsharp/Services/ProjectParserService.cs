@@ -236,7 +236,7 @@ public partial class ProjectParserService
             .FirstOrDefault()?.Value;
     }
 
-    private static IReadOnlyList<string> GetTargetFrameworks(List<XElement> propertyGroups)
+    private static string[] GetTargetFrameworks(List<XElement> propertyGroups)
     {
         // Try multi-targeting first (TargetFrameworks)
         var targetFrameworks = GetPropertyValue(propertyGroups, "TargetFrameworks");

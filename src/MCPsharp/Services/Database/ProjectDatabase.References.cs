@@ -1,3 +1,4 @@
+using System.Globalization;
 using MCPsharp.Models.Database;
 using Microsoft.Data.Sqlite;
 
@@ -37,7 +38,7 @@ public sealed partial class ProjectDatabase
         cmd.Parameters.AddWithValue("$column", reference.Column);
 
         var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return Convert.ToInt64(result);
+        return Convert.ToInt64(result, CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -181,6 +182,36 @@ public sealed partial class ProjectDatabase
         return results;
     }
 
+    private const string BackwardCallChainQuery = @"
+            WITH RECURSIVE call_chain(symbol_id, depth) AS (
+                SELECT $startId, 0
+                UNION ALL
+                SELECT r.from_symbol_id, cc.depth + 1
+                FROM symbol_references r
+                JOIN call_chain cc ON r.to_symbol_id = cc.symbol_id
+                WHERE cc.depth < $maxDepth
+            )
+            SELECT DISTINCT s.id, s.file_id, s.name, s.kind, s.namespace, s.containing_type, s.line, s.column, s.end_line, s.end_column, s.accessibility, s.signature
+            FROM call_chain cc
+            JOIN symbols s ON cc.symbol_id = s.id
+            WHERE cc.symbol_id != $startId
+            ORDER BY s.name";
+
+    private const string ForwardCallChainQuery = @"
+            WITH RECURSIVE call_chain(symbol_id, depth) AS (
+                SELECT $startId, 0
+                UNION ALL
+                SELECT r.to_symbol_id, cc.depth + 1
+                FROM symbol_references r
+                JOIN call_chain cc ON r.from_symbol_id = cc.symbol_id
+                WHERE cc.depth < $maxDepth
+            )
+            SELECT DISTINCT s.id, s.file_id, s.name, s.kind, s.namespace, s.containing_type, s.line, s.column, s.end_line, s.end_column, s.accessibility, s.signature
+            FROM call_chain cc
+            JOIN symbols s ON cc.symbol_id = s.id
+            WHERE cc.symbol_id != $startId
+            ORDER BY s.name";
+
     /// <summary>
     /// Gets a call chain using recursive CTE.
     /// </summary>
@@ -196,24 +227,9 @@ public sealed partial class ProjectDatabase
         await using var cmd = conn.CreateCommand();
 
         // Use recursive CTE for call chain analysis
-        var (fromCol, toCol) = direction == CallChainDirection.Backward
-            ? ("to_symbol_id", "from_symbol_id")
-            : ("from_symbol_id", "to_symbol_id");
-
-        cmd.CommandText = $@"
-            WITH RECURSIVE call_chain(symbol_id, depth) AS (
-                SELECT $startId, 0
-                UNION ALL
-                SELECT r.{toCol}, cc.depth + 1
-                FROM symbol_references r
-                JOIN call_chain cc ON r.{fromCol} = cc.symbol_id
-                WHERE cc.depth < $maxDepth
-            )
-            SELECT DISTINCT s.id, s.file_id, s.name, s.kind, s.namespace, s.containing_type, s.line, s.column, s.end_line, s.end_column, s.accessibility, s.signature
-            FROM call_chain cc
-            JOIN symbols s ON cc.symbol_id = s.id
-            WHERE cc.symbol_id != $startId
-            ORDER BY s.name";
+        cmd.CommandText = direction == CallChainDirection.Backward
+            ? BackwardCallChainQuery
+            : ForwardCallChainQuery;
 
         cmd.Parameters.AddWithValue("$startId", symbolId);
         cmd.Parameters.AddWithValue("$maxDepth", maxDepth);

@@ -10,8 +10,12 @@ using Microsoft.Extensions.Logging;
 
 namespace MCPsharp;
 
-class Program
+sealed partial class Program
 {
+    private Program()
+    {
+    }
+
     static async Task<int> Main(string[] args)
     {
         try
@@ -37,14 +41,14 @@ class Program
             });
 
             var logger = loggerFactory.CreateLogger<Program>();
-            logger.LogInformation("MCPsharp starting, workspace: {Workspace}", workspaceRoot);
+            LogMCPsharpStartingWorkspace(logger, workspaceRoot);
 
             // Database initialization
-            await using var projectDatabase = new ProjectDatabase(loggerFactory?.CreateLogger<ProjectDatabase>());
+            await using var projectDatabase = new ProjectDatabase(loggerFactory.CreateLogger<ProjectDatabase>());
 
             // Resource and prompt registries
-            var resourceRegistry = new McpResourceRegistry(loggerFactory?.CreateLogger<McpResourceRegistry>());
-            var promptRegistry = new McpPromptRegistry(loggerFactory?.CreateLogger<McpPromptRegistry>());
+            var resourceRegistry = new McpResourceRegistry(loggerFactory.CreateLogger<McpResourceRegistry>());
+            var promptRegistry = new McpPromptRegistry(loggerFactory.CreateLogger<McpPromptRegistry>());
 
             // Initialize all services
             var projectManager = new ProjectContextManager();
@@ -58,47 +62,40 @@ class Program
 
             // Initialize Roslyn Analyzer infrastructure
             var analyzerLoader = new MCPsharp.Services.Analyzers.RoslynAnalyzerLoader(
-                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerLoader>() ??
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerLoader>.Instance,
-                loggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+                loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerLoader>(),
+                loggerFactory);
 
             var analyzerRegistry = new MCPsharp.Services.Analyzers.AnalyzerRegistry(
-                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerRegistry>() ??
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.AnalyzerRegistry>.Instance);
+                loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerRegistry>());
 
             // Initialize auto-load service with default configuration
             var autoLoadService = new MCPsharp.Services.Analyzers.AnalyzerAutoLoadService(
-                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerAutoLoadService>() ??
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.AnalyzerAutoLoadService>.Instance,
+                loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerAutoLoadService>(),
                 analyzerLoader,
                 analyzerRegistry);
 
             // Initialize built-in code fix registry (auto-registers built-in providers)
             var codeFixRegistry = new MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry.BuiltInCodeFixRegistry(
-                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry.BuiltInCodeFixRegistry>() ??
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry.BuiltInCodeFixRegistry>.Instance,
-                loggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+                loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry.BuiltInCodeFixRegistry>(),
+                loggerFactory);
 
             // Initialize analyzer host dependencies
             var securityManager = new MCPsharp.Services.Analyzers.SecurityManager(
-                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.SecurityManager>() ??
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.SecurityManager>.Instance,
+                loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.SecurityManager>(),
                 workspaceRoot);
 
             var fixEngine = new MCPsharp.Services.Analyzers.Fixes.FixEngine(
-                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.Fixes.FixEngine>() ??
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.Fixes.FixEngine>.Instance,
+                loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.Fixes.FixEngine>(),
                 fileOperations);
 
             var sandboxFactory = new MCPsharp.Services.Analyzers.DefaultAnalyzerSandboxFactory(
-                loggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
+                loggerFactory,
                 securityManager);
 
             // Initialize analyzer host
             var analyzerHost = new MCPsharp.Services.Analyzers.AnalyzerHost(
-                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerHost>() ??
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.AnalyzerHost>.Instance,
-                loggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
+                loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerHost>(),
+                loggerFactory,
                 analyzerRegistry,
                 securityManager,
                 fixEngine,
@@ -108,22 +105,20 @@ class Program
             var roslynAnalyzerService = new MCPsharp.Services.Analyzers.RoslynAnalyzerService(
                 analyzerLoader,
                 analyzerHost,
-                loggerFactory?.CreateLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerService>() ??
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerService>.Instance,
+                loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerService>(),
                 autoLoadService);
 
             // Phase 2 services that can be instantiated immediately
             var configAnalyzer = new MCPsharp.Services.ConfigAnalyzerService(
-              loggerFactory?.CreateLogger<MCPsharp.Services.ConfigAnalyzerService>() ??
-              Microsoft.Extensions.Logging.Abstractions.NullLogger<MCPsharp.Services.ConfigAnalyzerService>.Instance);
+              loggerFactory.CreateLogger<MCPsharp.Services.ConfigAnalyzerService>());
             var workflowAnalyzer = new MCPsharp.Services.Phase2.WorkflowAnalyzerService();
 
             // Supporting services
-            var bulkEditService = new BulkEditService(loggerFactory?.CreateLogger<BulkEditService>());
-            var progressTracker = new ProgressTrackerService(loggerFactory?.CreateLogger<ProgressTrackerService>() ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ProgressTrackerService>.Instance);
+            var bulkEditService = new BulkEditService(loggerFactory.CreateLogger<BulkEditService>());
+            var progressTracker = new ProgressTrackerService(loggerFactory.CreateLogger<ProgressTrackerService>());
             var tempFileManager = new TempFileManagerService();
             var streamingProcessor = new StreamingFileProcessor(
-                loggerFactory?.CreateLogger<StreamingFileProcessor>() ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<StreamingFileProcessor>.Instance,
+                loggerFactory.CreateLogger<StreamingFileProcessor>(),
                 progressTracker,
                 tempFileManager
             );
@@ -133,12 +128,12 @@ class Program
                 workspaceRoot,
                 fileOperations,
                 bulkEditService,
-                loggerFactory?.CreateLogger<UniversalFileOperations>()
+                loggerFactory.CreateLogger<UniversalFileOperations>()
             );
 
             var unifiedAnalysis = new UnifiedAnalysisService(
                 workspace: roslynWorkspace,
-                logger: loggerFactory?.CreateLogger<UnifiedAnalysisService>()
+                logger: loggerFactory.CreateLogger<UnifiedAnalysisService>()
             );
 
             var bulkOperationsHub = new BulkOperationsHub(
@@ -146,14 +141,14 @@ class Program
                 fileOps: universalFileOps,
                 progressTracker: progressTracker,
                 tempFileManager: tempFileManager,
-                logger: loggerFactory?.CreateLogger<BulkOperationsHub>()
+                logger: loggerFactory.CreateLogger<BulkOperationsHub>()
             );
 
             var streamController = new StreamProcessingController(
                 streamingProcessor: streamingProcessor,
                 progressTracker: progressTracker,
                 tempFileManager: tempFileManager,
-                logger: loggerFactory?.CreateLogger<StreamProcessingController>()
+                logger: loggerFactory.CreateLogger<StreamProcessingController>()
             );
 
             // Initialize AI services (optional - gracefully degrades if unavailable)
@@ -177,13 +172,12 @@ class Program
                     loggerFactory.CreateLogger<AICodeTransformationService>()
                 );
 
-                logger.LogInformation("AI-powered tools enabled with {Provider}/{Model}",
-                    aiProvider.ProviderName, aiProvider.ModelName);
-                logger.LogInformation("AI code transformation tools enabled (Roslyn AST-based)");
+                LogAIPoweredToolsEnabledWith(logger, aiProvider.ProviderName, aiProvider.ModelName);
+                LogAICodeTransformationToolsEnabled(logger);
             }
             else
             {
-                logger.LogInformation("AI-powered tools disabled (no provider available)");
+                LogAIPoweredToolsDisabledNo(logger);
             }
 
             // Setup resource content generators
@@ -191,26 +185,26 @@ class Program
 
             // Register MCP resources
             resourceRegistry.RegisterResource(
-                new McpResource { Uri = "project://overview", Name = "Project Overview", Description = "Overview of the current project", MimeType = "text/markdown" },
+                new McpResource { Uri = ProjectResourceUris.Overview, Name = "Project Overview", Description = "Overview of the current project", MimeType = "text/markdown" },
                 () => resourceGenerators.GenerateOverview());
 
             resourceRegistry.RegisterResource(
-                new McpResource { Uri = "project://structure", Name = "Project Structure", Description = "File and folder structure", MimeType = "text/markdown" },
+                new McpResource { Uri = ProjectResourceUris.Structure, Name = "Project Structure", Description = "File and folder structure", MimeType = "text/markdown" },
                 () => resourceGenerators.GenerateStructure());
 
             resourceRegistry.RegisterResource(
-                new McpResource { Uri = "project://dependencies", Name = "Dependencies", Description = "Project dependencies", MimeType = "text/markdown" },
+                new McpResource { Uri = ProjectResourceUris.Dependencies, Name = "Dependencies", Description = "Project dependencies", MimeType = "text/markdown" },
                 () => resourceGenerators.GenerateDependencies());
 
             resourceRegistry.RegisterResource(
-                new McpResource { Uri = "project://symbols", Name = "Symbols", Description = "Symbol summary", MimeType = "text/markdown" },
+                new McpResource { Uri = ProjectResourceUris.Symbols, Name = "Symbols", Description = "Symbol summary", MimeType = "text/markdown" },
                 () => resourceGenerators.GenerateSymbolsSummary());
 
             resourceRegistry.RegisterResource(
-                new McpResource { Uri = "project://guidance", Name = "Usage Guide", Description = "Best practices for using MCPsharp", MimeType = "text/markdown" },
+                new McpResource { Uri = ProjectResourceUris.Guidance, Name = "Usage Guide", Description = "Best practices for using MCPsharp", MimeType = "text/markdown" },
                 () => resourceGenerators.GenerateGuidance());
 
-            logger.LogInformation("Registered {Count} MCP resources", 5);
+            LogRegisteredMCPResources(logger, 5);
 
             // Create tool registry with all Phase 2 services and consolidated services
             // Note: ImpactAnalyzerService and FeatureTracerService require runtime dependencies
@@ -238,7 +232,11 @@ class Program
                 aiCodeTransformation: aiCodeTransformation
             );
 
-            logger.LogInformation("MCPsharp initialized with {ToolCount} tools", toolRegistry.GetTools().Count);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                var toolCount = toolRegistry.GetTools().Count;
+                LogMCPsharpInitializedWithTools(logger, toolCount);
+            }
 
             // Create and run JSON-RPC handler
             var handler = new JsonRpcHandler(
@@ -255,7 +253,7 @@ class Program
             {
                 e.Cancel = true;
                 cts.Cancel();
-                logger.LogInformation("MCPsharp shutting down...");
+                LogMCPsharpShuttingDown(logger);
             };
 
             // Run MCP server loop
@@ -263,13 +261,12 @@ class Program
 
             // projectDatabase will be disposed automatically via await using
 
-            logger.LogInformation("MCPsharp stopped");
+            LogMCPsharpStopped(logger);
             return 0;
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync($"Fatal error: {ex.Message}");
-            await Console.Error.WriteLineAsync(ex.StackTrace);
+            await Console.Error.WriteLineAsync($"Fatal error: {ex}");
             return 1;
         }
     }
@@ -296,25 +293,29 @@ class Program
             if (slnFiles.Length > 0)
             {
                 projectPath = slnFiles[0];
-                if (slnFiles.Length > 1)
+                if (slnFiles.Length > 1 && logger.IsEnabled(LogLevel.Information))
                 {
-                    logger.LogInformation("Found {Count} solution files, auto-loading: {Path}",
-                        slnFiles.Length, Path.GetFileName(projectPath));
+                    var fileName = Path.GetFileName(projectPath);
+                    LogFoundSolutionFilesAutoLoading(logger, slnFiles.Length, fileName);
                 }
             }
             else if (csprojFiles.Length > 0)
             {
                 projectPath = csprojFiles[0];
-                if (csprojFiles.Length > 1)
+                if (csprojFiles.Length > 1 && logger.IsEnabled(LogLevel.Information))
                 {
-                    logger.LogInformation("Found {Count} project files, auto-loading: {Path}",
-                        csprojFiles.Length, Path.GetFileName(projectPath));
+                    var fileName = Path.GetFileName(projectPath);
+                    LogFoundProjectFilesAutoLoading(logger, csprojFiles.Length, fileName);
                 }
             }
 
             if (projectPath != null)
             {
-                logger.LogInformation("Auto-loading C# project: {Project}", Path.GetFileName(projectPath));
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    var fileName = Path.GetFileName(projectPath);
+                    LogAutoLoadingCSharpProject(logger, fileName);
+                }
 
                 // Load directory into project manager (expects directory, not file)
                 projectManager.OpenProject(workspaceRoot);
@@ -326,24 +327,72 @@ class Program
                 try
                 {
                     await projectDatabase.OpenOrCreateAsync(workspaceRoot);
-                    logger.LogInformation("Opened project database");
+                    LogOpenedProjectDatabase(logger);
                 }
                 catch (Exception dbEx)
                 {
-                    logger.LogWarning(dbEx, "Failed to open project database, continuing without cache");
+                    LogFailedToOpenProjectDatabase(logger, dbEx);
                 }
 
-                logger.LogInformation("Project auto-loaded successfully");
+                LogProjectAutoLoadedSuccessfully(logger);
             }
             else
             {
-                logger.LogInformation("No C# project files found in workspace - project tools available on demand");
+                LogNoCProjectFilesFound(logger);
             }
         }
         catch (Exception ex)
         {
             // Don't fail startup if auto-load fails - just log it
-            logger.LogWarning(ex, "Failed to auto-load project, continuing without pre-loaded project");
+            LogFailedToAutoLoadProject(logger, ex);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "MCPsharp starting, workspace: {Workspace}")]
+    private static partial void LogMCPsharpStartingWorkspace(ILogger logger, string workspace);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "AI-powered tools enabled with {Provider}/{Model}")]
+    private static partial void LogAIPoweredToolsEnabledWith(ILogger logger, string provider, string model);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "AI code transformation tools enabled (Roslyn AST-based)")]
+    private static partial void LogAICodeTransformationToolsEnabled(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "AI-powered tools disabled (no provider available)")]
+    private static partial void LogAIPoweredToolsDisabledNo(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Registered {Count} MCP resources")]
+    private static partial void LogRegisteredMCPResources(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "MCPsharp initialized with {ToolCount} tools")]
+    private static partial void LogMCPsharpInitializedWithTools(ILogger logger, int toolCount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "MCPsharp shutting down...")]
+    private static partial void LogMCPsharpShuttingDown(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "MCPsharp stopped")]
+    private static partial void LogMCPsharpStopped(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Found {Count} solution files, auto-loading: {Path}")]
+    private static partial void LogFoundSolutionFilesAutoLoading(ILogger logger, int count, string path);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Found {Count} project files, auto-loading: {Path}")]
+    private static partial void LogFoundProjectFilesAutoLoading(ILogger logger, int count, string path);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Auto-loading C# project: {Project}")]
+    private static partial void LogAutoLoadingCSharpProject(ILogger logger, string project);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Opened project database")]
+    private static partial void LogOpenedProjectDatabase(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to open project database, continuing without cache")]
+    private static partial void LogFailedToOpenProjectDatabase(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Project auto-loaded successfully")]
+    private static partial void LogProjectAutoLoadedSuccessfully(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "No C# project files found in workspace - project tools available on demand")]
+    private static partial void LogNoCProjectFilesFound(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to auto-load project, continuing without pre-loaded project")]
+    private static partial void LogFailedToAutoLoadProject(ILogger logger, Exception exception);
 }

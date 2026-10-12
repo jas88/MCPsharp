@@ -10,7 +10,7 @@ namespace MCPsharp.Services.Consolidated;
 /// Bulk Operations Hub consolidating all bulk operations
 /// Phase 3: Consolidate 35 bulk operation tools into 8 unified tools
 /// </summary>
-public class BulkOperationsHub
+public partial class BulkOperationsHub
 {
     private readonly IBulkEditService? _bulkEditService;
     private readonly UniversalFileOperations _fileOps;
@@ -80,7 +80,7 @@ public class BulkOperationsHub
             }
 
             // Validate request
-            var validation = await ValidateBulkOperationRequestAsync(request, ct);
+            var validation = await ValidateBulkOperationRequestAsync(request);
             if (!validation.IsValid)
             {
                 response.Error = validation.ErrorMessage;
@@ -127,7 +127,7 @@ public class BulkOperationsHub
                 response.Error = ex.Message;
                 response.Success = false;
                 context.Status = BulkOperationStatus.Failed;
-                _logger.LogError(ex, "Error executing bulk operation {OperationId}", operationId);
+                LogErrorExecutingBulkOperation(_logger, ex, operationId);
             }
             finally
             {
@@ -168,7 +168,7 @@ public class BulkOperationsHub
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Fatal error in bulk operation {OperationId}", operationId);
+            LogFatalErrorInBulkOperation(_logger, ex, operationId);
 
             return new BulkOperationResponse
             {
@@ -242,8 +242,8 @@ public class BulkOperationsHub
             }, ct);
 
             response.PreviewResults = previewResults;
-            response.ImpactAnalysis = await AnalyzeBulkImpactAsync(previewResults, ct);
-            response.RiskAssessment = await AssessBulkRisksAsync(previewResults, ct);
+            response.ImpactAnalysis = await AnalyzeBulkImpactAsync(previewResults);
+            response.RiskAssessment = await AssessBulkRisksAsync(previewResults);
             response.EstimatedTime = EstimateExecutionTime(previewResults);
 
             stopwatch.Stop();
@@ -258,7 +258,7 @@ public class BulkOperationsHub
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error previewing bulk operation");
+            LogErrorPreviewingBulkOperation(_logger, ex);
 
             return new BulkPreviewResponse
             {
@@ -312,7 +312,7 @@ public class BulkOperationsHub
                 {
                     response.Progress = new BulkProgressInfo
                     {
-                        CurrentStep = (int)(streamProgress.BytesProcessed > 0 ? 1 : 0), // Simplified
+                        CurrentStep = streamProgress.BytesProcessed > 0 ? 1 : 0, // Simplified
                         TotalSteps = 1, // Simplified
                         PercentComplete = streamProgress.ProgressPercentage,
                         CurrentFile = "Processing...", // StreamProgress doesn't have CurrentFile
@@ -324,7 +324,7 @@ public class BulkOperationsHub
             }
 
             // Get recent logs
-            response.RecentLogs = GetRecentLogs(context, 20);
+            response.RecentLogs = GetRecentLogs(context);
 
             stopwatch.Stop();
             response.Metadata = new ResponseMetadata
@@ -337,7 +337,7 @@ public class BulkOperationsHub
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting bulk progress for {OperationId}", operationId);
+            LogErrorGettingBulkProgressFor(_logger, ex, operationId);
 
             return new BulkProgressResponse
             {
@@ -368,7 +368,7 @@ public class BulkOperationsHub
             switch (request.Action)
             {
                 case BulkManagementAction.List:
-                    response.ActiveOperations = await ListActiveOperationsAsync(ct);
+                    response.ActiveOperations = await ListActiveOperationsAsync();
                     break;
 
                 case BulkManagementAction.Cancel:
@@ -378,7 +378,7 @@ public class BulkOperationsHub
                     }
                     else
                     {
-                        response.CancelResult = await CancelBulkOperationAsync(request.Target, ct);
+                        response.CancelResult = await CancelBulkOperationAsync();
                     }
                     break;
 
@@ -389,7 +389,7 @@ public class BulkOperationsHub
                     }
                     else
                     {
-                        response.PauseResult = await PauseBulkOperationAsync(request.Target, ct);
+                        response.PauseResult = await PauseBulkOperationAsync();
                     }
                     break;
 
@@ -400,12 +400,12 @@ public class BulkOperationsHub
                     }
                     else
                     {
-                        response.ResumeResult = await ResumeBulkOperationAsync(request.Target, ct);
+                        response.ResumeResult = await ResumeBulkOperationAsync();
                     }
                     break;
 
                 case BulkManagementAction.Cleanup:
-                    response.CleanupResult = await CleanupBulkOperationsAsync(request.MaxAge, ct);
+                    response.CleanupResult = await CleanupBulkOperationsAsync(request.MaxAge);
                     break;
 
                 case BulkManagementAction.Status:
@@ -415,7 +415,7 @@ public class BulkOperationsHub
                     }
                     else
                     {
-                        response.StatusResult = await GetBulkOperationStatusAsync(request.Target, ct);
+                        response.StatusResult = await GetBulkOperationStatusAsync(request.Target);
                     }
                     break;
 
@@ -435,7 +435,7 @@ public class BulkOperationsHub
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error managing bulk operation");
+            LogErrorManagingBulkOperation(_logger, ex);
 
             return new BulkManagementResponse
             {
@@ -450,7 +450,7 @@ public class BulkOperationsHub
     #region Private Helper Methods
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<BulkValidationResult> ValidateBulkOperationRequestAsync(BulkOperationRequest request, CancellationToken ct)
+    private async Task<BulkValidationResult> ValidateBulkOperationRequestAsync(BulkOperationRequest request)
     {
         // Check if we have the necessary services
         if (_bulkEditService == null && request.OperationType != BulkOperationType.FileOperation)
@@ -463,18 +463,16 @@ public class BulkOperationsHub
         }
 
         // Validate files
-        if (request.Files?.Any() == true)
+        if (request.Files?.Count > 0)
         {
-            foreach (var file in request.Files)
+            var missingFile = request.Files.Find(file => !File.Exists(file));
+            if (missingFile != null)
             {
-                if (!File.Exists(file))
+                return new BulkValidationResult
                 {
-                    return new BulkValidationResult
-                    {
-                        IsValid = false,
-                        ErrorMessage = $"File not found: {file}"
-                    };
-                }
+                    IsValid = false,
+                    ErrorMessage = $"File not found: {missingFile}"
+                };
             }
         }
 
@@ -496,30 +494,30 @@ public class BulkOperationsHub
         BulkOperationContext context,
         CancellationToken ct)
     {
-        var results = new List<BulkOperationResult>();
+        List<BulkOperationResult> results;
 
         context.StartedAt = DateTime.UtcNow;
 
         switch (request.OperationType)
         {
             case BulkOperationType.Replace:
-                results = await ExecuteBulkReplaceAsync(request, context, ct);
+                results = await ExecuteBulkReplaceAsync(request, ct);
                 break;
 
             case BulkOperationType.Conditional:
-                results = await ExecuteBulkConditionalAsync(request, context, ct);
+                results = await ExecuteBulkConditionalAsync(request, ct);
                 break;
 
             case BulkOperationType.Refactor:
-                results = await ExecuteBulkRefactorAsync(request, context, ct);
+                results = await ExecuteBulkRefactorAsync(request, ct);
                 break;
 
             case BulkOperationType.MultiEdit:
-                results = await ExecuteBulkMultiEditAsync(request, context, ct);
+                results = await ExecuteBulkMultiEditAsync(request, ct);
                 break;
 
             case BulkOperationType.FileOperation:
-                results = await ExecuteBulkFileOperationsAsync(request, context, ct);
+                results = await ExecuteBulkFileOperationsAsync(request, ct);
                 break;
 
             default:
@@ -531,7 +529,6 @@ public class BulkOperationsHub
 
     private async Task<List<BulkOperationResult>> ExecuteBulkReplaceAsync(
         BulkOperationRequest request,
-        BulkOperationContext context,
         CancellationToken ct)
     {
         if (_bulkEditService == null || request.Pattern == null || request.Replacement == null)
@@ -563,10 +560,9 @@ public class BulkOperationsHub
 
     private async Task<List<BulkOperationResult>> ExecuteBulkConditionalAsync(
         BulkOperationRequest request,
-        BulkOperationContext context,
         CancellationToken ct)
     {
-        if (_bulkEditService == null || request.Conditions?.Any() != true)
+        if (_bulkEditService == null || request.Conditions is not { Count: > 0 })
             return new List<BulkOperationResult>();
 
         var results = new List<BulkOperationResult>();
@@ -593,7 +589,7 @@ public class BulkOperationsHub
                                 _ => MCPsharp.Models.BulkEdit.BulkConditionType.Custom
                             },
                             Pattern = condition.Value,
-                            Negate = condition.Type.ToLowerInvariant() == "notcontains" || condition.Type.ToLowerInvariant() == "filedoesnotexist"
+                            Negate = string.Equals(condition.Type, "notcontains", StringComparison.OrdinalIgnoreCase) || string.Equals(condition.Type, "filedoesnotexist", StringComparison.OrdinalIgnoreCase)
                         };
                         return EvaluateCondition(content, bulkCondition);
                     });
@@ -628,6 +624,7 @@ public class BulkOperationsHub
             }
             catch (Exception ex)
             {
+                LogBulkFileOperationFailed(_logger, ex, file);
                 results.Add(new BulkOperationResult
                 {
                     FilePath = file,
@@ -642,7 +639,6 @@ public class BulkOperationsHub
 
     private async Task<List<BulkOperationResult>> ExecuteBulkRefactorAsync(
         BulkOperationRequest request,
-        BulkOperationContext context,
         CancellationToken ct)
     {
         if (_bulkEditService == null || request.TargetPattern == null || request.ReplacementPattern == null)
@@ -680,10 +676,9 @@ public class BulkOperationsHub
 
     private async Task<List<BulkOperationResult>> ExecuteBulkMultiEditAsync(
         BulkOperationRequest request,
-        BulkOperationContext context,
         CancellationToken ct)
     {
-        if (_bulkEditService == null || request.Operations?.Any() != true)
+        if (_bulkEditService == null || request.Operations is not { Count: > 0 })
             return new List<BulkOperationResult>();
 
         var options = new BulkEditOptions
@@ -727,7 +722,6 @@ public class BulkOperationsHub
 
     private async Task<List<BulkOperationResult>> ExecuteBulkFileOperationsAsync(
         BulkOperationRequest request,
-        BulkOperationContext context,
         CancellationToken ct)
     {
         var results = new List<BulkOperationResult>();
@@ -757,6 +751,7 @@ public class BulkOperationsHub
             }
             catch (Exception ex)
             {
+                LogBulkFileOperationFailed(_logger, ex, fileOp.Path);
                 results.Add(new BulkOperationResult
                 {
                     FilePath = fileOp.Path,
@@ -775,7 +770,7 @@ public class BulkOperationsHub
         var matches = condition.ConditionType switch
         {
             MCPsharp.Models.BulkEdit.BulkConditionType.FileContains => content.Contains(condition.Pattern, StringComparison.OrdinalIgnoreCase),
-            MCPsharp.Models.BulkEdit.BulkConditionType.FileMatches => System.Text.RegularExpressions.Regex.IsMatch(content, condition.Pattern),
+            MCPsharp.Models.BulkEdit.BulkConditionType.FileMatches => System.Text.RegularExpressions.Regex.IsMatch(content, condition.Pattern, System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1)),
             MCPsharp.Models.BulkEdit.BulkConditionType.Custom => condition.Pattern.ToLowerInvariant() switch
             {
                 "fileexists" => File.Exists(condition.Pattern),
@@ -798,19 +793,17 @@ public class BulkOperationsHub
 
         try
         {
-            foreach (var file in request.Files ?? new List<string>())
+            foreach (var file in (request.Files ?? new List<string>()).Where(File.Exists))
             {
-                if (File.Exists(file))
-                {
-                    var backupFile = Path.Combine(backupPath, Path.GetFileName(file));
-                    await Task.Run(() => File.Copy(file, backupFile, true), ct);
-                }
+                var backupFile = Path.Combine(backupPath, Path.GetFileName(file));
+                await Task.Run(() => File.Copy(file, backupFile, true), ct);
             }
 
             return backupId;
         }
-        catch
+        catch (Exception ex)
         {
+            LogBulkBackupFailed(_logger, ex, backupPath);
             // Cleanup on failure
             if (Directory.Exists(backupPath))
             {
@@ -820,7 +813,7 @@ public class BulkOperationsHub
         }
     }
 
-    private async Task RestoreBulkBackupAsync(string backupId, CancellationToken ct)
+    private static async Task RestoreBulkBackupAsync(string backupId, CancellationToken ct)
     {
         var backupPath = Path.Combine(Path.GetTempPath(), "mcpsharp_backups", backupId);
         if (!Directory.Exists(backupPath)) return;
@@ -833,14 +826,18 @@ public class BulkOperationsHub
                 var originalPath = fileName; // Would need more sophisticated mapping
                 await Task.Run(() => File.Copy(backupFile, originalPath, true), ct);
             }
-            catch
+            catch (IOException)
+            {
+                // Continue with other files
+            }
+            catch (UnauthorizedAccessException)
             {
                 // Continue with other files
             }
         }
     }
 
-    private async Task CleanupBulkBackupAsync(string backupId, CancellationToken ct)
+    private static async Task CleanupBulkBackupAsync(string backupId, CancellationToken ct)
     {
         var backupPath = Path.Combine(Path.GetTempPath(), "mcpsharp_backups", backupId);
         if (Directory.Exists(backupPath))
@@ -850,7 +847,7 @@ public class BulkOperationsHub
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<BulkImpactAnalysis> AnalyzeBulkImpactAsync(List<BulkOperationResult> results, CancellationToken ct)
+    private static async Task<BulkImpactAnalysis> AnalyzeBulkImpactAsync(List<BulkOperationResult> results)
     {
         return new BulkImpactAnalysis
         {
@@ -863,7 +860,7 @@ public class BulkOperationsHub
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<BulkRiskAssessment> AssessBulkRisksAsync(List<BulkOperationResult> results, CancellationToken ct)
+    private static async Task<BulkRiskAssessment> AssessBulkRisksAsync(List<BulkOperationResult> results)
     {
         var riskLevel = MCPsharp.Models.BulkEdit.RiskLevel.Low;
         var warnings = new List<string>();
@@ -928,7 +925,7 @@ public class BulkOperationsHub
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<BulkOperationInfo>> ListActiveOperationsAsync(CancellationToken ct)
+    private async Task<List<BulkOperationInfo>> ListActiveOperationsAsync()
     {
         List<BulkOperationInfo> operations;
 
@@ -949,7 +946,7 @@ public class BulkOperationsHub
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<BulkCancelResult> CancelBulkOperationAsync(string operationId, CancellationToken ct)
+    private static async Task<BulkCancelResult> CancelBulkOperationAsync()
     {
         // Implementation for canceling operations
         return new BulkCancelResult
@@ -960,7 +957,7 @@ public class BulkOperationsHub
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<BulkPauseResult> PauseBulkOperationAsync(string operationId, CancellationToken ct)
+    private static async Task<BulkPauseResult> PauseBulkOperationAsync()
     {
         // Implementation for pausing operations
         return new BulkPauseResult
@@ -971,7 +968,7 @@ public class BulkOperationsHub
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<BulkResumeResult> ResumeBulkOperationAsync(string operationId, CancellationToken ct)
+    private static async Task<BulkResumeResult> ResumeBulkOperationAsync()
     {
         // Implementation for resuming operations
         return new BulkResumeResult
@@ -982,7 +979,7 @@ public class BulkOperationsHub
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<BulkCleanupResult> CleanupBulkOperationsAsync(TimeSpan? maxAge, CancellationToken ct)
+    private async Task<BulkCleanupResult> CleanupBulkOperationsAsync(TimeSpan? maxAge)
     {
         var cleanedCount = 0;
         var cutoff = DateTime.UtcNow - (maxAge ?? TimeSpan.FromHours(24));
@@ -1010,7 +1007,7 @@ public class BulkOperationsHub
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<BulkOperationStatusResult> GetBulkOperationStatusAsync(string operationId, CancellationToken ct)
+    private async Task<BulkOperationStatusResult> GetBulkOperationStatusAsync(string operationId)
     {
         BulkOperationContext? context;
 
@@ -1031,7 +1028,7 @@ public class BulkOperationsHub
             };
     }
 
-    private static List<string> GetRecentLogs(BulkOperationContext context, int maxCount)
+    private static List<string> GetRecentLogs(BulkOperationContext context)
     {
         // Implementation would collect logs from various sources
         return new List<string>
@@ -1042,6 +1039,27 @@ public class BulkOperationsHub
         };
     }
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Bulk operation failed for file {FilePath}")]
+    private static partial void LogBulkFileOperationFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to create bulk operation backup at {BackupPath}")]
+    private static partial void LogBulkBackupFailed(ILogger logger, Exception exception, string backupPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error executing bulk operation {OperationId}")]
+    private static partial void LogErrorExecutingBulkOperation(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Fatal error in bulk operation {OperationId}")]
+    private static partial void LogFatalErrorInBulkOperation(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error previewing bulk operation")]
+    private static partial void LogErrorPreviewingBulkOperation(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting bulk progress for {OperationId}")]
+    private static partial void LogErrorGettingBulkProgressFor(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error managing bulk operation")]
+    private static partial void LogErrorManagingBulkOperation(ILogger logger, Exception exception);
+
     #endregion
 }
 
@@ -1050,7 +1068,7 @@ public class BulkOperationsHub
 /// <summary>
 /// Bulk operation context
 /// </summary>
-internal class BulkOperationContext
+internal sealed class BulkOperationContext
 {
     public required string Id { get; init; }
     public required BulkOperationType Type { get; init; }
@@ -1065,7 +1083,7 @@ internal class BulkOperationContext
 /// <summary>
 /// Bulk validation result
 /// </summary>
-internal class BulkValidationResult
+internal sealed class BulkValidationResult
 {
     public required bool IsValid { get; init; }
     public string? ErrorMessage { get; init; }

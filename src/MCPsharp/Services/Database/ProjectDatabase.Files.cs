@@ -1,3 +1,4 @@
+using System.Globalization;
 using MCPsharp.Models.Database;
 using Microsoft.Data.Sqlite;
 
@@ -37,7 +38,7 @@ public sealed partial class ProjectDatabase
         cmd.Parameters.AddWithValue("$language", language);
 
         var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return Convert.ToInt64(result);
+        return Convert.ToInt64(result, CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -166,7 +167,7 @@ public sealed partial class ProjectDatabase
         cmd.Parameters.AddWithValue("$projectId", projectId);
 
         var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return Convert.ToInt32(result);
+        return Convert.ToInt32(result, CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -212,7 +213,7 @@ public sealed partial class ProjectDatabase
             ProjectId = reader.GetInt64(1),
             RelativePath = reader.GetString(2),
             ContentHash = reader.GetString(3),
-            LastIndexed = DateTime.Parse(reader.GetString(4)),
+            LastIndexed = DateTime.Parse(reader.GetString(4), CultureInfo.InvariantCulture),
             SizeBytes = reader.GetInt64(5),
             Language = reader.GetString(6)
         };

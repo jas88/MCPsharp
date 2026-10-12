@@ -101,7 +101,7 @@ public class RollbackFileInfo
     /// <summary>
     /// Whether the file integrity was verified
     /// </summary>
-    public bool IntegrityVerified { get; set; } = false;
+    public bool IntegrityVerified { get; set; }
 
     /// <summary>
     /// Expected checksum for verification

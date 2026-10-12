@@ -15,7 +15,7 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Implementation of IConfigAnalyzerService for analyzing configuration files
 /// </summary>
-public class ConfigAnalyzerService : IConfigAnalyzerService
+public partial class ConfigAnalyzerService : IConfigAnalyzerService
 {
     private readonly ILogger<ConfigAnalyzerService> _logger;
     private readonly IDeserializer _yamlDeserializer;
@@ -59,7 +59,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
             throw new FileNotFoundException($"Configuration file not found: {absolutePath}");
         }
 
-        _logger.LogDebug("Analyzing configuration schema for file: {FilePath}", absolutePath);
+        LogAnalyzingConfigurationSchemaForFile(_logger, absolutePath);
 
         try
         {
@@ -68,15 +68,14 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
 
             Dictionary<string, object> configData = fileExtension switch
             {
-                ".json" => await ParseJsonConfigAsync(content, absolutePath, ct),
-                ".yml" or ".yaml" => await ParseYamlConfigAsync(content, absolutePath, ct),
+                ".json" => await ParseJsonConfigAsync(content, absolutePath),
+                ".yml" or ".yaml" => await ParseYamlConfigAsync(content, absolutePath),
                 _ => throw new NotSupportedException($"Configuration file format '{fileExtension}' is not supported")
             };
 
-            var properties = ExtractConfigProperties(configData, absolutePath);
+            var properties = ExtractConfigProperties(configData);
 
-            _logger.LogInformation("Successfully analyzed configuration schema for {FilePath}, found {PropertyCount} properties",
-                absolutePath, properties.Count);
+            LogSuccessfullyAnalyzedConfigurationSchemaFor(_logger, absolutePath, properties.Count);
 
             return new ConfigSchema
             {
@@ -86,7 +85,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
         }
         catch (Exception ex) when (!(ex is FileNotFoundException || ex is InvalidOperationException || ex is NotSupportedException))
         {
-            _logger.LogError(ex, "Failed to analyze configuration schema for file: {FilePath}", absolutePath);
+            LogFailedToAnalyzeConfigurationSchema(_logger, ex, absolutePath);
             throw new InvalidOperationException($"Failed to analyze configuration file: {absolutePath}", ex);
         }
     }
@@ -105,7 +104,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
             throw new ArgumentException("At least one configuration file path must be provided", nameof(configPaths));
         }
 
-        _logger.LogDebug("Merging {ConfigCount} configuration files", configPaths.Length);
+        LogMergingConfigurationFiles(_logger, configPaths.Length);
 
         var mergedSettings = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         var conflicts = new List<ConfigConflict>();
@@ -119,7 +118,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
 
                 if (!File.Exists(absolutePath))
                 {
-                    _logger.LogWarning("Configuration file not found, skipping: {FilePath}", absolutePath);
+                    LogConfigurationFileNotFoundSkipping(_logger, absolutePath);
                     continue;
                 }
 
@@ -128,8 +127,8 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
 
                 Dictionary<string, object> configData = fileExtension switch
                 {
-                    ".json" => await ParseJsonConfigAsync(content, absolutePath, ct),
-                    ".yml" or ".yaml" => await ParseYamlConfigAsync(content, absolutePath, ct),
+                    ".json" => await ParseJsonConfigAsync(content, absolutePath),
+                    ".yml" or ".yaml" => await ParseYamlConfigAsync(content, absolutePath),
                     _ => throw new NotSupportedException($"Configuration file format '{fileExtension}' is not supported")
                 };
 
@@ -152,7 +151,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
                                 Value2 = kvp.Value
                             });
 
-                            _logger.LogDebug("Configuration conflict detected for key '{Key}' between files", kvp.Key);
+                            LogConfigurationConflictDetectedForKey(_logger, kvp.Key);
                         }
 
                         // Always update to the latest value (later configs override earlier ones)
@@ -165,23 +164,22 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
                 }
 
                 sourceFiles.Add(absolutePath);
-                _logger.LogDebug("Successfully processed configuration file: {FilePath}", absolutePath);
+                LogSuccessfullyProcessedConfigurationFile(_logger, absolutePath);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to process configuration file: {FilePath}", configPath);
+                LogFailedToProcessConfigurationFile(_logger, ex, configPath);
                 throw;
             }
         }
 
-        _logger.LogInformation("Successfully merged {ConfigCount} configuration files with {ConflictCount} conflicts",
-            sourceFiles.Count, conflicts.Count);
+        LogSuccessfullyMergedConfigurationFilesWith(_logger, sourceFiles.Count, conflicts.Count);
 
         return new MergedConfig
         {
             SourceFiles = sourceFiles,
             MergedSettings = mergedSettings,
-            Conflicts = conflicts.Any() ? conflicts : null
+            Conflicts = conflicts.Count > 0 ? conflicts : null
         };
     }
 
@@ -198,14 +196,14 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
             throw new ArgumentException("Project root path cannot be null or empty", nameof(projectRoot));
         }
 
-        _logger.LogDebug("Validating configuration consistency for project: {ProjectRoot}", projectRoot);
+        LogValidatingConfigurationConsistencyForProject(_logger, projectRoot);
 
         ConfigValidationResult result;
 
         try
         {
             // Find all configuration files
-            var configFiles = await FindConfigurationFilesAsync(projectRoot, ct);
+            var configFiles = await FindConfigurationFilesAsync(projectRoot);
 
             result = new ConfigValidationResult
             {
@@ -220,10 +218,11 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
                 try
                 {
                     var schema = await GetConfigSchemaAsync(configFile, ct);
-                    await ValidateSingleConfigurationFileAsync(configFile, schema, result, ct);
+                    await ValidateSingleConfigurationFileAsync(configFile, schema, result);
                 }
                 catch (Exception ex)
                 {
+                    LogConfigFileValidationFailed(_logger, ex, configFile);
                     result.Issues.Add(new ConfigValidationIssue
                     {
                         Severity = ValidationSeverity.Error,
@@ -236,11 +235,11 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
             // Check for cross-file consistency
             await ValidateCrossFileConsistencyAsync(configFiles, result, ct);
 
-            _logger.LogInformation("Configuration validation completed with {IssueCount} issues found", result.Issues.Count);
+            LogConfigurationValidationCompletedWithIssues(_logger, result.Issues.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to validate configuration consistency for project: {ProjectRoot}", projectRoot);
+            LogFailedToValidateConfigurationConsistency(_logger, ex, projectRoot);
 
             // Return a result with the error information if result wasn't initialized
             return new ConfigValidationResult
@@ -285,16 +284,17 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
                 var jsonKeys = ExtractJsonKeys(content, configFile);
                 keys.AddRange(jsonKeys);
             }
-            catch
+            catch (Exception ex)
             {
                 // Skip files that can't be read
+                LogSkippedUnreadableConfigFile(_logger, ex, configFile);
             }
         }
 
         return keys;
     }
 
-    private List<ConfigurationKey> ExtractJsonKeys(string json, string filePath)
+    private static List<ConfigurationKey> ExtractJsonKeys(string json, string filePath)
     {
         var keys = new List<ConfigurationKey>();
 
@@ -303,7 +303,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
             using var doc = JsonDocument.Parse(json);
             ExtractKeysRecursive(doc.RootElement, "", filePath, keys);
         }
-        catch
+        catch (JsonException)
         {
             // Skip invalid JSON
         }
@@ -311,7 +311,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
         return keys;
     }
 
-    private void ExtractKeysRecursive(
+    private static void ExtractKeysRecursive(
         JsonElement element,
         string prefix,
         string filePath,
@@ -340,11 +340,11 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Parses a JSON configuration file into a dictionary.
     /// </summary>
-    private Task<Dictionary<string, object>> ParseJsonConfigAsync(string content, string filePath, CancellationToken ct)
+    private Task<Dictionary<string, object>> ParseJsonConfigAsync(string content, string filePath)
     {
         try
         {
-            _logger.LogDebug("Parsing JSON configuration file: {FilePath}", filePath);
+            LogParsingJSONConfigurationFile(_logger, filePath);
 
             using var document = JsonDocument.Parse(content);
             var result = new Dictionary<string, object>();
@@ -354,14 +354,13 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
                 ConvertJsonElementToDictionary(document.RootElement, result, "");
             }
 
-            _logger.LogDebug("Successfully parsed JSON configuration with {RootPropertyCount} root properties",
-                result.Count);
+            LogSuccessfullyParsedJSONConfigurationWith(_logger, result.Count);
 
             return Task.FromResult(result);
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "Failed to parse JSON configuration file: {FilePath}", filePath);
+            LogFailedToParseJSONConfiguration(_logger, ex, filePath);
             throw new InvalidOperationException($"Invalid JSON in configuration file: {filePath}", ex);
         }
     }
@@ -369,23 +368,22 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Parses a YAML configuration file into a dictionary.
     /// </summary>
-    private Task<Dictionary<string, object>> ParseYamlConfigAsync(string content, string filePath, CancellationToken ct)
+    private Task<Dictionary<string, object>> ParseYamlConfigAsync(string content, string filePath)
     {
         try
         {
-            _logger.LogDebug("Parsing YAML configuration file: {FilePath}", filePath);
+            LogParsingYAMLConfigurationFile(_logger, filePath);
 
             var yamlObject = _yamlDeserializer.Deserialize<Dictionary<string, object>>(content);
             var result = yamlObject ?? new Dictionary<string, object>();
 
-            _logger.LogDebug("Successfully parsed YAML configuration with {RootPropertyCount} root properties",
-                result.Count);
+            LogSuccessfullyParsedYAMLConfigurationWith(_logger, result.Count);
 
             return Task.FromResult(result);
         }
         catch (YamlDotNet.Core.YamlException ex)
         {
-            _logger.LogError(ex, "Failed to parse YAML configuration file: {FilePath}", filePath);
+            LogFailedToParseYAMLConfiguration(_logger, ex, filePath);
             throw new InvalidOperationException($"Invalid YAML in configuration file: {filePath}", ex);
         }
     }
@@ -458,10 +456,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
         return element.ValueKind switch
         {
             JsonValueKind.String => element.GetString() ?? string.Empty,
-            JsonValueKind.Number => element.TryGetInt32(out var intValue) ? (object)intValue :
-                                  element.TryGetInt64(out var longValue) ? (object)longValue :
-                                  element.TryGetDouble(out var doubleValue) ? (object)doubleValue :
-                                  element.GetDecimal(),
+            JsonValueKind.Number => ConvertJsonNumber(element),
             JsonValueKind.True => true,
             JsonValueKind.False => false,
             JsonValueKind.Null => null!,
@@ -484,7 +479,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Extracts configuration properties with metadata from a configuration dictionary.
     /// </summary>
-    private Dictionary<string, ConfigProperty> ExtractConfigProperties(Dictionary<string, object> configData, string filePath)
+    private static Dictionary<string, ConfigProperty> ExtractConfigProperties(Dictionary<string, object> configData)
     {
         var properties = new Dictionary<string, ConfigProperty>();
         var flatConfig = FlattenConfig(configData);
@@ -506,7 +501,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Flattens a nested configuration dictionary into dot-notation paths.
     /// </summary>
-    private Dictionary<string, object> FlattenConfig(Dictionary<string, object> config, string prefix = "")
+    private static Dictionary<string, object> FlattenConfig(Dictionary<string, object> config, string prefix = "")
     {
         var result = new Dictionary<string, object>();
 
@@ -572,6 +567,14 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
         return string.Equals(value1.ToString(), value2.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    private static object ConvertJsonNumber(JsonElement element)
+    {
+        if (element.TryGetInt32(out var intValue)) return intValue;
+        if (element.TryGetInt64(out var longValue)) return longValue;
+        if (element.TryGetDouble(out var doubleValue)) return doubleValue;
+        return element.GetDecimal();
+    }
+
     /// <summary>
     /// Checks if a configuration file contains a specific key (helper for conflict detection).
     /// </summary>
@@ -590,7 +593,11 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
                 _ => false
             };
         }
-        catch
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
         {
             return false;
         }
@@ -599,7 +606,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
     /// <summary>
     /// Finds all configuration files in the project.
     /// </summary>
-    private Task<IReadOnlyList<string>> FindConfigurationFilesAsync(string projectRoot, CancellationToken ct)
+    private Task<IReadOnlyList<string>> FindConfigurationFilesAsync(string projectRoot)
     {
         var configFiles = new List<string>();
         var searchPatterns = new[] { "*.json", "*.yml", "*.yaml" };
@@ -615,14 +622,14 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
             configFiles.AddRange(files);
         }
 
-        _logger.LogDebug("Found {ConfigFileCount} configuration files", configFiles.Count);
+        LogFoundConfigurationFiles(_logger, configFiles.Count);
         return Task.FromResult<IReadOnlyList<string>>(configFiles.Distinct().ToList());
     }
 
     /// <summary>
     /// Validates a single configuration file for common issues.
     /// </summary>
-    private Task ValidateSingleConfigurationFileAsync(string filePath, ConfigSchema schema, ConfigValidationResult result, CancellationToken ct)
+    private static Task ValidateSingleConfigurationFileAsync(string filePath, ConfigSchema schema, ConfigValidationResult result)
     {
         // Check for empty configuration files
         if (schema.Properties.Count == 0)
@@ -637,7 +644,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
 
         // Check for sensitive values in configuration
         var sensitiveProperties = schema.Properties.Where(p => p.Value.IsSensitive).ToList();
-        if (sensitiveProperties.Any())
+        if (sensitiveProperties.Count > 0)
         {
             result.Issues.Add(new ConfigValidationIssue
             {
@@ -649,13 +656,13 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
         }
 
         // Check for common configuration patterns
-        return ValidateCommonConfigurationPatternsAsync(filePath, schema, result, ct);
+        return ValidateCommonConfigurationPatternsAsync(filePath, schema, result);
     }
 
     /// <summary>
     /// Validates common configuration patterns and best practices.
     /// </summary>
-    private Task ValidateCommonConfigurationPatternsAsync(string filePath, ConfigSchema schema, ConfigValidationResult result, CancellationToken ct)
+    private static Task ValidateCommonConfigurationPatternsAsync(string filePath, ConfigSchema schema, ConfigValidationResult result)
     {
         // Check for connection strings without encryption
         var connectionStringProps = schema.Properties
@@ -727,6 +734,7 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
         }
         catch (Exception ex)
         {
+            LogCrossFileValidationFailed(_logger, ex);
             result.Issues.Add(new ConfigValidationIssue
             {
                 Severity = ValidationSeverity.Error,
@@ -773,9 +781,78 @@ public class ConfigAnalyzerService : IConfigAnalyzerService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to validate environment consistency for environment: {Environment}", env);
+                    LogFailedToValidateEnvironmentConsistency(_logger, ex, env);
                 }
             }
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to validate configuration file: {FilePath}")]
+    private static partial void LogConfigFileValidationFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Skipping unreadable configuration file: {FilePath}")]
+    private static partial void LogSkippedUnreadableConfigFile(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to validate cross-file configuration consistency")]
+    private static partial void LogCrossFileValidationFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Analyzing configuration schema for file: {FilePath}")]
+    private static partial void LogAnalyzingConfigurationSchemaForFile(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Successfully analyzed configuration schema for {FilePath}, found {PropertyCount} properties")]
+    private static partial void LogSuccessfullyAnalyzedConfigurationSchemaFor(ILogger logger, string filePath, int propertyCount);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to analyze configuration schema for file: {FilePath}")]
+    private static partial void LogFailedToAnalyzeConfigurationSchema(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Merging {ConfigCount} configuration files")]
+    private static partial void LogMergingConfigurationFiles(ILogger logger, int configCount);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Configuration file not found, skipping: {FilePath}")]
+    private static partial void LogConfigurationFileNotFoundSkipping(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Configuration conflict detected for key '{Key}' between files")]
+    private static partial void LogConfigurationConflictDetectedForKey(ILogger logger, string key);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Successfully processed configuration file: {FilePath}")]
+    private static partial void LogSuccessfullyProcessedConfigurationFile(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to process configuration file: {FilePath}")]
+    private static partial void LogFailedToProcessConfigurationFile(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Successfully merged {ConfigCount} configuration files with {ConflictCount} conflicts")]
+    private static partial void LogSuccessfullyMergedConfigurationFilesWith(ILogger logger, int configCount, int conflictCount);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Validating configuration consistency for project: {ProjectRoot}")]
+    private static partial void LogValidatingConfigurationConsistencyForProject(ILogger logger, string projectRoot);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Configuration validation completed with {IssueCount} issues found")]
+    private static partial void LogConfigurationValidationCompletedWithIssues(ILogger logger, int issueCount);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to validate configuration consistency for project: {ProjectRoot}")]
+    private static partial void LogFailedToValidateConfigurationConsistency(ILogger logger, Exception exception, string projectRoot);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Parsing JSON configuration file: {FilePath}")]
+    private static partial void LogParsingJSONConfigurationFile(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Successfully parsed JSON configuration with {RootPropertyCount} root properties")]
+    private static partial void LogSuccessfullyParsedJSONConfigurationWith(ILogger logger, int rootPropertyCount);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to parse JSON configuration file: {FilePath}")]
+    private static partial void LogFailedToParseJSONConfiguration(ILogger logger, JsonException exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Parsing YAML configuration file: {FilePath}")]
+    private static partial void LogParsingYAMLConfigurationFile(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Successfully parsed YAML configuration with {RootPropertyCount} root properties")]
+    private static partial void LogSuccessfullyParsedYAMLConfigurationWith(ILogger logger, int rootPropertyCount);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to parse YAML configuration file: {FilePath}")]
+    private static partial void LogFailedToParseYAMLConfiguration(ILogger logger, YamlDotNet.Core.YamlException exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Found {ConfigFileCount} configuration files")]
+    private static partial void LogFoundConfigurationFiles(ILogger logger, int configFileCount);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to validate environment consistency for environment: {Environment}")]
+    private static partial void LogFailedToValidateEnvironmentConsistency(ILogger logger, Exception exception, string environment);
 }

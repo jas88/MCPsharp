@@ -23,6 +23,11 @@ public interface IProgressTracker
     Task UpdateProgressAsync(string operationId, long bytesProcessed, long chunksProcessed = 0, long linesProcessed = 0, long itemsProcessed = 0);
 
     /// <summary>
+    /// Update progress with detailed progress information
+    /// </summary>
+    Task UpdateProgressAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default);
+
+    /// <summary>
     /// Get current progress for an operation
     /// </summary>
     Task<StreamProgress?> GetProgressAsync(string operationId);
@@ -72,8 +77,4 @@ public interface IProgressTracker
     /// </summary>
     Task CompleteTrackingAsync(string progressId, ProgressResult result, CancellationToken ct = default);
 
-    /// <summary>
-    /// Update progress with detailed progress information
-    /// </summary>
-    Task UpdateProgressAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default);
 }

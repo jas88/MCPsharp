@@ -1,3 +1,4 @@
+using System.Globalization;
 using MCPsharp.Models.Database;
 using Microsoft.Data.Sqlite;
 
@@ -31,7 +32,7 @@ public sealed partial class ProjectDatabase
             updateCmd.Parameters.AddWithValue("$id", existingId);
             await updateCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
-            return Convert.ToInt64(existingId);
+            return Convert.ToInt64(existingId, CultureInfo.InvariantCulture);
         }
 
         // Create new
@@ -47,7 +48,7 @@ public sealed partial class ProjectDatabase
         insertCmd.Parameters.AddWithValue("$openedAt", DateTime.UtcNow.ToString("O"));
 
         var result = await insertCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return Convert.ToInt64(result);
+        return Convert.ToInt64(result, CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -97,6 +98,15 @@ public sealed partial class ProjectDatabase
         return null;
     }
 
+    private static readonly (string Table, string CountQuery)[] TableCountQueries =
+    [
+        ("projects", "SELECT COUNT(*) FROM projects"),
+        ("files", "SELECT COUNT(*) FROM files"),
+        ("symbols", "SELECT COUNT(*) FROM symbols"),
+        ("symbol_references", "SELECT COUNT(*) FROM symbol_references"),
+        ("analysis_results", "SELECT COUNT(*) FROM analysis_results"),
+    ];
+
     /// <summary>
     /// Updates project statistics.
     /// </summary>
@@ -109,28 +119,21 @@ public sealed partial class ProjectDatabase
     {
         var conn = GetConnection();
 
-        var updates = new List<string>();
+        if (!solutionCount.HasValue && !projectCount.HasValue && !fileCount.HasValue) return;
+
         await using var cmd = conn.CreateCommand();
 
-        if (solutionCount.HasValue)
-        {
-            updates.Add("solution_count = $solutionCount");
-            cmd.Parameters.AddWithValue("$solutionCount", solutionCount.Value);
-        }
-        if (projectCount.HasValue)
-        {
-            updates.Add("project_count = $projectCount");
-            cmd.Parameters.AddWithValue("$projectCount", projectCount.Value);
-        }
-        if (fileCount.HasValue)
-        {
-            updates.Add("file_count = $fileCount");
-            cmd.Parameters.AddWithValue("$fileCount", fileCount.Value);
-        }
-
-        if (updates.Count == 0) return;
-
-        cmd.CommandText = $"UPDATE projects SET {string.Join(", ", updates)} WHERE id = $projectId";
+        // NULL parameters leave the existing column value unchanged
+        cmd.CommandText = """
+            UPDATE projects SET
+                solution_count = COALESCE($solutionCount, solution_count),
+                project_count = COALESCE($projectCount, project_count),
+                file_count = COALESCE($fileCount, file_count)
+            WHERE id = $projectId
+            """;
+        cmd.Parameters.AddWithValue("$solutionCount", (object?)solutionCount ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$projectCount", (object?)projectCount ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$fileCount", (object?)fileCount ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$projectId", projectId);
 
         await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -227,14 +230,12 @@ public sealed partial class ProjectDatabase
         var conn = GetConnection();
         var stats = new Dictionary<string, long>();
 
-        var tables = new[] { "projects", "files", "symbols", "symbol_references", "analysis_results" };
-
-        foreach (var table in tables)
+        foreach (var (table, countQuery) in TableCountQueries)
         {
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = $"SELECT COUNT(*) FROM {table}";
+            cmd.CommandText = countQuery;
             var count = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            stats[table] = Convert.ToInt64(count);
+            stats[table] = Convert.ToInt64(count, CultureInfo.InvariantCulture);
         }
 
         return stats;
@@ -248,7 +249,7 @@ public sealed partial class ProjectDatabase
             RootPathHash = reader.GetString(1),
             RootPath = reader.GetString(2),
             Name = reader.GetString(3),
-            OpenedAt = DateTime.Parse(reader.GetString(4)),
+            OpenedAt = DateTime.Parse(reader.GetString(4), CultureInfo.InvariantCulture),
             SolutionCount = reader.GetInt32(5),
             ProjectCount = reader.GetInt32(6),
             FileCount = reader.GetInt32(7)

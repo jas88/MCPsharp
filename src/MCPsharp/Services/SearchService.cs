@@ -13,7 +13,7 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Service for searching text and regex patterns across project files
 /// </summary>
-public class SearchService : ISearchService
+public partial class SearchService : ISearchService
 {
     private readonly ProjectContextManager _projectContext;
     private readonly ILogger<SearchService> _logger;
@@ -119,7 +119,7 @@ public class SearchService : ISearchService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Error searching file: {FilePath}", file);
+                    LogErrorSearchingFile(_logger, ex, file);
                 }
             });
 
@@ -158,7 +158,7 @@ public class SearchService : ISearchService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during text search");
+            LogErrorDuringTextSearch(_logger, ex);
             return CreateErrorResult($"Search failed: {ex.Message}", sw.ElapsedMilliseconds);
         }
     }
@@ -184,7 +184,7 @@ public class SearchService : ISearchService
         return _projectContext.GetProjectContext()?.RootPath ?? Directory.GetCurrentDirectory();
     }
 
-    private List<string> GetFilesToSearch(string searchRoot, string? includePattern, string? excludePattern)
+    private static List<string> GetFilesToSearch(string searchRoot, string? includePattern, string? excludePattern)
     {
         var matcher = new Matcher(StringComparison.OrdinalIgnoreCase);
 
@@ -221,7 +221,7 @@ public class SearchService : ISearchService
         return files;
     }
 
-    private bool IsBinaryFile(string filePath)
+    private static bool IsBinaryFile(string filePath)
     {
         var extension = Path.GetExtension(filePath);
         if (BinaryExtensions.Contains(extension))
@@ -247,7 +247,12 @@ public class SearchService : ISearchService
 
             return false;
         }
-        catch
+        catch (IOException)
+        {
+            // If we can't read the file, treat it as binary to skip
+            return true;
+        }
+        catch (UnauthorizedAccessException)
         {
             // If we can't read the file, treat it as binary to skip
             return true;
@@ -354,13 +359,13 @@ public class SearchService : ISearchService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error reading file: {FilePath}", filePath);
+            LogErrorReadingFile(_logger, ex, filePath);
         }
 
         return matches;
     }
 
-    private SearchResult CreateErrorResult(string errorMessage, long durationMs)
+    private static SearchResult CreateErrorResult(string errorMessage, long durationMs)
     {
         return new SearchResult
         {
@@ -375,4 +380,13 @@ public class SearchService : ISearchService
             ErrorMessage = errorMessage
         };
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error searching file: {FilePath}")]
+    private static partial void LogErrorSearchingFile(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error during text search")]
+    private static partial void LogErrorDuringTextSearch(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error reading file: {FilePath}")]
+    private static partial void LogErrorReadingFile(ILogger logger, Exception exception, string filePath);
 }

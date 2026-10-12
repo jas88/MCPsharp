@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using MCPsharp.Models;
 
@@ -47,6 +48,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectDuplicates));
             return new ToolCallResult
             {
                 Success = false,
@@ -88,6 +90,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteFindExactDuplicates));
             return new ToolCallResult
             {
                 Success = false,
@@ -132,6 +135,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteFindNearDuplicates));
             return new ToolCallResult
             {
                 Success = false,
@@ -182,6 +186,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeDuplicationMetrics));
             return new ToolCallResult
             {
                 Success = false,
@@ -218,9 +223,9 @@ public partial class McpToolRegistry
             }
             else
             {
-                // Detect duplicates first
-                var detectionOptions = ParseDuplicateDetectionOptions(arguments);
-                duplicates = new List<MCPsharp.Models.DuplicateGroup>(); // Skip mapping for now since service expects different type
+                // Duplicate detection results use a different model type than the refactoring API expects,
+                // so no automatic detection is performed here; callers should pass 'duplicates' explicitly.
+                duplicates = new List<MCPsharp.Models.DuplicateGroup>();
             }
 
             var result = await _duplicateCodeDetector.GetRefactoringSuggestionsAsync(projectPath, duplicates, options, ct);
@@ -241,6 +246,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetRefactoringSuggestions));
             return new ToolCallResult
             {
                 Success = false,
@@ -289,6 +295,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetDuplicateHotspots));
             return new ToolCallResult
             {
                 Success = false,
@@ -367,6 +374,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCompareCodeBlocks));
             return new ToolCallResult
             {
                 Success = false,
@@ -437,6 +445,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateRefactoring));
             return new ToolCallResult
             {
                 Success = false,
@@ -447,7 +456,7 @@ public partial class McpToolRegistry
 
     #region Helper Methods for Duplicate Code Detection
 
-    private DuplicateDetectionOptions ParseDuplicateDetectionOptions(JsonDocument arguments)
+    private static DuplicateDetectionOptions ParseDuplicateDetectionOptions(JsonDocument arguments)
     {
         var optionsElement = GetPropertyFromArguments(arguments, "options");
 
@@ -497,7 +506,7 @@ public partial class McpToolRegistry
         return options;
     }
 
-    private RefactoringOptions ParseRefactoringOptions(JsonDocument arguments)
+    private static RefactoringOptions ParseRefactoringOptions(JsonDocument arguments)
     {
         var optionsElement = GetPropertyFromArguments(arguments, "options");
 
@@ -535,7 +544,7 @@ public partial class McpToolRegistry
         return options;
     }
 
-    private CodeComparisonOptions ParseCodeComparisonOptions(JsonDocument arguments)
+    private static CodeComparisonOptions ParseCodeComparisonOptions(JsonDocument arguments)
     {
         var optionsElement = GetPropertyFromArguments(arguments, "options");
 
@@ -628,8 +637,9 @@ public partial class McpToolRegistry
                 }
             };
         }
-        catch
+        catch (Exception ex)
         {
+            LogInvalidCodeBlockDefinition(_logger, ex);
             return null;
         }
     }
@@ -637,4 +647,7 @@ public partial class McpToolRegistry
     #endregion
 
     #endregion
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Failed to parse code block definition")]
+    private static partial void LogInvalidCodeBlockDefinition(ILogger logger, Exception exception);
 }

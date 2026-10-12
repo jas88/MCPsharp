@@ -13,14 +13,13 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Service for managing temporary files during streaming operations
 /// </summary>
-public class TempFileManagerService : ITempFileManager, IDisposable
+public partial class TempFileManagerService : ITempFileManager, IDisposable
 {
     private readonly ILogger<TempFileManagerService> _logger;
     private readonly string _tempBasePath;
     private readonly ConcurrentDictionary<string, HashSet<string>> _operationFiles;
     private readonly ConcurrentDictionary<string, DateTime> _fileCreationTimes;
     private readonly Timer _cleanupTimer;
-    private readonly object _lock = new object();
 
     public TempFileManagerService(ILogger<TempFileManagerService>? logger = null)
     {
@@ -35,7 +34,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
         // Run cleanup every 10 minutes
         _cleanupTimer = new Timer(PerformCleanup, null, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
 
-        _logger.LogInformation("Initialized temporary file manager with base path: {TempBasePath}", _tempBasePath);
+        LogInitializedTemporaryFileManagerWith(_logger, _tempBasePath);
     }
 
     public async Task<string> CreateTempFileAsync(string? prefix = null, string? extension = null, string? operationId = null)
@@ -54,7 +53,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
 
         await RegisterTempFileAsync(filePath, operationId);
 
-        _logger.LogDebug("Created temporary file: {FilePath}", filePath);
+        LogCreatedTemporaryFile(_logger, filePath);
         return filePath;
     }
 
@@ -82,7 +81,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
 
         _fileCreationTimes[filePath] = DateTime.UtcNow;
 
-        _logger.LogDebug("Created temporary file: {FilePath}", filePath);
+        LogCreatedTemporaryFile(_logger, filePath);
         return filePath;
     }
 
@@ -104,7 +103,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
 
         _fileCreationTimes[dirPath] = DateTime.UtcNow;
 
-        _logger.LogDebug("Created temporary directory: {DirPath}", dirPath);
+        LogCreatedTemporaryDirectory(_logger, dirPath);
         return Task.FromResult(dirPath);
     }
 
@@ -128,7 +127,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
 
         _fileCreationTimes[filePath] = DateTime.UtcNow;
 
-        _logger.LogDebug("Registered temporary file: {FilePath} for operation: {OperationId}", filePath, operationId);
+        LogRegisteredTemporaryFileForOperation(_logger, filePath, operationId);
         return Task.CompletedTask;
     }
 
@@ -155,12 +154,12 @@ public class TempFileManagerService : ITempFileManager, IDisposable
             if (File.Exists(filePath))
             {
                 File.Delete(filePath);
-                _logger.LogDebug("Deleted temporary file: {FilePath}", filePath);
+                LogDeletedTemporaryFile(_logger, filePath);
             }
             else if (Directory.Exists(filePath))
             {
                 Directory.Delete(filePath, recursive: true);
-                _logger.LogDebug("Deleted temporary directory: {FilePath}", filePath);
+                LogDeletedTemporaryDirectory(_logger, filePath);
             }
 
             // Remove from tracking
@@ -176,7 +175,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting temporary file: {FilePath}", filePath);
+            LogErrorDeletingTemporaryFile(_logger, ex, filePath);
             return Task.FromResult(false);
         }
     }
@@ -188,8 +187,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
             var tasks = files.Select(DeleteTempFileAsync);
             await Task.WhenAll(tasks);
 
-            _logger.LogInformation("Cleaned up {Count} temporary files for operation: {OperationId}",
-                files.Count, operationId);
+            LogCleanedUpTemporaryFilesFor(_logger, files.Count, operationId);
         }
     }
 
@@ -207,8 +205,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
         var deletedCount = results.Count(r => r);
         if (deletedCount > 0)
         {
-            _logger.LogInformation("Cleaned up {Count} temporary files older than {OlderThan}",
-                deletedCount, olderThan);
+            LogCleanedUpTemporaryFilesOlder(_logger, deletedCount, olderThan);
         }
     }
 
@@ -232,7 +229,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error getting size for temp file: {FilePath}", filePath);
+                LogErrorGettingSizeForTemp(_logger, ex, filePath);
             }
         }
 
@@ -274,7 +271,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error getting stats for temp file: {FilePath}", filePath);
+                LogErrorGettingStatsForTemp(_logger, ex, filePath);
             }
         }
 
@@ -306,7 +303,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error calculating directory size: {DirectoryPath}", directoryPath);
+            LogErrorCalculatingDirectorySize(_logger, ex, directoryPath);
         }
         return size;
     }
@@ -319,7 +316,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during automatic temporary file cleanup");
+            LogErrorDuringAutomaticTemporaryFile(_logger, ex);
         }
     }
 
@@ -343,8 +340,50 @@ public class TempFileManagerService : ITempFileManager, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during disposal cleanup");
+                LogErrorDuringDisposalCleanup(_logger, ex);
             }
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Initialized temporary file manager with base path: {TempBasePath}")]
+    private static partial void LogInitializedTemporaryFileManagerWith(ILogger logger, string tempBasePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Created temporary file: {FilePath}")]
+    private static partial void LogCreatedTemporaryFile(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Created temporary directory: {DirPath}")]
+    private static partial void LogCreatedTemporaryDirectory(ILogger logger, string dirPath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Registered temporary file: {FilePath} for operation: {OperationId}")]
+    private static partial void LogRegisteredTemporaryFileForOperation(ILogger logger, string filePath, string? operationId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Deleted temporary file: {FilePath}")]
+    private static partial void LogDeletedTemporaryFile(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Deleted temporary directory: {FilePath}")]
+    private static partial void LogDeletedTemporaryDirectory(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error deleting temporary file: {FilePath}")]
+    private static partial void LogErrorDeletingTemporaryFile(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cleaned up {Count} temporary files for operation: {OperationId}")]
+    private static partial void LogCleanedUpTemporaryFilesFor(ILogger logger, int count, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cleaned up {Count} temporary files older than {OlderThan}")]
+    private static partial void LogCleanedUpTemporaryFilesOlder(ILogger logger, int count, TimeSpan olderThan);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error getting size for temp file: {FilePath}")]
+    private static partial void LogErrorGettingSizeForTemp(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error getting stats for temp file: {FilePath}")]
+    private static partial void LogErrorGettingStatsForTemp(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error calculating directory size: {DirectoryPath}")]
+    private static partial void LogErrorCalculatingDirectorySize(ILogger logger, Exception exception, string directoryPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error during automatic temporary file cleanup")]
+    private static partial void LogErrorDuringAutomaticTemporaryFile(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error during disposal cleanup")]
+    private static partial void LogErrorDuringDisposalCleanup(ILogger logger, Exception exception);
 }

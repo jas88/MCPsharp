@@ -18,6 +18,11 @@ public interface IAnalyzerHost
     Task<bool> UnloadAnalyzerAsync(string analyzerId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Unload an analyzer instance
+    /// </summary>
+    Task<AnalyzerUnloadResult> UnloadAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get all loaded analyzers
     /// </summary>
     ImmutableArray<AnalyzerInfo> GetLoadedAnalyzers();
@@ -76,11 +81,6 @@ public interface IAnalyzerHost
     /// Get capabilities of a specific analyzer
     /// </summary>
     Task<AnalyzerCapabilities?> GetAnalyzerCapabilitiesAsync(string analyzerId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Unload an analyzer instance
-    /// </summary>
-    Task<AnalyzerUnloadResult> UnloadAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Event fired when an analyzer is loaded

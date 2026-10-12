@@ -49,7 +49,7 @@ public class BulkOperationOptions
     /// <summary>
     /// Create backup before operation
     /// </summary>
-    public bool CreateBackup { get; set; } = false;
+    public bool CreateBackup { get; set; }
 
     /// <summary>
     /// Maximum parallelism
@@ -59,7 +59,7 @@ public class BulkOperationOptions
     /// <summary>
     /// Dry run - don't actually make changes
     /// </summary>
-    public bool DryRun { get; set; } = false;
+    public bool DryRun { get; set; }
 
     /// <summary>
     /// Fail fast on first error
@@ -74,7 +74,7 @@ public class BulkOperationOptions
     /// <summary>
     /// Include hidden files
     /// </summary>
-    public bool IncludeHidden { get; set; } = false;
+    public bool IncludeHidden { get; set; }
 
     /// <summary>
     /// Custom filters to apply

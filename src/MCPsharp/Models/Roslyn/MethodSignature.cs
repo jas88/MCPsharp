@@ -97,7 +97,7 @@ public class MethodSignature
             return true;
 
         // Handle generic types - they must have the same generic root
-        if (type1.Contains("<") && type2.Contains("<"))
+        if (type1.Contains('<') && type2.Contains('<'))
         {
             var generic1 = type1.Substring(0, type1.IndexOf('<'));
             var generic2 = type2.Substring(0, type2.IndexOf('<'));

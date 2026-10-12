@@ -101,7 +101,7 @@ public class TypeUsageInfo
     /// </summary>
     public string GetDescription()
     {
-        var parts = new List<string> { UsageKind.ToString().ToLower() };
+        var parts = new List<string> { UsageKind.ToString().ToLowerInvariant() };
 
         if (!string.IsNullOrEmpty(MemberName))
             parts.Add($"in {MemberName}");

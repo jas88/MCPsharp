@@ -12,7 +12,7 @@ public sealed class CompilationCache : IDisposable
     private readonly ConcurrentDictionary<ProjectId, int> _projectVersions = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly object _disposeLock = new();
-    private bool _disposed = false;
+    private bool _disposed;
 
     /// <summary>
     /// Get or create a compilation for a project
@@ -170,10 +170,7 @@ public sealed class CompilationCache : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(CompilationCache));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
     public void Dispose()

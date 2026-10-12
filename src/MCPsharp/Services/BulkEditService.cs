@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models;
 using MCPsharp.Models.BulkEdit;
 
@@ -18,14 +19,14 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class BulkEditService : IBulkEditService
 {
-    private readonly ILogger<BulkEditService>? _logger;
+    private readonly ILogger<BulkEditService> _logger;
     private readonly string _tempDirectory;
     private readonly ConcurrentDictionary<string, RollbackInfo> _rollbackSessions;
     private readonly SemaphoreSlim _processingSemaphore;
 
     public BulkEditService(ILogger<BulkEditService>? logger = null)
     {
-        _logger = logger;
+        _logger = logger ?? NullLogger<BulkEditService>.Instance;
         _tempDirectory = Path.Combine(Path.GetTempPath(), "MCPsharp", "BulkEdit");
         _rollbackSessions = new ConcurrentDictionary<string, RollbackInfo>();
         _processingSemaphore = new SemaphoreSlim(Environment.ProcessorCount, Environment.ProcessorCount);
@@ -46,10 +47,10 @@ public partial class BulkEditService : IBulkEditService
         var startTime = DateTime.UtcNow;
         options ??= new BulkEditOptions();
 
-        _logger?.LogInformation("Starting bulk replace operation {OperationId} with pattern {Pattern}", operationId, regexPattern);
+        LogStartingBulkReplaceOperationWith(_logger, operationId, regexPattern);
 
         // Validate regex pattern - this will throw ArgumentException for invalid patterns
-        var regex = new Regex(regexPattern, options.RegexOptions);
+        var regex = new Regex(regexPattern, options.RegexOptions, TimeSpan.FromSeconds(1));
 
         try
         {
@@ -95,6 +96,7 @@ public partial class BulkEditService : IBulkEditService
                 catch (Exception ex)
                 {
                     // Add error result for problematic file but continue processing
+                    LogBulkEditFileFailed(_logger, ex, file);
                     fileResults.Add(new FileBulkEditResult
                     {
                         FilePath = file,
@@ -197,15 +199,13 @@ public partial class BulkEditService : IBulkEditService
                 RollbackInfo = rollbackInfo
             };
 
-            _logger?.LogInformation(
-                "Bulk replace operation {OperationId} completed. Files: {Total}/{Successful}/{Failed}, Changes: {Changes}",
-                operationId, summary.TotalFilesProcessed, summary.SuccessfulFiles, summary.FailedFiles, changesApplied);
+            LogBulkReplaceOperationCompletedFiles(_logger, operationId, summary.TotalFilesProcessed, summary.SuccessfulFiles, summary.FailedFiles, changesApplied);
 
             return result;
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Bulk replace operation {OperationId} failed", operationId);
+            LogBulkReplaceOperationFailed(_logger, ex, operationId);
             var errors = new List<BulkEditError>
             {
                 new BulkEditError
@@ -248,8 +248,7 @@ public partial class BulkEditService : IBulkEditService
         var startTime = DateTime.UtcNow;
         options ??= new BulkEditOptions();
 
-        _logger?.LogInformation("Starting conditional edit operation {OperationId} with condition type {ConditionType}",
-            operationId, condition.ConditionType);
+        LogStartingConditionalEditOperationWith(_logger, operationId, condition.ConditionType);
 
         try
         {
@@ -334,7 +333,7 @@ public partial class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Conditional edit operation {OperationId} failed", operationId);
+            LogConditionalEditOperationFailed(_logger, ex, operationId);
             return CreateErrorResult(operationId, startTime, ex.Message);
         }
     }
@@ -350,8 +349,7 @@ public partial class BulkEditService : IBulkEditService
         var startTime = DateTime.UtcNow;
         options ??= new BulkEditOptions();
 
-        _logger?.LogInformation("Starting batch refactor operation {OperationId} with refactor type {RefactorType}",
-            operationId, refactorPattern.RefactorType);
+        LogStartingBatchRefactorOperationWith(_logger, operationId, refactorPattern.RefactorType);
 
         try
         {
@@ -436,7 +434,7 @@ public partial class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Batch refactor operation {OperationId} failed", operationId);
+            LogBatchRefactorOperationFailed(_logger, ex, operationId);
             return CreateErrorResult(operationId, startTime, ex.Message);
         }
     }
@@ -451,8 +449,7 @@ public partial class BulkEditService : IBulkEditService
         var startTime = DateTime.UtcNow;
         options ??= new BulkEditOptions();
 
-        _logger?.LogInformation("Starting multi-file edit operation {OperationId} with {OperationCount} operations",
-            operationId, editOperations.Count);
+        LogStartingMultiFileEditOperation(_logger, operationId, editOperations.Count);
 
         try
         {
@@ -560,8 +557,38 @@ public partial class BulkEditService : IBulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Multi-file edit operation {OperationId} failed", operationId);
+            LogMultiFileEditOperationFailed(_logger, ex, operationId);
             return CreateErrorResult(operationId, startTime, ex.Message);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting bulk replace operation {OperationId} with pattern {Pattern}")]
+    private static partial void LogStartingBulkReplaceOperationWith(ILogger logger, string operationId, string pattern);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Bulk replace operation {OperationId} completed. Files: {Total}/{Successful}/{Failed}, Changes: {Changes}")]
+    private static partial void LogBulkReplaceOperationCompletedFiles(ILogger logger, string operationId, int total, int successful, int failed, int changes);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Bulk replace operation {OperationId} failed")]
+    private static partial void LogBulkReplaceOperationFailed(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting conditional edit operation {OperationId} with condition type {ConditionType}")]
+    private static partial void LogStartingConditionalEditOperationWith(ILogger logger, string operationId, BulkConditionType conditionType);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Conditional edit operation {OperationId} failed")]
+    private static partial void LogConditionalEditOperationFailed(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting batch refactor operation {OperationId} with refactor type {RefactorType}")]
+    private static partial void LogStartingBatchRefactorOperationWith(ILogger logger, string operationId, BulkRefactorType refactorType);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Batch refactor operation {OperationId} failed")]
+    private static partial void LogBatchRefactorOperationFailed(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting multi-file edit operation {OperationId} with {OperationCount} operations")]
+    private static partial void LogStartingMultiFileEditOperation(ILogger logger, string operationId, int operationCount);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Multi-file edit operation {OperationId} failed")]
+    private static partial void LogMultiFileEditOperationFailed(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Bulk edit failed for file {FilePath}")]
+    private static partial void LogBulkEditFileFailed(ILogger logger, Exception exception, string filePath);
 }

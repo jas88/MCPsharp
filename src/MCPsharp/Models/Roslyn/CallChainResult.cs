@@ -36,7 +36,7 @@ public class CallChainResult
     /// </summary>
     public List<MethodSignature> UniqueCallers =>
         Paths.Where(p => p.Length > 0)
-             .Select(p => p.Steps.First().FromMethod)
+             .Select(p => p.Steps[0].FromMethod)
              .Distinct()
              .ToList();
 
@@ -45,7 +45,7 @@ public class CallChainResult
     /// </summary>
     public List<MethodSignature> UniqueCallees =>
         Paths.Where(p => p.Length > 0)
-             .Select(p => p.Steps.Last().ToMethod)
+             .Select(p => p.Steps[^1].ToMethod)
              .Distinct()
              .ToList();
 }

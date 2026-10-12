@@ -1,16 +1,17 @@
 using System.Collections.Concurrent;
 using MCPsharp.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services;
 
 /// <summary>
 /// Manages MCP resources that can be listed and read by clients.
 /// </summary>
-public sealed class McpResourceRegistry
+public sealed partial class McpResourceRegistry
 {
     private readonly ConcurrentDictionary<string, RegisteredResource> _resources = new();
-    private readonly ILogger<McpResourceRegistry>? _logger;
+    private readonly ILogger<McpResourceRegistry> _logger;
 
     private sealed class RegisteredResource
     {
@@ -20,7 +21,7 @@ public sealed class McpResourceRegistry
 
     public McpResourceRegistry(ILogger<McpResourceRegistry>? logger = null)
     {
-        _logger = logger;
+        _logger = logger ?? NullLogger<McpResourceRegistry>.Instance;
     }
 
     /// <summary>
@@ -41,13 +42,13 @@ public sealed class McpResourceRegistry
 
         if (_resources.TryAdd(resource.Uri, registered))
         {
-            _logger?.LogDebug("Registered resource: {Uri}", resource.Uri);
+            LogRegisteredResource(_logger, resource.Uri);
         }
         else
         {
             // Update existing
             _resources[resource.Uri] = registered;
-            _logger?.LogDebug("Updated resource: {Uri}", resource.Uri);
+            LogUpdatedResource(_logger, resource.Uri);
         }
     }
 
@@ -81,7 +82,7 @@ public sealed class McpResourceRegistry
         var removed = _resources.TryRemove(uri, out _);
         if (removed)
         {
-            _logger?.LogDebug("Unregistered resource: {Uri}", uri);
+            LogUnregisteredResource(_logger, uri);
         }
         return removed;
     }
@@ -137,6 +138,18 @@ public sealed class McpResourceRegistry
     public void Clear()
     {
         _resources.Clear();
-        _logger?.LogDebug("Cleared all resources");
+        LogClearedAllResources(_logger);
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Registered resource: {Uri}")]
+    private static partial void LogRegisteredResource(ILogger logger, string uri);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Updated resource: {Uri}")]
+    private static partial void LogUpdatedResource(ILogger logger, string uri);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Unregistered resource: {Uri}")]
+    private static partial void LogUnregisteredResource(ILogger logger, string uri);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cleared all resources")]
+    private static partial void LogClearedAllResources(ILogger logger);
 }

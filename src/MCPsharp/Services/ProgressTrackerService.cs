@@ -13,12 +13,11 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Service for tracking progress of streaming operations
 /// </summary>
-public class ProgressTrackerService : IProgressTracker, IDisposable
+public partial class ProgressTrackerService : IProgressTracker, IDisposable
 {
     private readonly ILogger<ProgressTrackerService> _logger;
     private readonly ConcurrentDictionary<string, StreamProgress> _progressTracker;
     private readonly Timer _cleanupTimer;
-    private readonly object _lock = new object();
 
     public ProgressTrackerService(ILogger<ProgressTrackerService> logger)
     {
@@ -40,8 +39,7 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
 
         _progressTracker.TryAdd(operationId, progress);
 
-        _logger.LogInformation("Created progress tracker for operation {OperationId} ({Name}) with {TotalBytes} bytes",
-            operationId, name, totalBytes);
+        LogCreatedProgressTrackerForOperation(_logger, operationId, name, totalBytes);
 
         return Task.FromResult(operationId);
     }
@@ -80,6 +78,40 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
         }
 
         return Task.CompletedTask;
+    }
+
+    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
+    public async Task UpdateProgressAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default)
+    {
+        if (_progressTracker.TryGetValue(operationId, out var progress))
+        {
+            lock (progress)
+            {
+                progress.LastUpdated = DateTime.UtcNow;
+
+                // Update metadata with progress info
+                progress.Metadata["TotalSteps"] = progressInfo.TotalSteps;
+                progress.Metadata["CurrentStep"] = progressInfo.CurrentStep;
+
+                if (!string.IsNullOrEmpty(progressInfo.CurrentItem))
+                {
+                    progress.Metadata["CurrentItem"] = progressInfo.CurrentItem;
+                }
+
+                if (!string.IsNullOrEmpty(progressInfo.Message))
+                {
+                    progress.Metadata["Message"] = progressInfo.Message;
+                }
+
+                // Calculate percentage complete
+                if (progressInfo.TotalSteps > 0)
+                {
+                    progress.Metadata["PercentComplete"] = (double)progressInfo.CurrentStep / progressInfo.TotalSteps * 100;
+                }
+            }
+
+            LogUpdatedProgressForOperationStep(_logger, operationId, progressInfo.CurrentStep, progressInfo.TotalSteps);
+        }
     }
 
     public Task<StreamProgress?> GetProgressAsync(string operationId)
@@ -155,8 +187,7 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
 
         if (toRemove.Count > 0)
         {
-            _logger.LogInformation("Cleaned up {Count} progress trackers older than {OlderThan}",
-                toRemove.Count, olderThan);
+            LogCleanedUpProgressTrackersOlder(_logger, toRemove.Count, olderThan);
         }
 
         return Task.CompletedTask;
@@ -170,7 +201,7 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during automatic progress tracker cleanup");
+            LogErrorDuringAutomaticProgressTracker(_logger, ex);
         }
     }
 
@@ -221,8 +252,7 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
             return existing;
         });
 
-        _logger.LogDebug("Reported progress for operation {OperationId}: {ProgressPercentage:F1}%",
-            progress.OperationId, progress.ProgressPercentage);
+        LogReportedProgressForOperation(_logger, progress.OperationId, progress.ProgressPercentage);
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
@@ -244,8 +274,7 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
 
         _progressTracker.TryAdd(operationId, progress);
 
-        _logger.LogInformation("Started progress tracking for operation {OperationId}: {Title} ({CurrentStep}/{TotalSteps})",
-            operationId, progressInfo.Title, progressInfo.CurrentStep, progressInfo.TotalSteps);
+        LogStartedProgressTrackingForOperation(_logger, operationId, progressInfo.Title, progressInfo.CurrentStep, progressInfo.TotalSteps);
 
         return operationId;
     }
@@ -269,54 +298,18 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
                 progress.Metadata["Result_Success"] = result.Success;
                 progress.Metadata["Result_Message"] = result.Message;
 
-                if (result.Warnings?.Any() == true)
+                if (result.Warnings?.Count > 0)
                 {
                     progress.Metadata["Result_Warnings"] = result.Warnings;
                 }
 
-                if (result.Errors?.Any() == true)
+                if (result.Errors?.Count > 0)
                 {
                     progress.Metadata["Result_Errors"] = result.Errors;
                 }
             }
 
-            _logger.LogInformation("Completed progress tracking for operation {ProgressId}: Success={Success}, Message={Message}",
-                progressId, result.Success, result.Message);
-        }
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task UpdateProgressAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default)
-    {
-        if (_progressTracker.TryGetValue(operationId, out var progress))
-        {
-            lock (progress)
-            {
-                progress.LastUpdated = DateTime.UtcNow;
-
-                // Update metadata with progress info
-                progress.Metadata["TotalSteps"] = progressInfo.TotalSteps;
-                progress.Metadata["CurrentStep"] = progressInfo.CurrentStep;
-
-                if (!string.IsNullOrEmpty(progressInfo.CurrentItem))
-                {
-                    progress.Metadata["CurrentItem"] = progressInfo.CurrentItem;
-                }
-
-                if (!string.IsNullOrEmpty(progressInfo.Message))
-                {
-                    progress.Metadata["Message"] = progressInfo.Message;
-                }
-
-                // Calculate percentage complete
-                if (progressInfo.TotalSteps > 0)
-                {
-                    progress.Metadata["PercentComplete"] = (double)progressInfo.CurrentStep / progressInfo.TotalSteps * 100;
-                }
-            }
-
-            _logger.LogDebug("Updated progress for operation {OperationId}: Step {CurrentStep}/{TotalSteps}",
-                operationId, progressInfo.CurrentStep, progressInfo.TotalSteps);
+            LogCompletedProgressTrackingForOperation(_logger, progressId, result.Success, result.Message);
         }
     }
 
@@ -335,4 +328,25 @@ public class ProgressTrackerService : IProgressTracker, IDisposable
             _progressTracker.Clear();
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Created progress tracker for operation {OperationId} ({Name}) with {TotalBytes} bytes")]
+    private static partial void LogCreatedProgressTrackerForOperation(ILogger logger, string operationId, string name, long totalBytes);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cleaned up {Count} progress trackers older than {OlderThan}")]
+    private static partial void LogCleanedUpProgressTrackersOlder(ILogger logger, int count, TimeSpan olderThan);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error during automatic progress tracker cleanup")]
+    private static partial void LogErrorDuringAutomaticProgressTracker(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Reported progress for operation {OperationId}: {ProgressPercentage:F1}%")]
+    private static partial void LogReportedProgressForOperation(ILogger logger, string operationId, double progressPercentage);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Started progress tracking for operation {OperationId}: {Title} ({CurrentStep}/{TotalSteps})")]
+    private static partial void LogStartedProgressTrackingForOperation(ILogger logger, string operationId, string title, int currentStep, int totalSteps);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Completed progress tracking for operation {ProgressId}: Success={Success}, Message={Message}")]
+    private static partial void LogCompletedProgressTrackingForOperation(ILogger logger, string progressId, bool success, string message);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Updated progress for operation {OperationId}: Step {CurrentStep}/{TotalSteps}")]
+    private static partial void LogUpdatedProgressForOperationStep(ILogger logger, string operationId, int currentStep, int totalSteps);
 }

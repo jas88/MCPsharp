@@ -158,7 +158,7 @@ public record DuplicateDetectionOptions
     /// <summary>
     /// Whether to ignore test code
     /// </summary>
-    public bool IgnoreTestCode { get; init; } = false;
+    public bool IgnoreTestCode { get; init; }
 
     /// <summary>
     /// Whether to ignore trivial differences (whitespace, comments)
@@ -168,7 +168,7 @@ public record DuplicateDetectionOptions
     /// <summary>
     /// Whether to ignore variable and method names (structure-only comparison)
     /// </summary>
-    public bool IgnoreIdentifiers { get; init; } = false;
+    public bool IgnoreIdentifiers { get; init; }
 
     /// <summary>
     /// Similarity threshold for near-miss detection (0.0-1.0)
@@ -261,17 +261,17 @@ public record CodeComparisonOptions
     /// <summary>
     /// Whether to ignore identifier names (variables, methods)
     /// </summary>
-    public bool IgnoreIdentifiers { get; init; } = false;
+    public bool IgnoreIdentifiers { get; init; }
 
     /// <summary>
     /// Whether to ignore string literals
     /// </summary>
-    public bool IgnoreStringLiterals { get; init; } = false;
+    public bool IgnoreStringLiterals { get; init; }
 
     /// <summary>
     /// Whether to ignore numeric literals
     /// </summary>
-    public bool IgnoreNumericLiterals { get; init; } = false;
+    public bool IgnoreNumericLiterals { get; init; }
 
     /// <summary>
     /// Weight for structural similarity (0.0-1.0)
@@ -310,7 +310,7 @@ public record RefactoringOptions
     /// <summary>
     /// Whether to prioritize breaking changes
     /// </summary>
-    public bool PrioritizeBreakingChanges { get; init; } = false;
+    public bool PrioritizeBreakingChanges { get; init; }
 
     /// <summary>
     /// Whether to include estimated effort

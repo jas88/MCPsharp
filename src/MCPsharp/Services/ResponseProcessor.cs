@@ -1,6 +1,6 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models;
 
 namespace MCPsharp.Services;
@@ -8,23 +8,21 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Service for processing tool responses to respect token limits
 /// </summary>
-public class ResponseProcessor
+public partial class ResponseProcessor
 {
     private readonly ResponseConfiguration _config;
-    private readonly ILogger<ResponseProcessor>? _logger;
+    private readonly ILogger<ResponseProcessor> _logger;
 
     // Approximate token to character ratio (4 chars ≈ 1 token for English text)
     private const double TokenToCharRatio = 0.25;
 
-    // Patterns for different content types
-    private static readonly Regex JsonPattern = new(@"^\s*[\[\{]", RegexOptions.Compiled);
-    private static readonly Regex CodePattern = new(@"^\s*(using|namespace|public|private|class|interface|function|def|import|package)", RegexOptions.Compiled | RegexOptions.Multiline);
-    private static readonly Regex LinePattern = new(@"\r?\n", RegexOptions.Compiled);
+    private static readonly string[] ParagraphSeparators = { "\r\n\r\n", "\n\n" };
+    private static readonly string[] LineSeparators = { "\r\n", "\n" };
 
     public ResponseProcessor(ResponseConfiguration config, ILogger<ResponseProcessor>? logger = null)
     {
         _config = config ?? throw new ArgumentNullException(nameof(config));
-        _logger = logger;
+        _logger = logger ?? NullLogger<ResponseProcessor>.Instance;
     }
 
     /// <summary>
@@ -83,11 +81,10 @@ public class ResponseProcessor
         }
 
         // Perform truncation
-        var truncatedContent = TruncateResponse(response, toolName);
+        var truncatedContent = TruncateResponse(response);
         var truncatedTokens = EstimateTokenCount(truncatedContent);
 
-        _logger?.LogInformation("Truncated response for tool {ToolName} from {OriginalTokens} to {TruncatedTokens} tokens",
-            toolName, originalTokenCount, truncatedTokens);
+        LogTruncatedResponseForToolFrom(_logger, toolName, originalTokenCount, truncatedTokens);
 
         return new ProcessedResponse
         {
@@ -117,14 +114,12 @@ public class ResponseProcessor
 
         try
         {
-            jsonString = JsonSerializer.Serialize(obj, new JsonSerializerOptions
-            {
-                WriteIndented = false
-            });
+            jsonString = JsonSerializer.Serialize(obj);
         }
-        catch
+        catch (Exception ex)
         {
             // Fallback to string representation
+            LogSerializationFallback(_logger, ex, obj.GetType().Name);
             jsonString = obj.ToString() ?? string.Empty;
         }
 
@@ -139,7 +134,7 @@ public class ResponseProcessor
     {
         return _config.ExemptTools.Any(exempt =>
             string.Equals(exempt, toolName, StringComparison.OrdinalIgnoreCase) ||
-            (exempt.EndsWith("*") && toolName.StartsWith(exempt[..^1], StringComparison.OrdinalIgnoreCase)));
+            (exempt.EndsWith('*') && toolName.StartsWith(exempt[..^1], StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>
@@ -158,14 +153,11 @@ public class ResponseProcessor
     /// <summary>
     /// Truncate a response based on the configured summary style
     /// </summary>
-    private object TruncateResponse(object response, string toolName)
+    private object TruncateResponse(object response)
     {
         try
         {
-            var jsonString = JsonSerializer.Serialize(response, new JsonSerializerOptions
-            {
-                WriteIndented = false
-            });
+            var jsonString = JsonSerializer.Serialize(response);
 
             return _config.SummaryStyle switch
             {
@@ -178,7 +170,7 @@ public class ResponseProcessor
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "Failed to truncate response, using fallback method");
+            LogFailedToTruncateResponseUsing(_logger, ex);
             return TruncateWithEllipsis(response.ToString() ?? string.Empty);
         }
     }
@@ -186,7 +178,7 @@ public class ResponseProcessor
     /// <summary>
     /// Simple ellipsis truncation
     /// </summary>
-    private object TruncateWithEllipsis(string content)
+    private string TruncateWithEllipsis(string content)
     {
         const string suffix = "... [truncated]";
 
@@ -214,7 +206,7 @@ public class ResponseProcessor
     /// <summary>
     /// Paragraph-based truncation
     /// </summary>
-    private object TruncateByParagraphs(string content)
+    private string TruncateByParagraphs(string content)
     {
         const string suffix = "\n\n... [truncated]";
         var targetChars = (int)(_config.MaxTokens / TokenToCharRatio);
@@ -227,7 +219,7 @@ public class ResponseProcessor
 
         // Unescape JSON to get actual newlines, then split by paragraphs
         var unescapedContent = content.Replace("\\n", "\n");
-        var paragraphs = unescapedContent.Split(new[] { "\r\n\r\n", "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
+        var paragraphs = unescapedContent.Split(ParagraphSeparators, StringSplitOptions.RemoveEmptyEntries);
         var currentLength = 0;
         var resultParagraphs = new List<string>();
 
@@ -265,8 +257,9 @@ public class ResponseProcessor
             var jsonElement = JsonSerializer.SerializeToElement(response);
             return TruncateJsonElement(jsonElement, (int)(_config.MaxTokens * 0.8));
         }
-        catch
+        catch (Exception ex)
         {
+            LogSerializationFallback(_logger, ex, response.GetType().Name);
             return TruncateWithEllipsis(JsonSerializer.Serialize(response));
         }
     }
@@ -296,7 +289,7 @@ public class ResponseProcessor
     private Dictionary<string, object> TruncateJsonObject(JsonElement obj, int targetTokens)
     {
         var result = new Dictionary<string, object>();
-        var currentTokens = 2; // Start with overhead for {}
+        var currentTokens = 2; // Start with overhead for the enclosing braces
 
         // Get properties and sort by importance (simple heuristic: shorter values first)
         var properties = obj.EnumerateObject()
@@ -352,7 +345,7 @@ public class ResponseProcessor
     /// <summary>
     /// Truncate JSON string
     /// </summary>
-    private string TruncateJsonString(string str, int targetTokens)
+    private static string TruncateJsonString(string str, int targetTokens)
     {
         const string suffix = "... [truncated]";
         var targetChars = (int)(targetTokens / TokenToCharRatio);
@@ -368,7 +361,7 @@ public class ResponseProcessor
     /// <summary>
     /// Line-based truncation for code and logs
     /// </summary>
-    private object TruncateByLines(string content)
+    private string TruncateByLines(string content)
     {
         var suffix = Environment.NewLine + "... [truncated]";
         var targetChars = (int)(_config.MaxTokens / TokenToCharRatio);
@@ -381,7 +374,7 @@ public class ResponseProcessor
 
         // Unescape JSON to get actual newlines, then split by lines
         var unescapedContent = content.Replace("\\n", "\n");
-        var lines = unescapedContent.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+        var lines = unescapedContent.Split(LineSeparators, StringSplitOptions.None);
         var currentLength = 0;
         var resultLines = new List<string>();
 
@@ -408,4 +401,13 @@ public class ResponseProcessor
 
         return jsonResult;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Truncated response for tool {ToolName} from {OriginalTokens} to {TruncatedTokens} tokens")]
+    private static partial void LogTruncatedResponseForToolFrom(ILogger logger, string toolName, int originalTokens, int truncatedTokens);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "JSON serialization of {TypeName} failed; using fallback representation")]
+    private static partial void LogSerializationFallback(ILogger logger, Exception exception, string typeName);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to truncate response, using fallback method")]
+    private static partial void LogFailedToTruncateResponseUsing(ILogger logger, Exception exception);
 }

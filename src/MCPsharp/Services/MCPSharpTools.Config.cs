@@ -89,6 +89,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetConfigSchema));
             return new ToolCallResult { Success = false, Error = $"Error analyzing configuration schema: {ex.Message}" };
         }
     }
@@ -204,7 +205,7 @@ public partial class McpToolRegistry
                 {
                     mergedConfig = mergedConfig,
                     sourceFiles = configPaths,
-                    fileType = fileTypes.First(),
+                    fileType = fileTypes[0],
                     mergedAt = DateTime.UtcNow,
                     filesCount = configPaths.Count
                 }
@@ -232,6 +233,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteMergeConfigs));
             return new ToolCallResult { Success = false, Error = $"Error merging configuration files: {ex.Message}" };
         }
     }

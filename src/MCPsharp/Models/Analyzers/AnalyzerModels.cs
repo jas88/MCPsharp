@@ -142,7 +142,7 @@ public record AnalysisRequest
     public ImmutableArray<string> Files { get; init; } = ImmutableArray<string>.Empty;
     public ImmutableArray<string> Rules { get; init; } = ImmutableArray<string>.Empty;
     public AnalyzerConfiguration? Configuration { get; init; }
-    public bool IncludeDisabledRules { get; init; } = false;
+    public bool IncludeDisabledRules { get; init; }
     public bool GenerateFixes { get; init; } = true;
 }
 
@@ -154,7 +154,7 @@ public record ApplyFixRequest
     public string AnalyzerId { get; init; } = string.Empty;
     public ImmutableArray<string> IssueIds { get; init; } = ImmutableArray<string>.Empty;
     public ImmutableArray<string> FixIds { get; init; } = ImmutableArray<string>.Empty;
-    public bool PreviewOnly { get; init; } = false;
+    public bool PreviewOnly { get; init; }
     public bool ResolveConflicts { get; init; } = true;
     public Dictionary<string, object> Inputs { get; init; } = new();
 }

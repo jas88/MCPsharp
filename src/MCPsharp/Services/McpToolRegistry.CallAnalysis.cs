@@ -88,7 +88,7 @@ public partial class McpToolRegistry
             maxDepth = depthElement.GetInt32();
         }
 
-        var callDirection = direction.ToLower() switch
+        var callDirection = direction.ToLowerInvariant() switch
         {
             "forward" => CallDirection.Forward,
             "both" => CallDirection.Both,

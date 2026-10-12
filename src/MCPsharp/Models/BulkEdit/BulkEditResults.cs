@@ -229,6 +229,13 @@ public class FileBulkEditResult
 public class BulkEditSummary
 {
     /// <summary>
+    /// Human-readable one-line summary of the bulk edit outcome
+    /// </summary>
+    public override string ToString() =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"{SuccessfulFiles} of {TotalFilesProcessed} files modified ({FailedFiles} failed, {SkippedFiles} skipped), {TotalChangesApplied} changes applied");
+
+    /// <summary>
     /// Total number of files matched by the operation criteria
     /// </summary>
     public required int TotalFilesMatched { get; init; }

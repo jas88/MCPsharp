@@ -110,9 +110,9 @@ public enum SecurityEventType
 public record AnalyzerPermissions
 {
     public bool CanReadFiles { get; init; } = true;
-    public bool CanWriteFiles { get; init; } = false;
-    public bool CanExecuteCommands { get; init; } = false;
-    public bool CanAccessNetwork { get; init; } = false;
+    public bool CanWriteFiles { get; init; }
+    public bool CanExecuteCommands { get; init; }
+    public bool CanAccessNetwork { get; init; }
     public bool CanAccessFileSystem { get; init; } = true;
     public ImmutableArray<string> AllowedPaths { get; init; } = ImmutableArray<string>.Empty;
     public ImmutableArray<string> DeniedPaths { get; init; } = ImmutableArray<string>.Empty;

@@ -275,7 +275,7 @@ public class FileContentOptions : ToolOptions
     /// <summary>
     /// Overwrite existing files
     /// </summary>
-    public bool Overwrite { get; set; } = false;
+    public bool Overwrite { get; set; }
 
     /// <summary>
     /// Content transformations to apply
@@ -339,27 +339,27 @@ public class FileOperationOptions
     /// <summary>
     /// Require UTF-8 encoding
     /// </summary>
-    public bool RequireUtf8 { get; set; } = false;
+    public bool RequireUtf8 { get; set; }
 
     /// <summary>
     /// Include new content in response
     /// </summary>
-    public bool IncludeNewContent { get; set; } = false;
+    public bool IncludeNewContent { get; set; }
 
     /// <summary>
     /// Overwrite existing files for copy/move
     /// </summary>
-    public bool Overwrite { get; set; } = false;
+    public bool Overwrite { get; set; }
 
     /// <summary>
     /// Create backup before operation
     /// </summary>
-    public bool CreateBackup { get; set; } = false;
+    public bool CreateBackup { get; set; }
 
     /// <summary>
     /// Dry run - don't actually make changes
     /// </summary>
-    public bool DryRun { get; set; } = false;
+    public bool DryRun { get; set; }
 
     /// <summary>
     /// Create a new FileOperationOptions with the specified DryRun value
@@ -439,9 +439,9 @@ public class FileOperationResult
 public class FileBatchRequest
 {
     public required List<FileOperationDefinition> Operations { get; init; }
-    public bool EnableTransactions { get; set; } = false;
+    public bool EnableTransactions { get; set; }
     public bool FailFast { get; set; } = true;
-    public bool ContinueOnError { get; set; } = false;
+    public bool ContinueOnError { get; set; }
     public string? RequestId { get; set; }
 }
 

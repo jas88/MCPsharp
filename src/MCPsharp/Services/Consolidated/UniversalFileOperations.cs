@@ -13,7 +13,7 @@ namespace MCPsharp.Services.Consolidated;
 /// Universal file operations service consolidating file_info, file_content, file_operation, and file_batch
 /// Phase 1: Consolidate 8 file operation tools into 4 universal tools
 /// </summary>
-public class UniversalFileOperations
+public partial class UniversalFileOperations
 {
     private readonly string _rootPath;
     private readonly FileOperationsService _fileOperations;
@@ -40,11 +40,7 @@ public class UniversalFileOperations
 
         try
         {
-            var result = new FileInfoResponse
-            {
-                Path = request.Path,
-                RequestId = request.RequestId ?? Guid.NewGuid().ToString()
-            };
+            FileInfoResponse result;
 
             // Determine if this is a directory or file
             var fullPath = GetFullPath(request.Path);
@@ -66,7 +62,7 @@ public class UniversalFileOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting file info for {Path}", request.Path);
+            LogErrorGettingFileInfoFor(_logger, ex, request.Path);
 
             return new FileInfoResponse
             {
@@ -140,7 +136,7 @@ public class UniversalFileOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling file content for {Path}", request.Path);
+            LogErrorHandlingFileContentFor(_logger, ex, request.Path);
 
             return new FileContentResponse
             {
@@ -206,7 +202,7 @@ public class UniversalFileOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error executing file operation {Operation} on {Path}", request.Operation, request.Path);
+            LogErrorExecutingFileOperationOn(_logger, ex, request.Operation, request.Path);
 
             return new FileOperationResponse
             {
@@ -277,7 +273,7 @@ public class UniversalFileOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error executing batch operations");
+            LogErrorExecutingBatchOperations(_logger, ex);
             response.Error = ex.Message;
 
             // Rollback on exception
@@ -354,9 +350,10 @@ public class UniversalFileOperations
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // Binary files can't be read as text
+                LogIgnoredException(_logger, ex, "reading file for line count", relativePath);
                 response.LineCount = -1;
             }
 
@@ -441,7 +438,7 @@ public class UniversalFileOperations
         };
 
         // Apply content transformations if requested
-        if (request.Options?.Transformations?.Any() == true)
+        if (request.Options?.Transformations?.Count > 0)
         {
             response.Content = ApplyContentTransformations(response.Content ?? string.Empty, request.Options.Transformations);
         }
@@ -506,6 +503,7 @@ public class UniversalFileOperations
         }
         catch (Exception ex)
         {
+            LogFileOperationFailed(_logger, ex, "append", request.Path);
             return new FileContentResponse
             {
                 Path = request.Path,
@@ -563,7 +561,7 @@ public class UniversalFileOperations
 
     private async Task<FileOperationResponse> HandleEditAsync(FileOperationRequest request, CancellationToken ct)
     {
-        if (request.Edits == null || !request.Edits.Any())
+        if (request.Edits == null || request.Edits.Count == 0)
         {
             return new FileOperationResponse
             {
@@ -645,8 +643,9 @@ public class UniversalFileOperations
                     });
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                LogIgnoredException(_logger, ex, "reading file for validation", request.Path);
                 validationResults.Add(new ValidationResult
                 {
                     Type = ValidationType.Readable,
@@ -715,6 +714,7 @@ public class UniversalFileOperations
         }
         catch (Exception ex)
         {
+            LogFileOperationFailed(_logger, ex, "copy", request.Path);
             return new FileOperationResponse
             {
                 Path = request.Path,
@@ -770,6 +770,7 @@ public class UniversalFileOperations
         }
         catch (Exception ex)
         {
+            LogFileOperationFailed(_logger, ex, "move", request.Path);
             return new FileOperationResponse
             {
                 Path = request.Path,
@@ -807,6 +808,7 @@ public class UniversalFileOperations
         }
         catch (Exception ex)
         {
+            LogFileOperationFailed(_logger, ex, "delete", request.Path);
             return new FileOperationResponse
             {
                 Path = request.Path,
@@ -963,7 +965,11 @@ public class UniversalFileOperations
             var hash = await sha256.ComputeHashAsync(stream, ct);
             return Convert.ToHexString(hash).ToLowerInvariant();
         }
-        catch
+        catch (IOException)
+        {
+            return string.Empty;
+        }
+        catch (UnauthorizedAccessException)
         {
             return string.Empty;
         }
@@ -978,7 +984,11 @@ public class UniversalFileOperations
                 return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
                     .Sum(file => new System.IO.FileInfo(file).Length);
             }
-            catch
+            catch (IOException)
+            {
+                return 0;
+            }
+            catch (UnauthorizedAccessException)
             {
                 return 0;
             }
@@ -1005,7 +1015,7 @@ public class UniversalFileOperations
                 TransformationType.NormalizeLineEndings => result.Replace("\r\n", "\n").Replace('\r', '\n'),
                 TransformationType.RemoveBlankLines => string.Join('\n', result.Split('\n').Where(line => !string.IsNullOrWhiteSpace(line))),
                 TransformationType.SortLines => string.Join('\n', result.Split('\n').OrderBy(line => line)),
-                TransformationType.RemoveComments => RemoveComments(result, transformation.Language),
+                TransformationType.RemoveComments => RemoveComments(result),
                 _ => result
             };
         }
@@ -1013,7 +1023,7 @@ public class UniversalFileOperations
         return result;
     }
 
-    private static string RemoveComments(string content, string? language)
+    private static string RemoveComments(string content)
     {
         // Simple comment removal - could be enhanced per language
         var lines = content.Split('\n');
@@ -1022,7 +1032,7 @@ public class UniversalFileOperations
         foreach (var line in lines)
         {
             var trimmed = line.Trim();
-            if (!trimmed.StartsWith("//") && !trimmed.StartsWith("#") && !trimmed.StartsWith("/*"))
+            if (!trimmed.StartsWith("//", StringComparison.Ordinal) && !trimmed.StartsWith('#') && !trimmed.StartsWith("/*", StringComparison.Ordinal))
             {
                 result.Add(line);
             }
@@ -1047,7 +1057,7 @@ public class UniversalFileOperations
                 var matches = System.Text.RegularExpressions.Regex.Matches(
                     content,
                     @"using\s+([\w.]+);",
-                    System.Text.RegularExpressions.RegexOptions.Multiline);
+                    System.Text.RegularExpressions.RegexOptions.Multiline, TimeSpan.FromSeconds(1));
 
                 foreach (System.Text.RegularExpressions.Match match in matches)
                 {
@@ -1055,9 +1065,17 @@ public class UniversalFileOperations
                 }
             }
         }
-        catch
+        catch (IOException)
         {
-            // Ignore errors in dependency extraction
+            // Ignore unreadable files in dependency extraction
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Ignore inaccessible files in dependency extraction
+        }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+        {
+            // Ignore pathological content in dependency extraction
         }
 
         return dependencies;
@@ -1065,16 +1083,11 @@ public class UniversalFileOperations
 
     private static bool IsValidUtf8(string content)
     {
-        try
-        {
-            var bytes = Encoding.UTF8.GetBytes(content);
-            var decoded = Encoding.UTF8.GetString(bytes);
-            return decoded == content;
-        }
-        catch
-        {
-            return false;
-        }
+        // Encoding.UTF8 uses replacement fallback, so encoding/decoding never throws;
+        // lone surrogates are replaced and therefore fail the round-trip comparison.
+        var bytes = Encoding.UTF8.GetBytes(content);
+        var decoded = Encoding.UTF8.GetString(bytes);
+        return decoded == content;
     }
 
     private async Task<string?> CreateTransactionBackupAsync(List<FileOperationDefinition> operations, CancellationToken ct)
@@ -1084,17 +1097,18 @@ public class UniversalFileOperations
 
         try
         {
-            foreach (var operation in operations.Where(o => File.Exists(GetFullPath(o.Path))))
+            foreach (var operationPath in operations.Select(o => o.Path).Where(p => File.Exists(GetFullPath(p))))
             {
-                var sourcePath = GetFullPath(operation.Path);
-                var backupPath = Path.Combine(backupDir, operation.Path.Replace('/', '_').Replace('\\', '_'));
+                var sourcePath = GetFullPath(operationPath);
+                var backupPath = Path.Combine(backupDir, operationPath.Replace('/', '_').Replace('\\', '_'));
                 await Task.Run(() => File.Copy(sourcePath, backupPath), ct);
             }
 
             return backupDir;
         }
-        catch
+        catch (Exception ex)
         {
+            LogIgnoredException(_logger, ex, "creating transaction backup", backupDir);
             // Cleanup on failure
             if (Directory.Exists(backupDir))
             {
@@ -1119,24 +1133,47 @@ public class UniversalFileOperations
 
                 await Task.Run(() => File.Copy(backupFile, targetPath, true), ct);
             }
-            catch
+            catch (Exception ex)
             {
                 // Continue with other files
+                LogIgnoredException(_logger, ex, "restoring backup file", backupFile);
             }
         }
     }
 
-    private async Task CleanupTransactionBackupAsync(string backupPath, CancellationToken ct)
+    private static async Task CleanupTransactionBackupAsync(string backupPath, CancellationToken ct)
     {
         try
         {
             await Task.Run(() => Directory.Delete(backupPath, true), ct);
         }
-        catch
+        catch (IOException)
+        {
+            // Ignore cleanup errors
+        }
+        catch (UnauthorizedAccessException)
         {
             // Ignore cleanup errors
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to {Operation} file: {Path}")]
+    private static partial void LogFileOperationFailed(ILogger logger, Exception exception, string operation, string path);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Ignored exception while {Activity}: {Path}")]
+    private static partial void LogIgnoredException(ILogger logger, Exception exception, string activity, string path);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting file info for {Path}")]
+    private static partial void LogErrorGettingFileInfoFor(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error handling file content for {Path}")]
+    private static partial void LogErrorHandlingFileContentFor(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error executing file operation {Operation} on {Path}")]
+    private static partial void LogErrorExecutingFileOperationOn(ILogger logger, Exception exception, FileOperationType operation, string path);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error executing batch operations")]
+    private static partial void LogErrorExecutingBatchOperations(ILogger logger, Exception exception);
 
     #endregion
 }

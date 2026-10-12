@@ -174,7 +174,7 @@ public partial class McpToolRegistry
                         {
                             diagnostic_id = diagnostic.Id,
                             severity = diagnostic.Severity.ToString(),
-                            message = diagnostic.GetMessage(),
+                            message = diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
                             file_path = diagnostic.Location.SourceTree?.FilePath ?? doc.FilePath ?? "",
                             line = lineSpan.StartLinePosition.Line + 1,
                             column = lineSpan.StartLinePosition.Character + 1,
@@ -205,6 +205,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCodeQualityAnalyze));
             return new ToolCallResult
             {
                 Success = false,
@@ -245,8 +246,8 @@ public partial class McpToolRegistry
                 ? idsProp.EnumerateArray().Select(x => x.GetString()!).ToImmutableArray()
                 : ImmutableArray<string>.Empty;
             var profileStr = root.TryGetProperty("profile", out var profileProp) ? profileProp.GetString() : "Balanced";
-            var preview = root.TryGetProperty("preview", out var previewProp) ? previewProp.GetBoolean() : true;
-            var createBackup = root.TryGetProperty("create_backup", out var backupProp) ? backupProp.GetBoolean() : true;
+            var preview = !root.TryGetProperty("preview", out var previewProp) || previewProp.GetBoolean();
+            var createBackup = !root.TryGetProperty("create_backup", out var backupProp) || backupProp.GetBoolean();
 
             if (string.IsNullOrWhiteSpace(targetPath))
             {
@@ -403,6 +404,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCodeQualityFix));
             return new ToolCallResult
             {
                 Success = false,
@@ -414,7 +416,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// List available fix profiles and their capabilities
     /// </summary>
-    private Task<ToolCallResult> ExecuteCodeQualityProfiles(JsonDocument arguments, CancellationToken ct)
+    private Task<ToolCallResult> ExecuteCodeQualityProfiles()
     {
         try
         {
@@ -491,6 +493,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCodeQualityProfiles));
             return Task.FromResult(new ToolCallResult
             {
                 Success = false,

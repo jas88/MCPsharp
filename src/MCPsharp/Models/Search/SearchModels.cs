@@ -18,7 +18,7 @@ public class SearchRequest
     /// <summary>
     /// Treat pattern as regex (default: false)
     /// </summary>
-    public bool Regex { get; init; } = false;
+    public bool Regex { get; init; }
 
     /// <summary>
     /// Case-sensitive search (default: true)
@@ -48,7 +48,7 @@ public class SearchRequest
     /// <summary>
     /// Pagination offset (default: 0)
     /// </summary>
-    public int Offset { get; init; } = 0;
+    public int Offset { get; init; }
 }
 
 /// <summary>

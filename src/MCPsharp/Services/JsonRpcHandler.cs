@@ -7,7 +7,7 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Handles JSON-RPC 2.0 protocol communication over stdin/stdout
 /// </summary>
-public class JsonRpcHandler
+public partial class JsonRpcHandler
 {
     private readonly TextReader _input;
     private readonly TextWriter _output;
@@ -87,6 +87,7 @@ public class JsonRpcHandler
             }
             catch (Exception ex)
             {
+                LogUnhandledRequestError(_logger, ex);
                 response = CreateErrorResponse(requestId, JsonRpcErrorCodes.InternalError, $"Internal error: {ex.Message}");
             }
 
@@ -111,8 +112,8 @@ public class JsonRpcHandler
         {
             object? result = request.Method switch
             {
-                "initialize" => await HandleInitialize(request.Params),
-                "tools/list" => await HandleToolsList(request.Params),
+                "initialize" => await HandleInitialize(),
+                "tools/list" => await HandleToolsList(),
                 "tools/call" => await HandleToolsCall(request.Params),
                 "resources/list" => await HandleResourcesListAsync(),
                 "resources/read" => await HandleResourcesReadAsync(request.Params),
@@ -138,6 +139,7 @@ public class JsonRpcHandler
         }
         catch (Exception ex)
         {
+            LogMethodInvocationFailed(_logger, ex, request.Method);
             return CreateErrorResponse(request.Id, JsonRpcErrorCodes.InternalError, ex.Message);
         }
     }
@@ -145,29 +147,29 @@ public class JsonRpcHandler
     private Task HandleNotification(JsonRpcRequest request)
     {
         // Handle MCP notifications (no response required)
-        _logger.LogDebug("Received notification: {Method}", request.Method);
+        LogReceivedNotification(_logger, request.Method);
 
         switch (request.Method)
         {
             case "notifications/initialized":
                 // Client has finished initialization
-                _logger.LogInformation("Client initialized");
+                LogClientInitialized(_logger);
                 break;
 
             case "notifications/cancelled":
                 // Client cancelled a request
-                _logger.LogInformation("Request cancelled");
+                LogRequestCancelled(_logger);
                 break;
 
             default:
-                _logger.LogWarning("Unknown notification: {Method}", request.Method);
+                LogUnknownNotification(_logger, request.Method);
                 break;
         }
 
         return Task.CompletedTask;
     }
 
-    private Task<object> HandleInitialize(object? parameters)
+    private Task<object> HandleInitialize()
     {
         // MCP initialize handshake
         var capabilities = new Dictionary<string, object>
@@ -208,7 +210,7 @@ public class JsonRpcHandler
         return Task.FromResult<object>(response);
     }
 
-    private Task<object> HandleToolsList(object? parameters)
+    private Task<object> HandleToolsList()
     {
         // Return list of available tools from registry
         var tools = _toolRegistry.GetTools();
@@ -349,8 +351,36 @@ public class JsonRpcHandler
         };
     }
 
-    private class MethodNotFoundException : Exception
+    public sealed class MethodNotFoundException : Exception
     {
-        public MethodNotFoundException(string message) : base(message) { }
+        public MethodNotFoundException()
+        {
+        }
+
+        public MethodNotFoundException(string message) : base(message)
+        {
+        }
+
+        public MethodNotFoundException(string message, Exception innerException) : base(message, innerException)
+        {
+        }
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Unhandled error while processing JSON-RPC message")]
+    private static partial void LogUnhandledRequestError(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "JSON-RPC method {Method} failed")]
+    private static partial void LogMethodInvocationFailed(ILogger logger, Exception exception, string method);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Received notification: {Method}")]
+    private static partial void LogReceivedNotification(ILogger logger, string method);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Client initialized")]
+    private static partial void LogClientInitialized(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Request cancelled")]
+    private static partial void LogRequestCancelled(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Unknown notification: {Method}")]
+    private static partial void LogUnknownNotification(ILogger logger, string method);
 }

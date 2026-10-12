@@ -5,17 +5,18 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services.Indexing;
 
 /// <summary>
 /// Builds cross-reference graphs by analyzing code relationships.
 /// </summary>
-public sealed class ReferenceIndexerService
+public sealed partial class ReferenceIndexerService
 {
     private readonly ProjectDatabase _database;
     private readonly RoslynWorkspace _workspace;
-    private readonly ILogger<ReferenceIndexerService>? _logger;
+    private readonly ILogger<ReferenceIndexerService> _logger;
 
     private int _indexedFiles;
     private int _totalFiles;
@@ -33,7 +34,7 @@ public sealed class ReferenceIndexerService
     {
         _database = database;
         _workspace = workspace;
-        _logger = logger;
+        _logger = logger ?? NullLogger<ReferenceIndexerService>.Instance;
     }
 
     /// <summary>
@@ -43,7 +44,7 @@ public sealed class ReferenceIndexerService
     {
         if (!_workspace.IsInitialized)
         {
-            _logger?.LogWarning("Workspace not initialized, cannot index references");
+            LogWorkspaceNotInitializedCannotIndex(_logger);
             return;
         }
 
@@ -60,8 +61,7 @@ public sealed class ReferenceIndexerService
         // Build symbol lookup from database
         var symbolLookup = await BuildSymbolLookupAsync(cancellationToken).ConfigureAwait(false);
 
-        _logger?.LogInformation("Starting reference indexing of {Count} documents with {Symbols} known symbols",
-            _totalFiles, symbolLookup.Count);
+        LogStartingReferenceIndexingOfDocuments(_logger, _totalFiles, symbolLookup.Count);
 
         foreach (var document in documents)
         {
@@ -71,8 +71,7 @@ public sealed class ReferenceIndexerService
             Interlocked.Increment(ref _indexedFiles);
         }
 
-        _logger?.LogInformation("Reference indexing complete: {Files} files, {Refs} references",
-            _indexedFiles, _referenceCount);
+        LogReferenceIndexingCompleteFilesReferences(_logger, _indexedFiles, _referenceCount);
     }
 
     /// <summary>
@@ -102,7 +101,7 @@ public sealed class ReferenceIndexerService
 
             if (file == null)
             {
-                _logger?.LogDebug("File not indexed yet: {Path}", relativePath);
+                LogFileNotIndexedYet(_logger, relativePath);
                 return;
             }
 
@@ -117,15 +116,15 @@ public sealed class ReferenceIndexerService
                 Interlocked.Add(ref _referenceCount, references.Count);
             }
 
-            _logger?.LogDebug("Indexed references in {Path}: {Count} references", relativePath, references.Count);
+            LogIndexedReferencesInReferences(_logger, relativePath, references.Count);
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "Failed to index references in document: {Path}", document.FilePath);
+            LogFailedToIndexReferencesIn(_logger, ex, document.FilePath);
         }
     }
 
-    private List<DbReference> ExtractReferences(
+    private static List<DbReference> ExtractReferences(
         SyntaxNode root,
         SemanticModel semanticModel,
         long fileId,
@@ -197,7 +196,7 @@ public sealed class ReferenceIndexerService
         return references;
     }
 
-    private DbReference? CreateReference(
+    private static DbReference? CreateReference(
         ISymbol fromSymbol,
         ISymbol toSymbol,
         SyntaxNode node,
@@ -297,4 +296,22 @@ public sealed class ReferenceIndexerService
 
         return filePath;
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Workspace not initialized, cannot index references")]
+    private static partial void LogWorkspaceNotInitializedCannotIndex(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting reference indexing of {Count} documents with {Symbols} known symbols")]
+    private static partial void LogStartingReferenceIndexingOfDocuments(ILogger logger, int count, int symbols);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Reference indexing complete: {Files} files, {Refs} references")]
+    private static partial void LogReferenceIndexingCompleteFilesReferences(ILogger logger, int files, int refs);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "File not indexed yet: {Path}")]
+    private static partial void LogFileNotIndexedYet(ILogger logger, string path);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Indexed references in {Path}: {Count} references")]
+    private static partial void LogIndexedReferencesInReferences(ILogger logger, string path, int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to index references in document: {Path}")]
+    private static partial void LogFailedToIndexReferencesIn(ILogger logger, Exception exception, string path);
 }

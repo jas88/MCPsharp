@@ -50,8 +50,8 @@ public partial class McpToolRegistry
                 OutputPath = outputPath,
                 ProcessorType = processorType,
                 ChunkSize = arguments.RootElement.TryGetProperty("chunkSize", out var chunkSizeEl) ? chunkSizeEl.GetInt64() : 65536,
-                CreateCheckpoint = arguments.RootElement.TryGetProperty("createCheckpoint", out var checkpointEl) ? checkpointEl.GetBoolean() : true,
-                EnableCompression = arguments.RootElement.TryGetProperty("enableCompression", out var compressionEl) ? compressionEl.GetBoolean() : false
+                CreateCheckpoint = !arguments.RootElement.TryGetProperty("createCheckpoint", out var checkpointEl) || checkpointEl.GetBoolean(),
+                EnableCompression = arguments.RootElement.TryGetProperty("enableCompression", out var compressionEl) && compressionEl.GetBoolean()
             };
 
             // Parse processor options
@@ -82,6 +82,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteStreamProcessFile));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -139,9 +140,9 @@ public partial class McpToolRegistry
                 ProcessorType = processorType,
                 ChunkSize = arguments.RootElement.TryGetProperty("chunkSize", out var chunkSizeEl) ? chunkSizeEl.GetInt64() : 65536,
                 MaxDegreeOfParallelism = arguments.RootElement.TryGetProperty("maxDegreeOfParallelism", out var parallelEl) ? parallelEl.GetInt32() : 4,
-                PreserveDirectoryStructure = arguments.RootElement.TryGetProperty("preserveDirectoryStructure", out var preserveEl) ? preserveEl.GetBoolean() : true,
+                PreserveDirectoryStructure = !arguments.RootElement.TryGetProperty("preserveDirectoryStructure", out var preserveEl) || preserveEl.GetBoolean(),
                 FilePattern = arguments.RootElement.TryGetProperty("filePattern", out var patternEl) ? patternEl.GetString() : "*",
-                Recursive = arguments.RootElement.TryGetProperty("recursive", out var recursiveEl) ? recursiveEl.GetBoolean() : false
+                Recursive = arguments.RootElement.TryGetProperty("recursive", out var recursiveEl) && recursiveEl.GetBoolean()
             };
 
             // Parse processor options
@@ -171,6 +172,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteBulkTransform));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -227,6 +229,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetStreamProgress));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -269,6 +272,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCancelStreamOperation));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -320,6 +324,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteResumeStreamOperation));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -377,6 +382,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteListStreamOperations));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -422,6 +428,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCleanupStreamOperations));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -429,9 +436,8 @@ public partial class McpToolRegistry
     /// <summary>
     /// Get list of available stream processors and their capabilities
     /// </summary>
-    /// <param name="arguments">Tool arguments (no parameters required)</param>
     /// <returns>Tool execution result with processor information</returns>
-    private async Task<ToolCallResult> ExecuteGetAvailableProcessors(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteGetAvailableProcessors()
     {
         if (_streamingProcessor == null)
         {
@@ -464,6 +470,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetAvailableProcessors));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -537,6 +544,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteEstimateStreamProcessing));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }

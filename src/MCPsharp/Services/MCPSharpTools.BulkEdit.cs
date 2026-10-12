@@ -65,13 +65,9 @@ public partial class McpToolRegistry
                 ? maxParallelElement.GetInt32()
                 : Environment.ProcessorCount;
 
-            var createBackups = arguments.RootElement.TryGetProperty("createBackups", out var backupsElement)
-                ? backupsElement.GetBoolean()
-                : true;
+            var createBackups = !arguments.RootElement.TryGetProperty("createBackups", out var backupsElement) || backupsElement.GetBoolean();
 
-            var previewMode = arguments.RootElement.TryGetProperty("previewMode", out var previewElement)
-                ? previewElement.GetBoolean()
-                : false;
+            var previewMode = arguments.RootElement.TryGetProperty("previewMode", out var previewElement) && previewElement.GetBoolean();
 
             var excludedFiles = new List<string>();
             if (arguments.RootElement.TryGetProperty("excludedFiles", out var excludedElement))
@@ -100,6 +96,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteBulkReplace));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -225,6 +222,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteConditionalEdit));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -305,6 +303,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteBatchRefactor));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -397,6 +396,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteMultiFileEdit));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -541,6 +541,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecutePreviewBulkChanges));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -577,6 +578,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteRollbackBulkEdit));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -584,9 +586,8 @@ public partial class McpToolRegistry
     /// <summary>
     /// Get list of available rollback sessions that can be used to undo changes
     /// </summary>
-    /// <param name="arguments">Tool arguments (no parameters required)</param>
     /// <returns>Tool execution result with list of available rollbacks</returns>
-    private async Task<ToolCallResult> ExecuteGetAvailableRollbacks(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteGetAvailableRollbacks(CancellationToken cancellationToken)
     {
         if (_bulkEditService == null)
         {
@@ -621,6 +622,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetAvailableRollbacks));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -630,7 +632,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing operation type, files, and operation-specific parameters</param>
     /// <returns>Tool execution result with validation details</returns>
-    private async Task<ToolCallResult> ExecuteValidateBulkEdit(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteValidateBulkEdit(JsonDocument arguments)
     {
         if (_bulkEditService == null)
         {
@@ -709,6 +711,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateBulkEdit));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -718,7 +721,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing operation type and files</param>
     /// <returns>Tool execution result with impact estimation</returns>
-    private async Task<ToolCallResult> ExecuteEstimateBulkImpact(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteEstimateBulkImpact(JsonDocument arguments)
     {
         if (_bulkEditService == null)
         {
@@ -771,6 +774,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteEstimateBulkImpact));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -780,7 +784,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing files array</param>
     /// <returns>Tool execution result with file statistics</returns>
-    private async Task<ToolCallResult> ExecuteGetBulkFileStatistics(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteGetBulkFileStatistics(JsonDocument arguments)
     {
         if (_bulkEditService == null)
         {
@@ -816,6 +820,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetBulkFileStatistics));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }

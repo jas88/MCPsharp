@@ -131,10 +131,10 @@ public enum SymbolConfidence
 public class SymbolResolutionOptions
 {
     public bool ResolveToOriginalDefinition { get; init; } = true;
-    public bool IncludeOverrides { get; init; } = false;
-    public bool IncludeImplementations { get; init; } = false;
+    public bool IncludeOverrides { get; init; }
+    public bool IncludeImplementations { get; init; }
     public bool PreferImplementationOverInterface { get; init; } = true;
-    public bool IncludeMetadata { get; init; } = false;
+    public bool IncludeMetadata { get; init; }
 }
 
 /// <summary>
@@ -169,7 +169,7 @@ public class HierarchyOptions
 {
     public bool IncludeBase { get; init; } = true;
     public bool IncludeInterfaces { get; init; } = true;
-    public bool IncludeDerived { get; init; } = false;
+    public bool IncludeDerived { get; init; }
     public int MaxDepth { get; init; } = -1;
     public bool IncludeSealed { get; init; } = true;
 }

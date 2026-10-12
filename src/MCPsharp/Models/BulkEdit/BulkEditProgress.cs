@@ -156,7 +156,7 @@ public class MultiFileOperation
     /// <summary>
     /// Order priority for this operation (lower = earlier)
     /// </summary>
-    public int Priority { get; init; } = 0;
+    public int Priority { get; init; }
 
     /// <summary>
     /// List of operations this operation depends on

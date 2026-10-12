@@ -7,7 +7,7 @@ namespace MCPsharp.Services.Consolidated.Analyzers;
 /// <summary>
 /// Analyzes dependency relationships including graphs, circular dependencies, and critical paths.
 /// </summary>
-public class DependencyAnalyzer
+public partial class DependencyAnalyzer
 {
     private readonly SymbolQueryService? _symbolQuery;
     private readonly RoslynWorkspace? _workspace;
@@ -39,12 +39,12 @@ public class DependencyAnalyzer
 
                 // Limit nodes based on depth parameter (depth * 10 nodes as heuristic)
                 var maxNodes = Math.Max(10, depth * 10);
-                foreach (var type in allTypes.Take(maxNodes))
+                foreach (var typeName in allTypes.Take(maxNodes).Select(type => type.Name))
                 {
                     var node = new DependencyNode
                     {
-                        Id = type.Name,
-                        Name = type.Name,
+                        Id = typeName,
+                        Name = typeName,
                         Type = "Class"
                     };
                     graph.Nodes.Add(node);
@@ -55,7 +55,7 @@ public class DependencyAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error building dependency graph for {Scope}", scope);
+            LogErrorBuildingDependencyGraphFor(_logger, ex, scope);
         }
 
         return new DependencyGraph();
@@ -88,7 +88,7 @@ public class DependencyAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error detecting circular dependencies for {Scope}", scope);
+            LogErrorDetectingCircularDependenciesFor(_logger, ex, scope);
         }
 
         return new List<ConsolidatedCircularDependency>();
@@ -117,7 +117,7 @@ public class DependencyAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing dependency impact for {Scope}", scope);
+            LogErrorAnalyzingDependencyImpactFor(_logger, ex, scope);
         }
 
         return null;
@@ -165,7 +165,7 @@ public class DependencyAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing critical paths for {Scope}", scope);
+            LogErrorAnalyzingCriticalPathsFor(_logger, ex, scope);
         }
 
         return new List<CriticalPath>();
@@ -227,7 +227,7 @@ public class DependencyAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating dependency metrics");
+            LogErrorCalculatingDependencyMetrics(_logger, ex);
             return Task.FromResult<DependencyMetrics?>(null);
         }
     }
@@ -240,26 +240,24 @@ public class DependencyAnalyzer
         var pathCount = 0;
 
         // Use BFS to calculate shortest paths between all pairs
-        foreach (var startNode in graph.Nodes)
+        foreach (var startId in graph.Nodes.Select(startNode => startNode.Id))
         {
             var distances = new Dictionary<string, int>();
             var queue = new Queue<(string NodeId, int Distance)>();
-            queue.Enqueue((startNode.Id, 0));
-            distances[startNode.Id] = 0;
+            queue.Enqueue((startId, 0));
+            distances[startId] = 0;
 
             while (queue.Count > 0)
             {
                 var (currentId, distance) = queue.Dequeue();
 
-                foreach (var edge in graph.Edges.Where(e => e.From == currentId))
+                // Predicate is evaluated lazily per edge, so nodes discovered earlier in this pass are skipped
+                foreach (var target in graph.Edges.Where(e => e.From == currentId && !distances.ContainsKey(e.To)).Select(e => e.To))
                 {
-                    if (!distances.ContainsKey(edge.To))
-                    {
-                        distances[edge.To] = distance + 1;
-                        queue.Enqueue((edge.To, distance + 1));
-                        totalPathLength += distance + 1;
-                        pathCount++;
-                    }
+                    distances[target] = distance + 1;
+                    queue.Enqueue((target, distance + 1));
+                    totalPathLength += distance + 1;
+                    pathCount++;
                 }
             }
         }
@@ -301,4 +299,19 @@ public class DependencyAnalyzer
         recursionStack.Remove(nodeId);
         return false;
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error building dependency graph for {Scope}")]
+    private static partial void LogErrorBuildingDependencyGraphFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error detecting circular dependencies for {Scope}")]
+    private static partial void LogErrorDetectingCircularDependenciesFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing dependency impact for {Scope}")]
+    private static partial void LogErrorAnalyzingDependencyImpactFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing critical paths for {Scope}")]
+    private static partial void LogErrorAnalyzingCriticalPathsFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error calculating dependency metrics")]
+    private static partial void LogErrorCalculatingDependencyMetrics(ILogger logger, Exception exception);
 }

@@ -160,7 +160,7 @@ public record WarningInfo
 /// <summary>
 /// Internal data flow analysis result
 /// </summary>
-internal record DataFlowAnalysisResult
+internal sealed record DataFlowAnalysisResult
 {
     public List<ISymbol> InputParameters { get; init; } = new();
     public List<ISymbol> OutputVariables { get; init; } = new();

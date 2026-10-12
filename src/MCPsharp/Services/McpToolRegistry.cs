@@ -13,6 +13,7 @@ using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry;
 using MCPsharp.Services.AI;
 using MCPsharp.Models.LargeFileOptimization;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services;
 
@@ -39,8 +40,8 @@ public partial class McpToolRegistry
     private RenameSymbolService? _renameSymbol;
 
     // Phase 3 services
-    private IArchitectureValidatorService? _architectureValidator;
-    private IDuplicateCodeDetectorService? _duplicateCodeDetector;
+    private ArchitectureValidatorService? _architectureValidator;
+    private DuplicateCodeDetectorService? _duplicateCodeDetector;
     private ISqlMigrationAnalyzerService? _sqlMigrationAnalyzer;
     private ILargeFileOptimizerService? _largeFileOptimizer;
 
@@ -73,6 +74,10 @@ public partial class McpToolRegistry
     private readonly BulkOperationsHub? _bulkOperationsHub;
     private readonly StreamProcessingController? _streamController;
 
+    // Static JSON schema fragments
+    private static readonly string[] EditOperationTypes = { "replace", "insert", "delete" };
+    private static readonly string[] EditRequiredProperties = { "type" };
+
     // Response processing for token limiting
     private readonly ResponseProcessor _responseProcessor;
     private readonly ILoggerFactory? _loggerFactory;
@@ -80,7 +85,7 @@ public partial class McpToolRegistry
     // AI-powered tools
     private readonly CodebaseQueryService? _codebaseQuery;
     private readonly AICodeTransformationService? _aiCodeTransformation;
-    private readonly ILogger? _logger;
+    private readonly ILogger _logger;
 
     public McpToolRegistry(
         ProjectContextManager projectContext,
@@ -133,7 +138,7 @@ public partial class McpToolRegistry
         _loggerFactory = loggerFactory;
         _codebaseQuery = codebaseQuery;
         _aiCodeTransformation = aiCodeTransformation;
-        _logger = loggerFactory?.CreateLogger<McpToolRegistry>();
+        _logger = (ILogger?)loggerFactory?.CreateLogger<McpToolRegistry>() ?? NullLogger.Instance;
 
         // Initialize response processor with configuration
         var responseConfig = ResponseConfiguration.LoadFromEnvironment();
@@ -207,10 +212,10 @@ public partial class McpToolRegistry
                 "multi_file_edit" => await ExecuteMultiFileEdit(request.Arguments, ct),
                 "preview_bulk_changes" => await ExecutePreviewBulkChanges(request.Arguments, ct),
                 "rollback_bulk_edit" => await ExecuteRollbackBulkEdit(request.Arguments, ct),
-                "validate_bulk_edit" => await ExecuteValidateBulkEdit(request.Arguments, ct),
-                "get_available_rollbacks" => await ExecuteGetAvailableRollbacks(request.Arguments, ct),
-                "estimate_bulk_impact" => await ExecuteEstimateBulkImpact(request.Arguments, ct),
-                "get_bulk_file_statistics" => await ExecuteGetBulkFileStatistics(request.Arguments, ct),
+                "validate_bulk_edit" => await ExecuteValidateBulkEdit(request.Arguments),
+                "get_available_rollbacks" => await ExecuteGetAvailableRollbacks(ct),
+                "estimate_bulk_impact" => await ExecuteEstimateBulkImpact(request.Arguments),
+                "get_bulk_file_statistics" => await ExecuteGetBulkFileStatistics(request.Arguments),
                 // Streaming processor tools
                 "stream_process_file" => await ExecuteStreamProcessFile(request.Arguments, ct),
                 "bulk_transform" => await ExecuteBulkTransform(request.Arguments, ct),
@@ -219,7 +224,7 @@ public partial class McpToolRegistry
                 "resume_stream_operation" => await ExecuteResumeStreamOperation(request.Arguments, ct),
                 "list_stream_operations" => await ExecuteListStreamOperations(request.Arguments),
                 "cleanup_stream_operations" => await ExecuteCleanupStreamOperations(request.Arguments),
-                "get_available_processors" => await ExecuteGetAvailableProcessors(request.Arguments),
+                "get_available_processors" => await ExecuteGetAvailableProcessors(),
                 "estimate_stream_processing" => await ExecuteEstimateStreamProcessing(request.Arguments),
                 // Phase 3 architecture validation tools
                 "validate_architecture" => await ExecuteValidateArchitecture(request.Arguments, ct),
@@ -230,7 +235,7 @@ public partial class McpToolRegistry
                 "generate_architecture_diagram" => await ExecuteGenerateArchitectureDiagram(request.Arguments, ct),
                 "get_architecture_recommendations" => await ExecuteGetArchitectureRecommendations(request.Arguments, ct),
                 "check_type_compliance" => await ExecuteCheckTypeCompliance(request.Arguments, ct),
-                "get_predefined_architectures" => await ExecuteGetPredefinedArchitectures(request.Arguments, ct),
+                "get_predefined_architectures" => await ExecuteGetPredefinedArchitectures(ct),
                 // Duplicate Code Detection Tools
                 "detect_duplicates" => await ExecuteDetectDuplicates(request.Arguments, ct),
                 "find_exact_duplicates" => await ExecuteFindExactDuplicates(request.Arguments, ct),
@@ -248,12 +253,12 @@ public partial class McpToolRegistry
                 // Automated Code Fix Tools
                 "code_quality_analyze" => await ExecuteCodeQualityAnalyze(request.Arguments, ct),
                 "code_quality_fix" => await ExecuteCodeQualityFix(request.Arguments, ct),
-                "code_quality_profiles" => await ExecuteCodeQualityProfiles(request.Arguments, ct),
+                "code_quality_profiles" => await ExecuteCodeQualityProfiles(),
                 // Roslyn Code Fix and Configuration Tools
                 "apply_roslyn_fixes" => await ExecuteApplyRoslynFixes(request.Arguments, ct),
                 "configure_analyzer" => await ExecuteConfigureAnalyzer(request.Arguments, ct),
-                "get_analyzer_config" => await ExecuteGetAnalyzerConfig(request.Arguments, ct),
-                "reset_analyzer_config" => await ExecuteResetAnalyzerConfig(request.Arguments, ct),
+                "get_analyzer_config" => await ExecuteGetAnalyzerConfig(),
+                "reset_analyzer_config" => await ExecuteResetAnalyzerConfig(ct),
                 "generate_analysis_report" => await ExecuteGenerateAnalysisReport(request.Arguments, ct),
                 // SQL Migration Analyzer Tools (Phase 3)
                 "analyze_migrations" => await ExecuteAnalyzeMigrations(request.Arguments, ct),
@@ -368,6 +373,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteTool));
             return new ToolCallResult
             {
                 Success = false,
@@ -376,7 +382,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private List<McpTool> RegisterTools()
+    private static List<McpTool> RegisterTools()
     {
         return new List<McpTool>
         {
@@ -503,7 +509,7 @@ Edit types:
                                 ["type"] = new Dictionary<string, object>
                                 {
                                     ["type"] = "string",
-                                    ["enum"] = new[] { "replace", "insert", "delete" },
+                                    ["enum"] = EditOperationTypes,
                                     ["description"] = "Type of edit operation"
                                 },
                                 ["start_line"] = new Dictionary<string, object>
@@ -547,7 +553,7 @@ Edit types:
                                     ["description"] = "Text to insert"
                                 }
                             },
-                            ["required"] = new[] { "type" }
+                            ["required"] = EditRequiredProperties
                         }
                     }
                 )
@@ -1556,6 +1562,7 @@ Edit types:
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteProjectOpen));
             return new ToolCallResult
             {
                 Success = false,
@@ -2347,7 +2354,7 @@ Edit types:
             return new ToolCallResult
             {
                 Success = false,
-                Error = result.Errors.Any()
+                Error = result.Errors.Count > 0
                     ? string.Join("; ", result.Errors)
                     : "Rename operation failed"
             };
@@ -2390,4 +2397,7 @@ Edit types:
             Result = response
         };
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Tool operation {Operation} failed")]
+    private static partial void LogToolOperationFailed(ILogger logger, Exception exception, string operation);
 }

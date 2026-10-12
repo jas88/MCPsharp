@@ -17,7 +17,7 @@ namespace MCPsharp.Services;
 /// Service for managing long-running streaming operations with progress tracking,
 /// checkpoint support, and concurrent operation handling.
 /// </summary>
-public class StreamOperationManager : IStreamOperationManager, IDisposable
+public partial class StreamOperationManager : IStreamOperationManager, IDisposable
 {
     private readonly ILogger<StreamOperationManager> _logger;
     private readonly IStreamingFileProcessor _streamingProcessor;
@@ -52,8 +52,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
         _cleanupTimer = new Timer(PerformAutomaticCleanup, null, 
             TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
 
-        _logger.LogInformation("StreamOperationManager initialized with max {MaxConcurrent} concurrent operations",
-            _maxConcurrentOperations);
+        LogStreamOperationManagerInitializedWithMaxConcurrent(_logger, _maxConcurrentOperations);
     }
 
     public async Task<StreamOperation> CreateOperationAsync(string name, StreamProcessRequest request, 
@@ -62,8 +61,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Operation name cannot be empty", nameof(name));
 
-        if (request == null)
-            throw new ArgumentNullException(nameof(request));
+        ArgumentNullException.ThrowIfNull(request);
 
         var operation = new StreamOperation
         {
@@ -81,8 +79,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             : 0;
         await _progressTracker.CreateProgressAsync(operation.OperationId, name, fileSize);
 
-        _logger.LogInformation("Created streaming operation {OperationId} ({Name}) for file {FilePath}",
-            operation.OperationId, name, request.FilePath);
+        LogCreatedStreamingOperationForFile(_logger, operation.OperationId, name, request.FilePath);
 
         return operation;
     }
@@ -111,8 +108,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken, operation.CancellationTokenSource.Token);
 
-            _logger.LogInformation("Starting streaming operation {OperationId} ({Name})", 
-                operationId, operation.Name);
+            LogStartingStreamingOperation(_logger, operationId, operation.Name);
 
             // Execute the streaming operation
             var result = await _streamingProcessor.ProcessFileAsync(operation.Request, linkedCts.Token);
@@ -131,8 +127,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
                 operation.Exception = result.Exception;
             }
 
-            _logger.LogInformation("Streaming operation {OperationId} completed with status {Status}: {Message}",
-                operationId, operation.Status, result.ErrorMessage ?? "Success");
+            LogStreamingOperationCompletedWithStatus(_logger, operationId, operation.Status, result.ErrorMessage ?? "Success");
 
             return result;
         }
@@ -142,7 +137,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             operation.CompletedAt = DateTime.UtcNow;
             operation.ErrorMessage = "Operation was cancelled";
             
-            _logger.LogInformation("Streaming operation {OperationId} was cancelled", operationId);
+            LogStreamingOperationWasCancelled(_logger, operationId);
             throw;
         }
         catch (Exception ex)
@@ -152,7 +147,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             operation.ErrorMessage = ex.Message;
             operation.Exception = ex;
 
-            _logger.LogError(ex, "Streaming operation {OperationId} failed", operationId);
+            LogStreamingOperationFailed(_logger, ex, operationId);
             throw;
         }
         finally
@@ -213,12 +208,12 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             operation.CompletedAt = DateTime.UtcNow;
             operation.ErrorMessage = "Operation was cancelled by user request";
 
-            _logger.LogInformation("Cancelled streaming operation {OperationId}", operationId);
+            LogCancelledStreamingOperation(_logger, operationId);
             return Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error cancelling operation {OperationId}", operationId);
+            LogErrorCancellingOperation(_logger, ex, operationId);
             return Task.FromResult(false);
         }
     }
@@ -236,7 +231,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
         }
 
         operation.Status = StreamOperationStatus.Paused;
-        _logger.LogInformation("Paused streaming operation {OperationId}", operationId);
+        LogPausedStreamingOperation(_logger, operationId);
         return Task.FromResult(true);
     }
 
@@ -253,7 +248,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
         }
 
         operation.Status = StreamOperationStatus.Resumed;
-        _logger.LogInformation("Resumed streaming operation {OperationId}", operationId);
+        LogResumedStreamingOperation(_logger, operationId);
         return Task.FromResult(true);
     }
 
@@ -284,15 +279,14 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
                 operation.LastCheckpoint = checkpoint;
                 operation.LastCheckpointAt = DateTime.UtcNow;
 
-                _logger.LogInformation("Created checkpoint {CheckpointId} for operation {OperationId}",
-                    checkpoint.CheckpointId, operationId);
+                LogCreatedCheckpointForOperation(_logger, checkpoint.CheckpointId, operationId);
             }
 
             return checkpoint;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating checkpoint for operation {OperationId}", operationId);
+            LogErrorCreatingCheckpointForOperation(_logger, ex, operationId);
             return null;
         }
     }
@@ -325,16 +319,14 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
         {
             operation.Status = StreamOperationStatus.Resumed;
             
-            _logger.LogInformation("Resuming operation {OperationId} from checkpoint {CheckpointId}",
-                operationId, checkpointId);
+            LogResumingOperationFromCheckpoint(_logger, operationId, checkpointId);
 
             var result = await _streamingProcessor.ResumeOperationAsync(operationId, cancellationToken);
             return result;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error resuming operation {OperationId} from checkpoint {CheckpointId}",
-                operationId, checkpointId);
+            LogErrorResumingOperationFromCheckpoint(_logger, ex, operationId, checkpointId);
             operation.Status = StreamOperationStatus.Failed;
             operation.ErrorMessage = ex.Message;
             operation.Exception = ex;
@@ -364,7 +356,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
                         op.CompletedAt.HasValue)
             .ToList();
 
-        if (completedOperations.Any())
+        if (completedOperations.Count > 0)
         {
             stats.AverageProcessingTime = TimeSpan.FromTicks(
                 (long)completedOperations.Average(op => (op.CompletedAt!.Value - op.StartedAt!.Value).Ticks));
@@ -390,30 +382,24 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             try
             {
                 // Clean up temporary files
-                foreach (var tempFile in operation.TemporaryFiles)
+                foreach (var tempFile in operation.TemporaryFiles.Where(File.Exists))
                 {
-                    if (File.Exists(tempFile))
-                    {
-                        File.Delete(tempFile);
-                    }
+                    File.Delete(tempFile);
                 }
 
                 // Clean up checkpoints
                 if (_checkpoints.TryRemove(operationId, out var checkpoints))
                 {
-                    foreach (var checkpoint in checkpoints)
+                    foreach (var checkpointFile in checkpoints.Select(c => c.CheckpointFilePath).Where(File.Exists))
                     {
-                        if (File.Exists(checkpoint.CheckpointFilePath))
-                        {
-                            File.Delete(checkpoint.CheckpointFilePath);
-                        }
+                        File.Delete(checkpointFile);
                     }
                 }
 
                 // Cancel if still running
                 if (operation.Status == StreamOperationStatus.Running)
                 {
-                    operation.CancellationTokenSource.Cancel();
+                    await operation.CancellationTokenSource.CancelAsync();
                 }
 
                 // Dispose cancellation token source
@@ -429,13 +415,13 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error cleaning up operation {OperationId}", operationId);
+                LogErrorCleaningUpOperation(_logger, ex, operationId);
             }
         }
 
         if (cleanedCount > 0)
         {
-            _logger.LogInformation("Cleaned up {Count} streaming operations", cleanedCount);
+            LogCleanedUpStreamingOperations(_logger, cleanedCount);
         }
 
         return cleanedCount;
@@ -479,8 +465,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deleting checkpoint file {FilePath}",
-                    checkpoint.CheckpointFilePath);
+                LogErrorDeletingCheckpointFile(_logger, ex, checkpoint.CheckpointFilePath);
             }
 
             // Remove from list
@@ -544,7 +529,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
         }
     }
 
-    private bool ShouldCleanupOperation(StreamOperation operation, DateTime cutoffTime, bool includeFailed)
+    private static bool ShouldCleanupOperation(StreamOperation operation, DateTime cutoffTime, bool includeFailed)
     {
         // Don't clean up running operations
         if (operation.Status == StreamOperationStatus.Running || 
@@ -587,7 +572,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during automatic cleanup of streaming operations");
+            LogErrorDuringAutomaticCleanupOf(_logger, ex);
         }
     }
 
@@ -618,7 +603,7 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error disposing operation {OperationId}", operation.OperationId);
+                    LogErrorDisposingOperation(_logger, ex, operation.OperationId);
                 }
             }
 
@@ -626,4 +611,61 @@ public class StreamOperationManager : IStreamOperationManager, IDisposable
             _checkpoints.Clear();
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "StreamOperationManager initialized with max {MaxConcurrent} concurrent operations")]
+    private static partial void LogStreamOperationManagerInitializedWithMaxConcurrent(ILogger logger, int maxConcurrent);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Created streaming operation {OperationId} ({Name}) for file {FilePath}")]
+    private static partial void LogCreatedStreamingOperationForFile(ILogger logger, string operationId, string name, string? filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting streaming operation {OperationId} ({Name})")]
+    private static partial void LogStartingStreamingOperation(ILogger logger, string operationId, string name);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Streaming operation {OperationId} completed with status {Status}: {Message}")]
+    private static partial void LogStreamingOperationCompletedWithStatus(ILogger logger, string operationId, StreamOperationStatus status, string message);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Streaming operation {OperationId} was cancelled")]
+    private static partial void LogStreamingOperationWasCancelled(ILogger logger, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Streaming operation {OperationId} failed")]
+    private static partial void LogStreamingOperationFailed(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cancelled streaming operation {OperationId}")]
+    private static partial void LogCancelledStreamingOperation(ILogger logger, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error cancelling operation {OperationId}")]
+    private static partial void LogErrorCancellingOperation(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Paused streaming operation {OperationId}")]
+    private static partial void LogPausedStreamingOperation(ILogger logger, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Resumed streaming operation {OperationId}")]
+    private static partial void LogResumedStreamingOperation(ILogger logger, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Created checkpoint {CheckpointId} for operation {OperationId}")]
+    private static partial void LogCreatedCheckpointForOperation(ILogger logger, string checkpointId, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error creating checkpoint for operation {OperationId}")]
+    private static partial void LogErrorCreatingCheckpointForOperation(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Resuming operation {OperationId} from checkpoint {CheckpointId}")]
+    private static partial void LogResumingOperationFromCheckpoint(ILogger logger, string operationId, string checkpointId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error resuming operation {OperationId} from checkpoint {CheckpointId}")]
+    private static partial void LogErrorResumingOperationFromCheckpoint(ILogger logger, Exception exception, string operationId, string checkpointId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error cleaning up operation {OperationId}")]
+    private static partial void LogErrorCleaningUpOperation(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cleaned up {Count} streaming operations")]
+    private static partial void LogCleanedUpStreamingOperations(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error deleting checkpoint file {FilePath}")]
+    private static partial void LogErrorDeletingCheckpointFile(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error during automatic cleanup of streaming operations")]
+    private static partial void LogErrorDuringAutomaticCleanupOf(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error disposing operation {OperationId}")]
+    private static partial void LogErrorDisposingOperation(ILogger logger, Exception exception, string operationId);
 }

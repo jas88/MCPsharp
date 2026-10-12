@@ -55,6 +55,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateArchitecture));
             return new ToolCallResult
             {
                 Success = false,
@@ -104,6 +105,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectLayerViolations));
             return new ToolCallResult
             {
                 Success = false,
@@ -154,6 +156,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeDependencies));
             return new ToolCallResult
             {
                 Success = false,
@@ -205,6 +208,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetArchitectureReport));
             return new ToolCallResult
             {
                 Success = false,
@@ -253,6 +257,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDefineCustomArchitecture));
             return new ToolCallResult
             {
                 Success = false,
@@ -301,6 +306,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeCircularDependencies));
             return new ToolCallResult
             {
                 Success = false,
@@ -346,6 +352,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateArchitectureDiagram));
             return new ToolCallResult
             {
                 Success = false,
@@ -398,6 +405,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetArchitectureRecommendations));
             return new ToolCallResult
             {
                 Success = false,
@@ -452,6 +460,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCheckTypeCompliance));
             return new ToolCallResult
             {
                 Success = false,
@@ -460,7 +469,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetPredefinedArchitectures(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetPredefinedArchitectures(CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -489,6 +498,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetPredefinedArchitectures));
             return new ToolCallResult
             {
                 Success = false,

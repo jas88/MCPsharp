@@ -66,12 +66,12 @@ public class ProcessorOptions
     /// <summary>
     /// Enable compression
     /// </summary>
-    public bool EnableCompression { get; set; } = false;
+    public bool EnableCompression { get; set; }
 
     /// <summary>
     /// Enable checkpoints for recovery
     /// </summary>
-    public bool EnableCheckpoints { get; set; } = false;
+    public bool EnableCheckpoints { get; set; }
 
     /// <summary>
     /// Maximum parallel chunks
@@ -96,7 +96,7 @@ public class ProcessorOptions
     /// <summary>
     /// Skip errors and continue processing
     /// </summary>
-    public bool SkipErrors { get; set; } = false;
+    public bool SkipErrors { get; set; }
 
     /// <summary>
     /// Maximum errors before stopping
@@ -174,9 +174,9 @@ public class StreamProcessRequest
     public Stream? InputStream { get; set; }
     public ProcessorOptions? ProcessorOptions { get; set; }
     public int? ChunkSize { get; set; }
-    public bool EnableCompression { get; set; } = false;
-    public bool EnableCheckpoints { get; set; } = false;
-    public bool Recursive { get; set; } = false;
+    public bool EnableCompression { get; set; }
+    public bool EnableCheckpoints { get; set; }
+    public bool Recursive { get; set; }
     public string? SearchPattern { get; set; }
     public string? OperationId { get; set; }
     public string? RequestId { get; set; }
