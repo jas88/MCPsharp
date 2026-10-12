@@ -9,7 +9,7 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Service for discovering and loading Roslyn DiagnosticAnalyzers from assemblies
 /// </summary>
-public class RoslynAnalyzerLoader
+public partial class RoslynAnalyzerLoader
 {
     private readonly ILogger<RoslynAnalyzerLoader> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -33,11 +33,11 @@ public class RoslynAnalyzerLoader
 
         try
         {
-            _logger.LogInformation("Loading Roslyn analyzers from assembly: {AssemblyPath}", assemblyPath);
+            LogLoadingFromAssembly(_logger, assemblyPath);
 
             if (!File.Exists(assemblyPath))
             {
-                _logger.LogError("Assembly not found: {AssemblyPath}", assemblyPath);
+                LogAssemblyNotFound(_logger, assemblyPath);
                 return Task.FromResult(ImmutableArray<IAnalyzer>.Empty);
             }
 
@@ -53,8 +53,7 @@ public class RoslynAnalyzerLoader
                     && typeof(DiagnosticAnalyzer).IsAssignableFrom(t))
                 .ToList();
 
-            _logger.LogInformation("Found {Count} analyzer types in assembly {AssemblyPath}",
-                analyzerTypes.Count, assemblyPath);
+            LogFoundAnalyzerTypes(_logger, analyzerTypes.Count, assemblyPath);
 
             foreach (var analyzerType in analyzerTypes)
             {
@@ -66,8 +65,7 @@ public class RoslynAnalyzerLoader
                     var constructor = analyzerType.GetConstructor(Type.EmptyTypes);
                     if (constructor == null)
                     {
-                        _logger.LogWarning("Analyzer {AnalyzerType} does not have parameterless constructor",
-                            analyzerType.Name);
+                        LogNoParameterlessConstructor(_logger, analyzerType.Name);
                         continue;
                     }
 
@@ -81,23 +79,21 @@ public class RoslynAnalyzerLoader
 
                     analyzers.Add(adapter);
 
-                    _logger.LogDebug("Loaded Roslyn analyzer: {AnalyzerId} ({AnalyzerType})",
-                        adapter.Id, analyzerType.Name);
+                    LogLoadedAnalyzer(_logger, adapter.Id, analyzerType.Name);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error loading analyzer type {AnalyzerType}", analyzerType.Name);
+                    LogErrorLoadingAnalyzerType(_logger, ex, analyzerType.Name);
                 }
             }
 
-            _logger.LogInformation("Successfully loaded {Count} Roslyn analyzers from {AssemblyPath}",
-                analyzers.Count, assemblyPath);
+            LogLoadedAnalyzers(_logger, analyzers.Count, assemblyPath);
 
             return Task.FromResult(analyzers.ToImmutableArray());
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading analyzers from assembly {AssemblyPath}", assemblyPath);
+            LogErrorLoadingFromAssembly(_logger, ex, assemblyPath);
             return Task.FromResult(ImmutableArray<IAnalyzer>.Empty);
         }
     }
@@ -131,7 +127,7 @@ public class RoslynAnalyzerLoader
         {
             if (!Directory.Exists(directory))
             {
-                _logger.LogError("Directory not found: {Directory}", directory);
+                LogDirectoryNotFound(_logger, directory);
                 return ImmutableArray<string>.Empty;
             }
 
@@ -157,24 +153,23 @@ public class RoslynAnalyzerLoader
                     if (hasAnalyzers)
                     {
                         analyzerAssemblies.Add(dllFile);
-                        _logger.LogDebug("Discovered analyzer assembly: {AssemblyPath}", dllFile);
+                        LogDiscoveredAssembly(_logger, dllFile);
                     }
                 }
                 catch (Exception ex)
                 {
                     // Skip assemblies that can't be loaded or inspected
-                    _logger.LogTrace(ex, "Could not inspect assembly {AssemblyPath}", dllFile);
+                    LogCouldNotInspectAssembly(_logger, ex, dllFile);
                 }
             }
 
-            _logger.LogInformation("Discovered {Count} analyzer assemblies in {Directory}",
-                analyzerAssemblies.Count, directory);
+            LogDiscoveredAssemblies(_logger, analyzerAssemblies.Count, directory);
 
             return analyzerAssemblies.ToImmutableArray();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error discovering analyzer assemblies in {Directory}", directory);
+            LogErrorDiscoveringAssemblies(_logger, ex, directory);
             return ImmutableArray<string>.Empty;
         }
     }
@@ -205,7 +200,7 @@ public class RoslynAnalyzerLoader
                 if (!Directory.Exists(cachePath))
                     continue;
 
-                _logger.LogInformation("Scanning NuGet cache for analyzers: {CachePath}", cachePath);
+                LogScanningNuGetCache(_logger, cachePath);
 
                 // Look for analyzer DLLs in the analyzers subdirectory
 
@@ -215,13 +210,13 @@ public class RoslynAnalyzerLoader
                 allAnalyzers.AddRange(analyzers);
             }
 
-            _logger.LogInformation("Loaded {Count} analyzers from NuGet cache", allAnalyzers.Count);
+            LogLoadedFromNuGetCache(_logger, allAnalyzers.Count);
 
             return allAnalyzers.ToImmutableArray();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading analyzers from NuGet cache");
+            LogErrorLoadingFromNuGetCache(_logger, ex);
             return ImmutableArray<IAnalyzer>.Empty;
         }
     }
@@ -243,7 +238,7 @@ public class RoslynAnalyzerLoader
                     && typeof(DiagnosticAnalyzer).IsAssignableFrom(t))
                 .ToList();
 
-            if (!analyzerTypes.Any())
+            if (analyzerTypes.Count == 0)
                 return null;
 
             return new AnalyzerAssemblyInfo
@@ -257,10 +252,61 @@ public class RoslynAnalyzerLoader
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting analyzer assembly info for {AssemblyPath}", assemblyPath);
+            LogErrorGettingAssemblyInfo(_logger, ex, assemblyPath);
             return null;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loading Roslyn analyzers from assembly: {AssemblyPath}")]
+    private static partial void LogLoadingFromAssembly(ILogger logger, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Assembly not found: {AssemblyPath}")]
+    private static partial void LogAssemblyNotFound(ILogger logger, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Found {Count} analyzer types in assembly {AssemblyPath}")]
+    private static partial void LogFoundAnalyzerTypes(ILogger logger, int count, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Analyzer {AnalyzerType} does not have parameterless constructor")]
+    private static partial void LogNoParameterlessConstructor(ILogger logger, string analyzerType);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Loaded Roslyn analyzer: {AnalyzerId} ({AnalyzerType})")]
+    private static partial void LogLoadedAnalyzer(ILogger logger, string analyzerId, string analyzerType);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzer type {AnalyzerType}")]
+    private static partial void LogErrorLoadingAnalyzerType(ILogger logger, Exception exception, string analyzerType);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Successfully loaded {Count} Roslyn analyzers from {AssemblyPath}")]
+    private static partial void LogLoadedAnalyzers(ILogger logger, int count, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzers from assembly {AssemblyPath}")]
+    private static partial void LogErrorLoadingFromAssembly(ILogger logger, Exception exception, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Directory not found: {Directory}")]
+    private static partial void LogDirectoryNotFound(ILogger logger, string directory);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Discovered analyzer assembly: {AssemblyPath}")]
+    private static partial void LogDiscoveredAssembly(ILogger logger, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Trace, Message = "Could not inspect assembly {AssemblyPath}")]
+    private static partial void LogCouldNotInspectAssembly(ILogger logger, Exception exception, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Discovered {Count} analyzer assemblies in {Directory}")]
+    private static partial void LogDiscoveredAssemblies(ILogger logger, int count, string directory);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error discovering analyzer assemblies in {Directory}")]
+    private static partial void LogErrorDiscoveringAssemblies(ILogger logger, Exception exception, string directory);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Scanning NuGet cache for analyzers: {CachePath}")]
+    private static partial void LogScanningNuGetCache(ILogger logger, string cachePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} analyzers from NuGet cache")]
+    private static partial void LogLoadedFromNuGetCache(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzers from NuGet cache")]
+    private static partial void LogErrorLoadingFromNuGetCache(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting analyzer assembly info for {AssemblyPath}")]
+    private static partial void LogErrorGettingAssemblyInfo(ILogger logger, Exception exception, string assemblyPath);
 }
 
 /// <summary>

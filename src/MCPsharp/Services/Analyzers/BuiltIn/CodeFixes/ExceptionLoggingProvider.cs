@@ -12,7 +12,7 @@ namespace MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
 /// Automated code fix provider for exception logging issues
 /// Converts string-based exception logging to proper exception parameter format
 /// </summary>
-public class ExceptionLoggingProvider : AutomatedCodeFixProviderBase
+public partial class ExceptionLoggingProvider : AutomatedCodeFixProviderBase
 {
     public override string Id => "ExceptionLogging";
     public override string Name => "Exception Logging Fixer";
@@ -59,8 +59,7 @@ public class ExceptionLoggingProvider : AutomatedCodeFixProviderBase
                 };
             }
 
-            Logger.LogDebug("Found {Count} exception logging issues in {FilePath}",
-                diagnostics.Length, filePath);
+            LogIssuesFound(Logger, diagnostics.Length, filePath);
 
             var currentDocument = document;
             var fixedCount = 0;
@@ -84,15 +83,14 @@ public class ExceptionLoggingProvider : AutomatedCodeFixProviderBase
 
                 await _fixer.RegisterCodeFixesAsync(context);
 
-                if (actions.Any())
+                if (actions.Count > 0)
                 {
                     // Apply the first code action
-                    var codeAction = actions.First();
+                    var codeAction = actions[0];
                     currentDocument = await ApplyCodeActionAsync(currentDocument, codeAction, cancellationToken);
                     fixedCount++;
 
-                    Logger.LogTrace("Applied fix for diagnostic at {Location}",
-                        diagnostic.Location.GetLineSpan());
+                    LogAppliedFix(diagnostic);
                 }
             }
 
@@ -118,7 +116,7 @@ public class ExceptionLoggingProvider : AutomatedCodeFixProviderBase
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error fixing document: {FilePath}", filePath);
+            LogFixDocumentError(Logger, ex, filePath);
 
             return new DocumentFixResult
             {
@@ -130,4 +128,7 @@ public class ExceptionLoggingProvider : AutomatedCodeFixProviderBase
             };
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Found {Count} exception logging issues in {FilePath}")]
+    private static partial void LogIssuesFound(ILogger logger, int count, string filePath);
 }

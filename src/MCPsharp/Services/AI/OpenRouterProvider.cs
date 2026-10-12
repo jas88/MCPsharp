@@ -7,27 +7,29 @@ namespace MCPsharp.Services.AI;
 /// AI provider that uses OpenRouter for cloud-based inference.
 /// Requires an OpenRouter API key.
 /// </summary>
-public class OpenRouterProvider : IAIProvider, IDisposable
+public sealed class OpenRouterProvider : IAIProvider, IDisposable
 {
+    /// <summary>OpenRouter API endpoint.</summary>
+    private static readonly Uri ApiBaseAddress = new UriBuilder(Uri.UriSchemeHttps, "openrouter.ai") { Path = "api/v1/" }.Uri;
+
     private readonly HttpClient _client;
     private readonly string _model;
-    private readonly string _apiKey;
 
     public string ProviderName => "OpenRouter";
     public string ModelName => _model;
 
     public OpenRouterProvider(string apiKey, string? model = null)
     {
-        _apiKey = apiKey ?? throw new ArgumentNullException(nameof(apiKey));
+        ArgumentNullException.ThrowIfNull(apiKey);
         _model = model ?? "anthropic/claude-3.5-sonnet";
 
         _client = new HttpClient
         {
-            BaseAddress = new Uri("https://openrouter.ai/api/v1/"),
+            BaseAddress = ApiBaseAddress,
             Timeout = TimeSpan.FromMinutes(2)
         };
 
-        _client.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
+        _client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
         _client.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/mcpsharp/mcpsharp");
         _client.DefaultRequestHeaders.Add("X-Title", "MCPsharp");
     }
@@ -37,11 +39,17 @@ public class OpenRouterProvider : IAIProvider, IDisposable
         try
         {
             // Simple check - if we can reach the API, consider it available
-            var response = await _client.GetAsync("models");
+            using var response = await _client.GetAsync("models");
             return response.IsSuccessStatusCode;
         }
-        catch
+        catch (HttpRequestException)
         {
+            // Endpoint unreachable
+            return false;
+        }
+        catch (TaskCanceledException)
+        {
+            // Request timed out
             return false;
         }
     }
@@ -84,11 +92,12 @@ public class OpenRouterProvider : IAIProvider, IDisposable
 
     public void Dispose()
     {
-        _client?.Dispose();
+        _client.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     // OpenRouter API models
-    private class OpenRouterRequest
+    private sealed class OpenRouterRequest
     {
         [JsonPropertyName("model")]
         public string Model { get; set; } = "";
@@ -103,7 +112,7 @@ public class OpenRouterProvider : IAIProvider, IDisposable
         public int MaxTokens { get; set; }
     }
 
-    private class OpenRouterMessage
+    private sealed class OpenRouterMessage
     {
         [JsonPropertyName("role")]
         public string Role { get; set; } = "";
@@ -112,7 +121,7 @@ public class OpenRouterProvider : IAIProvider, IDisposable
         public string Content { get; set; } = "";
     }
 
-    private class OpenRouterResponse
+    private sealed class OpenRouterResponse
     {
         [JsonPropertyName("id")]
         public string Id { get; set; } = "";
@@ -124,7 +133,7 @@ public class OpenRouterProvider : IAIProvider, IDisposable
         public OpenRouterUsage? Usage { get; set; }
     }
 
-    private class OpenRouterChoice
+    private sealed class OpenRouterChoice
     {
         [JsonPropertyName("message")]
         public OpenRouterMessage Message { get; set; } = new();
@@ -133,7 +142,7 @@ public class OpenRouterProvider : IAIProvider, IDisposable
         public string FinishReason { get; set; } = "";
     }
 
-    private class OpenRouterUsage
+    private sealed class OpenRouterUsage
     {
         [JsonPropertyName("prompt_tokens")]
         public int PromptTokens { get; set; }

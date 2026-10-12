@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models;
 using MCPsharp.Models.BulkEdit;
 
@@ -12,6 +14,16 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class BulkEditService
 {
+    /// <summary>
+    /// Timeout applied to user-supplied regular expressions evaluated by bulk edit helpers.
+    /// </summary>
+    private static readonly TimeSpan BulkEditRegexTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Non-null logger for source-generated log methods (falls back to a no-op logger).
+    /// </summary>
+    private ILogger BulkEditLog => (ILogger?)_logger ?? NullLogger.Instance;
+
     private Task<IReadOnlyList<string>> ResolveFilePatterns(
         IReadOnlyList<string> patterns,
         BulkEditOptions options,
@@ -72,7 +84,7 @@ public partial class BulkEditService
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "Failed to resolve pattern {Pattern}", pattern);
+                LogResolvePatternFailed(BulkEditLog, ex, pattern);
             }
         }
 
@@ -92,7 +104,7 @@ public partial class BulkEditService
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogWarning(ex, "Failed to check file size for {FilePath}", file);
+                    LogCheckFileSizeFailed(BulkEditLog, ex, file);
                 }
             }
             return Task.FromResult<IReadOnlyList<string>>(filteredFiles);
@@ -136,18 +148,23 @@ public partial class BulkEditService
             // On Unix-like systems, files starting with . are considered hidden
             return Path.GetFileName(filePath).StartsWith('.');
         }
-        catch
+        catch (IOException)
+        {
+            // Attributes unavailable (file removed or locked): treat as not hidden
+            return false;
+        }
+        catch (UnauthorizedAccessException)
         {
             return false;
         }
     }
 
-    private Task<bool> CheckCondition(string content, BulkEditCondition condition, string filePath)
+    private static bool CheckCondition(string content, BulkEditCondition condition, string filePath)
     {
         var result = condition.ConditionType switch
         {
-            BulkConditionType.FileContains => content.Contains(condition.Pattern),
-            BulkConditionType.FileMatches => Regex.IsMatch(content, condition.Pattern),
+            BulkConditionType.FileContains => content.Contains(condition.Pattern, StringComparison.Ordinal),
+            BulkConditionType.FileMatches => Regex.IsMatch(content, condition.Pattern, RegexOptions.None, BulkEditRegexTimeout),
             BulkConditionType.FileSize => CheckFileSizeCondition(filePath, condition),
             BulkConditionType.FileModifiedAfter => CheckFileModifiedCondition(filePath, condition),
             BulkConditionType.FileExtension => CheckFileExtensionCondition(filePath, condition),
@@ -155,7 +172,7 @@ public partial class BulkEditService
             _ => false
         };
 
-        return Task.FromResult(condition.Negate ? !result : result);
+        return condition.Negate ? !result : result;
     }
 
     private static bool CheckFileSizeCondition(string filePath, BulkEditCondition condition)
@@ -164,20 +181,27 @@ public partial class BulkEditService
         {
             var fileInfo = new System.IO.FileInfo(filePath);
             if (condition.Parameters?.TryGetValue("minSize", out var minSizeObj) == true &&
-                long.TryParse(minSizeObj.ToString(), out var minSize))
+                long.TryParse(minSizeObj.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var minSize) &&
+                fileInfo.Length < minSize)
             {
-                if (fileInfo.Length < minSize) return false;
+                return false;
             }
 
             if (condition.Parameters?.TryGetValue("maxSize", out var maxSizeObj) == true &&
-                long.TryParse(maxSizeObj.ToString(), out var maxSize))
+                long.TryParse(maxSizeObj.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var maxSize) &&
+                fileInfo.Length > maxSize)
             {
-                if (fileInfo.Length > maxSize) return false;
+                return false;
             }
 
             return true;
         }
-        catch
+        catch (IOException)
+        {
+            // File missing or inaccessible: condition cannot be met
+            return false;
+        }
+        catch (UnauthorizedAccessException)
         {
             return false;
         }
@@ -189,13 +213,18 @@ public partial class BulkEditService
         {
             var fileInfo = new System.IO.FileInfo(filePath);
             if (condition.Parameters?.TryGetValue("date", out var dateObj) == true &&
-                DateTime.TryParse(dateObj.ToString(), out var date))
+                DateTime.TryParse(dateObj.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             {
                 return fileInfo.LastWriteTime > date;
             }
             return false;
         }
-        catch
+        catch (IOException)
+        {
+            // File missing or inaccessible: condition cannot be met
+            return false;
+        }
+        catch (UnauthorizedAccessException)
         {
             return false;
         }
@@ -203,8 +232,8 @@ public partial class BulkEditService
 
     private static bool CheckFileExtensionCondition(string filePath, BulkEditCondition condition)
     {
-        var extension = Path.GetExtension(filePath).ToLowerInvariant();
-        return extension.Equals(condition.Pattern.ToLowerInvariant());
+        var extension = Path.GetExtension(filePath);
+        return extension.Equals(condition.Pattern, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool CheckFileInDirectoryCondition(string filePath, BulkEditCondition condition)
@@ -214,18 +243,79 @@ public partial class BulkEditService
                directory.Contains(condition.Pattern, StringComparison.OrdinalIgnoreCase);
     }
 
-    private Task<string> ApplyRefactoring(
-        string content,
-        BulkRefactorPattern refactorPattern,
-        string filePath,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// Apply a text-level refactoring. Symbol renames are applied as whole-word replacements;
+    /// other refactoring types require semantic analysis and leave the content unchanged.
+    /// </summary>
+    private static string ApplyRefactoring(string content, BulkRefactorPattern refactorPattern)
     {
-        // This would implement specific refactoring logic based on the pattern type
-        // For now, return the original content
-        return Task.FromResult(content);
+        if (refactorPattern.RefactorType != BulkRefactorType.RenameSymbol ||
+            string.IsNullOrEmpty(refactorPattern.TargetPattern))
+        {
+            return content;
+        }
+
+        var wholeWord = $@"\b{Regex.Escape(refactorPattern.TargetPattern)}\b";
+        return Regex.Replace(
+            content,
+            wholeWord,
+            refactorPattern.ReplacementPattern.Replace("$", "$$", StringComparison.Ordinal),
+            RegexOptions.None,
+            BulkEditRegexTimeout);
     }
 
-    private FileChange ConvertTextEditToFileChange(TextEdit textEdit)
+    /// <summary>
+    /// Apply line/column (0-indexed) text edits to content. Edits are applied from the end of the
+    /// document backwards so earlier positions stay valid. Positions beyond the end of a line or of
+    /// the document are clamped to the nearest valid position (LSP semantics).
+    /// </summary>
+    private static string ApplyTextEdits(
+        string content,
+        IEnumerable<TextEdit> edits,
+        List<FileChange> changes,
+        CancellationToken cancellationToken)
+    {
+        var editList = edits.ToList();
+        var lines = content.Split('\n').ToList();
+
+        foreach (var edit in editList.OrderByDescending(e => e.StartLine).ThenByDescending(e => e.StartColumn))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var (startLine, startColumn) = ClampPosition(lines, edit.StartLine, edit.StartColumn);
+            var (endLine, endColumn) = edit is InsertEdit
+                ? (startLine, startColumn)
+                : ClampPosition(lines, edit.EndLine, edit.EndColumn);
+
+            if (endLine < startLine || (endLine == startLine && endColumn < startColumn))
+            {
+                (endLine, endColumn) = (startLine, startColumn);
+            }
+
+            var newText = edit is DeleteEdit ? string.Empty : edit.NewText;
+            var merged = lines[startLine][..startColumn] + newText + lines[endLine][endColumn..];
+
+            lines.RemoveRange(startLine, endLine - startLine + 1);
+            lines.InsertRange(startLine, merged.Split('\n'));
+        }
+
+        changes.AddRange(editList.Select(ConvertTextEditToFileChange));
+        return string.Join('\n', lines);
+    }
+
+    private static (int Line, int Column) ClampPosition(List<string> lines, int line, int column)
+    {
+        if (line >= lines.Count)
+        {
+            var last = lines.Count - 1;
+            return (last, lines[last].Length);
+        }
+
+        var clampedLine = Math.Max(0, line);
+        return (clampedLine, Math.Clamp(column, 0, lines[clampedLine].Length));
+    }
+
+    private static FileChange ConvertTextEditToFileChange(TextEdit textEdit)
     {
         return textEdit switch
         {
@@ -259,12 +349,10 @@ public partial class BulkEditService
         };
     }
 
-    private static string GenerateDiff(string originalContent, IReadOnlyList<FileChange> changes)
+    private static string GenerateDiff(List<FileChange> changes)
     {
         // Simple diff generation - in a real implementation, you'd use a proper diff library
-        var diffLines = new List<string>();
-        diffLines.Add("--- Original");
-        diffLines.Add("+++ Modified");
+        var diffLines = new List<string> { "--- Original", "+++ Modified" };
 
         foreach (var change in changes.Take(10)) // Limit preview size
         {
@@ -317,7 +405,98 @@ public partial class BulkEditService
         return column;
     }
 
-    private BulkEditResult CreateErrorResult(string operationId, DateTime startTime, string error)
+    /// <summary>
+    /// Render bulk edit statistics as a human-readable summary line.
+    /// </summary>
+    private static string FormatBulkEditSummary(BulkEditSummary summary)
+    {
+        return string.Create(CultureInfo.InvariantCulture,
+            $"Processed {summary.TotalFilesProcessed} of {summary.TotalFilesMatched} files: " +
+            $"{summary.SuccessfulFiles} succeeded, {summary.FailedFiles} failed, {summary.SkippedFiles} skipped, " +
+            $"{summary.TotalChangesApplied} changes applied");
+    }
+
+    /// <summary>
+    /// Render preview statistics as a human-readable summary line.
+    /// </summary>
+    private static string FormatPreviewSummary(PreviewSummary summary)
+    {
+        return string.Create(CultureInfo.InvariantCulture,
+            $"{summary.FilesToChange} of {summary.TotalFiles} files would change ({summary.FilesToSkip} skipped): " +
+            $"{summary.TotalChanges} changes, +{summary.LinesAdded}/-{summary.LinesRemoved} lines, " +
+            $"{summary.SizeChange:+#;-#;0} characters");
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to resolve pattern {Pattern}")]
+    private static partial void LogResolvePatternFailed(ILogger logger, Exception exception, string pattern);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to check file size for {FilePath}")]
+    private static partial void LogCheckFileSizeFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Generating preview {PreviewId} for bulk edit operation")]
+    private static partial void LogGeneratingPreview(ILogger logger, string previewId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to generate preview {PreviewId}")]
+    private static partial void LogPreviewFailed(ILogger logger, Exception exception, string previewId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to generate preview for file {FilePath}")]
+    private static partial void LogFilePreviewFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to process file {FilePath} for bulk replace")]
+    private static partial void LogBulkReplaceFileFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to process file {FilePath} for conditional edit")]
+    private static partial void LogConditionalEditFileFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to process file {FilePath} for batch refactor")]
+    private static partial void LogBatchRefactorFileFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to process file {FilePath} for multi-file edit")]
+    private static partial void LogMultiFileEditFileFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Invalid file pattern {Pattern}")]
+    private static partial void LogInvalidFilePattern(ILogger logger, Exception exception, string pattern);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Invalid regex pattern {Pattern}")]
+    private static partial void LogInvalidRegexPattern(ILogger logger, Exception exception, string pattern);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Bulk edit validation failed")]
+    private static partial void LogBulkEditValidationFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to estimate impact")]
+    private static partial void LogEstimateImpactFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to analyze file {FilePath}")]
+    private static partial void LogAnalyzeFileFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to get file statistics")]
+    private static partial void LogFileStatisticsFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting rollback operation {OperationId} for rollback session {RollbackId}")]
+    private static partial void LogStartingRollback(ILogger logger, string operationId, string rollbackId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to cleanup rollback directory {Directory}")]
+    private static partial void LogRollbackDirectoryCleanupFailed(ILogger logger, Exception exception, string directory);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Rollback operation {OperationId} failed")]
+    private static partial void LogRollbackFailed(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to get available rollbacks")]
+    private static partial void LogGetRollbacksFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to cleanup expired rollback {RollbackId}")]
+    private static partial void LogExpiredRollbackCleanupFailed(ILogger logger, Exception exception, string rollbackId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cleaned up {Count} expired rollback sessions")]
+    private static partial void LogExpiredRollbacksCleaned(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to create backup for file {FilePath}")]
+    private static partial void LogBackupFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to rollback file {FilePath}")]
+    private static partial void LogRollbackFileFailed(ILogger logger, Exception exception, string filePath);
+
+    private static BulkEditResult CreateErrorResult(string operationId, DateTime startTime, string error)
     {
         var errors = new List<BulkEditError>
         {

@@ -1,8 +1,10 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
 
@@ -34,7 +36,8 @@ public class StaticMethodAnalyzer : DiagnosticAnalyzer
         "Performance",
         DiagnosticSeverity.Info,
         isEnabledByDefault: true,
-        description: "Making methods static when they don't access instance state improves code clarity and may improve performance.");
+        description: "Making methods static when they don't access instance state improves code clarity and may improve performance.",
+        customTags: WellKnownDiagnosticTags.CompilationEnd);
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(Rule);
@@ -43,63 +46,93 @@ public class StaticMethodAnalyzer : DiagnosticAnalyzer
     {
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.EnableConcurrentExecution();
-        context.RegisterSymbolAction(AnalyzeMethod, SymbolKind.Method);
+        context.RegisterCompilationStartAction(OnCompilationStart);
     }
 
-    private void AnalyzeMethod(SymbolAnalysisContext context)
+    private static void OnCompilationStart(CompilationStartAnalysisContext context)
     {
-        var methodSymbol = (IMethodSymbol)context.Symbol;
+        // Methods referenced as method groups (converted to delegates) anywhere in the compilation
+        var methodGroupReferences = new ConcurrentDictionary<IMethodSymbol, byte>(SymbolEqualityComparer.Default);
+        var candidates = new ConcurrentBag<(IMethodSymbol Method, Location Location)>();
 
-        // Only analyze private methods
-        if (methodSymbol.DeclaredAccessibility != Accessibility.Private)
+        context.RegisterOperationAction(
+            operationContext =>
+            {
+                var reference = (IMethodReferenceOperation)operationContext.Operation;
+                methodGroupReferences.TryAdd(reference.Method.OriginalDefinition, 0);
+            },
+            OperationKind.MethodReference);
+
+        context.RegisterSyntaxNodeAction(
+            nodeContext => AnalyzeMethodDeclaration(nodeContext, candidates),
+            SyntaxKind.MethodDeclaration);
+
+        context.RegisterCompilationEndAction(endContext =>
+        {
+            foreach (var (method, location) in candidates)
+            {
+                // If the method is used as a delegate or method group, making it static could break the code
+                if (methodGroupReferences.ContainsKey(method))
+                    continue;
+
+                endContext.ReportDiagnostic(Diagnostic.Create(Rule, location, method.Name));
+            }
+        });
+    }
+
+    private static void AnalyzeMethodDeclaration(
+        SyntaxNodeAnalysisContext context,
+        ConcurrentBag<(IMethodSymbol Method, Location Location)> candidates)
+    {
+        var methodDeclaration = (MethodDeclarationSyntax)context.Node;
+        if (context.SemanticModel.GetDeclaredSymbol(methodDeclaration, context.CancellationToken) is not IMethodSymbol methodSymbol)
             return;
 
-        // Skip if already static
-        if (methodSymbol.IsStatic)
+        // Analyze each method once, at its first declaration (matches partial-method handling)
+        var firstDeclaration = methodSymbol.DeclaringSyntaxReferences.FirstOrDefault();
+        if (firstDeclaration == null || firstDeclaration.SyntaxTree != methodDeclaration.SyntaxTree ||
+            firstDeclaration.Span != methodDeclaration.Span)
             return;
 
-        // Skip special methods (constructors, finalizers, operators, property accessors)
-        if (methodSymbol.MethodKind != MethodKind.Ordinary)
-            return;
-
-        // Skip if method overrides base method
-        if (methodSymbol.IsOverride)
-            return;
-
-        // Skip if method implements interface
-        if (methodSymbol.ExplicitInterfaceImplementations.Any() ||
-            ImplementsInterfaceMember(methodSymbol))
-            return;
-
-        // Skip if method is virtual (might be overridden)
-        if (methodSymbol.IsVirtual || methodSymbol.IsAbstract)
-            return;
-
-        // Skip if method has special attributes that might require instance context
-        if (HasSpecialAttributes(methodSymbol))
-            return;
-
-        // Get the method syntax
-        var syntax = methodSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax(context.CancellationToken);
-        if (syntax is not MethodDeclarationSyntax methodDeclaration)
+        if (!IsCandidateSymbol(methodSymbol))
             return;
 
         // Check if method accesses any instance members
-        if (AccessesInstanceMembers(methodDeclaration, methodSymbol, context.Compilation))
+        if (AccessesInstanceMembers(methodDeclaration, methodSymbol, context.SemanticModel))
             return;
 
-        // Check if method is used as a delegate or passed as a method group
-        // If it's assigned to a delegate variable, making it static could break the code
-        if (IsUsedAsDelegateOrMethodGroup(methodSymbol, context.Compilation, context.CancellationToken))
-            return;
+        candidates.Add((methodSymbol, methodDeclaration.Identifier.GetLocation()));
+    }
 
-        // Report diagnostic
-        var diagnostic = Diagnostic.Create(
-            Rule,
-            methodDeclaration.Identifier.GetLocation(),
-            methodSymbol.Name);
+    private static bool IsCandidateSymbol(IMethodSymbol methodSymbol)
+    {
+        // Only analyze private methods
+        if (methodSymbol.DeclaredAccessibility != Accessibility.Private)
+            return false;
 
-        context.ReportDiagnostic(diagnostic);
+        // Skip if already static
+        if (methodSymbol.IsStatic)
+            return false;
+
+        // Skip special methods (constructors, finalizers, operators, property accessors)
+        if (methodSymbol.MethodKind != MethodKind.Ordinary)
+            return false;
+
+        // Skip if method overrides base method
+        if (methodSymbol.IsOverride)
+            return false;
+
+        // Skip if method implements interface
+        if (methodSymbol.ExplicitInterfaceImplementations.Length > 0 ||
+            ImplementsInterfaceMember(methodSymbol))
+            return false;
+
+        // Skip if method is virtual (might be overridden)
+        if (methodSymbol.IsVirtual || methodSymbol.IsAbstract)
+            return false;
+
+        // Skip if method has special attributes that might require instance context
+        return !HasSpecialAttributes(methodSymbol);
     }
 
     private static bool ImplementsInterfaceMember(IMethodSymbol methodSymbol)
@@ -145,71 +178,16 @@ public class StaticMethodAnalyzer : DiagnosticAnalyzer
         return specialAttributes.Any(sa => attributeNames.Contains(sa));
     }
 
-    private static bool IsUsedAsDelegateOrMethodGroup(
-        IMethodSymbol methodSymbol,
-        Compilation compilation,
-        CancellationToken cancellationToken)
-    {
-        // This is a conservative check - if we can't determine usage patterns safely,
-        // we err on the side of not suggesting the change
-        // A full implementation would require finding all references to this method
-        // across the entire compilation, which could be expensive
-
-        // For now, we'll do a simpler check: look at the containing type's methods
-        // and see if this method is passed as a delegate
-        var containingType = methodSymbol.ContainingType;
-
-        foreach (var syntaxRef in containingType.DeclaringSyntaxReferences)
-        {
-            var typeDecl = syntaxRef.GetSyntax(cancellationToken);
-            if (typeDecl is not TypeDeclarationSyntax typeDeclarationSyntax)
-                continue;
-
-            var semanticModel = compilation.GetSemanticModel(typeDecl.SyntaxTree);
-
-            // Look for identifier references to this method that might be used as method groups
-            var identifiers = typeDeclarationSyntax.DescendantNodes()
-                .OfType<IdentifierNameSyntax>()
-                .Where(i => i.Identifier.Text == methodSymbol.Name);
-
-            foreach (var identifier in identifiers)
-            {
-                var symbolInfo = semanticModel.GetSymbolInfo(identifier, cancellationToken);
-                if (!SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol, methodSymbol))
-                    continue;
-
-                // Check if this identifier is used in a context where it's converted to a delegate
-                var parent = identifier.Parent;
-
-                // Assignment to a delegate variable
-                if (parent is AssignmentExpressionSyntax or EqualsValueClauseSyntax)
-                    return true;
-
-                // Passed as an argument (might be delegate parameter)
-                if (parent is ArgumentSyntax)
-                    return true;
-
-                // Used in a delegate creation expression
-                if (parent is ObjectCreationExpressionSyntax)
-                    return true;
-            }
-        }
-
-        return false;
-    }
-
     private static bool AccessesInstanceMembers(
         MethodDeclarationSyntax methodDeclaration,
         IMethodSymbol methodSymbol,
-        Compilation compilation)
+        SemanticModel semanticModel)
     {
         var body = methodDeclaration.Body;
         var expressionBody = methodDeclaration.ExpressionBody;
 
         if (body == null && expressionBody == null)
             return false;
-
-        var semanticModel = compilation.GetSemanticModel(methodDeclaration.SyntaxTree);
 
         // Check all identifiers and member accesses
         var descendants = body?.DescendantNodes() ?? expressionBody!.DescendantNodes();

@@ -8,7 +8,7 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Service for automatically discovering and loading Roslyn analyzers from standard locations
 /// </summary>
-public class AnalyzerAutoLoadService
+public partial class AnalyzerAutoLoadService
 {
     private readonly ILogger<AnalyzerAutoLoadService> _logger;
     private readonly RoslynAnalyzerLoader _loader;
@@ -51,7 +51,7 @@ public class AnalyzerAutoLoadService
 
         if (!_configuration.AutoLoadEnabled)
         {
-            _logger.LogInformation("Auto-loading is disabled in configuration");
+            LogAutoLoadDisabled(_logger);
             return new AnalyzerAutoLoadResult
             {
                 Success = true,
@@ -75,7 +75,7 @@ public class AnalyzerAutoLoadService
 
         try
         {
-            _logger.LogInformation("Starting auto-load of Roslyn analyzers...");
+            LogStartingAutoLoad(_logger);
 
             // Load from NuGet cache
             if (_configuration.AnalyzerSources.Contains("nuget_cache"))
@@ -84,20 +84,19 @@ public class AnalyzerAutoLoadService
                 {
                     var nugetAnalyzers = await LoadFromNuGetCacheAsync(cancellationToken);
                     loadedAnalyzers.AddRange(nugetAnalyzers);
-                    _logger.LogInformation("Loaded {Count} analyzers from NuGet cache", nugetAnalyzers.Length);
+                    LogLoadedFromNuGetCache(_logger, nugetAnalyzers.Length);
                 }
                 catch (Exception ex)
                 {
-                    var error = $"Error loading from NuGet cache: {ex.Message}";
-                    _logger.LogWarning(ex, error);
-                    errors.Add(error);
+                    LogErrorLoadingFromNuGetCache(_logger, ex, ex.Message);
+                    errors.Add($"Error loading from NuGet cache: {ex.Message}");
                 }
             }
 
             // Load built-in providers (already registered in BuiltInCodeFixRegistry)
             if (_configuration.AnalyzerSources.Contains("builtin_providers"))
             {
-                _logger.LogInformation("Built-in code fix providers are automatically registered via BuiltInCodeFixRegistry");
+                LogBuiltInProvidersAutoRegistered(_logger);
             }
 
             // Load from custom paths
@@ -113,28 +112,24 @@ public class AnalyzerAutoLoadService
                             var customAnalyzers = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath, cancellationToken);
                             loadedAnalyzers.AddRange(customAnalyzers);
                         }
-                        _logger.LogInformation("Loaded {Count} analyzers from custom path: {Path}",
-                            loadedAnalyzers.Count, customPath);
+                        LogLoadedFromCustomPath(_logger, loadedAnalyzers.Count, customPath);
                     }
                     else if (File.Exists(customPath))
                     {
                         var customAnalyzers = await _loader.LoadAnalyzersFromAssemblyAsync(customPath, cancellationToken);
                         loadedAnalyzers.AddRange(customAnalyzers);
-                        _logger.LogInformation("Loaded {Count} analyzers from custom assembly: {Path}",
-                            customAnalyzers.Length, customPath);
+                        LogLoadedFromCustomAssembly(_logger, customAnalyzers.Length, customPath);
                     }
                     else
                     {
-                        var warning = $"Custom analyzer path not found: {customPath}";
-                        _logger.LogWarning(warning);
-                        errors.Add(warning);
+                        LogCustomPathNotFound(_logger, customPath);
+                        errors.Add($"Custom analyzer path not found: {customPath}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    var error = $"Error loading from custom path '{customPath}': {ex.Message}";
-                    _logger.LogWarning(ex, error);
-                    errors.Add(error);
+                    LogErrorLoadingFromCustomPath(_logger, ex, customPath, ex.Message);
+                    errors.Add($"Error loading from custom path '{customPath}': {ex.Message}");
                 }
             }
 
@@ -145,7 +140,7 @@ public class AnalyzerAutoLoadService
                 loadedAnalyzers = loadedAnalyzers
                     .Where(a => !_configuration.ExcludeAnalyzers.Contains(a.Id))
                     .ToList();
-                _logger.LogInformation("Filtered out {Count} excluded analyzers", beforeCount - loadedAnalyzers.Count);
+                LogFilteredExcluded(_logger, beforeCount - loadedAnalyzers.Count);
             }
 
             // Register all loaded analyzers
@@ -157,7 +152,7 @@ public class AnalyzerAutoLoadService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error registering analyzer: {AnalyzerId}", analyzer.Id);
+                    LogErrorRegisteringAnalyzer(_logger, ex, analyzer.Id);
                     errors.Add($"Failed to register analyzer '{analyzer.Id}': {ex.Message}");
                 }
             }
@@ -169,8 +164,7 @@ public class AnalyzerAutoLoadService
             }
 
             var duration = DateTime.UtcNow - startTime;
-            _logger.LogInformation("Auto-load completed: {Count} analyzers loaded in {Duration}ms",
-                loadedAnalyzers.Count, duration.TotalMilliseconds);
+            LogAutoLoadCompleted(_logger, loadedAnalyzers.Count, duration.TotalMilliseconds);
 
             return new AnalyzerAutoLoadResult
             {
@@ -183,7 +177,7 @@ public class AnalyzerAutoLoadService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Fatal error during analyzer auto-load");
+            LogFatalAutoLoadError(_logger, ex);
             return new AnalyzerAutoLoadResult
             {
                 Success = false,
@@ -206,7 +200,7 @@ public class AnalyzerAutoLoadService
 
         if (!Directory.Exists(nugetCachePath))
         {
-            _logger.LogWarning("NuGet cache directory not found: {Path}", nugetCachePath);
+            LogNuGetCacheNotFound(_logger, nugetCachePath);
             return ImmutableArray<IAnalyzer>.Empty;
         }
 
@@ -238,10 +232,10 @@ public class AnalyzerAutoLoadService
                     .OrderByDescending(v => v)
                     .ToList();
 
-                if (!versions.Any())
+                if (versions.Count == 0)
                     continue;
 
-                var latestVersion = versions.First();
+                var latestVersion = versions[0];
                 var versionPath = Path.Combine(packagePath, latestVersion);
 
                 // Try each relative path
@@ -257,13 +251,12 @@ public class AnalyzerAutoLoadService
                         var packageAnalyzers = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath, cancellationToken);
                         analyzers.AddRange(packageAnalyzers);
                     }
-                    _logger.LogDebug("Loaded {Count} analyzers from {Package} v{Version}",
-                        analyzers.Count, packageName, latestVersion);
+                    LogLoadedFromPackage(_logger, analyzers.Count, packageName, latestVersion);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error loading analyzers from package: {Package}", packageName);
+                LogErrorLoadingFromPackage(_logger, ex, packageName);
             }
         }
 
@@ -312,11 +305,60 @@ public class AnalyzerAutoLoadService
             var config = JsonSerializer.Deserialize<AnalyzerAutoLoadConfiguration>(json);
             return config ?? AnalyzerAutoLoadConfiguration.Default;
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
         {
+            // An unreadable or malformed configuration file falls back to the default configuration
             return AnalyzerAutoLoadConfiguration.Default;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Auto-loading is disabled in configuration")]
+    private static partial void LogAutoLoadDisabled(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting auto-load of Roslyn analyzers...")]
+    private static partial void LogStartingAutoLoad(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} analyzers from NuGet cache")]
+    private static partial void LogLoadedFromNuGetCache(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error loading from NuGet cache: {ErrorMessage}")]
+    private static partial void LogErrorLoadingFromNuGetCache(ILogger logger, Exception exception, string errorMessage);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Built-in code fix providers are automatically registered via BuiltInCodeFixRegistry")]
+    private static partial void LogBuiltInProvidersAutoRegistered(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} analyzers from custom path: {Path}")]
+    private static partial void LogLoadedFromCustomPath(ILogger logger, int count, string path);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} analyzers from custom assembly: {Path}")]
+    private static partial void LogLoadedFromCustomAssembly(ILogger logger, int count, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Custom analyzer path not found: {Path}")]
+    private static partial void LogCustomPathNotFound(ILogger logger, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error loading from custom path '{Path}': {ErrorMessage}")]
+    private static partial void LogErrorLoadingFromCustomPath(ILogger logger, Exception exception, string path, string errorMessage);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Filtered out {Count} excluded analyzers")]
+    private static partial void LogFilteredExcluded(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error registering analyzer: {AnalyzerId}")]
+    private static partial void LogErrorRegisteringAnalyzer(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Auto-load completed: {Count} analyzers loaded in {Duration}ms")]
+    private static partial void LogAutoLoadCompleted(ILogger logger, int count, double duration);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Fatal error during analyzer auto-load")]
+    private static partial void LogFatalAutoLoadError(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "NuGet cache directory not found: {Path}")]
+    private static partial void LogNuGetCacheNotFound(ILogger logger, string path);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Loaded {Count} analyzers from {Package} v{Version}")]
+    private static partial void LogLoadedFromPackage(ILogger logger, int count, string package, string version);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error loading analyzers from package: {Package}")]
+    private static partial void LogErrorLoadingFromPackage(ILogger logger, Exception exception, string package);
 }
 
 /// <summary>
@@ -325,7 +367,7 @@ public class AnalyzerAutoLoadService
 public record AnalyzerAutoLoadConfiguration
 {
     public bool AutoLoadEnabled { get; init; } = true;
-    public bool LoadOnStartup { get; init; } = false; // false = lazy load on first use
+    public bool LoadOnStartup { get; init; } // false (default) = lazy load on first use
     public ImmutableArray<string> AnalyzerSources { get; init; } = ImmutableArray.Create("nuget_cache", "builtin_providers");
     public ImmutableArray<string> ExcludeAnalyzers { get; init; } = ImmutableArray<string>.Empty;
     public ImmutableArray<string> CustomAnalyzerPaths { get; init; } = ImmutableArray<string>.Empty;

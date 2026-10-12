@@ -59,7 +59,7 @@ public class ExceptionLoggingFixer : CodeFixProvider
             diagnostic);
     }
 
-    private async Task<Document> FixExceptionLoggingAsync(
+    private static async Task<Document> FixExceptionLoggingAsync(
         Document document,
         InvocationExpressionSyntax invocation,
         string exceptionVarName,
@@ -72,9 +72,6 @@ public class ExceptionLoggingFixer : CodeFixProvider
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (semanticModel == null)
             return document;
-
-        // Extract the logging method name
-        var methodName = ((MemberAccessExpressionSyntax)invocation.Expression).Name.Identifier.Text;
 
         // Use rewriter to transform the logging call
         var rewriter = new ExceptionLoggingRewriter(exceptionVarName, invocation, semanticModel);
@@ -90,7 +87,7 @@ public class ExceptionLoggingFixer : CodeFixProvider
 /// <summary>
 /// Syntax rewriter that transforms improper exception logging to proper format
 /// </summary>
-internal class ExceptionLoggingRewriter : CSharpSyntaxRewriter
+internal sealed class ExceptionLoggingRewriter : CSharpSyntaxRewriter
 {
     private readonly string _exceptionVarName;
     private readonly InvocationExpressionSyntax _targetInvocation;
@@ -158,13 +155,11 @@ internal class ExceptionLoggingRewriter : CSharpSyntaxRewriter
                 {
                     simplifiedParts.Add(text.TextToken.Text);
                 }
-                else if (content is InterpolationSyntax interpolation)
+                else if (content is InterpolationSyntax interpolation &&
+                         !IsExceptionReference(interpolation.Expression))
                 {
-                    // Skip exception-related interpolations
-                    if (!IsExceptionReference(interpolation.Expression))
-                    {
-                        simplifiedParts.Add($"{{{interpolation.Expression}}}");
-                    }
+                    // Keep non-exception interpolations; exception-related ones are skipped
+                    simplifiedParts.Add($"{{{interpolation.Expression}}}");
                 }
             }
 
@@ -191,7 +186,7 @@ internal class ExceptionLoggingRewriter : CSharpSyntaxRewriter
         return "An error occurred";
     }
 
-    private void CollectNonExceptionParts(BinaryExpressionSyntax binary, List<string> parts)
+    private static void CollectNonExceptionParts(BinaryExpressionSyntax binary, List<string> parts)
     {
         // Recursively collect non-exception parts from concatenation
         if (binary.Left is BinaryExpressionSyntax leftBinary &&

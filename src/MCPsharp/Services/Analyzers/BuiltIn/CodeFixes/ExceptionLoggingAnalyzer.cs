@@ -49,7 +49,7 @@ public class ExceptionLoggingAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeInvocation, SyntaxKind.InvocationExpression);
     }
 
-    private void AnalyzeInvocation(SyntaxNodeAnalysisContext context)
+    private static void AnalyzeInvocation(SyntaxNodeAnalysisContext context)
     {
         var invocation = (InvocationExpressionSyntax)context.Node;
 
@@ -109,7 +109,7 @@ public class ExceptionLoggingAnalyzer : DiagnosticAnalyzer
     {
         // Check for ILogger or ILogger<T>
         var typeName = type.Name;
-        if (typeName.StartsWith("ILogger"))
+        if (typeName.StartsWith("ILogger", StringComparison.Ordinal))
         {
             var ns = type.ContainingNamespace?.ToDisplayString();
             return ns == "Microsoft.Extensions.Logging";
@@ -190,25 +190,19 @@ public class ExceptionLoggingAnalyzer : DiagnosticAnalyzer
             memberAccess.Name.Identifier.Text == "Message")
         {
             var symbolInfo = semanticModel.GetSymbolInfo(memberAccess.Expression);
-            if (symbolInfo.Symbol is ILocalSymbol localSymbol)
+            // Check if the variable or parameter is an exception type
+            if (symbolInfo.Symbol is ILocalSymbol localSymbol && IsExceptionType(localSymbol.Type))
             {
-                // Check if the variable is an exception type
-                if (IsExceptionType(localSymbol.Type))
-                {
-                    return new ExceptionReferenceInfo(
-                        localSymbol.Name,
-                        memberAccess.GetLocation());
-                }
+                return new ExceptionReferenceInfo(
+                    localSymbol.Name,
+                    memberAccess.GetLocation());
             }
-            else if (symbolInfo.Symbol is IParameterSymbol paramSymbol)
+
+            if (symbolInfo.Symbol is IParameterSymbol paramSymbol && IsExceptionType(paramSymbol.Type))
             {
-                // Check if the parameter is an exception type
-                if (IsExceptionType(paramSymbol.Type))
-                {
-                    return new ExceptionReferenceInfo(
-                        paramSymbol.Name,
-                        memberAccess.GetLocation());
-                }
+                return new ExceptionReferenceInfo(
+                    paramSymbol.Name,
+                    memberAccess.GetLocation());
             }
         }
 
@@ -235,5 +229,5 @@ public class ExceptionLoggingAnalyzer : DiagnosticAnalyzer
         return null;
     }
 
-    private record ExceptionReferenceInfo(string VariableName, Location Location);
+    private sealed record ExceptionReferenceInfo(string VariableName, Location Location);
 }

@@ -12,7 +12,7 @@ namespace MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
 /// Automated code fix provider for async/await pattern issues
 /// Combines analyzer and fixer with batch processing capabilities
 /// </summary>
-public class AsyncAwaitPatternProvider : AutomatedCodeFixProviderBase
+public partial class AsyncAwaitPatternProvider : AutomatedCodeFixProviderBase
 {
     public override string Id => "AsyncAwaitPattern";
     public override string Name => "Async/Await Pattern Fixer";
@@ -59,8 +59,7 @@ public class AsyncAwaitPatternProvider : AutomatedCodeFixProviderBase
                 };
             }
 
-            Logger.LogDebug("Found {Count} async/await pattern issues in {FilePath}",
-                diagnostics.Length, filePath);
+            LogIssuesFound(Logger, diagnostics.Length, filePath);
 
             var currentDocument = document;
             var fixedCount = 0;
@@ -84,15 +83,14 @@ public class AsyncAwaitPatternProvider : AutomatedCodeFixProviderBase
 
                 await _fixer.RegisterCodeFixesAsync(context);
 
-                if (actions.Any())
+                if (actions.Count > 0)
                 {
                     // Apply the first code action
-                    var codeAction = actions.First();
+                    var codeAction = actions[0];
                     currentDocument = await ApplyCodeActionAsync(currentDocument, codeAction, cancellationToken);
                     fixedCount++;
 
-                    Logger.LogTrace("Applied fix for diagnostic at {Location}",
-                        diagnostic.Location.GetLineSpan());
+                    LogAppliedFix(diagnostic);
                 }
             }
 
@@ -118,7 +116,7 @@ public class AsyncAwaitPatternProvider : AutomatedCodeFixProviderBase
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error fixing document: {FilePath}", filePath);
+            LogFixDocumentError(Logger, ex, filePath);
 
             return new DocumentFixResult
             {
@@ -130,4 +128,7 @@ public class AsyncAwaitPatternProvider : AutomatedCodeFixProviderBase
             };
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Found {Count} async/await pattern issues in {FilePath}")]
+    private static partial void LogIssuesFound(ILogger logger, int count, string filePath);
 }

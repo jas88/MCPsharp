@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -10,8 +11,11 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Adapter that wraps Roslyn DiagnosticAnalyzer as MCPsharp IAnalyzer
 /// </summary>
-public class RoslynAnalyzerAdapter : IAnalyzer
+public partial class RoslynAnalyzerAdapter : IAnalyzer
 {
+    private static readonly CSharpCompilationOptions LibraryCompilationOptions =
+        CSharpCompilation.Create("AnalysisAssembly").Options.WithOutputKind(OutputKind.DynamicallyLinkedLibrary);
+
     private readonly DiagnosticAnalyzer _roslynAnalyzer;
     private readonly ILogger<RoslynAnalyzerAdapter> _logger;
     private readonly string _analyzerId;
@@ -65,7 +69,7 @@ public class RoslynAnalyzerAdapter : IAnalyzer
         // Check if directory contains C# files
         if (Directory.Exists(targetPath))
         {
-            return Directory.GetFiles(targetPath, "*.cs", SearchOption.AllDirectories).Any();
+            return Directory.EnumerateFiles(targetPath, "*.cs", SearchOption.AllDirectories).Any();
         }
 
         return false;
@@ -73,7 +77,7 @@ public class RoslynAnalyzerAdapter : IAnalyzer
 
     public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Initialized Roslyn analyzer adapter: {AnalyzerId}", Id);
+        LogInitialized(_logger, Id);
         return Task.CompletedTask;
     }
 
@@ -85,7 +89,7 @@ public class RoslynAnalyzerAdapter : IAnalyzer
 
         try
         {
-            _logger.LogDebug("Analyzing file {FilePath} with Roslyn analyzer {AnalyzerId}", filePath, Id);
+            LogAnalyzingFile(_logger, filePath, Id);
 
             // Create a Roslyn compilation for analysis
             var syntaxTree = CSharpSyntaxTree.ParseText(content, path: filePath, cancellationToken: cancellationToken);
@@ -94,7 +98,7 @@ public class RoslynAnalyzerAdapter : IAnalyzer
                 "AnalysisAssembly",
                 syntaxTrees: new[] { syntaxTree },
                 references: GetMetadataReferences(),
-                options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+                options: LibraryCompilationOptions);
 
             // Create compilation with analyzers
             var compilationWithAnalyzers = compilation.WithAnalyzers(
@@ -135,7 +139,7 @@ public class RoslynAnalyzerAdapter : IAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing file {FilePath} with Roslyn analyzer {AnalyzerId}", filePath, Id);
+            LogAnalyzeError(_logger, ex, filePath, Id);
 
             return new Models.Analyzers.AnalysisResult
             {
@@ -161,8 +165,8 @@ public class RoslynAnalyzerAdapter : IAnalyzer
                 .Select(d => new AnalyzerRule
                 {
                     Id = d.Id,
-                    Title = d.Title.ToString(),
-                    Description = d.Description.ToString(),
+                    Title = d.Title.ToString(CultureInfo.InvariantCulture),
+                    Description = d.Description.ToString(CultureInfo.InvariantCulture),
                     Category = MapCategory(d.Category),
                     DefaultSeverity = MapSeverity(d.DefaultSeverity),
                     IsEnabledByDefault = d.IsEnabledByDefault,
@@ -173,7 +177,7 @@ public class RoslynAnalyzerAdapter : IAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting rules from Roslyn analyzer {AnalyzerId}", Id);
+            LogGetRulesError(_logger, ex, Id);
             return ImmutableArray<AnalyzerRule>.Empty;
         }
     }
@@ -215,8 +219,8 @@ public class RoslynAnalyzerAdapter : IAnalyzer
             Id = Guid.NewGuid().ToString(),
             RuleId = diagnostic.Id,
             AnalyzerId = Id,
-            Title = diagnostic.Descriptor.Title.ToString(),
-            Description = diagnostic.GetMessage(),
+            Title = diagnostic.Descriptor.Title.ToString(CultureInfo.InvariantCulture),
+            Description = diagnostic.GetMessage(CultureInfo.InvariantCulture),
             FilePath = filePath,
             LineNumber = lineSpan.StartLinePosition.Line + 1,
             ColumnNumber = lineSpan.StartLinePosition.Character + 1,
@@ -262,7 +266,7 @@ public class RoslynAnalyzerAdapter : IAnalyzer
         };
     }
 
-    private IEnumerable<MetadataReference> GetMetadataReferences()
+    private List<MetadataReference> GetMetadataReferences()
     {
         // Get common .NET references for compilation
         var references = new List<MetadataReference>();
@@ -295,9 +299,24 @@ public class RoslynAnalyzerAdapter : IAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error loading metadata references for Roslyn analysis");
+            LogMetadataReferencesError(_logger, ex);
         }
 
         return references;
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Initialized Roslyn analyzer adapter: {AnalyzerId}")]
+    private static partial void LogInitialized(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Analyzing file {FilePath} with Roslyn analyzer {AnalyzerId}")]
+    private static partial void LogAnalyzingFile(ILogger logger, string filePath, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file {FilePath} with Roslyn analyzer {AnalyzerId}")]
+    private static partial void LogAnalyzeError(ILogger logger, Exception exception, string filePath, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting rules from Roslyn analyzer {AnalyzerId}")]
+    private static partial void LogGetRulesError(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error loading metadata references for Roslyn analysis")]
+    private static partial void LogMetadataReferencesError(ILogger logger, Exception exception);
 }

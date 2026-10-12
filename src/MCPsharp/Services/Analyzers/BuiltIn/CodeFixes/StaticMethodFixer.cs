@@ -45,7 +45,7 @@ public class StaticMethodFixer : CodeFixProvider
             diagnostic);
     }
 
-    private async Task<Document> MakeMethodStaticAsync(
+    private static async Task<Document> MakeMethodStaticAsync(
         Document document,
         MethodDeclarationSyntax methodDecl,
         CancellationToken cancellationToken)

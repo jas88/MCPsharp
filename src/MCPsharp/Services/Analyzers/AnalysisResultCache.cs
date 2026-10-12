@@ -21,7 +21,7 @@ public interface IAnalysisResultCache
     string ComputeContentHash(string content);
 }
 
-public class AnalysisResultCache : IAnalysisResultCache
+public partial class AnalysisResultCache : IAnalysisResultCache
 {
     private readonly ILogger<AnalysisResultCache> _logger;
     private readonly Dictionary<string, CachedAnalysisResult> _memoryCache;
@@ -72,8 +72,7 @@ public class AnalysisResultCache : IAnalysisResultCache
                     if (!cachedResult.IsExpired())
                     {
                         _cacheHits++;
-                        _logger.LogDebug("Cache hit for {FilePath} with analyzer {AnalyzerId}",
-                            filePath, analyzerId);
+                        LogCacheHit(_logger, filePath, analyzerId);
                         return cachedResult.Result;
                     }
                     else
@@ -100,20 +99,18 @@ public class AnalysisResultCache : IAnalysisResultCache
                     }
 
                     _cacheHits++;
-                    _logger.LogDebug("Cache hit (disk) for {FilePath} with analyzer {AnalyzerId}",
-                        filePath, analyzerId);
+                    LogDiskCacheHit(_logger, filePath, analyzerId);
                     return diskResult.Result;
                 }
             }
 
             _cacheMisses++;
-            _logger.LogDebug("Cache miss for {FilePath} with analyzer {AnalyzerId}",
-                filePath, analyzerId);
+            LogCacheMiss(_logger, filePath, analyzerId);
             return null;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting cached result for {FilePath}", filePath);
+            LogErrorGettingCachedResult(_logger, ex, filePath);
             return null;
         }
     }
@@ -160,13 +157,12 @@ public class AnalysisResultCache : IAnalysisResultCache
                 await SaveToDiskAsync(cacheKey, cachedResult, cancellationToken);
             }
 
-            _logger.LogDebug("Cached result for {FilePath} with analyzer {AnalyzerId}",
-                filePath, analyzerId);
+            LogCachedResult(_logger, filePath, analyzerId);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error caching result for {FilePath}", filePath);
+            LogErrorCachingResult(_logger, ex, filePath);
             return false;
         }
     }
@@ -175,7 +171,7 @@ public class AnalysisResultCache : IAnalysisResultCache
     {
         try
         {
-            _logger.LogInformation("Invalidating cache for file: {FilePath}", filePath);
+            LogInvalidatingFileCache(_logger, filePath);
 
             // Remove from memory cache
             lock (_lock)
@@ -205,7 +201,7 @@ public class AnalysisResultCache : IAnalysisResultCache
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Error deleting cache file: {CacheFile}", cacheFile);
+                        LogErrorDeletingCacheFile(_logger, ex, cacheFile);
                     }
                 }
             }
@@ -214,7 +210,7 @@ public class AnalysisResultCache : IAnalysisResultCache
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error invalidating cache for {FilePath}", filePath);
+            LogErrorInvalidatingFileCache(_logger, ex, filePath);
             return Task.FromResult(false);
         }
     }
@@ -223,7 +219,7 @@ public class AnalysisResultCache : IAnalysisResultCache
     {
         try
         {
-            _logger.LogInformation("Invalidating cache for analyzer: {AnalyzerId}", analyzerId);
+            LogInvalidatingAnalyzerCache(_logger, analyzerId);
 
             // Remove from memory cache
             lock (_lock)
@@ -252,7 +248,7 @@ public class AnalysisResultCache : IAnalysisResultCache
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Error deleting cache file: {CacheFile}", cacheFile);
+                        LogErrorDeletingCacheFile(_logger, ex, cacheFile);
                     }
                 }
             }
@@ -261,7 +257,7 @@ public class AnalysisResultCache : IAnalysisResultCache
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error invalidating cache for analyzer {AnalyzerId}", analyzerId);
+            LogErrorInvalidatingAnalyzerCache(_logger, ex, analyzerId);
             return Task.FromResult(false);
         }
     }
@@ -270,7 +266,7 @@ public class AnalysisResultCache : IAnalysisResultCache
     {
         try
         {
-            _logger.LogInformation("Clearing entire analysis cache");
+            LogClearingCache(_logger);
 
             // Clear memory cache
             lock (_lock)
@@ -292,17 +288,17 @@ public class AnalysisResultCache : IAnalysisResultCache
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Error deleting cache file: {CacheFile}", cacheFile);
+                        LogErrorDeletingCacheFile(_logger, ex, cacheFile);
                     }
                 }
             }
 
-            _logger.LogInformation("Cache cleared successfully");
+            LogCacheCleared(_logger);
             return Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error clearing cache");
+            LogErrorClearingCache(_logger, ex);
             return Task.FromResult(false);
         }
     }
@@ -343,19 +339,18 @@ public class AnalysisResultCache : IAnalysisResultCache
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting cache statistics");
+            LogErrorGettingStatistics(_logger, ex);
             return Task.FromResult(new CacheStatistics());
         }
     }
 
     public string ComputeContentHash(string content)
     {
-        using var sha256 = SHA256.Create();
-        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(content));
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(content));
         return Convert.ToBase64String(hashBytes);
     }
 
-    private string GetCacheKey(string analyzerId, string filePath, string contentHash)
+    private static string GetCacheKey(string analyzerId, string filePath, string contentHash)
     {
         var filePathHash = GetFilePathHash(filePath);
         return $"{analyzerId}_{filePathHash}_{contentHash}";
@@ -363,8 +358,7 @@ public class AnalysisResultCache : IAnalysisResultCache
 
     private static string GetFilePathHash(string filePath)
     {
-        using var sha256 = SHA256.Create();
-        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(filePath));
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(filePath));
         return Convert.ToHexString(hashBytes)[..16]; // Use first 16 characters
     }
 
@@ -381,7 +375,7 @@ public class AnalysisResultCache : IAnalysisResultCache
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error loading cache from disk: {CacheKey}", cacheKey);
+            LogErrorLoadingFromDisk(_logger, ex, cacheKey);
             return null;
         }
     }
@@ -391,18 +385,66 @@ public class AnalysisResultCache : IAnalysisResultCache
         try
         {
             var cachePath = Path.Combine(_cacheDirectory, $"{cacheKey}.json");
-            var json = JsonSerializer.Serialize(cachedResult, new JsonSerializerOptions
-            {
-                WriteIndented = false
-            });
+            var json = JsonSerializer.Serialize(cachedResult);
 
             await File.WriteAllTextAsync(cachePath, json, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error saving cache to disk: {CacheKey}", cacheKey);
+            LogErrorSavingToDisk(_logger, ex, cacheKey);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cache hit for {FilePath} with analyzer {AnalyzerId}")]
+    private static partial void LogCacheHit(ILogger logger, string filePath, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cache hit (disk) for {FilePath} with analyzer {AnalyzerId}")]
+    private static partial void LogDiskCacheHit(ILogger logger, string filePath, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cache miss for {FilePath} with analyzer {AnalyzerId}")]
+    private static partial void LogCacheMiss(ILogger logger, string filePath, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting cached result for {FilePath}")]
+    private static partial void LogErrorGettingCachedResult(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cached result for {FilePath} with analyzer {AnalyzerId}")]
+    private static partial void LogCachedResult(ILogger logger, string filePath, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error caching result for {FilePath}")]
+    private static partial void LogErrorCachingResult(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Invalidating cache for file: {FilePath}")]
+    private static partial void LogInvalidatingFileCache(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error deleting cache file: {CacheFile}")]
+    private static partial void LogErrorDeletingCacheFile(ILogger logger, Exception exception, string cacheFile);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error invalidating cache for {FilePath}")]
+    private static partial void LogErrorInvalidatingFileCache(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Invalidating cache for analyzer: {AnalyzerId}")]
+    private static partial void LogInvalidatingAnalyzerCache(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error invalidating cache for analyzer {AnalyzerId}")]
+    private static partial void LogErrorInvalidatingAnalyzerCache(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Clearing entire analysis cache")]
+    private static partial void LogClearingCache(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cache cleared successfully")]
+    private static partial void LogCacheCleared(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error clearing cache")]
+    private static partial void LogErrorClearingCache(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting cache statistics")]
+    private static partial void LogErrorGettingStatistics(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error loading cache from disk: {CacheKey}")]
+    private static partial void LogErrorLoadingFromDisk(ILogger logger, Exception exception, string cacheKey);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error saving cache to disk: {CacheKey}")]
+    private static partial void LogErrorSavingToDisk(ILogger logger, Exception exception, string cacheKey);
 }
 
 /// <summary>

@@ -75,7 +75,7 @@ public class UnusedCodeFixer : CodeFixProvider
         }
     }
 
-    private async Task<Document> RemoveUnusedLocalAsync(
+    private static async Task<Document> RemoveUnusedLocalAsync(
         Document document,
         VariableDeclaratorSyntax variableDeclarator,
         CancellationToken cancellationToken)
@@ -115,7 +115,7 @@ public class UnusedCodeFixer : CodeFixProvider
         }
     }
 
-    private async Task<Document> RemoveUnusedFieldAsync(
+    private static async Task<Document> RemoveUnusedFieldAsync(
         Document document,
         FieldDeclarationSyntax fieldDeclaration,
         CancellationToken cancellationToken)

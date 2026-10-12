@@ -103,12 +103,13 @@ public partial class BulkEditService
             // Write changes
             await File.WriteAllTextAsync(filePath, newContent, cancellationToken);
 
+            var matchCount = regex.Count(content);
             return new FileBulkEditResult
             {
                 FilePath = filePath,
                 Success = true,
-                ChangesApplied = regex.Matches(content).Count,
-                ChangesCount = regex.Matches(content).Count,
+                ChangesApplied = matchCount,
+                ChangesCount = matchCount,
                 OriginalSize = originalSize,
                 NewSize = newSize,
                 BackupPath = backupPath,
@@ -121,7 +122,7 @@ public partial class BulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to process file {FilePath} for bulk replace", filePath);
+            LogBulkReplaceFileFailed(BulkEditLog, ex, filePath);
             return new FileBulkEditResult
             {
                 FilePath = filePath,
@@ -159,7 +160,7 @@ public partial class BulkEditService
             originalSize = content.Length;
 
             // Check condition
-            var conditionMet = await CheckCondition(content, condition, filePath);
+            var conditionMet = CheckCondition(content, condition, filePath);
 
             if (!conditionMet)
             {
@@ -195,57 +196,8 @@ public partial class BulkEditService
                 }
             }
 
-            // Apply each edit
-            foreach (var edit in edits)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                switch (edit)
-                {
-                    case ReplaceEdit replaceEdit:
-                        // TODO: Implement proper text replacement at specified positions
-                        // For now, this is a placeholder that prepends the new text
-                        newContent = replaceEdit.NewText + newContent;
-                        changes.Add(new FileChange
-                        {
-                            ChangeType = FileChangeType.Replace,
-                            StartLine = replaceEdit.StartLine,
-                            StartColumn = replaceEdit.StartColumn,
-                            EndLine = replaceEdit.EndLine,
-                            EndColumn = replaceEdit.EndColumn,
-                            NewText = replaceEdit.NewText
-                        });
-                        break;
-                    case InsertEdit insertEdit:
-                        newContent = insertEdit.NewText + newContent;
-                        changes.Add(new FileChange
-                        {
-                            ChangeType = FileChangeType.Insert,
-                            StartLine = insertEdit.StartLine,
-                            StartColumn = insertEdit.StartColumn,
-                            EndLine = insertEdit.StartLine,
-                            EndColumn = insertEdit.StartColumn,
-                            NewText = insertEdit.NewText
-                        });
-                        break;
-                    case DeleteEdit deleteEdit:
-                        var lines = newContent.Split('\n').ToList();
-                        if (deleteEdit.StartLine <= lines.Count)
-                        {
-                            lines.RemoveAt(deleteEdit.StartLine - 1);
-                            newContent = string.Join('\n', lines);
-                        }
-                        changes.Add(new FileChange
-                        {
-                            ChangeType = FileChangeType.Delete,
-                            StartLine = deleteEdit.StartLine,
-                            StartColumn = deleteEdit.StartColumn,
-                            EndLine = deleteEdit.EndLine,
-                            EndColumn = deleteEdit.EndColumn
-                        });
-                        break;
-                }
-            }
+            // Apply each edit at its line/column position
+            newContent = ApplyTextEdits(newContent, edits, changes, cancellationToken);
 
             newSize = newContent.Length;
 
@@ -272,7 +224,7 @@ public partial class BulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to process file {FilePath} for conditional edit", filePath);
+            LogConditionalEditFileFailed(BulkEditLog, ex, filePath);
             return new FileBulkEditResult
             {
                 FilePath = filePath,
@@ -309,7 +261,7 @@ public partial class BulkEditService
             originalSize = content.Length;
 
             // Apply refactoring based on type
-            var newContent = await ApplyRefactoring(content, refactorPattern, filePath, cancellationToken);
+            var newContent = ApplyRefactoring(content, refactorPattern);
             newSize = newContent.Length;
 
             // Check if any changes were made
@@ -379,7 +331,7 @@ public partial class BulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to process file {FilePath} for batch refactor", filePath);
+            LogBatchRefactorFileFailed(BulkEditLog, ex, filePath);
             return new FileBulkEditResult
             {
                 FilePath = filePath,
@@ -419,55 +371,7 @@ public partial class BulkEditService
             var newContent = content;
             var changes = new List<FileChange>();
 
-            foreach (var edit in operation.Edits)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                switch (edit)
-                {
-                    case ReplaceEdit replaceEdit:
-                        // TODO: Implement proper text replacement at specified positions
-                        newContent = replaceEdit.NewText + newContent;
-                        changes.Add(new FileChange
-                        {
-                            ChangeType = FileChangeType.Replace,
-                            StartLine = replaceEdit.StartLine,
-                            StartColumn = replaceEdit.StartColumn,
-                            EndLine = replaceEdit.EndLine,
-                            EndColumn = replaceEdit.EndColumn,
-                            NewText = replaceEdit.NewText
-                        });
-                        break;
-                    case InsertEdit insertEdit:
-                        newContent = insertEdit.NewText + newContent;
-                        changes.Add(new FileChange
-                        {
-                            ChangeType = FileChangeType.Insert,
-                            StartLine = insertEdit.StartLine,
-                            StartColumn = insertEdit.StartColumn,
-                            EndLine = insertEdit.StartLine,
-                            EndColumn = insertEdit.StartColumn,
-                            NewText = insertEdit.NewText
-                        });
-                        break;
-                    case DeleteEdit deleteEdit:
-                        var lines = newContent.Split('\n').ToList();
-                        if (deleteEdit.StartLine <= lines.Count)
-                        {
-                            lines.RemoveAt(deleteEdit.StartLine - 1);
-                            newContent = string.Join('\n', lines);
-                        }
-                        changes.Add(new FileChange
-                        {
-                            ChangeType = FileChangeType.Delete,
-                            StartLine = deleteEdit.StartLine,
-                            StartColumn = deleteEdit.StartColumn,
-                            EndLine = deleteEdit.EndLine,
-                            EndColumn = deleteEdit.EndColumn
-                        });
-                        break;
-                }
-            }
+            newContent = ApplyTextEdits(newContent, operation.Edits, changes, cancellationToken);
 
             newSize = newContent.Length;
 
@@ -518,7 +422,7 @@ public partial class BulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to process file {FilePath} for multi-file edit", filePath);
+            LogMultiFileEditFileFailed(BulkEditLog, ex, filePath);
             return new FileBulkEditResult
             {
                 FilePath = filePath,

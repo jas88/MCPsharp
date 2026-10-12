@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using MCPsharp.Models.Analyzers;
 
@@ -8,8 +10,10 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Service for generating analysis reports in various formats
 /// </summary>
-public class AnalysisReportGenerator
+public partial class AnalysisReportGenerator
 {
+    private static readonly JsonSerializerOptions IndentedJsonOptions = new() { WriteIndented = true };
+
     private readonly ILogger<AnalysisReportGenerator> _logger;
 
     public AnalysisReportGenerator(ILogger<AnalysisReportGenerator>? logger = null)
@@ -29,7 +33,7 @@ public class AnalysisReportGenerator
     {
         try
         {
-            _logger.LogInformation("Generating {Format} report to {OutputPath}", format, outputPath);
+            LogGeneratingReport(_logger, format, outputPath);
 
             options ??= new ReportOptions();
 
@@ -38,7 +42,7 @@ public class AnalysisReportGenerator
                 ReportFormat.Html => GenerateHtmlReport(results, options),
                 ReportFormat.Markdown => GenerateMarkdownReport(results, options),
                 ReportFormat.Json => GenerateJsonReport(results, options),
-                ReportFormat.Csv => GenerateCsvReport(results, options),
+                ReportFormat.Csv => GenerateCsvReport(results),
                 _ => throw new ArgumentException($"Unsupported report format: {format}")
             };
 
@@ -53,7 +57,7 @@ public class AnalysisReportGenerator
 
             var statistics = CalculateStatistics(results);
 
-            _logger.LogInformation("Report generated successfully: {OutputPath}", outputPath);
+            LogReportGenerated(_logger, outputPath);
 
             return new ReportResult
             {
@@ -66,7 +70,7 @@ public class AnalysisReportGenerator
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating report");
+            LogErrorGeneratingReport(_logger, ex);
             return new ReportResult
             {
                 Success = false,
@@ -77,7 +81,7 @@ public class AnalysisReportGenerator
         }
     }
 
-    private string GenerateHtmlReport(ImmutableArray<AnalysisResult> results, ReportOptions options)
+    private static string GenerateHtmlReport(ImmutableArray<AnalysisResult> results, ReportOptions options)
     {
         var sb = new StringBuilder();
         var statistics = CalculateStatistics(results);
@@ -87,7 +91,7 @@ public class AnalysisReportGenerator
         sb.AppendLine("<head>");
         sb.AppendLine("    <meta charset=\"UTF-8\">");
         sb.AppendLine("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
-        sb.AppendLine($"    <title>Analysis Report - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}</title>");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    <title>Analysis Report - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}</title>");
         sb.AppendLine("    <style>");
         sb.AppendLine("        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }");
         sb.AppendLine("        .container { max-width: 1200px; margin: 0 auto; background-color: white; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }");
@@ -114,17 +118,17 @@ public class AnalysisReportGenerator
         sb.AppendLine("</head>");
         sb.AppendLine("<body>");
         sb.AppendLine("    <div class=\"container\">");
-        sb.AppendLine($"        <h1>Code Analysis Report</h1>");
-        sb.AppendLine($"        <p>Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"        <h1>Code Analysis Report</h1>");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"        <p>Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>");
 
         // Statistics
         sb.AppendLine("        <h2>Summary Statistics</h2>");
         sb.AppendLine("        <div class=\"stats\">");
-        sb.AppendLine($"            <div class=\"stat-card\"><div class=\"stat-value\">{statistics.TotalFiles}</div><div class=\"stat-label\">Files Analyzed</div></div>");
-        sb.AppendLine($"            <div class=\"stat-card\"><div class=\"stat-value\">{statistics.TotalIssues}</div><div class=\"stat-label\">Total Issues</div></div>");
-        sb.AppendLine($"            <div class=\"stat-card\"><div class=\"stat-value\" style=\"color: #dc3545;\">{statistics.ErrorCount}</div><div class=\"stat-label\">Errors</div></div>");
-        sb.AppendLine($"            <div class=\"stat-card\"><div class=\"stat-value\" style=\"color: #ffc107;\">{statistics.WarningCount}</div><div class=\"stat-label\">Warnings</div></div>");
-        sb.AppendLine($"            <div class=\"stat-card\"><div class=\"stat-value\" style=\"color: #17a2b8;\">{statistics.InfoCount}</div><div class=\"stat-label\">Info</div></div>");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"            <div class=\"stat-card\"><div class=\"stat-value\">{statistics.TotalFiles}</div><div class=\"stat-label\">Files Analyzed</div></div>");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"            <div class=\"stat-card\"><div class=\"stat-value\">{statistics.TotalIssues}</div><div class=\"stat-label\">Total Issues</div></div>");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"            <div class=\"stat-card\"><div class=\"stat-value\" style=\"color: #dc3545;\">{statistics.ErrorCount}</div><div class=\"stat-label\">Errors</div></div>");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"            <div class=\"stat-card\"><div class=\"stat-value\" style=\"color: #ffc107;\">{statistics.WarningCount}</div><div class=\"stat-label\">Warnings</div></div>");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"            <div class=\"stat-card\"><div class=\"stat-value\" style=\"color: #17a2b8;\">{statistics.InfoCount}</div><div class=\"stat-label\">Info</div></div>");
         sb.AppendLine("        </div>");
 
         // Issues by severity
@@ -139,28 +143,28 @@ public class AnalysisReportGenerator
 
             foreach (var severityGroup in issuesBySeverity)
             {
-                sb.AppendLine($"        <h3>{severityGroup.Key} ({severityGroup.Count()})</h3>");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"        <h3>{severityGroup.Key} ({severityGroup.Count()})</h3>");
 
                 foreach (var issue in severityGroup.Take(options.MaxIssuesPerCategory))
                 {
                     var cssClass = severityGroup.Key.ToString().ToLowerInvariant();
-                    sb.AppendLine($"        <div class=\"issue-card {cssClass}\">");
-                    sb.AppendLine($"            <strong>{issue.Title}</strong>");
-                    sb.AppendLine($"            <p>{issue.Description}</p>");
-                    sb.AppendLine($"            <div class=\"location\">");
-                    sb.AppendLine($"                <span class=\"file-path\">{issue.FilePath}</span> ");
-                    sb.AppendLine($"                Line {issue.LineNumber}, Column {issue.ColumnNumber}");
-                    sb.AppendLine($"            </div>");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"        <div class=\"issue-card {cssClass}\">");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"            <strong>{issue.Title}</strong>");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"            <p>{issue.Description}</p>");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"            <div class=\"location\">");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"                <span class=\"file-path\">{issue.FilePath}</span> ");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"                Line {issue.LineNumber}, Column {issue.ColumnNumber}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"            </div>");
                     if (!string.IsNullOrEmpty(issue.HelpLink))
                     {
-                        sb.AppendLine($"            <p><a href=\"{issue.HelpLink}\" target=\"_blank\">More Info</a></p>");
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"            <p><a href=\"{issue.HelpLink}\" target=\"_blank\">More Info</a></p>");
                     }
                     sb.AppendLine("        </div>");
                 }
 
                 if (severityGroup.Count() > options.MaxIssuesPerCategory)
                 {
-                    sb.AppendLine($"        <p><em>... and {severityGroup.Count() - options.MaxIssuesPerCategory} more {severityGroup.Key} issues</em></p>");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"        <p><em>... and {severityGroup.Count() - options.MaxIssuesPerCategory} more {severityGroup.Key} issues</em></p>");
                 }
             }
         }
@@ -172,24 +176,24 @@ public class AnalysisReportGenerator
         return sb.ToString();
     }
 
-    private string GenerateMarkdownReport(ImmutableArray<AnalysisResult> results, ReportOptions options)
+    private static string GenerateMarkdownReport(ImmutableArray<AnalysisResult> results, ReportOptions options)
     {
         var sb = new StringBuilder();
         var statistics = CalculateStatistics(results);
 
         sb.AppendLine("# Code Analysis Report");
         sb.AppendLine();
-        sb.AppendLine($"**Generated:** {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Generated:** {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
         sb.AppendLine();
 
         sb.AppendLine("## Summary Statistics");
         sb.AppendLine();
-        sb.AppendLine($"- **Files Analyzed:** {statistics.TotalFiles}");
-        sb.AppendLine($"- **Total Issues:** {statistics.TotalIssues}");
-        sb.AppendLine($"- **Errors:** {statistics.ErrorCount}");
-        sb.AppendLine($"- **Warnings:** {statistics.WarningCount}");
-        sb.AppendLine($"- **Info:** {statistics.InfoCount}");
-        sb.AppendLine($"- **Critical:** {statistics.CriticalCount}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Files Analyzed:** {statistics.TotalFiles}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Total Issues:** {statistics.TotalIssues}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Errors:** {statistics.ErrorCount}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Warnings:** {statistics.WarningCount}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Info:** {statistics.InfoCount}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Critical:** {statistics.CriticalCount}");
         sb.AppendLine();
 
         // Issues by category
@@ -205,25 +209,25 @@ public class AnalysisReportGenerator
 
             foreach (var categoryGroup in issuesByCategory)
             {
-                sb.AppendLine($"### {categoryGroup.Key} ({categoryGroup.Count()})");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"### {categoryGroup.Key} ({categoryGroup.Count()})");
                 sb.AppendLine();
 
                 foreach (var issue in categoryGroup.Take(options.MaxIssuesPerCategory))
                 {
-                    sb.AppendLine($"**{issue.Severity}:** {issue.Title}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"**{issue.Severity}:** {issue.Title}");
                     sb.AppendLine();
-                    sb.AppendLine($"```");
-                    sb.AppendLine($"File: {issue.FilePath}");
-                    sb.AppendLine($"Location: Line {issue.LineNumber}, Column {issue.ColumnNumber}");
-                    sb.AppendLine($"Rule: {issue.RuleId}");
-                    sb.AppendLine($"```");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"```");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"File: {issue.FilePath}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"Location: Line {issue.LineNumber}, Column {issue.ColumnNumber}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"Rule: {issue.RuleId}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"```");
                     sb.AppendLine();
-                    sb.AppendLine($"{issue.Description}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"{issue.Description}");
                     sb.AppendLine();
 
                     if (!string.IsNullOrEmpty(issue.HelpLink))
                     {
-                        sb.AppendLine($"[More Info]({issue.HelpLink})");
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"[More Info]({issue.HelpLink})");
                         sb.AppendLine();
                     }
 
@@ -233,7 +237,7 @@ public class AnalysisReportGenerator
 
                 if (categoryGroup.Count() > options.MaxIssuesPerCategory)
                 {
-                    sb.AppendLine($"*... and {categoryGroup.Count() - options.MaxIssuesPerCategory} more {categoryGroup.Key} issues*");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"*... and {categoryGroup.Count() - options.MaxIssuesPerCategory} more {categoryGroup.Key} issues*");
                     sb.AppendLine();
                 }
             }
@@ -242,7 +246,7 @@ public class AnalysisReportGenerator
         return sb.ToString();
     }
 
-    private string GenerateJsonReport(ImmutableArray<AnalysisResult> results, ReportOptions options)
+    private static string GenerateJsonReport(ImmutableArray<AnalysisResult> results, ReportOptions options)
     {
         var report = new
         {
@@ -271,13 +275,10 @@ public class AnalysisReportGenerator
             }).ToArray()
         };
 
-        return System.Text.Json.JsonSerializer.Serialize(report, new System.Text.Json.JsonSerializerOptions
-        {
-            WriteIndented = true
-        });
+        return JsonSerializer.Serialize(report, IndentedJsonOptions);
     }
 
-    private string GenerateCsvReport(ImmutableArray<AnalysisResult> results, ReportOptions options)
+    private static string GenerateCsvReport(ImmutableArray<AnalysisResult> results)
     {
         var sb = new StringBuilder();
 
@@ -289,7 +290,7 @@ public class AnalysisReportGenerator
         {
             foreach (var issue in result.Issues)
             {
-                sb.AppendLine($"\"{EscapeCsv(issue.FilePath)}\",\"{EscapeCsv(issue.RuleId)}\",\"{issue.Severity}\",\"{issue.Category}\",{issue.LineNumber},{issue.ColumnNumber},\"{EscapeCsv(issue.Title)}\",\"{EscapeCsv(issue.Description)}\"");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"\"{EscapeCsv(issue.FilePath)}\",\"{EscapeCsv(issue.RuleId)}\",\"{issue.Severity}\",\"{issue.Category}\",{issue.LineNumber},{issue.ColumnNumber},\"{EscapeCsv(issue.Title)}\",\"{EscapeCsv(issue.Description)}\"");
             }
         }
 
@@ -304,7 +305,7 @@ public class AnalysisReportGenerator
         return value.Replace("\"", "\"\"");
     }
 
-    private ReportStatistics CalculateStatistics(ImmutableArray<AnalysisResult> results)
+    private static ReportStatistics CalculateStatistics(ImmutableArray<AnalysisResult> results)
     {
         var allIssues = results.SelectMany(r => r.Issues).ToList();
 
@@ -328,6 +329,15 @@ public class AnalysisReportGenerator
                 .ToDictionary(g => g.Key, g => g.Count())
         };
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Generating {Format} report to {OutputPath}")]
+    private static partial void LogGeneratingReport(ILogger logger, ReportFormat format, string outputPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Report generated successfully: {OutputPath}")]
+    private static partial void LogReportGenerated(ILogger logger, string outputPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error generating report")]
+    private static partial void LogErrorGeneratingReport(ILogger logger, Exception exception);
 }
 
 /// <summary>

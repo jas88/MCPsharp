@@ -13,8 +13,11 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Adapter that wraps Roslyn CodeFixProvider to provide automatic fixes for diagnostic issues
 /// </summary>
-public class RoslynCodeFixAdapter
+public partial class RoslynCodeFixAdapter
 {
+    private static readonly CSharpCompilationOptions LibraryCompilationOptions =
+        CSharpCompilation.Create("FixAnalysisAssembly").Options.WithOutputKind(OutputKind.DynamicallyLinkedLibrary);
+
     private readonly CodeFixProvider _codeFixProvider;
     private readonly ILogger<RoslynCodeFixAdapter> _logger;
     private readonly string _fixProviderId;
@@ -71,12 +74,11 @@ public class RoslynCodeFixAdapter
     {
         try
         {
-            _logger.LogDebug("Getting fixes for issue {IssueId} with rule {RuleId}", issue.Id, issue.RuleId);
+            LogGettingFixes(_logger, issue.Id, issue.RuleId);
 
             if (!CanFix(issue.RuleId))
             {
-                _logger.LogWarning("Fix provider {ProviderId} cannot fix diagnostic {DiagnosticId}",
-                    Id, issue.RuleId);
+                LogCannotFix(_logger, Id, issue.RuleId);
                 return ImmutableArray<AnalyzerFix>.Empty;
             }
 
@@ -87,7 +89,7 @@ public class RoslynCodeFixAdapter
                 "FixAnalysisAssembly",
                 syntaxTrees: new[] { syntaxTree },
                 references: GetMetadataReferences(),
-                options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+                options: LibraryCompilationOptions);
 
             // Create a workspace and document
             var workspace = new AdhocWorkspace();
@@ -123,13 +125,12 @@ public class RoslynCodeFixAdapter
                 }
             }
 
-            _logger.LogDebug("Found {Count} fixes for issue {IssueId}", fixes.Count, issue.Id);
+            LogFixesFound(_logger, fixes.Count, issue.Id);
             return fixes.ToImmutableArray();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting fixes for issue {IssueId} with rule {RuleId}",
-                issue.Id, issue.RuleId);
+            LogGetFixesError(_logger, ex, issue.Id, issue.RuleId);
             return ImmutableArray<AnalyzerFix>.Empty;
         }
     }
@@ -145,7 +146,7 @@ public class RoslynCodeFixAdapter
         var startTime = DateTime.UtcNow;
         try
         {
-            _logger.LogDebug("Applying fix {FixId} for rule {RuleId}", fix.Id, fix.RuleId);
+            LogApplyingFix(_logger, fix.Id, fix.RuleId);
 
             // Apply the edits to the content
 
@@ -168,7 +169,7 @@ public class RoslynCodeFixAdapter
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error applying fix {FixId} for rule {RuleId}", fix.Id, fix.RuleId);
+            LogApplyFixError(_logger, ex, fix.Id, fix.RuleId);
 
             return Task.FromResult(new FixApplicationResult
             {
@@ -270,12 +271,12 @@ public class RoslynCodeFixAdapter
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error converting code action {Title} to fix", codeAction.Title);
+            LogConvertCodeActionError(_logger, ex, codeAction.Title);
             return null;
         }
     }
 
-    private Diagnostic CreateDiagnosticFromIssue(AnalyzerIssue issue, SyntaxTree syntaxTree)
+    private static Diagnostic CreateDiagnosticFromIssue(AnalyzerIssue issue, SyntaxTree syntaxTree)
     {
         // Create a diagnostic descriptor
         var descriptor = new DiagnosticDescriptor(
@@ -307,60 +308,6 @@ public class RoslynCodeFixAdapter
         return Diagnostic.Create(descriptor, location);
     }
 
-    private string ApplyTextEdits(string content, ImmutableArray<Models.TextEdit> edits)
-    {
-        // Sort edits in reverse order to maintain positions
-        var sortedEdits = edits
-            .OrderByDescending(e => e.StartLine)
-            .ThenByDescending(e => e.StartColumn)
-            .ToList();
-
-        var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None).ToList();
-
-        foreach (var edit in sortedEdits)
-        {
-            var startLineIndex = edit.StartLine;
-            var endLineIndex = edit.EndLine;
-
-            if (startLineIndex < 0 || startLineIndex >= lines.Count ||
-                endLineIndex < 0 || endLineIndex >= lines.Count)
-            {
-                _logger.LogWarning("Edit has invalid line range: {StartLine}-{EndLine}",
-                    edit.StartLine, edit.EndLine);
-                continue;
-            }
-
-            if (startLineIndex == endLineIndex)
-            {
-                // Single line edit
-                var line = lines[startLineIndex];
-                var startColumn = Math.Max(0, edit.StartColumn);
-                var endColumn = Math.Min(line.Length, edit.EndColumn);
-
-                var before = line.Substring(0, startColumn);
-                var after = line.Substring(endColumn);
-                lines[startLineIndex] = before + edit.NewText + after;
-            }
-            else
-            {
-                // Multi-line edit
-                var firstLine = lines[startLineIndex];
-                var lastLine = lines[endLineIndex];
-
-                var before = firstLine.Substring(0, Math.Max(0, edit.StartColumn));
-                var after = lastLine.Substring(Math.Min(lastLine.Length, edit.EndColumn));
-
-                // Remove all lines in between
-                lines.RemoveRange(startLineIndex, endLineIndex - startLineIndex + 1);
-
-                // Insert the new content
-                lines.Insert(startLineIndex, before + edit.NewText + after);
-            }
-        }
-
-        return string.Join(Environment.NewLine, lines);
-    }
-
     private static DiagnosticSeverity MapSeverityToDiagnosticSeverity(IssueSeverity severity)
     {
         return severity switch
@@ -388,7 +335,7 @@ public class RoslynCodeFixAdapter
         };
     }
 
-    private IEnumerable<MetadataReference> GetMetadataReferences()
+    private List<MetadataReference> GetMetadataReferences()
     {
         var references = new List<MetadataReference>();
 
@@ -420,9 +367,33 @@ public class RoslynCodeFixAdapter
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error loading metadata references for code fix analysis");
+            LogMetadataReferencesError(_logger, ex);
         }
 
         return references;
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Getting fixes for issue {IssueId} with rule {RuleId}")]
+    private static partial void LogGettingFixes(ILogger logger, string issueId, string ruleId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Fix provider {ProviderId} cannot fix diagnostic {DiagnosticId}")]
+    private static partial void LogCannotFix(ILogger logger, string providerId, string diagnosticId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Found {Count} fixes for issue {IssueId}")]
+    private static partial void LogFixesFound(ILogger logger, int count, string issueId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting fixes for issue {IssueId} with rule {RuleId}")]
+    private static partial void LogGetFixesError(ILogger logger, Exception exception, string issueId, string ruleId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Applying fix {FixId} for rule {RuleId}")]
+    private static partial void LogApplyingFix(ILogger logger, string fixId, string ruleId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error applying fix {FixId} for rule {RuleId}")]
+    private static partial void LogApplyFixError(ILogger logger, Exception exception, string fixId, string ruleId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error converting code action {Title} to fix")]
+    private static partial void LogConvertCodeActionError(ILogger logger, Exception exception, string title);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error loading metadata references for code fix analysis")]
+    private static partial void LogMetadataReferencesError(ILogger logger, Exception exception);
 }

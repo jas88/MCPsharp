@@ -46,7 +46,7 @@ public class AsyncAwaitPatternFixer : CodeFixProvider
             diagnostic);
     }
 
-    private async Task<Document> RemoveAsyncAndWrapReturnAsync(
+    private static async Task<Document> RemoveAsyncAndWrapReturnAsync(
         Document document,
         MethodDeclarationSyntax methodDecl,
         CancellationToken cancellationToken)
@@ -88,7 +88,7 @@ public class AsyncAwaitPatternFixer : CodeFixProvider
     /// <summary>
     /// Syntax rewriter that wraps return statements with Task.FromResult or Task.CompletedTask
     /// </summary>
-    private class AsyncReturnRewriter : CSharpSyntaxRewriter
+    private sealed class AsyncReturnRewriter : CSharpSyntaxRewriter
     {
         private readonly bool _isGenericTask;
 
@@ -102,7 +102,7 @@ public class AsyncAwaitPatternFixer : CodeFixProvider
             // Handle void Task (Task with no return value)
             if (node.Expression == null)
             {
-                // return; -> return Task.CompletedTask;
+                // A bare return statement becomes a return of Task.CompletedTask
                 var completedTask = SyntaxFactory.ParseExpression("Task.CompletedTask")
                     .WithLeadingTrivia(node.GetLeadingTrivia())
                     .WithTrailingTrivia(node.GetTrailingTrivia());
@@ -147,9 +147,8 @@ public class AsyncAwaitPatternFixer : CodeFixProvider
 
         public override SyntaxNode? VisitArrowExpressionClause(ArrowExpressionClauseSyntax node)
         {
-            // Handle expression-bodied methods
-            // async Task<int> GetValue() => 42;
-            // Should become: Task<int> GetValue() => Task.FromResult(42);
+            // Handle expression-bodied methods: the arrow expression of an async Task<T>
+            // method is wrapped in a Task.FromResult invocation once the async modifier is removed.
 
             if (node.Expression == null)
                 return node;

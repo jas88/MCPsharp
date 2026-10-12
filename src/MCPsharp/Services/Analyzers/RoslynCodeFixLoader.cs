@@ -8,7 +8,7 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Service for discovering and loading Roslyn CodeFixProviders from assemblies
 /// </summary>
-public class RoslynCodeFixLoader
+public partial class RoslynCodeFixLoader
 {
     private readonly ILogger<RoslynCodeFixLoader> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -30,11 +30,11 @@ public class RoslynCodeFixLoader
     {
         try
         {
-            _logger.LogInformation("Loading Roslyn code fix providers from assembly: {AssemblyPath}", assemblyPath);
+            LogLoadingFromAssembly(_logger, assemblyPath);
 
             if (!File.Exists(assemblyPath))
             {
-                _logger.LogError("Assembly not found: {AssemblyPath}", assemblyPath);
+                LogAssemblyNotFound(_logger, assemblyPath);
                 return Task.FromResult(ImmutableArray<RoslynCodeFixAdapter>.Empty);
             }
 
@@ -50,8 +50,7 @@ public class RoslynCodeFixLoader
                     && typeof(CodeFixProvider).IsAssignableFrom(t))
                 .ToList();
 
-            _logger.LogInformation("Found {Count} code fix provider types in assembly {AssemblyPath}",
-                codeFixTypes.Count, assemblyPath);
+            LogFoundProviderTypes(_logger, codeFixTypes.Count, assemblyPath);
 
             foreach (var codeFixType in codeFixTypes)
             {
@@ -63,8 +62,7 @@ public class RoslynCodeFixLoader
                     var constructor = codeFixType.GetConstructor(Type.EmptyTypes);
                     if (constructor == null)
                     {
-                        _logger.LogWarning("Code fix provider {CodeFixType} does not have parameterless constructor",
-                            codeFixType.Name);
+                        LogNoParameterlessConstructor(_logger, codeFixType.Name);
                         continue;
                     }
 
@@ -78,23 +76,21 @@ public class RoslynCodeFixLoader
 
                     codeFixProviders.Add(adapter);
 
-                    _logger.LogDebug("Loaded Roslyn code fix provider: {ProviderId} ({ProviderType})",
-                        adapter.Id, codeFixType.Name);
+                    LogLoadedProvider(_logger, adapter.Id, codeFixType.Name);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error loading code fix provider type {CodeFixType}", codeFixType.Name);
+                    LogErrorLoadingProviderType(_logger, ex, codeFixType.Name);
                 }
             }
 
-            _logger.LogInformation("Successfully loaded {Count} Roslyn code fix providers from {AssemblyPath}",
-                codeFixProviders.Count, assemblyPath);
+            LogLoadedProviders(_logger, codeFixProviders.Count, assemblyPath);
 
             return Task.FromResult(codeFixProviders.ToImmutableArray());
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading code fix providers from assembly {AssemblyPath}", assemblyPath);
+            LogErrorLoadingFromAssembly(_logger, ex, assemblyPath);
             return Task.FromResult(ImmutableArray<RoslynCodeFixAdapter>.Empty);
         }
     }
@@ -126,7 +122,7 @@ public class RoslynCodeFixLoader
         {
             if (!Directory.Exists(directory))
             {
-                _logger.LogError("Directory not found: {Directory}", directory);
+                LogDirectoryNotFound(_logger, directory);
                 return ImmutableArray<string>.Empty;
             }
 
@@ -152,24 +148,23 @@ public class RoslynCodeFixLoader
                     if (hasCodeFixProviders)
                     {
                         codeFixProviderAssemblies.Add(dllFile);
-                        _logger.LogDebug("Discovered code fix provider assembly: {AssemblyPath}", dllFile);
+                        LogDiscoveredAssembly(_logger, dllFile);
                     }
                 }
                 catch (Exception ex)
                 {
                     // Skip assemblies that can't be loaded or inspected
-                    _logger.LogTrace(ex, "Could not inspect assembly {AssemblyPath}", dllFile);
+                    LogCouldNotInspectAssembly(_logger, ex, dllFile);
                 }
             }
 
-            _logger.LogInformation("Discovered {Count} code fix provider assemblies in {Directory}",
-                codeFixProviderAssemblies.Count, directory);
+            LogDiscoveredAssemblies(_logger, codeFixProviderAssemblies.Count, directory);
 
             return codeFixProviderAssemblies.ToImmutableArray();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error discovering code fix provider assemblies in {Directory}", directory);
+            LogErrorDiscoveringAssemblies(_logger, ex, directory);
             return ImmutableArray<string>.Empty;
         }
     }
@@ -198,7 +193,7 @@ public class RoslynCodeFixLoader
                 if (!Directory.Exists(cachePath))
                     continue;
 
-                _logger.LogInformation("Scanning NuGet cache for code fix providers: {CachePath}", cachePath);
+                LogScanningNuGetCache(_logger, cachePath);
 
                 var assemblyPaths = DiscoverCodeFixProviderAssemblies(cachePath, recursive: true);
                 var codeFixProviders = await LoadCodeFixProvidersFromAssembliesAsync(assemblyPaths, cancellationToken);
@@ -206,13 +201,13 @@ public class RoslynCodeFixLoader
                 allCodeFixProviders.AddRange(codeFixProviders);
             }
 
-            _logger.LogInformation("Loaded {Count} code fix providers from NuGet cache", allCodeFixProviders.Count);
+            LogLoadedFromNuGetCache(_logger, allCodeFixProviders.Count);
 
             return allCodeFixProviders.ToImmutableArray();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading code fix providers from NuGet cache");
+            LogErrorLoadingFromNuGetCache(_logger, ex);
             return ImmutableArray<RoslynCodeFixAdapter>.Empty;
         }
     }
@@ -234,7 +229,7 @@ public class RoslynCodeFixLoader
                     && typeof(CodeFixProvider).IsAssignableFrom(t))
                 .ToList();
 
-            if (!codeFixTypes.Any())
+            if (codeFixTypes.Count == 0)
                 return null;
 
             // Get fixable diagnostic IDs from each provider
@@ -253,9 +248,10 @@ public class RoslynCodeFixLoader
                         }
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
                     // Skip if we can't instantiate
+                    LogCouldNotInstantiateProvider(_logger, ex, codeFixType.Name);
                 }
             }
 
@@ -271,7 +267,7 @@ public class RoslynCodeFixLoader
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting code fix provider assembly info for {AssemblyPath}", assemblyPath);
+            LogErrorGettingAssemblyInfo(_logger, ex, assemblyPath);
             return null;
         }
     }
@@ -279,7 +275,7 @@ public class RoslynCodeFixLoader
     /// <summary>
     /// Match code fix providers to analyzers based on diagnostic IDs
     /// </summary>
-    public ImmutableDictionary<string, ImmutableArray<RoslynCodeFixAdapter>> MatchCodeFixProvidersToAnalyzers(
+    public static ImmutableDictionary<string, ImmutableArray<RoslynCodeFixAdapter>> MatchCodeFixProvidersToAnalyzers(
         ImmutableArray<RoslynCodeFixAdapter> codeFixProviders,
         ImmutableArray<Models.Analyzers.IAnalyzer> analyzers)
     {
@@ -292,16 +288,10 @@ public class RoslynCodeFixLoader
             var analyzerRules = analyzer.GetRules();
             foreach (var rule in analyzerRules)
             {
-                foreach (var codeFixProvider in codeFixProviders)
-                {
-                    if (codeFixProvider.CanFix(rule.Id))
-                    {
-                        matchingProviders.Add(codeFixProvider);
-                    }
-                }
+                matchingProviders.AddRange(codeFixProviders.Where(codeFixProvider => codeFixProvider.CanFix(rule.Id)));
             }
 
-            if (matchingProviders.Any())
+            if (matchingProviders.Count > 0)
             {
                 matches[analyzer.Id] = matchingProviders.Distinct().ToList();
             }
@@ -311,6 +301,60 @@ public class RoslynCodeFixLoader
             kvp => kvp.Key,
             kvp => kvp.Value.ToImmutableArray());
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loading Roslyn code fix providers from assembly: {AssemblyPath}")]
+    private static partial void LogLoadingFromAssembly(ILogger logger, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Assembly not found: {AssemblyPath}")]
+    private static partial void LogAssemblyNotFound(ILogger logger, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Found {Count} code fix provider types in assembly {AssemblyPath}")]
+    private static partial void LogFoundProviderTypes(ILogger logger, int count, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Code fix provider {CodeFixType} does not have parameterless constructor")]
+    private static partial void LogNoParameterlessConstructor(ILogger logger, string codeFixType);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Loaded Roslyn code fix provider: {ProviderId} ({ProviderType})")]
+    private static partial void LogLoadedProvider(ILogger logger, string providerId, string providerType);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading code fix provider type {CodeFixType}")]
+    private static partial void LogErrorLoadingProviderType(ILogger logger, Exception exception, string codeFixType);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Successfully loaded {Count} Roslyn code fix providers from {AssemblyPath}")]
+    private static partial void LogLoadedProviders(ILogger logger, int count, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading code fix providers from assembly {AssemblyPath}")]
+    private static partial void LogErrorLoadingFromAssembly(ILogger logger, Exception exception, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Directory not found: {Directory}")]
+    private static partial void LogDirectoryNotFound(ILogger logger, string directory);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Discovered code fix provider assembly: {AssemblyPath}")]
+    private static partial void LogDiscoveredAssembly(ILogger logger, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Trace, Message = "Could not inspect assembly {AssemblyPath}")]
+    private static partial void LogCouldNotInspectAssembly(ILogger logger, Exception exception, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Discovered {Count} code fix provider assemblies in {Directory}")]
+    private static partial void LogDiscoveredAssemblies(ILogger logger, int count, string directory);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error discovering code fix provider assemblies in {Directory}")]
+    private static partial void LogErrorDiscoveringAssemblies(ILogger logger, Exception exception, string directory);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Scanning NuGet cache for code fix providers: {CachePath}")]
+    private static partial void LogScanningNuGetCache(ILogger logger, string cachePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} code fix providers from NuGet cache")]
+    private static partial void LogLoadedFromNuGetCache(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading code fix providers from NuGet cache")]
+    private static partial void LogErrorLoadingFromNuGetCache(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Trace, Message = "Could not instantiate code fix provider {CodeFixType}")]
+    private static partial void LogCouldNotInstantiateProvider(ILogger logger, Exception exception, string codeFixType);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting code fix provider assembly info for {AssemblyPath}")]
+    private static partial void LogErrorGettingAssemblyInfo(ILogger logger, Exception exception, string assemblyPath);
 }
 
 /// <summary>

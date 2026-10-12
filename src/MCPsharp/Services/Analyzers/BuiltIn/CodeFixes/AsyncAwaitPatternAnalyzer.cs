@@ -34,7 +34,7 @@ public class AsyncAwaitPatternAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeMethod, SyntaxKind.MethodDeclaration);
     }
 
-    private void AnalyzeMethod(SyntaxNodeAnalysisContext context)
+    private static void AnalyzeMethod(SyntaxNodeAnalysisContext context)
     {
         var methodDecl = (MethodDeclarationSyntax)context.Node;
 
@@ -59,13 +59,10 @@ public class AsyncAwaitPatternAnalyzer : DiagnosticAnalyzer
             return;
 
         // Skip if method has cancellation token that might be used async
-        // (defensive check - might have async operations we can't detect)
-        if (HasCancellationTokenParameter(methodDecl))
-        {
-            // Only skip if the method body is complex (might use token in ways we can't analyze)
-            if (IsComplexMethodBody(methodDecl))
-                return;
-        }
+        // (defensive check - might have async operations we can't detect).
+        // Only skip if the method body is complex (might use token in ways we can't analyze)
+        if (HasCancellationTokenParameter(methodDecl) && IsComplexMethodBody(methodDecl))
+            return;
 
         // Skip if method uses ConfigureAwait (indicates async intent)
         if (methodDecl.DescendantNodes().Any(n =>

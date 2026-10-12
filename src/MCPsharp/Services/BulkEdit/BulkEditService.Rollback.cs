@@ -18,8 +18,7 @@ public partial class BulkEditService
         var operationId = Guid.NewGuid().ToString();
         var startTime = DateTime.UtcNow;
 
-        _logger?.LogInformation("Starting rollback operation {OperationId} for rollback session {RollbackId}",
-            operationId, rollbackId);
+        LogStartingRollback(BulkEditLog, operationId, rollbackId);
 
         try
         {
@@ -139,18 +138,19 @@ public partial class BulkEditService
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogWarning(ex, "Failed to cleanup rollback directory {Directory}", rollbackInfo.RollbackDirectory);
+                    LogRollbackDirectoryCleanupFailed(BulkEditLog, ex, rollbackInfo.RollbackDirectory);
                 }
             }
 
             var rollbackFileCount = filesToRollback.Count;
             var rollbackErrors = new List<BulkEditError>();
-            if (fileResults.Count(r => !r.Success) > 0)
+            var failedRollbacks = fileResults.Count(r => !r.Success);
+            if (failedRollbacks > 0)
             {
                 rollbackErrors.Add(new BulkEditError
                 {
                     FilePath = "Multiple files",
-                    ErrorMessage = $"Rollback failed for {fileResults.Count(r => !r.Success)} files",
+                    ErrorMessage = $"Rollback failed for {failedRollbacks} files",
                     Timestamp = DateTime.UtcNow
                 });
             }
@@ -161,11 +161,11 @@ public partial class BulkEditService
                 TotalFiles = fileResults.Count,
                 ModifiedFiles = successfulRollbacks,
                 SkippedFiles = fileResults.Count(r => r.Skipped),
-                FailedFiles = fileResults.Count(r => !r.Success),
+                FailedFiles = failedRollbacks,
                 FileResults = fileResults,
                 Errors = rollbackErrors,
                 ElapsedTime = endTime - startTime,
-                Summary = summary.ToString(),
+                Summary = FormatBulkEditSummary(summary),
                 OperationId = operationId,
                 StartTime = startTime,
                 EndTime = endTime
@@ -173,7 +173,7 @@ public partial class BulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Rollback operation {OperationId} failed", operationId);
+            LogRollbackFailed(BulkEditLog, ex, operationId);
             return CreateErrorResult(operationId, startTime, ex.Message);
         }
     }
@@ -194,7 +194,7 @@ public partial class BulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to get available rollbacks");
+            LogGetRollbacksFailed(BulkEditLog, ex);
             return Array.Empty<RollbackInfo>();
         }
     }
@@ -224,14 +224,14 @@ public partial class BulkEditService
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogWarning(ex, "Failed to cleanup expired rollback {RollbackId}", rollbackId);
+                    LogExpiredRollbackCleanupFailed(BulkEditLog, ex, rollbackId);
                 }
             }
         }
 
         if (cleanedCount > 0)
         {
-            _logger?.LogInformation("Cleaned up {Count} expired rollback sessions", cleanedCount);
+            LogExpiredRollbacksCleaned(BulkEditLog, cleanedCount);
         }
 
         return cleanedCount;
@@ -282,7 +282,7 @@ public partial class BulkEditService
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "Failed to create backup for file {FilePath}", filePath);
+                LogBackupFailed(BulkEditLog, ex, filePath);
             }
         }
 
@@ -392,7 +392,7 @@ public partial class BulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to rollback file {FilePath}", rollbackFile.OriginalPath);
+            LogRollbackFileFailed(BulkEditLog, ex, rollbackFile.OriginalPath);
             return new FileBulkEditResult
             {
                 FilePath = rollbackFile.OriginalPath,

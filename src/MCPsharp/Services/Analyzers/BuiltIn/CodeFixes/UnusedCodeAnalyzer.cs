@@ -1,8 +1,10 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
 
@@ -43,7 +45,8 @@ public class UnusedCodeAnalyzer : DiagnosticAnalyzer
         "CodeQuality",
         DiagnosticSeverity.Info,
         isEnabledByDefault: true,
-        description: "Remove unused private fields to reduce code clutter.");
+        description: "Remove unused private fields to reduce code clutter.",
+        customTags: WellKnownDiagnosticTags.CompilationEnd);
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(UnusedLocalRule, UnusedFieldRule);
@@ -57,11 +60,45 @@ public class UnusedCodeAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeMethodBody, SyntaxKind.MethodDeclaration);
         context.RegisterSyntaxNodeAction(AnalyzeMethodBody, SyntaxKind.ConstructorDeclaration);
 
-        // Register for class declarations to find unused fields
-        context.RegisterSymbolAction(AnalyzeNamedType, SymbolKind.NamedType);
+        // Collect private fields and field references across the compilation to find unused fields
+        context.RegisterCompilationStartAction(OnCompilationStart);
     }
 
-    private void AnalyzeMethodBody(SyntaxNodeAnalysisContext context)
+    private static void OnCompilationStart(CompilationStartAnalysisContext context)
+    {
+        var referencedFields = new ConcurrentDictionary<IFieldSymbol, byte>(SymbolEqualityComparer.Default);
+        var candidateFields = new ConcurrentBag<IFieldSymbol>();
+
+        context.RegisterOperationAction(
+            operationContext =>
+            {
+                var reference = (IFieldReferenceOperation)operationContext.Operation;
+                referencedFields.TryAdd(reference.Field.OriginalDefinition, 0);
+            },
+            OperationKind.FieldReference);
+
+        context.RegisterSymbolAction(
+            symbolContext => CollectCandidateFields((INamedTypeSymbol)symbolContext.Symbol, candidateFields),
+            SymbolKind.NamedType);
+
+        context.RegisterCompilationEndAction(endContext =>
+        {
+            foreach (var field in candidateFields)
+            {
+                // A field that is never referenced (beyond its own declaration) is unused
+                if (referencedFields.ContainsKey(field))
+                    continue;
+
+                var location = field.Locations.FirstOrDefault(l => l.IsInSource);
+                if (location != null)
+                {
+                    endContext.ReportDiagnostic(Diagnostic.Create(UnusedFieldRule, location, field.Name));
+                }
+            }
+        });
+    }
+
+    private static void AnalyzeMethodBody(SyntaxNodeAnalysisContext context)
     {
         var methodBody = context.Node is MethodDeclarationSyntax method
             ? method.Body
@@ -74,7 +111,16 @@ public class UnusedCodeAnalyzer : DiagnosticAnalyzer
 
         // Find all local variable declarations
         var localDeclarations = methodBody.DescendantNodes()
-            .OfType<LocalDeclarationStatementSyntax>();
+            .OfType<LocalDeclarationStatementSyntax>()
+            .ToList();
+
+        if (localDeclarations.Count == 0)
+            return;
+
+        // Data flow for the whole body is the same for every variable, so compute it once
+        var dataFlow = semanticModel.AnalyzeDataFlow(methodBody);
+        if (dataFlow == null || !dataFlow.Succeeded)
+            return;
 
         foreach (var declaration in localDeclarations)
         {
@@ -85,10 +131,6 @@ public class UnusedCodeAnalyzer : DiagnosticAnalyzer
                     continue;
 
                 // Check if variable is ever read
-                var dataFlow = semanticModel.AnalyzeDataFlow(methodBody);
-                if (dataFlow == null || !dataFlow.Succeeded)
-                    continue;
-
                 // Check if this variable is in the set of variables that are read
                 var isRead = dataFlow.ReadInside.Contains(variableSymbol) ||
                             dataFlow.ReadOutside.Contains(variableSymbol);
@@ -114,49 +156,22 @@ public class UnusedCodeAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    private void AnalyzeNamedType(SymbolAnalysisContext context)
+    private static void CollectCandidateFields(INamedTypeSymbol namedType, ConcurrentBag<IFieldSymbol> candidateFields)
     {
-        var namedType = (INamedTypeSymbol)context.Symbol;
-
         // Only analyze classes and structs
         if (namedType.TypeKind != TypeKind.Class && namedType.TypeKind != TypeKind.Struct)
             return;
 
-        // Find all private fields
+        // Find all private fields, skipping compiler-generated fields and those whose
+        // name suggests they are intentionally unused (like backing fields)
         var privateFields = namedType.GetMembers()
             .OfType<IFieldSymbol>()
-            .Where(f => f.DeclaredAccessibility == Accessibility.Private && !f.IsConst);
+            .Where(f => f.DeclaredAccessibility == Accessibility.Private && !f.IsConst)
+            .Where(f => !f.IsImplicitlyDeclared && !IsIntentionallyUnused(f.Name));
 
         foreach (var field in privateFields)
         {
-            // Skip compiler-generated fields
-            if (field.IsImplicitlyDeclared)
-                continue;
-
-            // Skip if field name suggests intentional (like backing fields)
-            if (IsIntentionallyUnused(field.Name))
-                continue;
-
-            // Check if field is ever referenced
-            var references = GetAllReferences(field, context.Compilation);
-
-            // If field is only referenced in its own declaration, it's unused
-            if (references == 0)
-            {
-                foreach (var location in field.Locations)
-                {
-                    if (location.IsInSource)
-                    {
-                        var diagnostic = Diagnostic.Create(
-                            UnusedFieldRule,
-                            location,
-                            field.Name);
-
-                        context.ReportDiagnostic(diagnostic);
-                        break; // Only report once per field
-                    }
-                }
-            }
+            candidateFields.Add(field);
         }
     }
 
@@ -191,41 +206,8 @@ public class UnusedCodeAnalyzer : DiagnosticAnalyzer
     {
         // Common patterns for intentionally unused variables
         return name == "_" ||
-               name.StartsWith("__") ||
+               name.StartsWith("__", StringComparison.Ordinal) ||
                name.StartsWith("unused", StringComparison.OrdinalIgnoreCase) ||
                name.StartsWith("ignore", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static int GetAllReferences(IFieldSymbol field, Compilation compilation)
-    {
-        int referenceCount = 0;
-
-        // Simple heuristic: check all syntax trees for field references
-        foreach (var syntaxTree in compilation.SyntaxTrees)
-        {
-            var root = syntaxTree.GetRoot();
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
-
-            // Look for identifier references
-            var identifiers = root.DescendantNodes()
-                .OfType<IdentifierNameSyntax>()
-                .Where(i => i.Identifier.Text == field.Name);
-
-            foreach (var identifier in identifiers)
-            {
-                var symbolInfo = semanticModel.GetSymbolInfo(identifier);
-                if (SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol, field))
-                {
-                    // Check if this is not just the declaration
-                    var parent = identifier.Parent;
-                    if (parent is not VariableDeclaratorSyntax)
-                    {
-                        referenceCount++;
-                    }
-                }
-            }
-        }
-
-        return referenceCount;
     }
 }

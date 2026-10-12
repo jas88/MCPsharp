@@ -1,7 +1,5 @@
 using System.Collections.Immutable;
-using System.Runtime.Loader;
 using Microsoft.Extensions.Logging;
-using System.Reflection;
 using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Services.Analyzers;
@@ -9,7 +7,7 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Implementation of analyzer host for loading and managing analyzers
 /// </summary>
-public class AnalyzerHost : IAnalyzerHost
+public partial class AnalyzerHost : IAnalyzerHost
 {
     private readonly ILogger<AnalyzerHost> _logger;
     private readonly IAnalyzerRegistry _registry;
@@ -20,9 +18,7 @@ public class AnalyzerHost : IAnalyzerHost
     private readonly object _lock = new();
 
     public event EventHandler<AnalyzerLoadedEventArgs>? AnalyzerLoaded;
-    #pragma warning disable CS0067 // Event is part of IAnalyzerHost interface contract, will be raised in future implementation
     public event EventHandler<AnalyzerUnloadedEventArgs>? AnalyzerUnloaded;
-    #pragma warning restore CS0067
     public event EventHandler<AnalyzerUnregisteredEventArgs>? AnalyzerUnregistered;
     public event EventHandler<AnalysisCompletedEventArgs>? AnalysisCompleted;
 
@@ -51,7 +47,7 @@ public class AnalyzerHost : IAnalyzerHost
     {
         try
         {
-            _logger.LogInformation("Loading analyzer from assembly: {AssemblyPath}", assemblyPath);
+            LogLoadingAnalyzer(_logger, assemblyPath);
 
             if (string.IsNullOrEmpty(assemblyPath))
             {
@@ -164,7 +160,7 @@ public class AnalyzerHost : IAnalyzerHost
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading analyzer assembly: {AssemblyPath}", assemblyPath);
+            LogErrorLoadingAnalyzer(_logger, ex, assemblyPath);
             return new AnalyzerLoadResult
             {
                 Success = false,
@@ -182,7 +178,7 @@ public class AnalyzerHost : IAnalyzerHost
 
         try
         {
-            _logger.LogInformation("Unloading analyzer: {AnalyzerId}", analyzerId);
+            LogUnloadingAnalyzer(_logger, analyzerId);
 
             // Check if analyzer exists
             var analyzer = _registry.GetAnalyzer(analyzerId);
@@ -216,14 +212,78 @@ public class AnalyzerHost : IAnalyzerHost
                     Success = true,
                     Details = $"Analyzer {analyzerId} unloaded successfully"
                 });
+
+                AnalyzerUnloaded?.Invoke(this, new AnalyzerUnloadedEventArgs(analyzerId));
             }
 
             return unregistered;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error unloading analyzer: {AnalyzerId}", analyzerId);
+            LogErrorUnloadingAnalyzer(_logger, ex, analyzerId);
             return false;
+        }
+    }
+
+    public async Task<AnalyzerUnloadResult> UnloadAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            LogUnloadingAnalyzer(_logger, analyzer.Id);
+
+            // Remove sandbox
+            IAnalyzerSandbox? sandbox = null;
+            lock (_lock)
+            {
+                if (_sandboxes.TryGetValue(analyzer.Id, out sandbox))
+                {
+                    _sandboxes.Remove(analyzer.Id);
+                }
+            }
+
+            sandbox?.Dispose();
+
+            // Unregister from registry
+            var unregistered = await _registry.UnregisterAnalyzerAsync(analyzer.Id, cancellationToken);
+
+            if (unregistered)
+            {
+                await _securityManager.LogSecurityEventAsync(new SecurityEvent
+                {
+                    AnalyzerId = analyzer.Id,
+                    EventType = SecurityEventType.AssemblyValidation,
+                    Operation = "UnloadAnalyzer",
+                    Success = true,
+                    Details = $"Analyzer {analyzer.Id} unloaded successfully"
+                });
+
+                AnalyzerUnloaded?.Invoke(this, new AnalyzerUnloadedEventArgs(analyzer.Id));
+
+                return new AnalyzerUnloadResult
+                {
+                    Success = true,
+                    AnalyzerId = analyzer.Id
+                };
+            }
+            else
+            {
+                return new AnalyzerUnloadResult
+                {
+                    Success = false,
+                    AnalyzerId = analyzer.Id,
+                    ErrorMessage = "Failed to unregister analyzer"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            LogErrorUnloadingAnalyzer(_logger, ex, analyzer.Id);
+            return new AnalyzerUnloadResult
+            {
+                Success = false,
+                AnalyzerId = analyzer.Id,
+                ErrorMessage = ex.Message
+            };
         }
     }
 
@@ -267,7 +327,7 @@ public class AnalyzerHost : IAnalyzerHost
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error setting analyzer enabled state: {AnalyzerId}", analyzerId);
+            LogErrorSettingEnabledState(_logger, ex, analyzerId);
             return false;
         }
     }
@@ -297,7 +357,7 @@ public class AnalyzerHost : IAnalyzerHost
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error configuring analyzer: {AnalyzerId}", analyzerId);
+            LogErrorConfiguringAnalyzer(_logger, ex, analyzerId);
             return false;
         }
     }
@@ -309,7 +369,7 @@ public class AnalyzerHost : IAnalyzerHost
 
         try
         {
-            _logger.LogInformation("Starting analysis session {SessionId} with analyzer {AnalyzerId}", sessionId, request.AnalyzerId);
+            LogStartingAnalysisSession(_logger, sessionId, request.AnalyzerId);
 
             var analyzer = _registry.GetAnalyzer(request.AnalyzerId);
             if (analyzer == null)
@@ -365,7 +425,7 @@ public class AnalyzerHost : IAnalyzerHost
                 {
                     if (!File.Exists(filePath))
                     {
-                        _logger.LogWarning("File not found for analysis: {FilePath}", filePath);
+                        LogFileNotFoundForAnalysis(_logger, filePath);
                         continue;
                     }
 
@@ -373,7 +433,7 @@ public class AnalyzerHost : IAnalyzerHost
                     var canRead = await _securityManager.IsOperationAllowedAsync(request.AnalyzerId, "ReadFile", filePath);
                     if (!canRead)
                     {
-                        _logger.LogWarning("Analyzer {AnalyzerId} not allowed to read file: {FilePath}", request.AnalyzerId, filePath);
+                        LogReadNotAllowed(_logger, request.AnalyzerId, filePath);
                         continue;
                     }
 
@@ -391,7 +451,7 @@ public class AnalyzerHost : IAnalyzerHost
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error analyzing file: {FilePath}", filePath);
+                    LogErrorAnalyzingFile(_logger, ex, filePath);
                     results.Add(new AnalysisResult
                     {
                         FilePath = filePath,
@@ -423,9 +483,9 @@ public class AnalyzerHost : IAnalyzerHost
             };
 
             // Generate fixes if requested
-            if (request.GenerateFixes && allIssues.Any())
+            if (request.GenerateFixes && allIssues.Count > 0)
             {
-                await GenerateFixesAsync(sessionResult, cancellationToken);
+                GenerateFixes(sessionResult);
             }
 
             AnalysisCompleted?.Invoke(this, new AnalysisCompletedEventArgs(sessionId, sessionResult));
@@ -434,7 +494,7 @@ public class AnalyzerHost : IAnalyzerHost
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in analysis session {SessionId}", sessionId);
+            LogErrorInAnalysisSession(_logger, ex, sessionId);
             return new AnalysisSessionResult
             {
                 SessionId = sessionId,
@@ -471,7 +531,7 @@ public class AnalyzerHost : IAnalyzerHost
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting fixes for analyzer: {AnalyzerId}", analyzerId);
+            LogErrorGettingFixes(_logger, ex, analyzerId);
             return Task.FromResult(ImmutableArray<AnalyzerFix>.Empty);
         }
     }
@@ -483,7 +543,7 @@ public class AnalyzerHost : IAnalyzerHost
 
         try
         {
-            _logger.LogInformation("Starting fix session {SessionId} with analyzer {AnalyzerId}", sessionId, request.AnalyzerId);
+            LogStartingFixSession(_logger, sessionId, request.AnalyzerId);
 
             var analyzer = _registry.GetAnalyzer(request.AnalyzerId);
             if (analyzer == null)
@@ -565,7 +625,7 @@ public class AnalyzerHost : IAnalyzerHost
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in fix session {SessionId}", sessionId);
+            LogErrorInFixSession(_logger, ex, sessionId);
             return new FixSessionResult
             {
                 SessionId = sessionId,
@@ -578,8 +638,7 @@ public class AnalyzerHost : IAnalyzerHost
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<ImmutableArray<AnalyzerHealthStatus>> GetHealthStatusAsync(CancellationToken cancellationToken = default)
+    public Task<ImmutableArray<AnalyzerHealthStatus>> GetHealthStatusAsync(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -618,79 +677,27 @@ public class AnalyzerHost : IAnalyzerHost
                 });
             }
 
-            return healthStatuses.ToImmutableArray();
+            return Task.FromResult(healthStatuses.ToImmutableArray());
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting analyzer health status");
-            return ImmutableArray<AnalyzerHealthStatus>.Empty;
+            LogErrorGettingHealthStatus(_logger, ex);
+            return Task.FromResult(ImmutableArray<AnalyzerHealthStatus>.Empty);
         }
     }
-    #pragma warning restore CS1998
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<IAnalyzer?> CreateAnalyzerInstanceAsync(AnalyzerInfo info, string assemblyPath, CancellationToken cancellationToken)
+    private void GenerateFixes(AnalysisSessionResult sessionResult)
     {
-        try
-        {
-            var assemblyContext = new AssemblyLoadContext(assemblyPath, isCollectible: true);
-            var assembly = assemblyContext.LoadFromAssemblyPath(assemblyPath);
-
-            var analyzerTypes = assembly.GetTypes()
-                .Where(t => t.IsClass && !t.IsAbstract && typeof(IAnalyzer).IsAssignableFrom(t))
-                .ToList();
-
-            foreach (var analyzerType in analyzerTypes)
-            {
-                try
-                {
-                    var constructor = analyzerType.GetConstructor(Type.EmptyTypes);
-                    if (constructor != null)
-                    {
-                        var analyzer = (IAnalyzer)constructor.Invoke(Array.Empty<object>());
-                        if (analyzer.Id == info.Id)
-                        {
-                            return analyzer;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error instantiating analyzer type: {AnalyzerType}", analyzerType.Name);
-                }
-            }
-
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error creating analyzer instance: {AnalyzerId}", info.Id);
-            return null;
-        }
+        // This would integrate with the fix engine to pre-generate fixes.
+        // Fixes are currently produced on demand via GetFixesAsync/ApplyFixesAsync.
+        LogGeneratingFixes(_logger, sessionResult.SessionId);
     }
-    #pragma warning restore CS1998
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task GenerateFixesAsync(AnalysisSessionResult sessionResult, CancellationToken cancellationToken)
-    {
-        try
-        {
-            // This would integrate with the fix engine to pre-generate fixes
-            // For now, it's a placeholder
-            _logger.LogInformation("Generating fixes for session {SessionId}", sessionResult.SessionId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error generating fixes for session {SessionId}", sessionResult.SessionId);
-        }
-    }
-    #pragma warning restore CS1998
 
     public async Task<AnalyzerResult> RunAnalyzerAsync(string analyzerId, string targetPath, AnalyzerOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Running analyzer {AnalyzerId} on target {TargetPath}", analyzerId, targetPath);
+            LogRunningAnalyzer(_logger, analyzerId, targetPath);
 
             // Check cancellation early
             cancellationToken.ThrowIfCancellationRequested();
@@ -789,12 +796,12 @@ public class AnalyzerHost : IAnalyzerHost
                     }
                     catch (OperationCanceledException)
                     {
-                        _logger.LogInformation("Analysis cancelled during file processing: {FilePath}", file);
+                        LogAnalysisCancelledDuringFile(_logger, file);
                         throw; // Re-throw cancellation
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error analyzing file: {FilePath}", file);
+                        LogErrorAnalyzingFile(_logger, ex, file);
                         hasAnalysisErrors = true;
                         analysisErrorMessage = ex.Message;
                         // For tests, we want to fail if analysis fails, not just log and continue
@@ -829,12 +836,12 @@ public class AnalyzerHost : IAnalyzerHost
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("Analyzer execution was cancelled: {AnalyzerId}", analyzerId);
+            LogAnalyzerExecutionCancelled(_logger, analyzerId);
             throw; // Re-throw cancellation exceptions
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error running analyzer {AnalyzerId} on target {TargetPath}", analyzerId, targetPath);
+            LogErrorRunningAnalyzer(_logger, ex, analyzerId, targetPath);
             return new AnalyzerResult
             {
                 Success = false,
@@ -852,93 +859,31 @@ public class AnalyzerHost : IAnalyzerHost
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting loaded analyzers");
+            LogErrorGettingLoadedAnalyzers(_logger, ex);
             return new List<IAnalyzer>();
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<AnalyzerCapabilities?> GetAnalyzerCapabilitiesAsync(string analyzerId, CancellationToken cancellationToken = default)
+    public Task<AnalyzerCapabilities?> GetAnalyzerCapabilitiesAsync(string analyzerId, CancellationToken cancellationToken = default)
     {
         try
         {
             var analyzer = _registry.GetAnalyzer(analyzerId);
             if (analyzer == null)
             {
-                return null;
+                return Task.FromResult<AnalyzerCapabilities?>(null);
             }
 
-            return analyzer.GetCapabilities();
+            return Task.FromResult<AnalyzerCapabilities?>(analyzer.GetCapabilities());
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting capabilities for analyzer: {AnalyzerId}", analyzerId);
-            return null;
-        }
-    }
-    #pragma warning restore CS1998
-
-    public async Task<AnalyzerUnloadResult> UnloadAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("Unloading analyzer: {AnalyzerId}", analyzer.Id);
-
-            // Remove sandbox
-            IAnalyzerSandbox? sandbox = null;
-            lock (_lock)
-            {
-                if (_sandboxes.TryGetValue(analyzer.Id, out sandbox))
-                {
-                    _sandboxes.Remove(analyzer.Id);
-                }
-            }
-
-            sandbox?.Dispose();
-
-            // Unregister from registry
-            var unregistered = await _registry.UnregisterAnalyzerAsync(analyzer.Id, cancellationToken);
-
-            if (unregistered)
-            {
-                await _securityManager.LogSecurityEventAsync(new SecurityEvent
-                {
-                    AnalyzerId = analyzer.Id,
-                    EventType = SecurityEventType.AssemblyValidation,
-                    Operation = "UnloadAnalyzer",
-                    Success = true,
-                    Details = $"Analyzer {analyzer.Id} unloaded successfully"
-                });
-
-                return new AnalyzerUnloadResult
-                {
-                    Success = true,
-                    AnalyzerId = analyzer.Id
-                };
-            }
-            else
-            {
-                return new AnalyzerUnloadResult
-                {
-                    Success = false,
-                    AnalyzerId = analyzer.Id,
-                    ErrorMessage = "Failed to unregister analyzer"
-                };
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error unloading analyzer: {AnalyzerId}", analyzer.Id);
-            return new AnalyzerUnloadResult
-            {
-                Success = false,
-                AnalyzerId = analyzer.Id,
-                ErrorMessage = ex.Message
-            };
+            LogErrorGettingCapabilities(_logger, ex, analyzerId);
+            return Task.FromResult<AnalyzerCapabilities?>(null);
         }
     }
 
-    private FindingSeverity MapSeverity(IssueSeverity analyzerSeverity)
+    private static FindingSeverity MapSeverity(IssueSeverity analyzerSeverity)
     {
         return analyzerSeverity switch
         {
@@ -949,4 +894,70 @@ public class AnalyzerHost : IAnalyzerHost
             _ => FindingSeverity.Info
         };
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loading analyzer from assembly: {AssemblyPath}")]
+    private static partial void LogLoadingAnalyzer(ILogger logger, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzer assembly: {AssemblyPath}")]
+    private static partial void LogErrorLoadingAnalyzer(ILogger logger, Exception exception, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Unloading analyzer: {AnalyzerId}")]
+    private static partial void LogUnloadingAnalyzer(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error unloading analyzer: {AnalyzerId}")]
+    private static partial void LogErrorUnloadingAnalyzer(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error setting analyzer enabled state: {AnalyzerId}")]
+    private static partial void LogErrorSettingEnabledState(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error configuring analyzer: {AnalyzerId}")]
+    private static partial void LogErrorConfiguringAnalyzer(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting analysis session {SessionId} with analyzer {AnalyzerId}")]
+    private static partial void LogStartingAnalysisSession(ILogger logger, string sessionId, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "File not found for analysis: {FilePath}")]
+    private static partial void LogFileNotFoundForAnalysis(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Analyzer {AnalyzerId} not allowed to read file: {FilePath}")]
+    private static partial void LogReadNotAllowed(ILogger logger, string analyzerId, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file: {FilePath}")]
+    private static partial void LogErrorAnalyzingFile(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error in analysis session {SessionId}")]
+    private static partial void LogErrorInAnalysisSession(ILogger logger, Exception exception, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting fixes for analyzer: {AnalyzerId}")]
+    private static partial void LogErrorGettingFixes(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting fix session {SessionId} with analyzer {AnalyzerId}")]
+    private static partial void LogStartingFixSession(ILogger logger, string sessionId, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error in fix session {SessionId}")]
+    private static partial void LogErrorInFixSession(ILogger logger, Exception exception, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting analyzer health status")]
+    private static partial void LogErrorGettingHealthStatus(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Generating fixes for session {SessionId}")]
+    private static partial void LogGeneratingFixes(ILogger logger, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Running analyzer {AnalyzerId} on target {TargetPath}")]
+    private static partial void LogRunningAnalyzer(ILogger logger, string analyzerId, string targetPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Analysis cancelled during file processing: {FilePath}")]
+    private static partial void LogAnalysisCancelledDuringFile(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Analyzer execution was cancelled: {AnalyzerId}")]
+    private static partial void LogAnalyzerExecutionCancelled(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error running analyzer {AnalyzerId} on target {TargetPath}")]
+    private static partial void LogErrorRunningAnalyzer(ILogger logger, Exception exception, string analyzerId, string targetPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting loaded analyzers")]
+    private static partial void LogErrorGettingLoadedAnalyzers(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting capabilities for analyzer: {AnalyzerId}")]
+    private static partial void LogErrorGettingCapabilities(ILogger logger, Exception exception, string analyzerId);
 }

@@ -7,20 +7,23 @@ namespace MCPsharp.Services.AI;
 /// AI provider that uses Ollama for local inference.
 /// Ollama must be running locally (typically at http://localhost:11434).
 /// </summary>
-public class OllamaProvider : IAIProvider, IDisposable
+public sealed class OllamaProvider : IAIProvider, IDisposable
 {
+    /// <summary>Default local Ollama endpoint.</summary>
+    internal static readonly string DefaultBaseUrl =
+        new UriBuilder(Uri.UriSchemeHttp, "localhost", 11434).Uri.GetLeftPart(UriPartial.Authority);
+
     private readonly HttpClient _client;
     private readonly string _model;
-    private readonly string _baseUrl;
 
     public string ProviderName => "Ollama";
     public string ModelName => _model;
 
     public OllamaProvider(string? baseUrl = null, string? model = null)
     {
-        _baseUrl = baseUrl
+        var resolvedBaseUrl = baseUrl
             ?? Environment.GetEnvironmentVariable("OLLAMA_URL")
-            ?? "http://localhost:11434";
+            ?? DefaultBaseUrl;
 
         _model = model
             ?? Environment.GetEnvironmentVariable("OLLAMA_MODEL")
@@ -28,7 +31,7 @@ public class OllamaProvider : IAIProvider, IDisposable
 
         _client = new HttpClient
         {
-            BaseAddress = new Uri(_baseUrl),
+            BaseAddress = new Uri(resolvedBaseUrl),
             Timeout = TimeSpan.FromMinutes(5) // Local inference can be slow
         };
     }
@@ -37,11 +40,17 @@ public class OllamaProvider : IAIProvider, IDisposable
     {
         try
         {
-            var response = await _client.GetAsync("/api/tags");
+            using var response = await _client.GetAsync("/api/tags");
             return response.IsSuccessStatusCode;
         }
-        catch
+        catch (HttpRequestException)
         {
+            // Endpoint unreachable
+            return false;
+        }
+        catch (TaskCanceledException)
+        {
+            // Request timed out
             return false;
         }
     }
@@ -75,11 +84,12 @@ public class OllamaProvider : IAIProvider, IDisposable
 
     public void Dispose()
     {
-        _client?.Dispose();
+        _client.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     // Ollama API models
-    private class OllamaGenerateRequest
+    private sealed class OllamaGenerateRequest
     {
         [JsonPropertyName("model")]
         public string Model { get; set; } = "";
@@ -94,7 +104,7 @@ public class OllamaProvider : IAIProvider, IDisposable
         public OllamaOptions? Options { get; set; }
     }
 
-    private class OllamaOptions
+    private sealed class OllamaOptions
     {
         [JsonPropertyName("temperature")]
         public double Temperature { get; set; }
@@ -103,7 +113,7 @@ public class OllamaProvider : IAIProvider, IDisposable
         public int NumCtx { get; set; }
     }
 
-    private class OllamaGenerateResponse
+    private sealed class OllamaGenerateResponse
     {
         [JsonPropertyName("model")]
         public string Model { get; set; } = "";

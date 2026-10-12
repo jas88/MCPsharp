@@ -7,7 +7,7 @@ namespace MCPsharp.Services.AI;
 /// Factory for creating AI provider instances based on configuration.
 /// Supports auto-detection and manual configuration.
 /// </summary>
-public class AIProviderFactory
+public partial class AIProviderFactory
 {
     private readonly IConfiguration? _configuration;
     private readonly ILogger<AIProviderFactory> _logger;
@@ -28,7 +28,7 @@ public class AIProviderFactory
 
         if (providerType.Equals("none", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogInformation("AI-powered tools are disabled (AIProvider:Type = none)");
+            LogAiDisabled(_logger);
             return null;
         }
 
@@ -40,7 +40,7 @@ public class AIProviderFactory
         return providerType.ToLowerInvariant() switch
         {
             "ollama" => await CreateOllamaProviderAsync(),
-            "openrouter" => CreateOpenRouterProvider(),
+            "openrouter" => (IAIProvider)CreateOpenRouterProvider(),
             _ => throw new InvalidOperationException($"Unknown AI provider type: {providerType}")
         };
     }
@@ -53,14 +53,14 @@ public class AIProviderFactory
     /// </summary>
     private async Task<IAIProvider?> AutoDetectProviderAsync()
     {
-        _logger.LogInformation("Auto-detecting AI provider...");
+        LogAutoDetecting(_logger);
 
         // Try Ollama first
         var ollamaProvider = await CreateOllamaProviderAsync();
         if (ollamaProvider != null && await ollamaProvider.IsAvailableAsync())
         {
-            _logger.LogInformation("Using Ollama for AI-powered tools (detected at {BaseUrl})",
-                Environment.GetEnvironmentVariable("OLLAMA_URL") ?? "http://localhost:11434");
+            var detectedUrl = Environment.GetEnvironmentVariable("OLLAMA_URL") ?? OllamaProvider.DefaultBaseUrl;
+            LogUsingOllama(_logger, detectedUrl);
             return ollamaProvider;
         }
 
@@ -70,13 +70,12 @@ public class AIProviderFactory
 
         if (!string.IsNullOrWhiteSpace(openRouterKey))
         {
-            _logger.LogInformation("Using OpenRouter for AI-powered tools");
+            LogUsingOpenRouter(_logger);
             return CreateOpenRouterProvider();
         }
 
         // No provider available
-        _logger.LogWarning("No AI provider available. AI-powered tools will be disabled. " +
-                          "Install Ollama (brew install ollama) or configure OpenRouter API key.");
+        LogNoProvider(_logger);
         return null;
     }
 
@@ -96,7 +95,7 @@ public class AIProviderFactory
             // Verify it's actually available
             if (!await provider.IsAvailableAsync())
             {
-                _logger.LogDebug("Ollama not available at {BaseUrl}", baseUrl ?? "http://localhost:11434");
+                LogOllamaUnavailable(_logger, baseUrl ?? OllamaProvider.DefaultBaseUrl);
                 provider.Dispose();
                 return null;
             }
@@ -105,13 +104,13 @@ public class AIProviderFactory
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Failed to create Ollama provider");
+            LogOllamaCreateFailed(_logger, ex);
             provider?.Dispose();
             return null;
         }
     }
 
-    private IAIProvider CreateOpenRouterProvider()
+    private OpenRouterProvider CreateOpenRouterProvider()
     {
         var apiKey = _configuration?["AIProvider:OpenRouter:ApiKey"]
             ?? Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")
@@ -122,4 +121,25 @@ public class AIProviderFactory
 
         return new OpenRouterProvider(apiKey, model);
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "AI-powered tools are disabled (AIProvider:Type = none)")]
+    private static partial void LogAiDisabled(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Auto-detecting AI provider...")]
+    private static partial void LogAutoDetecting(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Using Ollama for AI-powered tools (detected at {BaseUrl})")]
+    private static partial void LogUsingOllama(ILogger logger, string baseUrl);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Using OpenRouter for AI-powered tools")]
+    private static partial void LogUsingOpenRouter(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No AI provider available. AI-powered tools will be disabled. Install Ollama (brew install ollama) or configure OpenRouter API key.")]
+    private static partial void LogNoProvider(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Ollama not available at {BaseUrl}")]
+    private static partial void LogOllamaUnavailable(ILogger logger, string baseUrl);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Failed to create Ollama provider")]
+    private static partial void LogOllamaCreateFailed(ILogger logger, Exception exception);
 }

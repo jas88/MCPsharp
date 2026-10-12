@@ -2,14 +2,17 @@ using System.Collections.Immutable;
 using System.Text.RegularExpressions;
 using MCPsharp.Models;
 using MCPsharp.Models.Analyzers;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services.Analyzers.BuiltIn;
 
 /// <summary>
 /// Built-in analyzer for upgrading NUnit from v2/v3 to v4 syntax
 /// </summary>
-public class NUnitUpgraderAnalyzer : IAnalyzer
+public partial class NUnitUpgraderAnalyzer : IAnalyzer
 {
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
     private static readonly ImmutableArray<string> _supportedExtensions = ImmutableArray.Create(".cs");
     private static readonly ImmutableArray<AnalyzerRule> Rules = ImmutableArray.Create(
         new AnalyzerRule
@@ -74,6 +77,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         }
     );
 
+    private readonly ILogger<NUnitUpgraderAnalyzer> _logger;
     private readonly Dictionary<string, Regex> _patterns;
     private readonly Dictionary<string, Func<Match, string, AnalyzerFix[]>> _fixGenerators;
 
@@ -109,15 +113,21 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
     }
 
     public NUnitUpgraderAnalyzer()
+        : this(NullLogger<NUnitUpgraderAnalyzer>.Instance)
     {
+    }
+
+    public NUnitUpgraderAnalyzer(ILogger<NUnitUpgraderAnalyzer> logger)
+    {
+        _logger = logger;
         _patterns = new Dictionary<string, Regex>
         {
-            ["NUNIT001"] = new Regex(@"\[(?:NUnit\.)?TestFixture\]", RegexOptions.Compiled),
-            ["NUNIT002"] = new Regex(@"Assert\.AreEqual\(([^,]+),\s*([^,]+)\)", RegexOptions.Compiled),
-            ["NUNIT003"] = new Regex(@"\[(?:NUnit\.)?SetUp\]", RegexOptions.Compiled),
-            ["NUNIT004"] = new Regex(@"\[(?:NUnit\.)?ExpectedException\((?:typeof\(([^)]+)\)|([^)]+))\)\]", RegexOptions.Compiled),
-            ["NUNIT005"] = new Regex(@"Assert\.(True|False)\(string\.IsNullOrEmpty\(([^)]+)\)\)", RegexOptions.Compiled),
-            ["NUNIT006"] = new Regex(@"using\s+NUnit\.Framework(?:\.Tests)?;", RegexOptions.Compiled)
+            ["NUNIT001"] = new Regex(@"\[(?:NUnit\.)?TestFixture\]", RegexOptions.Compiled, RegexTimeout),
+            ["NUNIT002"] = new Regex(@"Assert\.AreEqual\(([^,]+),\s*([^,]+)\)", RegexOptions.Compiled, RegexTimeout),
+            ["NUNIT003"] = new Regex(@"\[(?:NUnit\.)?SetUp\]", RegexOptions.Compiled, RegexTimeout),
+            ["NUNIT004"] = new Regex(@"\[(?:NUnit\.)?ExpectedException\((?:typeof\(([^)]+)\)|([^)]+))\)\]", RegexOptions.Compiled, RegexTimeout),
+            ["NUNIT005"] = new Regex(@"Assert\.(True|False)\(string\.IsNullOrEmpty\(([^)]+)\)\)", RegexOptions.Compiled, RegexTimeout),
+            ["NUNIT006"] = new Regex(@"using\s+NUnit\.Framework(?:\.Tests)?;", RegexOptions.Compiled, RegexTimeout)
         };
 
         _fixGenerators = new Dictionary<string, Func<Match, string, AnalyzerFix[]>>
@@ -170,11 +180,11 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
                         Severity = rule.DefaultSeverity,
                         Confidence = Confidence.High,
                         Category = rule.Category,
-                        HelpLink = $"https://docs.nunit.org/articles/nunit/writing-tests.html#{rule.Id.ToLower()}",
+                        HelpLink = $"https://docs.nunit.org/articles/nunit/writing-tests.html#{rule.Id.ToLowerInvariant()}",
                         Properties = new Dictionary<string, object>
                         {
                             ["MatchText"] = match.Value,
-                            ["Suggestion"] = GetSuggestion(rule.Id, match)
+                            ["Suggestion"] = GetSuggestion(rule.Id)
                         }.ToImmutableDictionary()
                     };
 
@@ -201,6 +211,8 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         }
         catch (Exception ex)
         {
+            LogAnalysisFailed(_logger, ex, filePath);
+
             var errorResult = new AnalysisResult
             {
                 FilePath = filePath,
@@ -260,10 +272,10 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
 
     private bool IsRuleEnabled(string ruleId)
     {
-        return Configuration.Rules.TryGetValue(ruleId, out var ruleConfig) ? ruleConfig.IsEnabled : true;
+        return !Configuration.Rules.TryGetValue(ruleId, out var ruleConfig) || ruleConfig.IsEnabled;
     }
 
-    private (int line, int column) GetPosition(string content, int index)
+    private static (int line, int column) GetPosition(string content, int index)
     {
         var linesBefore = content.Substring(0, index).Split('\n');
         var line = linesBefore.Length - 1;
@@ -271,7 +283,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         return (line, column);
     }
 
-    private string GetSuggestion(string ruleId, Match match)
+    private static string GetSuggestion(string ruleId)
     {
         return ruleId switch
         {
@@ -285,7 +297,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         };
     }
 
-    private AnalyzerFix[] GenerateTestFixtureFix(Match match, string content)
+    private static AnalyzerFix[] GenerateTestFixtureFix(Match match, string content)
     {
         var fix = new AnalyzerFix
         {
@@ -309,7 +321,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         return new[] { fix };
     }
 
-    private AnalyzerFix[] GenerateAssertEqualsFix(Match match, string content)
+    private static AnalyzerFix[] GenerateAssertEqualsFix(Match match, string content)
     {
         var actual = match.Groups[2].Value.Trim();
         var expected = match.Groups[1].Value.Trim();
@@ -336,13 +348,13 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         return new[] { fix };
     }
 
-    private AnalyzerFix[] GenerateSetUpFix(Match match, string content)
+    private static AnalyzerFix[] GenerateSetUpFix(Match match, string content)
     {
         // [SetUp] is already correct in v4, so this is just informational
         return Array.Empty<AnalyzerFix>();
     }
 
-    private AnalyzerFix[] GenerateExpectedExceptionFix(Match match, string content)
+    private static AnalyzerFix[] GenerateExpectedExceptionFix(Match match, string content)
     {
         var exceptionType = match.Groups[1].Value;
         if (string.IsNullOrEmpty(exceptionType))
@@ -371,7 +383,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         return new[] { fix };
     }
 
-    private AnalyzerFix[] GenerateStringNullOrEmptyFix(Match match, string content)
+    private static AnalyzerFix[] GenerateStringNullOrEmptyFix(Match match, string content)
     {
         var isTrue = match.Groups[1].Value == "True";
         var parameter = match.Groups[2].Value.Trim();
@@ -400,7 +412,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
         return new[] { fix };
     }
 
-    private AnalyzerFix[] GenerateUsingFix(Match match, string content)
+    private static AnalyzerFix[] GenerateUsingFix(Match match, string content)
     {
         var fix = new AnalyzerFix
         {
@@ -423,4 +435,7 @@ public class NUnitUpgraderAnalyzer : IAnalyzer
 
         return new[] { fix };
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "NUnit upgrade analysis failed for {FilePath}")]
+    private static partial void LogAnalysisFailed(ILogger logger, Exception exception, string filePath);
 }

@@ -9,10 +9,9 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Service for managing analyzer configurations
 /// </summary>
-public class AnalyzerConfigurationManager
+public partial class AnalyzerConfigurationManager
 {
     private readonly ILogger<AnalyzerConfigurationManager> _logger;
-    private readonly string _configDirectory;
     private readonly string _configFilePath;
     private AnalyzerConfigurationFile _currentConfiguration;
 
@@ -32,11 +31,11 @@ public class AnalyzerConfigurationManager
 
         // Use .mcpsharp directory in the specified path or current directory
         var baseDirectory = basePath ?? Directory.GetCurrentDirectory();
-        _configDirectory = Path.Combine(baseDirectory, ".mcpsharp");
-        _configFilePath = Path.Combine(_configDirectory, "analyzer-config.json");
+        var configDirectory = Path.Combine(baseDirectory, ".mcpsharp");
+        _configFilePath = Path.Combine(configDirectory, "analyzer-config.json");
 
         // Ensure directory exists
-        Directory.CreateDirectory(_configDirectory);
+        Directory.CreateDirectory(configDirectory);
 
         // Load or create default configuration
         _currentConfiguration = LoadConfigurationFromFile() ?? CreateDefaultConfiguration();
@@ -59,18 +58,18 @@ public class AnalyzerConfigurationManager
     {
         try
         {
-            _logger.LogInformation("Updating analyzer configuration");
+            LogUpdatingConfiguration(_logger);
 
             _currentConfiguration = configuration;
 
             await SaveConfigurationToFileAsync(configuration, cancellationToken);
 
-            _logger.LogInformation("Analyzer configuration updated successfully");
+            LogConfigurationUpdated(_logger);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating analyzer configuration");
+            LogErrorUpdatingConfiguration(_logger, ex);
             return false;
         }
     }
@@ -85,18 +84,18 @@ public class AnalyzerConfigurationManager
     {
         try
         {
-            _logger.LogInformation("Setting analyzer {AnalyzerId} enabled={Enabled}", analyzerId, enabled);
+            LogSettingAnalyzerEnabled(_logger, analyzerId, enabled);
 
-            if (!_currentConfiguration.Analyzers.ContainsKey(analyzerId))
+            if (_currentConfiguration.Analyzers.TryGetValue(analyzerId, out var existingEntry))
             {
-                _currentConfiguration.Analyzers[analyzerId] = new AnalyzerConfigurationEntry
+                _currentConfiguration.Analyzers[analyzerId] = existingEntry with
                 {
                     Enabled = enabled
                 };
             }
             else
             {
-                _currentConfiguration.Analyzers[analyzerId] = _currentConfiguration.Analyzers[analyzerId] with
+                _currentConfiguration.Analyzers[analyzerId] = new AnalyzerConfigurationEntry
                 {
                     Enabled = enabled
                 };
@@ -108,7 +107,7 @@ public class AnalyzerConfigurationManager
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error setting analyzer {AnalyzerId} enabled state", analyzerId);
+            LogErrorSettingAnalyzerEnabled(_logger, ex, analyzerId);
             return false;
         }
     }
@@ -124,10 +123,9 @@ public class AnalyzerConfigurationManager
     {
         try
         {
-            _logger.LogInformation("Setting rule {RuleId} severity to {Severity} for analyzer {AnalyzerId}",
-                ruleId, severity, analyzerId);
+            LogSettingRuleSeverity(_logger, ruleId, severity, analyzerId);
 
-            if (!_currentConfiguration.Analyzers.ContainsKey(analyzerId))
+            if (!_currentConfiguration.Analyzers.TryGetValue(analyzerId, out var entry))
             {
                 _currentConfiguration.Analyzers[analyzerId] = new AnalyzerConfigurationEntry
                 {
@@ -137,7 +135,6 @@ public class AnalyzerConfigurationManager
             }
             else
             {
-                var entry = _currentConfiguration.Analyzers[analyzerId];
                 var overrides = new Dictionary<string, IssueSeverity>(entry.RuleSeverityOverrides)
                 {
                     [ruleId] = severity
@@ -155,7 +152,7 @@ public class AnalyzerConfigurationManager
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error setting rule {RuleId} severity", ruleId);
+            LogErrorSettingRuleSeverity(_logger, ex, ruleId);
             return false;
         }
     }
@@ -167,17 +164,17 @@ public class AnalyzerConfigurationManager
     {
         try
         {
-            _logger.LogInformation("Resetting analyzer configuration to defaults");
+            LogResettingToDefaults(_logger);
 
             _currentConfiguration = CreateDefaultConfiguration();
             await SaveConfigurationToFileAsync(_currentConfiguration, cancellationToken);
 
-            _logger.LogInformation("Analyzer configuration reset to defaults");
+            LogResetToDefaults(_logger);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error resetting analyzer configuration");
+            LogErrorResettingConfiguration(_logger, ex);
             return false;
         }
     }
@@ -201,7 +198,7 @@ public class AnalyzerConfigurationManager
     {
         try
         {
-            _logger.LogInformation("Updating global analyzer settings");
+            LogUpdatingGlobalSettings(_logger);
 
             _currentConfiguration = _currentConfiguration with
             {
@@ -214,7 +211,7 @@ public class AnalyzerConfigurationManager
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating global analyzer settings");
+            LogErrorUpdatingGlobalSettings(_logger, ex);
             return false;
         }
     }
@@ -228,7 +225,7 @@ public class AnalyzerConfigurationManager
     {
         try
         {
-            _logger.LogInformation("Exporting analyzer configuration to {FilePath}", filePath);
+            LogExportingConfiguration(_logger, filePath);
 
             var directory = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(directory))
@@ -239,12 +236,12 @@ public class AnalyzerConfigurationManager
             var json = JsonSerializer.Serialize(_currentConfiguration, _jsonOptions);
             await File.WriteAllTextAsync(filePath, json, cancellationToken);
 
-            _logger.LogInformation("Configuration exported successfully");
+            LogConfigurationExported(_logger);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error exporting configuration to {FilePath}", filePath);
+            LogErrorExportingConfiguration(_logger, ex, filePath);
             return false;
         }
     }
@@ -258,11 +255,11 @@ public class AnalyzerConfigurationManager
     {
         try
         {
-            _logger.LogInformation("Importing analyzer configuration from {FilePath}", filePath);
+            LogImportingConfiguration(_logger, filePath);
 
             if (!File.Exists(filePath))
             {
-                _logger.LogError("Configuration file not found: {FilePath}", filePath);
+                LogConfigurationFileNotFound(_logger, filePath);
                 return false;
             }
 
@@ -271,19 +268,19 @@ public class AnalyzerConfigurationManager
 
             if (configuration == null)
             {
-                _logger.LogError("Failed to deserialize configuration from {FilePath}", filePath);
+                LogDeserializationFailed(_logger, filePath);
                 return false;
             }
 
             _currentConfiguration = configuration;
             await SaveConfigurationToFileAsync(configuration, cancellationToken);
 
-            _logger.LogInformation("Configuration imported successfully");
+            LogConfigurationImported(_logger);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error importing configuration from {FilePath}", filePath);
+            LogErrorImportingConfiguration(_logger, ex, filePath);
             return false;
         }
     }
@@ -294,19 +291,19 @@ public class AnalyzerConfigurationManager
         {
             if (!File.Exists(_configFilePath))
             {
-                _logger.LogInformation("No existing configuration file found at {ConfigFilePath}", _configFilePath);
+                LogNoExistingConfigurationFile(_logger, _configFilePath);
                 return null;
             }
 
             var json = File.ReadAllText(_configFilePath);
             var configuration = JsonSerializer.Deserialize<AnalyzerConfigurationFile>(json, _jsonOptions);
 
-            _logger.LogInformation("Loaded analyzer configuration from {ConfigFilePath}", _configFilePath);
+            LogLoadedConfiguration(_logger, _configFilePath);
             return configuration;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading configuration from {ConfigFilePath}", _configFilePath);
+            LogErrorLoadingConfiguration(_logger, ex, _configFilePath);
             return null;
         }
     }
@@ -320,16 +317,16 @@ public class AnalyzerConfigurationManager
             var json = JsonSerializer.Serialize(configuration, _jsonOptions);
             await File.WriteAllTextAsync(_configFilePath, json, cancellationToken);
 
-            _logger.LogDebug("Saved analyzer configuration to {ConfigFilePath}", _configFilePath);
+            LogSavedConfiguration(_logger, _configFilePath);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Error saving configuration to {ConfigFilePath}", _configFilePath);
-            throw;
+            // Callers log the failure; add the file path as context rather than logging twice.
+            throw new IOException($"Error saving configuration to {_configFilePath}", ex);
         }
     }
 
-    private AnalyzerConfigurationFile CreateDefaultConfiguration()
+    private static AnalyzerConfigurationFile CreateDefaultConfiguration()
     {
         return new AnalyzerConfigurationFile
         {
@@ -344,6 +341,78 @@ public class AnalyzerConfigurationManager
             }
         };
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Updating analyzer configuration")]
+    private static partial void LogUpdatingConfiguration(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Analyzer configuration updated successfully")]
+    private static partial void LogConfigurationUpdated(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error updating analyzer configuration")]
+    private static partial void LogErrorUpdatingConfiguration(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Setting analyzer {AnalyzerId} enabled={Enabled}")]
+    private static partial void LogSettingAnalyzerEnabled(ILogger logger, string analyzerId, bool enabled);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error setting analyzer {AnalyzerId} enabled state")]
+    private static partial void LogErrorSettingAnalyzerEnabled(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Setting rule {RuleId} severity to {Severity} for analyzer {AnalyzerId}")]
+    private static partial void LogSettingRuleSeverity(ILogger logger, string ruleId, IssueSeverity severity, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error setting rule {RuleId} severity")]
+    private static partial void LogErrorSettingRuleSeverity(ILogger logger, Exception exception, string ruleId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Resetting analyzer configuration to defaults")]
+    private static partial void LogResettingToDefaults(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Analyzer configuration reset to defaults")]
+    private static partial void LogResetToDefaults(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error resetting analyzer configuration")]
+    private static partial void LogErrorResettingConfiguration(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Updating global analyzer settings")]
+    private static partial void LogUpdatingGlobalSettings(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error updating global analyzer settings")]
+    private static partial void LogErrorUpdatingGlobalSettings(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Exporting analyzer configuration to {FilePath}")]
+    private static partial void LogExportingConfiguration(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Configuration exported successfully")]
+    private static partial void LogConfigurationExported(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error exporting configuration to {FilePath}")]
+    private static partial void LogErrorExportingConfiguration(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Importing analyzer configuration from {FilePath}")]
+    private static partial void LogImportingConfiguration(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Configuration file not found: {FilePath}")]
+    private static partial void LogConfigurationFileNotFound(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to deserialize configuration from {FilePath}")]
+    private static partial void LogDeserializationFailed(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Configuration imported successfully")]
+    private static partial void LogConfigurationImported(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error importing configuration from {FilePath}")]
+    private static partial void LogErrorImportingConfiguration(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "No existing configuration file found at {ConfigFilePath}")]
+    private static partial void LogNoExistingConfigurationFile(ILogger logger, string configFilePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded analyzer configuration from {ConfigFilePath}")]
+    private static partial void LogLoadedConfiguration(ILogger logger, string configFilePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading configuration from {ConfigFilePath}")]
+    private static partial void LogErrorLoadingConfiguration(ILogger logger, Exception exception, string configFilePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Saved analyzer configuration to {ConfigFilePath}")]
+    private static partial void LogSavedConfiguration(ILogger logger, string configFilePath);
 }
 
 /// <summary>

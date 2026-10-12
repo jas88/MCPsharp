@@ -10,7 +10,7 @@ namespace MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry;
 /// Central registry for built-in automated code fix providers
 /// Discovers and manages all built-in fix providers
 /// </summary>
-public class BuiltInCodeFixRegistry
+public partial class BuiltInCodeFixRegistry
 {
     private readonly ILogger<BuiltInCodeFixRegistry> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -50,11 +50,11 @@ public class BuiltInCodeFixRegistry
             RegisterProvider(new StaticMethodProvider(
                 _loggerFactory.CreateLogger<StaticMethodProvider>()));
 
-            _logger.LogInformation("Registered {Count} built-in code fix providers", _providers.Count);
+            LogProvidersRegistered(_logger, _providers.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error registering built-in code fix providers");
+            LogRegistrationError(_logger, ex);
         }
     }
 
@@ -63,20 +63,17 @@ public class BuiltInCodeFixRegistry
     /// </summary>
     public void RegisterProvider(IAutomatedCodeFixProvider provider)
     {
-        if (provider == null)
-            throw new ArgumentNullException(nameof(provider));
+        ArgumentNullException.ThrowIfNull(provider);
 
         lock (_lock)
         {
-            if (_providers.ContainsKey(provider.Id))
+            if (!_providers.TryAdd(provider.Id, provider))
             {
-                _logger.LogWarning("Provider {ProviderId} is already registered, skipping", provider.Id);
+                LogProviderAlreadyRegistered(_logger, provider.Id);
                 return;
             }
 
-            _providers[provider.Id] = provider;
-            _logger.LogInformation("Registered code fix provider: {Id} - {Name} (Profile: {Profile})",
-                provider.Id, provider.Name, provider.Profile);
+            LogProviderRegistered(_logger, provider.Id, provider.Name, provider.Profile);
         }
     }
 
@@ -189,6 +186,18 @@ public class BuiltInCodeFixRegistry
             };
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Registered {Count} built-in code fix providers")]
+    private static partial void LogProvidersRegistered(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error registering built-in code fix providers")]
+    private static partial void LogRegistrationError(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Provider {ProviderId} is already registered, skipping")]
+    private static partial void LogProviderAlreadyRegistered(ILogger logger, string providerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Registered code fix provider: {Id} - {Name} (Profile: {Profile})")]
+    private static partial void LogProviderRegistered(ILogger logger, string id, string name, FixProfile profile);
 }
 
 /// <summary>

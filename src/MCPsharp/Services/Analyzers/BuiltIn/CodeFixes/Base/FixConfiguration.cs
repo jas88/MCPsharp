@@ -30,7 +30,7 @@ public record FixConfiguration
     /// <summary>
     /// Whether to stop on first error
     /// </summary>
-    public bool StopOnFirstError { get; init; } = false;
+    public bool StopOnFirstError { get; init; }
 
     /// <summary>
     /// Specific fix providers to include (empty = all for profile)

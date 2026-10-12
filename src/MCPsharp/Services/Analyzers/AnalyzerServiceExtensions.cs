@@ -65,12 +65,11 @@ public static class AnalyzerServiceExtensions
     {
         services.AddSingleton<McpToolRegistry>(provider =>
         {
-            var logger = provider.GetRequiredService<ILogger<McpToolRegistry>>();
             var projectContext = provider.GetRequiredService<ProjectContextManager>();
             var analyzerHost = provider.GetRequiredService<IAnalyzerHost>();
             var fixEngine = provider.GetRequiredService<IFixEngine>();
 
-            return new AnalyzerToolRegistry(logger, projectContext, analyzerHost, fixEngine);
+            return new AnalyzerToolRegistry(projectContext, analyzerHost, fixEngine);
         });
 
         return services;
@@ -80,7 +79,7 @@ public static class AnalyzerServiceExtensions
 /// <summary>
 /// Background service to initialize built-in analyzers
 /// </summary>
-internal class AnalyzerInitializationService : IHostedService
+internal sealed partial class AnalyzerInitializationService : IHostedService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<AnalyzerInitializationService> _logger;
@@ -95,7 +94,7 @@ internal class AnalyzerInitializationService : IHostedService
     {
         try
         {
-            _logger.LogInformation("Initializing built-in analyzers");
+            LogInitializing(_logger);
 
             var registry = _serviceProvider.GetRequiredService<IAnalyzerRegistry>();
 
@@ -103,11 +102,11 @@ internal class AnalyzerInitializationService : IHostedService
             var nunitAnalyzer = _serviceProvider.GetRequiredService<NUnitUpgraderAnalyzer>();
             await registry.RegisterAnalyzerAsync(nunitAnalyzer, cancellationToken);
 
-            _logger.LogInformation("Built-in analyzers initialized successfully");
+            LogInitialized(_logger);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error initializing built-in analyzers");
+            LogInitializationError(_logger, ex);
         }
     }
 
@@ -115,18 +114,26 @@ internal class AnalyzerInitializationService : IHostedService
     {
         return Task.CompletedTask;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Initializing built-in analyzers")]
+    private static partial void LogInitializing(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Built-in analyzers initialized successfully")]
+    private static partial void LogInitialized(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error initializing built-in analyzers")]
+    private static partial void LogInitializationError(ILogger logger, Exception exception);
 }
 
 /// <summary>
 /// Extended MCP tool registry that includes analyzer tools
 /// </summary>
-internal class AnalyzerToolRegistry : McpToolRegistry
+internal sealed class AnalyzerToolRegistry : McpToolRegistry
 {
     private readonly IAnalyzerHost _analyzerHost;
     private readonly IFixEngine _fixEngine;
 
     public AnalyzerToolRegistry(
-        ILogger<McpToolRegistry> logger,
         ProjectContextManager projectContext,
         IAnalyzerHost analyzerHost,
         IFixEngine fixEngine)

@@ -10,12 +10,11 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Implementation of analyzer sandbox for isolated execution
 /// </summary>
-public class AnalyzerSandbox : IAnalyzerSandbox
+public partial class AnalyzerSandbox : IAnalyzerSandbox
 {
     private readonly ILogger<AnalyzerSandbox> _logger;
     private readonly ISecurityManager _securityManager;
     private readonly SandboxConfiguration _configuration;
-    private readonly Channel<SandboxOperation> _operationQueue;
     private readonly ChannelWriter<SandboxOperation> _operationWriter;
     private readonly ChannelReader<SandboxOperation> _operationReader;
     private readonly CancellationTokenSource _cancellationTokenSource;
@@ -41,9 +40,9 @@ public class AnalyzerSandbox : IAnalyzerSandbox
             SingleWriter = false
         };
 
-        _operationQueue = Channel.CreateBounded<SandboxOperation>(options);
-        _operationWriter = _operationQueue.Writer;
-        _operationReader = _operationQueue.Reader;
+        var operationQueue = Channel.CreateBounded<SandboxOperation>(options);
+        _operationWriter = operationQueue.Writer;
+        _operationReader = operationQueue.Reader;
         _cancellationTokenSource = new CancellationTokenSource();
 
         _currentUsage = new SandboxUsage { StartTime = DateTime.UtcNow };
@@ -53,47 +52,40 @@ public class AnalyzerSandbox : IAnalyzerSandbox
 
     public async Task<IAnalyzer> LoadAnalyzerAsync(string assemblyPath, CancellationToken cancellationToken = default)
     {
-        try
+        // Failures propagate to the caller (AnalyzerHost), which logs them and converts them into a load result.
+        LogLoadingAnalyzer(_logger, assemblyPath);
+
+        if (!File.Exists(assemblyPath))
         {
-            _logger.LogInformation("Loading analyzer from assembly: {AssemblyPath}", assemblyPath);
-
-            if (!File.Exists(assemblyPath))
-            {
-                throw new FileNotFoundException($"Assembly not found: {assemblyPath}");
-            }
-
-            // Load the assembly and find analyzer types
-            var assemblyContext = new AssemblyLoadContext(assemblyPath, isCollectible: true);
-            var assembly = assemblyContext.LoadFromAssemblyPath(assemblyPath);
-
-            var analyzerTypes = assembly.GetTypes()
-                .Where(t => t.IsClass && !t.IsAbstract && typeof(IAnalyzer).IsAssignableFrom(t))
-                .ToList();
-
-            if (!analyzerTypes.Any())
-            {
-                throw new InvalidOperationException("No analyzer types found in assembly");
-            }
-
-            // Create the first analyzer found (for simplicity)
-            var analyzerType = analyzerTypes.First();
-            var constructor = analyzerType.GetConstructor(Type.EmptyTypes);
-            if (constructor == null)
-            {
-                throw new InvalidOperationException($"Analyzer type {analyzerType.Name} does not have a parameterless constructor");
-            }
-
-            var analyzer = (IAnalyzer)constructor.Invoke(Array.Empty<object>());
-            await analyzer.InitializeAsync(cancellationToken);
-
-            _logger.LogInformation("Successfully loaded analyzer: {AnalyzerId}", analyzer.Id);
-            return analyzer;
+            throw new FileNotFoundException($"Assembly not found: {assemblyPath}");
         }
-        catch (Exception ex)
+
+        // Load the assembly and find analyzer types
+        var assemblyContext = new AssemblyLoadContext(assemblyPath, isCollectible: true);
+        var assembly = assemblyContext.LoadFromAssemblyPath(assemblyPath);
+
+        var analyzerTypes = assembly.GetTypes()
+            .Where(t => t.IsClass && !t.IsAbstract && typeof(IAnalyzer).IsAssignableFrom(t))
+            .ToList();
+
+        if (analyzerTypes.Count == 0)
         {
-            _logger.LogError(ex, "Error loading analyzer from assembly: {AssemblyPath}", assemblyPath);
-            throw;
+            throw new InvalidOperationException("No analyzer types found in assembly");
         }
+
+        // Create the first analyzer found (for simplicity)
+        var analyzerType = analyzerTypes[0];
+        var constructor = analyzerType.GetConstructor(Type.EmptyTypes);
+        if (constructor == null)
+        {
+            throw new InvalidOperationException($"Analyzer type {analyzerType.Name} does not have a parameterless constructor");
+        }
+
+        var analyzer = (IAnalyzer)constructor.Invoke(Array.Empty<object>());
+        await analyzer.InitializeAsync(cancellationToken);
+
+        LogAnalyzerLoaded(_logger, analyzer.Id);
+        return analyzer;
     }
 
     public async Task<AnalysisResult> ExecuteAnalyzerAsync(IAnalyzer analyzer, string filePath, string content, CancellationToken cancellationToken = default)
@@ -147,12 +139,12 @@ public class AnalyzerSandbox : IAnalyzerSandbox
         {
             _currentUsage = new SandboxUsage { StartTime = DateTime.UtcNow };
         }
-        _logger.LogDebug("Sandbox reset");
+        LogSandboxReset(_logger);
     }
 
     public bool IsHealthy()
     {
-        return !_disposed && !_cancellationTokenSource.IsCancellationRequested && _processingTask.IsCompleted == false;
+        return !_disposed && !_cancellationTokenSource.IsCancellationRequested && !_processingTask.IsCompleted;
     }
 
     public void Dispose()
@@ -178,11 +170,11 @@ public class AnalyzerSandbox : IAnalyzerSandbox
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error waiting for sandbox processing task to complete");
+                LogProcessingTaskWaitError(_logger, ex);
             }
 
             _cancellationTokenSource.Dispose();
-            _logger.LogDebug("Sandbox disposed");
+            LogSandboxDisposed(_logger);
         }
 
         _disposed = true;
@@ -216,7 +208,7 @@ public class AnalyzerSandbox : IAnalyzerSandbox
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing sandbox operation: {Type}", operation.Type);
+                LogOperationError(_logger, ex, operation.Type);
                 operation.TaskCompletionSource.SetException(ex);
             }
         }
@@ -227,19 +219,19 @@ public class AnalyzerSandbox : IAnalyzerSandbox
         // Validate required parameters
         if (operation.Analyzer == null)
         {
-            operation.TaskCompletionSource.SetException(new ArgumentNullException(nameof(operation.Analyzer), "Analyzer cannot be null"));
+            operation.TaskCompletionSource.SetException(new ArgumentNullException(nameof(operation), "Analyzer cannot be null"));
             return;
         }
 
         if (operation.FilePath == null)
         {
-            operation.TaskCompletionSource.SetException(new ArgumentNullException(nameof(operation.FilePath), "FilePath cannot be null"));
+            operation.TaskCompletionSource.SetException(new ArgumentNullException(nameof(operation), "FilePath cannot be null"));
             return;
         }
 
         if (operation.Content == null)
         {
-            operation.TaskCompletionSource.SetException(new ArgumentNullException(nameof(operation.Content), "Content cannot be null"));
+            operation.TaskCompletionSource.SetException(new ArgumentNullException(nameof(operation), "Content cannot be null"));
             return;
         }
 
@@ -328,17 +320,17 @@ public class AnalyzerSandbox : IAnalyzerSandbox
             // Check limits
             if (_currentUsage.MemoryUsed > _configuration.MaxMemoryUsage)
             {
-                _logger.LogWarning("Sandbox memory limit exceeded: {Used} > {Limit}", _currentUsage.MemoryUsed, _configuration.MaxMemoryUsage);
+                LogMemoryLimitExceeded(_logger, _currentUsage.MemoryUsed, _configuration.MaxMemoryUsage);
             }
 
             if (_currentUsage.FilesAccessed > _configuration.MaxFileAccess)
             {
-                _logger.LogWarning("Sandbox file access limit exceeded: {Accessed} > {Limit}", _currentUsage.FilesAccessed, _configuration.MaxFileAccess);
+                LogFileAccessLimitExceeded(_logger, _currentUsage.FilesAccessed, _configuration.MaxFileAccess);
             }
         }
     }
 
-    private class SandboxOperation
+    private sealed class SandboxOperation
     {
         public SandboxOperationType Type { get; init; }
         public string AnalyzerId { get; init; } = string.Empty;
@@ -354,4 +346,28 @@ public class AnalyzerSandbox : IAnalyzerSandbox
         Analysis,
         Fix
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loading analyzer from assembly: {AssemblyPath}")]
+    private static partial void LogLoadingAnalyzer(ILogger logger, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Successfully loaded analyzer: {AnalyzerId}")]
+    private static partial void LogAnalyzerLoaded(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Sandbox reset")]
+    private static partial void LogSandboxReset(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error waiting for sandbox processing task to complete")]
+    private static partial void LogProcessingTaskWaitError(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Sandbox disposed")]
+    private static partial void LogSandboxDisposed(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error processing sandbox operation: {Type}")]
+    private static partial void LogOperationError(ILogger logger, Exception exception, SandboxOperationType type);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sandbox memory limit exceeded: {Used} > {Limit}")]
+    private static partial void LogMemoryLimitExceeded(ILogger logger, long used, long limit);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sandbox file access limit exceeded: {Accessed} > {Limit}")]
+    private static partial void LogFileAccessLimitExceeded(ILogger logger, int accessed, int limit);
 }
