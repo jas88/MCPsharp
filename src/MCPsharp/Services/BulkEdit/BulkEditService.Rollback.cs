@@ -200,8 +200,7 @@ public sealed partial class BulkEditService
     }
 
     /// <inheritdoc />
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<int> CleanupExpiredRollbacksAsync(
+    public Task<int> CleanupExpiredRollbacksAsync(
         CancellationToken cancellationToken = default)
     {
         var cleanedCount = 0;
@@ -234,9 +233,8 @@ public sealed partial class BulkEditService
             LogExpiredRollbacksCleaned(BulkEditLog, cleanedCount);
         }
 
-        return cleanedCount;
+        return Task.FromResult(cleanedCount);
     }
-    #pragma warning restore CS1998
 
     private async Task<RollbackInfo> CreateRollbackSession(
         string operationId,
