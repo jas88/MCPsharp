@@ -1,3 +1,4 @@
+using System;
 using MCPsharp.Services.Roslyn;
 using NUnit.Framework;
 using System.IO;
@@ -40,7 +41,7 @@ public class RoslynWorkspaceInitializationTests
         Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}. " +
             $"This indicates MSBuildWorkspace is loading references correctly." +
-            $" Sample errors:\n{string.Join("\n", health.ErrorSamples)}");
+            Describe(workspace));
 
         // Verify semantic operations are available or close to being available
         Assert.That(health.CanDoSyntaxOperations, Is.True, "Should be able to do syntax operations");
@@ -108,7 +109,7 @@ public class RoslynWorkspaceInitializationTests
         Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}. " +
             $"Regression test: Previously passing .sln file caused fallback to AdhocWorkspace with 15k errors." +
-            $" Sample errors:\n{string.Join("\n", health.ErrorSamples)}");
+            Describe(workspace));
 
         workspace.Dispose();
     }
@@ -137,9 +138,22 @@ public class RoslynWorkspaceInitializationTests
         Assert.That(health.TotalFiles > 0, Is.True, "Should have source files");
         Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}." +
-            $" Sample errors:\n{string.Join("\n", health.ErrorSamples)}");
+            Describe(workspace));
 
         workspace.Dispose();
+    }
+
+    /// <summary>
+    /// Explain a high error count: sample errors, analyzer load failures and the generators each project references.
+    /// </summary>
+    private static string Describe(RoslynWorkspace workspace)
+    {
+        var health = workspace.GetHealth();
+        var analyzers = workspace.GetProjects().Select(p =>
+            $"{p.Name}: {string.Join(", ", p.AnalyzerReferences.Select(r => r.Display).Where(n => n != null && n.Contains("Generator", StringComparison.OrdinalIgnoreCase)))}");
+        return $"\nSample errors:\n{string.Join("\n", health.ErrorSamples)}" +
+            $"\nAnalyzer load failures:\n{string.Join("\n", health.AnalyzerLoadFailures)}" +
+            $"\nGenerator references:\n{string.Join("\n", analyzers)}";
     }
 
     private static string GetProjectPath()

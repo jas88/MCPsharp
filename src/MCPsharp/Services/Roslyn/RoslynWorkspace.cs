@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.CodeAnalysis.MSBuild;
 using MCPsharp.Services.Caching;
@@ -113,6 +114,8 @@ public partial class RoslynWorkspace : IDisposable
             _semanticModelCache.InvalidateAll();
 
             await TrackWorkspaceFileHealthAsync(workspaceRoot);
+            // Must run before the first compilation: load failures are only raised on first load
+            _health.AnalyzerLoadFailures = CollectAnalyzerLoadFailures(msbuildWorkspace.CurrentSolution);
             await RefreshAllCompilationsAndHealthAsync();
             _health.IsInitialized = true;
         }
@@ -276,13 +279,48 @@ public partial class RoslynWorkspace : IDisposable
             var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
             _health.ErrorCount += errors.Count;
             _health.WarningCount += diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
-            errorSamples.AddRange(errors
+            // Generator failures are warnings but explain the errors that follow, so list them first
+            errorSamples.AddRange(diagnostics
+                .Where(d => d.Id is "CS8784" or "CS8785")
+                .Concat(errors)
                 .Select(d => $"{compilation.AssemblyName}: {d.Id} {d.GetMessage(CultureInfo.InvariantCulture)}")
                 .Distinct(StringComparer.Ordinal)
                 .Take(MaxErrorSamples - errorSamples.Count));
         }
 
         _health.ErrorSamples = errorSamples;
+    }
+
+    /// <summary>
+    /// Load every analyzer and source generator referenced by the solution, returning a description
+    /// of each one that fails (e.g. because it was built against a newer Roslyn than this process uses).
+    /// </summary>
+    private static List<string> CollectAnalyzerLoadFailures(Solution solution)
+    {
+        var failures = new List<string>();
+        var references = solution.Projects
+            .SelectMany(p => p.AnalyzerReferences)
+            .OfType<AnalyzerFileReference>()
+            .DistinctBy(r => r.FullPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var reference in references)
+        {
+            void OnLoadFailed(object? sender, AnalyzerLoadFailureEventArgs e) =>
+                failures.Add($"{reference.FullPath}: {e.ErrorCode} {e.Message}");
+
+            reference.AnalyzerLoadFailed += OnLoadFailed;
+            try
+            {
+                _ = reference.GetAnalyzers(LanguageNames.CSharp);
+                _ = reference.GetGenerators(LanguageNames.CSharp);
+            }
+            finally
+            {
+                reference.AnalyzerLoadFailed -= OnLoadFailed;
+            }
+        }
+
+        return failures;
     }
 
     /// <summary>

@@ -51,6 +51,12 @@ public class WorkspaceHealth
     public IReadOnlyList<string> ErrorSamples { get; set; } = [];
 
     /// <summary>
+    /// Analyzers and source generators that could not be loaded. A generator that fails to load
+    /// typically shows up as errors such as CS0759 for source-generated partial methods.
+    /// </summary>
+    public IReadOnlyList<string> AnalyzerLoadFailures { get; set; } = [];
+
+    /// <summary>
     /// Per-file health status.
     /// </summary>
     public Dictionary<string, FileHealth> FileStatus { get; set; } = new();
