@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models.Roslyn;
 
 namespace MCPsharp.Services.Roslyn;
@@ -8,15 +9,25 @@ namespace MCPsharp.Services.Roslyn;
 /// <summary>
 /// Service for performing semantic edits to C# code
 /// </summary>
-public class SemanticEditService
+public partial class SemanticEditService
 {
     private readonly RoslynWorkspace _workspace;
     private readonly ClassStructureService _classStructure;
+    private readonly ILogger<SemanticEditService> _logger;
 
     public SemanticEditService(RoslynWorkspace workspace, ClassStructureService classStructure)
+        : this(workspace, classStructure, NullLogger<SemanticEditService>.Instance)
+    {
+    }
+
+    public SemanticEditService(
+        RoslynWorkspace workspace,
+        ClassStructureService classStructure,
+        ILogger<SemanticEditService> logger)
     {
         _workspace = workspace;
         _classStructure = classStructure;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
@@ -113,6 +124,7 @@ public class SemanticEditService
         }
         catch (Exception ex)
         {
+            LogAddMemberFailed(_logger, ex, "property", propertyName, className);
             return new EditResult { Success = false, Error = ex.Message };
         }
     }
@@ -178,7 +190,7 @@ public class SemanticEditService
             int insertLine = classDecl.CloseBraceToken.GetLocation().GetLineSpan().StartLinePosition.Line;
 
             // Generate method code
-            var paramList = parameters != null && parameters.Any()
+            var paramList = parameters != null && parameters.Count > 0
                 ? string.Join(", ", parameters.Select(p => $"{p.Type} {p.Name}"))
                 : "";
 
@@ -200,6 +212,7 @@ public class SemanticEditService
         }
         catch (Exception ex)
         {
+            LogAddMemberFailed(_logger, ex, "method", methodName, className);
             return new EditResult { Success = false, Error = ex.Message };
         }
     }
@@ -289,6 +302,7 @@ public class SemanticEditService
         }
         catch (Exception ex)
         {
+            LogAddMemberFailed(_logger, ex, "field", fieldName, className);
             return new EditResult { Success = false, Error = ex.Message };
         }
     }
@@ -296,7 +310,7 @@ public class SemanticEditService
     /// <summary>
     /// Generate property code with proper formatting
     /// </summary>
-    public string GeneratePropertyCode(
+    public static string GeneratePropertyCode(
         string name,
         string type,
         string accessibility,
@@ -312,7 +326,7 @@ public class SemanticEditService
     /// <summary>
     /// Generate method code with proper formatting
     /// </summary>
-    public string GenerateMethodCode(
+    public static string GenerateMethodCode(
         string name,
         string returnType,
         IEnumerable<ParameterStructure>? parameters,
@@ -333,7 +347,7 @@ public class SemanticEditService
                $"{indentation}}}";
     }
 
-    private string DetectIndentation(ClassDeclarationSyntax classDecl)
+    private static string DetectIndentation(ClassDeclarationSyntax classDecl)
     {
         // Simple indentation detection - use 4 spaces or existing indentation
         var firstMember = classDecl.Members.FirstOrDefault();
@@ -349,4 +363,7 @@ public class SemanticEditService
         }
         return "    "; // Default to 4 spaces
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to add {MemberKind} '{MemberName}' to class '{ClassName}'")]
+    private static partial void LogAddMemberFailed(ILogger logger, Exception exception, string memberKind, string memberName, string className);
 }

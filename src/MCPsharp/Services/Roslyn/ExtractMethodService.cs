@@ -2,7 +2,10 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models.Refactoring;
+using System.Globalization;
 using System.Text;
 
 namespace MCPsharp.Services.Roslyn;
@@ -11,13 +14,23 @@ namespace MCPsharp.Services.Roslyn;
 /// Service for extracting methods from selected code using Roslyn
 /// MVP: Handles simple statement extraction with basic parameter inference
 /// </summary>
-public class ExtractMethodService
+public partial class ExtractMethodService
 {
+    // MVP: extracted methods get a simple default name unless the request supplies one
+    private const string DefaultMethodName = "ExtractedMethod";
+
     private readonly RoslynWorkspace _workspace;
+    private readonly ILogger<ExtractMethodService> _logger;
 
     public ExtractMethodService(RoslynWorkspace workspace)
+        : this(workspace, NullLogger<ExtractMethodService>.Instance)
+    {
+    }
+
+    public ExtractMethodService(RoslynWorkspace workspace, ILogger<ExtractMethodService> logger)
     {
         _workspace = workspace;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
@@ -71,7 +84,7 @@ public class ExtractMethodService
             var selection = GetTextSpan(syntaxRoot, request);
             var selectedNodes = GetSelectedStatements(syntaxRoot, selection);
 
-            if (!selectedNodes.Any())
+            if (selectedNodes.Count == 0)
             {
                 return ExtractMethodResult.CreateError(
                     "No complete statements selected",
@@ -87,17 +100,13 @@ public class ExtractMethodService
             }
 
             // Step 4: Analyze data flow
-            var dataFlow = await AnalyzeDataFlowAsync(
-                selectedNodes,
-                semanticModel,
-                validation.ContainingMethod!,
-                cancellationToken);
+            var dataFlow = AnalyzeDataFlow(selectedNodes, semanticModel);
 
             // Step 5: Generate method name
-            var methodName = request.MethodName ?? GenerateMethodName(selectedNodes);
+            var methodName = request.MethodName ?? DefaultMethodName;
 
             // Step 6: Infer parameters and return type
-            var parameters = InferParameters(dataFlow, semanticModel);
+            var parameters = InferParameters(dataFlow);
             var returnInfo = InferReturnType(dataFlow, semanticModel, selectedNodes);
 
             // Step 7: Detect method characteristics
@@ -151,21 +160,13 @@ public class ExtractMethodService
                 Characteristics = characteristics
             };
 
-            // Step 12: Generate preview if requested
+            // Step 12: Generate preview if requested.
+            // NOTE: Non-preview mode does not yet rewrite the document; the extracted method and
+            // call site are returned to the caller, who is responsible for applying them.
             PreviewInfo? preview = null;
             if (request.Preview)
             {
                 preview = await GeneratePreviewAsync(
-                    document,
-                    validation.ContainingMethod!,
-                    selectedNodes,
-                    extractedMethod,
-                    cancellationToken);
-            }
-            else
-            {
-                // Apply the extraction
-                await ApplyExtractionAsync(
                     document,
                     validation.ContainingMethod!,
                     selectedNodes,
@@ -177,11 +178,12 @@ public class ExtractMethodService
         }
         catch (Exception ex)
         {
+            LogExtractionFailed(_logger, ex, request.FilePath);
             return ExtractMethodResult.CreateError($"Extraction failed: {ex.Message}");
         }
     }
 
-    private TextSpan GetTextSpan(SyntaxNode root, ExtractMethodRequest request)
+    private static TextSpan GetTextSpan(SyntaxNode root, ExtractMethodRequest request)
     {
         var text = root.GetText();
         if (text == null)
@@ -224,7 +226,7 @@ public class ExtractMethodService
         return TextSpan.FromBounds(start, end);
     }
 
-    private List<StatementSyntax> GetSelectedStatements(SyntaxNode root, TextSpan selection)
+    private static List<StatementSyntax> GetSelectedStatements(SyntaxNode root, TextSpan selection)
     {
         var statements = root.DescendantNodes()
             .OfType<StatementSyntax>()
@@ -257,7 +259,7 @@ public class ExtractMethodService
         }
 
         // Find containing method
-        var containingMethod = statements.First()
+        var containingMethod = statements[0]
             .Ancestors()
             .OfType<MethodDeclarationSyntax>()
             .FirstOrDefault();
@@ -283,8 +285,8 @@ public class ExtractMethodService
         // Check control flow (basic check)
         try
         {
-            var firstStmt = statements.First();
-            var lastStmt = statements.Last();
+            var firstStmt = statements[0];
+            var lastStmt = statements[^1];
             var controlFlow = semanticModel.AnalyzeControlFlow(firstStmt, lastStmt);
             if (controlFlow == null)
                 throw new InvalidOperationException("Control flow analysis returned null");
@@ -302,27 +304,25 @@ public class ExtractMethodService
                     null);
             }
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Control flow analysis failed - continue anyway for MVP
+            LogControlFlowAnalysisFailed(_logger, ex);
         }
 
         return (true, null, null, containingMethod);
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<DataFlowAnalysisResult> AnalyzeDataFlowAsync(
+    private DataFlowAnalysisResult AnalyzeDataFlow(
         List<StatementSyntax> statements,
-        SemanticModel semanticModel,
-        MethodDeclarationSyntax containingMethod,
-        CancellationToken cancellationToken)
+        SemanticModel semanticModel)
     {
         var result = new DataFlowAnalysisResult();
 
         try
         {
-            var firstStmt = statements.First();
-            var lastStmt = statements.Last();
+            var firstStmt = statements[0];
+            var lastStmt = statements[^1];
 
             var dataFlow = semanticModel.AnalyzeDataFlow(firstStmt, lastStmt);
             if (dataFlow == null)
@@ -343,16 +343,16 @@ public class ExtractMethodService
 
             // Output variables: variables written inside and read outside
             var writtenAndReadOutside = dataFlow.WrittenInside
-                .Intersect(dataFlow.ReadOutside)
-                .Where(s => !dataFlow.DataFlowsIn.Contains(s));
+                .Intersect(dataFlow.ReadOutside, SymbolEqualityComparer.Default)
+                .Where(s => !dataFlow.DataFlowsIn.Contains(s, SymbolEqualityComparer.Default));
 
             result.OutputVariables.AddRange(writtenAndReadOutside);
 
             // Ref parameters: variables read and written inside, also read outside
             var refCandidates = dataFlow.ReadInside
-                .Intersect(dataFlow.WrittenInside)
-                .Intersect(dataFlow.ReadOutside)
-                .Where(s => dataFlow.DataFlowsIn.Contains(s));
+                .Intersect(dataFlow.WrittenInside, SymbolEqualityComparer.Default)
+                .Intersect(dataFlow.ReadOutside, SymbolEqualityComparer.Default)
+                .Where(s => dataFlow.DataFlowsIn.Contains(s, SymbolEqualityComparer.Default));
 
             result.RefParameters.AddRange(refCandidates);
 
@@ -365,8 +365,8 @@ public class ExtractMethodService
                 .ToList();
 
             var hasMultipleReturns = returnStatements.Count > 1;
-            var hasEarlyReturns = returnStatements.Any() &&
-                returnStatements.Last() != statements.Last().DescendantNodesAndSelf().LastOrDefault();
+            var hasEarlyReturns = returnStatements.Count > 0 &&
+                returnStatements[^1] != lastStmt.DescendantNodesAndSelf().LastOrDefault();
 
             // Create new result with all properties set
             return new DataFlowAnalysisResult
@@ -379,22 +379,21 @@ public class ExtractMethodService
                 HasEarlyReturns = hasEarlyReturns
             };
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Data flow analysis failed - return empty result
+            LogDataFlowAnalysisFailed(_logger, ex);
         }
 
         return result;
     }
 
-    private bool IsThisParameter(ISymbol symbol)
+    private static bool IsThisParameter(ISymbol symbol)
     {
         return symbol is IParameterSymbol param && param.IsThis;
     }
 
-    private List<ParameterInfo> InferParameters(
-        DataFlowAnalysisResult dataFlow,
-        SemanticModel semanticModel)
+    private static List<ParameterInfo> InferParameters(DataFlowAnalysisResult dataFlow)
     {
         var parameters = new List<ParameterInfo>();
 
@@ -412,23 +411,20 @@ public class ExtractMethodService
         }
 
         // Add out parameters for output variables
-        foreach (var symbol in dataFlow.OutputVariables)
+        foreach (var symbol in dataFlow.OutputVariables.Where(s => !dataFlow.InputParameters.Contains(s)))
         {
-            if (!dataFlow.InputParameters.Contains(symbol))
+            parameters.Add(new ParameterInfo
             {
-                parameters.Add(new ParameterInfo
-                {
-                    Name = symbol.Name,
-                    Type = GetTypeDisplayString(symbol),
-                    Modifier = "out"
-                });
-            }
+                Name = symbol.Name,
+                Type = GetTypeDisplayString(symbol),
+                Modifier = "out"
+            });
         }
 
         return parameters;
     }
 
-    private (string returnType, List<string>? returnVariables) InferReturnType(
+    private static (string returnType, List<string>? returnVariables) InferReturnType(
         DataFlowAnalysisResult dataFlow,
         SemanticModel semanticModel,
         List<StatementSyntax> statements)
@@ -442,7 +438,7 @@ public class ExtractMethodService
             .SelectMany(s => s.DescendantNodesAndSelf().OfType<AwaitExpressionSyntax>())
             .ToList();
 
-        if (awaitExpressions.Any())
+        if (awaitExpressions.Count > 0)
         {
             // For async methods with await expressions, we need to check if there's a clear return value
             var lastStatement = statements.LastOrDefault();
@@ -463,7 +459,7 @@ public class ExtractMethodService
                         var typeString = awaitedType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
                         // For async methods, we want the awaited type, not the Task<T>
-                        if (typeString.StartsWith("Task<"))
+                        if (typeString.StartsWith("Task<", StringComparison.Ordinal))
                         {
                             typeString = typeString.Substring(5, typeString.Length - 6); // Remove "Task<" and ">"
                         }
@@ -490,7 +486,7 @@ public class ExtractMethodService
                     var typeString = awaitedType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
                     // For async methods, we want the awaited type, not the Task<T>
-                    if (typeString.StartsWith("Task<"))
+                    if (typeString.StartsWith("Task<", StringComparison.Ordinal))
                     {
                         typeString = typeString.Substring(5, typeString.Length - 6); // Remove "Task<" and ">"
                     }
@@ -526,7 +522,7 @@ public class ExtractMethodService
         }
     }
 
-    private string GetTypeDisplayString(ISymbol symbol)
+    private static string GetTypeDisplayString(ISymbol symbol)
     {
         if (symbol is ILocalSymbol local)
         {
@@ -540,11 +536,11 @@ public class ExtractMethodService
         return "object";
     }
 
-    private MethodCharacteristics DetectCharacteristics(
+    private static MethodCharacteristics DetectCharacteristics(
         List<StatementSyntax> statements,
         DataFlowAnalysisResult dataFlow)
     {
-        if (statements == null || !statements.Any())
+        if (statements == null || statements.Count == 0)
         {
             return new MethodCharacteristics
             {
@@ -572,25 +568,19 @@ public class ExtractMethodService
             IsGeneric = false, // MVP: no generic support yet
             HasMultipleReturns = dataFlow?.HasMultipleReturns ?? false,
             HasEarlyReturns = dataFlow?.HasEarlyReturns ?? false,
-            CapturesVariables = dataFlow?.CapturedVariables?.Any() ?? false,
+            CapturesVariables = dataFlow?.CapturedVariables is { Count: > 0 },
             ContainsAwait = hasAwait,
             ContainsYield = hasYield
         };
     }
 
-    private bool CanBeStatic(DataFlowAnalysisResult dataFlow)
+    private static bool CanBeStatic(DataFlowAnalysisResult dataFlow)
     {
         // Can be static if no instance members are accessed
-        return !dataFlow.CapturedVariables.Any();
+        return dataFlow.CapturedVariables.Count == 0;
     }
 
-    private string GenerateMethodName(List<StatementSyntax> statements)
-    {
-        // MVP: simple default name
-        return "ExtractedMethod";
-    }
-
-    private string GenerateSignature(
+    private static string GenerateSignature(
         string methodName,
         string accessibility,
         bool isStatic,
@@ -601,7 +591,7 @@ public class ExtractMethodService
         // Validate inputs
         if (string.IsNullOrWhiteSpace(methodName))
         {
-            methodName = "ExtractedMethod";
+            methodName = DefaultMethodName;
         }
 
         if (string.IsNullOrWhiteSpace(accessibility))
@@ -632,25 +622,22 @@ public class ExtractMethodService
             {
                 returnType = "Task";
             }
-            else if (!returnType.StartsWith("Task"))
+            else if (!returnType.StartsWith("Task", StringComparison.Ordinal))
             {
                 returnType = $"Task<{returnType}>";
             }
         }
 
-        if (characteristics?.ContainsYield == true)
+        // Wrap in IEnumerable
+        if (characteristics?.ContainsYield == true && !returnType.StartsWith("IEnumerable", StringComparison.Ordinal))
         {
-            // Wrap in IEnumerable
-            if (!returnType.StartsWith("IEnumerable"))
-            {
-                returnType = $"IEnumerable<{returnType}>";
-            }
+            returnType = $"IEnumerable<{returnType}>";
         }
 
-        sb.Append($" {returnType} {methodName}(");
+        sb.Append(CultureInfo.InvariantCulture, $" {returnType} {methodName}(");
 
         // Add parameters safely
-        if (parameters != null && parameters.Any())
+        if (parameters != null && parameters.Count > 0)
         {
             var paramStrings = parameters.Select(p =>
             {
@@ -663,12 +650,12 @@ public class ExtractMethodService
             sb.Append(string.Join(", ", paramStrings));
         }
 
-        sb.Append(")");
+        sb.Append(')');
 
         return sb.ToString();
     }
 
-    private string GenerateMethodBody(
+    private static string GenerateMethodBody(
         List<StatementSyntax> statements,
         (string returnType, List<string>? returnVariables) returnInfo)
     {
@@ -684,19 +671,19 @@ public class ExtractMethodService
         {
             if (returnInfo.returnVariables.Count == 1)
             {
-                sb.AppendLine($"return {returnInfo.returnVariables[0]};");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"return {returnInfo.returnVariables[0]};");
             }
             else
             {
                 var tupleReturn = string.Join(", ", returnInfo.returnVariables);
-                sb.AppendLine($"return ({tupleReturn});");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"return ({tupleReturn});");
             }
         }
 
         return sb.ToString();
     }
 
-    private string GenerateCallSite(
+    private static string GenerateCallSite(
         string methodName,
         List<ParameterInfo> parameters,
         (string returnType, List<string>? returnVariables) returnInfo,
@@ -709,12 +696,12 @@ public class ExtractMethodService
         {
             if (returnInfo.returnVariables.Count == 1)
             {
-                sb.Append($"var {returnInfo.returnVariables[0]} = ");
+                sb.Append(CultureInfo.InvariantCulture, $"var {returnInfo.returnVariables[0]} = ");
             }
             else
             {
                 var vars = string.Join(", ", returnInfo.returnVariables);
-                sb.Append($"({vars}) = ");
+                sb.Append(CultureInfo.InvariantCulture, $"({vars}) = ");
             }
         }
 
@@ -724,7 +711,7 @@ public class ExtractMethodService
             // Instance method - no qualifier needed in same class
         }
 
-        sb.Append($"{methodName}(");
+        sb.Append(CultureInfo.InvariantCulture, $"{methodName}(");
 
         // Add arguments
         var args = parameters
@@ -745,7 +732,7 @@ public class ExtractMethodService
         return sb.ToString();
     }
 
-    private LocationInfo GetInsertLocation(MethodDeclarationSyntax containingMethod)
+    private static LocationInfo GetInsertLocation(MethodDeclarationSyntax containingMethod)
     {
         var location = containingMethod.GetLocation();
         var lineSpan = location.GetLineSpan();
@@ -758,7 +745,7 @@ public class ExtractMethodService
         };
     }
 
-    private async Task<PreviewInfo> GeneratePreviewAsync(
+    private static async Task<PreviewInfo> GeneratePreviewAsync(
         Document document,
         MethodDeclarationSyntax containingMethod,
         List<StatementSyntax> selectedStatements,
@@ -792,7 +779,7 @@ public class ExtractMethodService
         };
     }
 
-    private string GenerateModifiedMethod(
+    private static string GenerateModifiedMethod(
         MethodDeclarationSyntax containingMethod,
         List<StatementSyntax> selectedStatements,
         ExtractedMethodInfo extraction)
@@ -800,17 +787,16 @@ public class ExtractMethodService
         var sb = new StringBuilder();
 
         // Original method with call site
-        var methodBody = containingMethod.Body?.Statements ?? new SyntaxList<StatementSyntax>();
-
         sb.AppendLine(containingMethod.ToFullString()
             .Replace(
                 string.Join("\n", selectedStatements.Select(s => s.ToFullString())),
-                extraction.CallSite.Code));
+                extraction.CallSite.Code,
+                StringComparison.Ordinal));
 
         sb.AppendLine();
 
         // New extracted method
-        sb.AppendLine($"{extraction.Method.Signature}");
+        sb.AppendLine(extraction.Method.Signature);
         sb.AppendLine("{");
         sb.Append(extraction.Method.Body);
         sb.AppendLine("}");
@@ -818,15 +804,12 @@ public class ExtractMethodService
         return sb.ToString();
     }
 
-    private async Task ApplyExtractionAsync(
-        Document document,
-        MethodDeclarationSyntax containingMethod,
-        List<StatementSyntax> selectedStatements,
-        ExtractedMethodInfo extraction,
-        CancellationToken cancellationToken)
-    {
-        // MVP: Preview only for now
-        // Actual application would require more complex syntax rewriting
-        await Task.CompletedTask;
-    }
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Method extraction failed for {FilePath}")]
+    private static partial void LogExtractionFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Control flow analysis failed; continuing without control flow validation")]
+    private static partial void LogControlFlowAnalysisFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Data flow analysis failed; returning empty data flow result")]
+    private static partial void LogDataFlowAnalysisFailed(ILogger logger, Exception exception);
 }

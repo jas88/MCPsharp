@@ -1,22 +1,34 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Rename;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Services.Roslyn.SymbolSearch;
-using System.Collections.Concurrent;
 
 namespace MCPsharp.Services.Roslyn;
 
 /// <summary>
 /// Service for safe symbol renaming across the entire solution
 /// </summary>
-public class RenameSymbolService
+public partial class RenameSymbolService
 {
+    private static readonly string[] SymbolNotFoundErrors = { "Symbol not found" };
+    private static readonly string[] ApplyChangesFailedErrors = { "Failed to apply rename changes to workspace" };
+
+    private static readonly HashSet<string> CSharpKeywords = new(StringComparer.Ordinal)
+    {
+        "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked",
+        "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else",
+        "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for",
+        "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is", "lock",
+        "long", "namespace", "new", "null", "object", "operator", "out", "override", "params",
+        "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed", "short",
+        "sizeof", "stackalloc", "static", "string", "struct", "switch", "this", "throw", "true",
+        "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual",
+        "void", "volatile", "while"
+    };
+
     private readonly RoslynWorkspace _workspace;
-    private readonly AdvancedReferenceFinderService _referenceFinder;
-    private readonly SymbolQueryService _symbolQuery;
     private readonly SymbolFinderService _symbolFinder;
     private readonly ILogger<RenameSymbolService> _logger;
 
@@ -27,8 +39,10 @@ public class RenameSymbolService
         ILogger<RenameSymbolService> logger)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
-        _referenceFinder = referenceFinder ?? throw new ArgumentNullException(nameof(referenceFinder));
-        _symbolQuery = symbolQuery ?? throw new ArgumentNullException(nameof(symbolQuery));
+        // referenceFinder and symbolQuery are retained in the constructor contract (callers and DI
+        // supply them) but symbol lookup is now delegated to SymbolFinderService.
+        ArgumentNullException.ThrowIfNull(referenceFinder);
+        ArgumentNullException.ThrowIfNull(symbolQuery);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // Initialize the new symbol finder service with strategy pattern
@@ -45,15 +59,16 @@ public class RenameSymbolService
     {
         try
         {
-            _logger.LogInformation("Starting rename of '{OldName}' to '{NewName}'",
-                request.OldName, request.NewName);
+            LogStartingRename(_logger, request.OldName, request.NewName);
 
             // Phase 1: Validate the rename request
             var validation = await ValidateRenameAsync(request, ct);
             if (!validation.IsValid)
             {
-                _logger.LogWarning("Rename validation failed: {Errors}",
-                    string.Join(", ", validation.Errors));
+                if (_logger.IsEnabled(LogLevel.Warning))
+                {
+                    LogRenameValidationFailed(_logger, string.Join(", ", validation.Errors));
+                }
                 return RenameResult.Failed(validation.Errors);
             }
 
@@ -61,19 +76,19 @@ public class RenameSymbolService
             var symbol = validation.Symbol;
             if (symbol == null)
             {
-                return RenameResult.Failed(new[] { "Symbol not found" });
+                return RenameResult.Failed(SymbolNotFoundErrors);
             }
 
             // Phase 3: Check for conflicts
-            var conflicts = await DetectConflictsAsync(symbol, request.NewName, ct);
+            var conflicts = DetectConflicts(symbol, request.NewName, ct);
             if (conflicts.Any(c => c.Severity == ConflictSeverity.Error))
             {
-                _logger.LogWarning("Blocking conflicts detected for rename");
+                LogBlockingConflicts(_logger);
                 return RenameResult.Blocked(conflicts);
             }
 
             // Phase 4: Handle non-blocking conflicts based on strategy
-            if (conflicts.Any() && request.HandleConflicts == ConflictHandling.Abort)
+            if (conflicts.Count > 0 && request.HandleConflicts == ConflictHandling.Abort)
             {
                 return RenameResult.Blocked(conflicts);
             }
@@ -81,19 +96,18 @@ public class RenameSymbolService
             // Phase 5: Perform the rename using Roslyn's Renamer
             var renameResult = await PerformRenameAsync(symbol, request, ct);
 
-            _logger.LogInformation("Rename completed successfully: {Count} references updated",
-                renameResult.RenamedCount);
+            LogRenameCompleted(_logger, renameResult.RenamedCount);
 
             return renameResult;
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("Rename operation cancelled");
+            LogRenameCancelled(_logger);
             throw;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Rename operation failed");
+            LogRenameFailed(_logger, ex);
             return RenameResult.Failed(new[] { $"Rename failed: {ex.Message}" });
         }
     }
@@ -164,29 +178,27 @@ public class RenameSymbolService
         // Use the new unified finder service
         var result = await _symbolFinder.FindSymbolAsync(searchRequest, ct);
 
-        if (result.Symbol != null)
+        var foundSymbol = result.Symbol;
+        if (foundSymbol != null)
         {
             // Additional validation specific to rename operations
-            if (!ValidateSymbolMatch(result.Symbol, request))
+            if (!ValidateSymbolMatch(foundSymbol, request))
             {
-                _logger.LogDebug("Symbol found but failed validation: '{SymbolName}'", result.Symbol.Name);
+                LogSymbolFailedValidation(_logger, foundSymbol.Name);
                 return null;
             }
 
-            _logger.LogDebug("Found symbol '{SymbolName}' of kind {SymbolKind} using {Strategy}",
-                result.Symbol.Name, result.Symbol.Kind, result.UsedStrategy);
+            LogFoundSymbol(_logger, foundSymbol.Name, foundSymbol.Kind, result.UsedStrategy);
 
             if (result.IsAmbiguous)
             {
-                _logger.LogWarning("Found {Count} ambiguous candidates for '{OldName}', selected best match",
-                    result.Candidates.Count, request.OldName);
+                LogAmbiguousCandidates(_logger, result.Candidates.Count, request.OldName);
             }
 
-            return result.Symbol;
+            return foundSymbol;
         }
 
-        _logger.LogWarning("Symbol '{OldName}' not found with kind {SymbolKind}",
-            request.OldName, request.SymbolKind);
+        LogSymbolNotFound(_logger, request.OldName, request.SymbolKind);
         return null;
     }
 
@@ -224,7 +236,7 @@ public class RenameSymbolService
             var sourceLocation = symbol.Locations.FirstOrDefault(l => l.IsInSource);
             if (sourceLocation == null)
             {
-                _logger.LogDebug("Symbol has no source location, cannot re-resolve");
+                LogNoSourceLocation(_logger);
                 return null;
             }
 
@@ -236,7 +248,7 @@ public class RenameSymbolService
 
             if (document == null)
             {
-                _logger.LogDebug("Document not found for path: {FilePath}", filePath);
+                LogDocumentNotFound(_logger, filePath);
                 return null;
             }
 
@@ -246,7 +258,7 @@ public class RenameSymbolService
 
             if (semanticModel == null || syntaxRoot == null)
             {
-                _logger.LogDebug("Could not get semantic model or syntax root");
+                LogNoSemanticModelOrRoot(_logger);
                 return null;
             }
 
@@ -255,7 +267,7 @@ public class RenameSymbolService
             var node = syntaxRoot.FindNode(sourceLocation.SourceSpan);
             if (node == null)
             {
-                _logger.LogDebug("Could not find syntax node at location");
+                LogSyntaxNodeNotFound(_logger);
                 return null;
             }
 
@@ -269,32 +281,30 @@ public class RenameSymbolService
                 var declaredSymbol = semanticModel.GetDeclaredSymbol(declarationNode, ct);
                 if (declaredSymbol != null)
                 {
-                    _logger.LogInformation("Re-resolved symbol '{SymbolName}' (kind: {Kind}) in current compilation via declaration node",
-                        declaredSymbol.Name, declaredSymbol.Kind);
+                    LogReResolvedViaDeclaration(_logger, declaredSymbol.Name, declaredSymbol.Kind);
                     return declaredSymbol;
                 }
             }
 
             // If not a declaration, try to get the symbol info (for references like variables, parameters)
-            var symbolInfo = semanticModel.GetSymbolInfo(node, ct);
-            if (symbolInfo.Symbol != null)
+            var resolved = semanticModel.GetSymbolInfo(node, ct).Symbol;
+            if (resolved != null)
             {
-                _logger.LogInformation("Re-resolved symbol '{SymbolName}' (kind: {Kind}) in current compilation via SymbolInfo",
-                    symbolInfo.Symbol.Name, symbolInfo.Symbol.Kind);
-                return symbolInfo.Symbol;
+                LogReResolvedViaSymbolInfo(_logger, resolved.Name, resolved.Kind);
+                return resolved;
             }
 
-            _logger.LogDebug("Could not re-resolve symbol in current compilation");
+            LogCouldNotReResolve(_logger);
             return null;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error re-resolving symbol in current compilation");
+            LogReResolveError(_logger, ex);
             return null;
         }
     }
 
-    private async Task<List<RenameConflict>> DetectConflictsAsync(
+    private List<RenameConflict> DetectConflicts(
         ISymbol symbol,
         string newName,
         CancellationToken ct)
@@ -305,82 +315,73 @@ public class RenameSymbolService
         {
             if (symbol == null || string.IsNullOrWhiteSpace(newName))
             {
-                _logger.LogWarning("Invalid parameters for conflict detection: symbol={HasSymbol}, newName={NewName}",
-                    symbol != null, newName);
+                LogInvalidConflictParameters(_logger, symbol != null, newName);
                 return conflicts;
             }
 
-            _logger.LogInformation("Detecting conflicts for symbol {SymbolName} (Kind: {Kind}) -> {NewName}",
-                symbol.Name, symbol.Kind, newName);
+            LogDetectingConflicts(_logger, symbol.Name, symbol.Kind, newName);
 
             // Check for name collision in the same scope
             var containingSymbol = symbol.ContainingSymbol;
-            _logger.LogDebug("ContainingSymbol: {ContainingSymbol} (Type: {Type})",
-                containingSymbol?.Name ?? "null",
-                containingSymbol?.GetType().Name ?? "null");
+            LogContainingSymbol(_logger, containingSymbol?.Name ?? "null", containingSymbol?.GetType().Name ?? "null");
 
             // Check for name collision in the same type or namespace
-            if (containingSymbol is INamedTypeSymbol containingType && containingType != null)
+            if (containingSymbol is INamedTypeSymbol containingType)
             {
-                _logger.LogDebug("Checking type member collisions in {TypeName}", containingType.Name);
-                await CheckTypeMemberCollisionsAsync(containingType, newName, symbol, conflicts, ct);
+                LogCheckingTypeMemberCollisions(_logger, containingType.Name);
+                CheckTypeMemberCollisions(containingType, newName, symbol, conflicts);
             }
-            else if (containingSymbol is INamespaceSymbol containingNamespace && containingNamespace != null)
+            else if (containingSymbol is INamespaceSymbol containingNamespace)
             {
-                _logger.LogDebug("Checking namespace collisions in {NamespaceName}", containingNamespace.ToDisplayString());
-                await CheckNamespaceCollisionsAsync(containingNamespace, newName, symbol, conflicts, ct);
+                LogCheckingNamespaceCollisions(_logger, containingNamespace);
+                CheckNamespaceCollisions(containingNamespace, newName, symbol, conflicts, ct);
             }
             else
             {
-                _logger.LogDebug("ContainingSymbol is neither a type nor a namespace");
+                LogContainingSymbolNeitherTypeNorNamespace(_logger);
             }
 
             // Check for hiding inherited members
-            _logger.LogDebug("Checking inheritance hiding");
-            await CheckInheritanceHidingAsync(symbol, newName, conflicts, ct);
+            LogCheckingInheritanceHiding(_logger);
+            CheckInheritanceHiding(symbol, newName, conflicts);
 
             // Check interface implementation conflicts
-            _logger.LogDebug("Checking interface implementation conflicts");
-            await CheckInterfaceImplementationConflictsAsync(symbol, newName, conflicts, ct);
+            LogCheckingInterfaceConflicts(_logger);
+            CheckInterfaceImplementationConflicts(symbol, newName, conflicts);
 
-            _logger.LogInformation("Conflict detection complete: Found {ConflictCount} conflicts for symbol {SymbolName}",
-                conflicts.Count, symbol.Name);
+            LogConflictDetectionComplete(_logger, conflicts.Count, symbol.Name);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error detecting conflicts for symbol {SymbolName}", symbol?.Name);
+            LogConflictDetectionError(_logger, ex, symbol?.Name);
         }
 
         return conflicts;
     }
 
-    private async Task CheckTypeMemberCollisionsAsync(
+    private void CheckTypeMemberCollisions(
         INamedTypeSymbol containingType,
         string newName,
         ISymbol originalSymbol,
-        List<RenameConflict> conflicts,
-        CancellationToken ct)
+        List<RenameConflict> conflicts)
     {
         try
         {
-            _logger.LogDebug("CheckTypeMemberCollisionsAsync called: containingType={ContainingType}, newName={NewName}, originalSymbol={OriginalSymbol}",
-                containingType?.Name, newName, originalSymbol?.Name);
+            LogCheckTypeMemberCollisionsCalled(_logger, containingType?.Name, newName, originalSymbol?.Name);
 
             if (containingType == null || originalSymbol == null || conflicts == null)
             {
-                _logger.LogDebug("Early return due to null check: containingType={HasContainingType}, originalSymbol={HasOriginalSymbol}, conflicts={HasConflicts}",
-                    containingType != null, originalSymbol != null, conflicts != null);
+                LogTypeMemberCollisionsEarlyReturn(_logger, containingType != null, originalSymbol != null, conflicts != null);
                 return;
             }
 
             // Get all members with the target name
             var existingMembers = containingType.GetMembers(newName);
-            _logger.LogDebug("Found {MemberCount} members with name '{NewName}' in type {TypeName}",
-                existingMembers.Length, newName, containingType.Name);
+            LogFoundMembersWithName(_logger, existingMembers.Length, newName, containingType.Name);
 
-            if (!existingMembers.Any())
+            if (existingMembers.IsEmpty)
             {
-                _logger.LogDebug("No existing members found with name '{NewName}' in type {TypeName}", newName, containingType.Name);
+                LogNoExistingMembers(_logger, newName, containingType.Name);
                 return;
             }
 
@@ -388,48 +389,47 @@ public class RenameSymbolService
             {
                 if (existing == null)
                 {
-                    _logger.LogDebug("Skipping null member");
+                    LogSkippingNullMember(_logger);
                     continue;
                 }
 
-                _logger.LogDebug("Checking member: Name={Name}, Kind={Kind}, IsInSource={IsInSource}",
-                    existing.Name, existing.Kind, existing.Locations.Any(l => l.IsInSource));
+                var sourceLocations = existing.Locations.Where(l => l?.IsInSource == true).ToList();
+                LogCheckingMember(_logger, existing.Name, existing.Kind, sourceLocations.Count > 0);
 
                 // Skip if it's the same symbol
                 if (SymbolEqualityComparer.Default.Equals(existing, originalSymbol))
                 {
-                    _logger.LogDebug("Skipping because it's the same symbol as original");
+                    LogSkippingSameSymbol(_logger);
                     continue;
                 }
 
                 // Check if the existing symbol is in source code
-                var sourceLocations = existing.Locations.Where(l => l?.IsInSource == true).ToList();
-                if (!sourceLocations.Any())
+                if (sourceLocations.Count == 0)
                 {
-                    _logger.LogDebug("Existing symbol '{ExistingName}' is not in source code", existing.Name);
+                    LogExistingSymbolNotInSource(_logger, existing.Name);
                     continue;
                 }
 
-                _logger.LogInformation("Found name collision: '{NewName}' already exists in {TypeName}", newName, containingType.Name);
+                LogNameCollision(_logger, newName, containingType.Name);
 
                 conflicts.Add(new RenameConflict
                 {
                     Type = ConflictType.NameCollision,
                     Severity = ConflictSeverity.Error,
                     Description = $"Name '{newName}' already exists in {containingType.Name}",
-                    Location = sourceLocations.FirstOrDefault()
+                    Location = sourceLocations[0]
                 });
             }
 
-            _logger.LogDebug("CheckTypeMemberCollisionsAsync finished with {ConflictCount} conflicts", conflicts.Count);
+            LogCheckTypeMemberCollisionsFinished(_logger, conflicts.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking type member collisions in {TypeName}", containingType?.Name);
+            LogTypeMemberCollisionsError(_logger, ex, containingType?.Name);
         }
     }
 
-    private async Task CheckNamespaceCollisionsAsync(
+    private void CheckNamespaceCollisions(
         INamespaceSymbol containingNamespace,
         string newName,
         ISymbol originalSymbol,
@@ -446,9 +446,11 @@ public class RenameSymbolService
             var compilation = _workspace.GetCompilation();
             if (compilation == null)
             {
-                _logger.LogWarning("No compilation available for namespace collision checking");
+                LogNoCompilationForNamespaceCheck(_logger);
                 return;
             }
+
+            var namespaceName = containingNamespace.ToDisplayString();
 
             // Find all symbols with the target name in the same namespace
             var existingSymbols = compilation.GetSymbolsWithName(
@@ -458,46 +460,40 @@ public class RenameSymbolService
                            s.ContainingNamespace != null &&
                            SymbolEqualityComparer.Default.Equals(s.ContainingNamespace, containingNamespace) &&
                            !SymbolEqualityComparer.Default.Equals(s, originalSymbol) &&
-                           s.Locations != null &&
                            s.Locations.Any(l => l?.IsInSource == true))
                 .ToList();
 
-            if (!existingSymbols.Any())
+            if (existingSymbols.Count == 0)
             {
-                _logger.LogDebug("No existing symbols found with name '{NewName}' in namespace {NamespaceName}", newName, containingNamespace.ToDisplayString());
+                LogNoExistingNamespaceSymbols(_logger, newName, namespaceName);
                 return;
             }
 
             foreach (var existing in existingSymbols)
             {
-                if (existing == null)
-                    continue;
-
                 var sourceLocation = existing.Locations.FirstOrDefault(l => l?.IsInSource == true);
 
-                _logger.LogDebug("Found namespace collision: '{NewName}' already exists in namespace {NamespaceName}",
-                    newName, containingNamespace.ToDisplayString());
+                LogNamespaceCollision(_logger, newName, namespaceName);
 
                 conflicts.Add(new RenameConflict
                 {
                     Type = ConflictType.NameCollision,
                     Severity = ConflictSeverity.Error,
-                    Description = $"Name '{newName}' already exists in namespace {containingNamespace.ToDisplayString()}",
+                    Description = $"Name '{newName}' already exists in namespace {namespaceName}",
                     Location = sourceLocation
                 });
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking namespace collisions in {NamespaceName}", containingNamespace?.ToDisplayString());
+            LogNamespaceCollisionsError(_logger, ex, containingNamespace?.ToDisplayString());
         }
     }
 
-    private async Task CheckInheritanceHidingAsync(
+    private void CheckInheritanceHiding(
         ISymbol symbol,
         string newName,
-        List<RenameConflict> conflicts,
-        CancellationToken ct)
+        List<RenameConflict> conflicts)
     {
         try
         {
@@ -506,60 +502,24 @@ public class RenameSymbolService
                 return;
             }
 
-            if (symbol.ContainingType is not INamedTypeSymbol containingType || containingType == null)
+            if (symbol.ContainingType is not INamedTypeSymbol containingType)
             {
-                _logger.LogDebug("Symbol {SymbolName} is not in a type, skipping inheritance hiding check", symbol.Name);
+                LogNotInType(_logger, symbol.Name);
                 return;
             }
 
-            _logger.LogDebug("Checking inheritance hiding for symbol {SymbolName} -> {NewName}", symbol.Name, newName);
+            LogCheckingInheritanceHidingFor(_logger, symbol.Name, newName);
 
             var baseType = containingType.BaseType;
             while (baseType != null)
             {
-                if (baseType == null)
-                    break;
-
                 try
                 {
-                    var baseMembers = baseType.GetMembers(newName);
-                    if (baseMembers != null)
-                    {
-                        foreach (var baseMember in baseMembers)
-                        {
-                            if (baseMember == null)
-                                continue;
-
-                            // Skip if it's the same symbol (shouldn't happen but defensive)
-                            if (SymbolEqualityComparer.Default.Equals(baseMember, symbol))
-                                continue;
-
-                            // Skip if base member is sealed and would be hidden
-                            if (baseMember.IsSealed)
-                                continue;
-
-                            // Check if base member is virtual/abstract/override that could be hidden
-                            if (baseMember.IsVirtual || baseMember.IsAbstract || baseMember.IsOverride)
-                            {
-                                var sourceLocation = baseMember.Locations.FirstOrDefault(l => l?.IsInSource == true);
-
-                                _logger.LogDebug("Found inheritance hiding: '{NewName}' hides inherited member from {BaseTypeName}",
-                                    newName, baseType.Name);
-
-                                conflicts.Add(new RenameConflict
-                                {
-                                    Type = ConflictType.HidesInheritedMember,
-                                    Severity = ConflictSeverity.Warning,
-                                    Description = $"New name '{newName}' hides inherited member from {baseType.Name}",
-                                    Location = sourceLocation
-                                });
-                            }
-                        }
-                    }
+                    AddInheritanceHidingConflicts(baseType, symbol, newName, conflicts);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error checking base type {BaseTypeName} for inheritance hiding", baseType.Name);
+                    LogBaseTypeCheckError(_logger, ex, baseType.Name);
                 }
 
                 baseType = baseType.BaseType;
@@ -567,15 +527,44 @@ public class RenameSymbolService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking inheritance hiding for symbol {SymbolName}", symbol?.Name ?? "null");
+            LogInheritanceHidingError(_logger, ex, symbol?.Name ?? "null");
         }
     }
 
-    private async Task CheckInterfaceImplementationConflictsAsync(
+    private void AddInheritanceHidingConflicts(
+        INamedTypeSymbol baseType,
         ISymbol symbol,
         string newName,
-        List<RenameConflict> conflicts,
-        CancellationToken ct)
+        List<RenameConflict> conflicts)
+    {
+        // Only virtual/abstract/override members that are not sealed can be hidden;
+        // skip the symbol itself (shouldn't happen but defensive).
+        var hideableMembers = baseType.GetMembers(newName)
+            .Where(baseMember => baseMember != null &&
+                                 !SymbolEqualityComparer.Default.Equals(baseMember, symbol) &&
+                                 !baseMember.IsSealed &&
+                                 (baseMember.IsVirtual || baseMember.IsAbstract || baseMember.IsOverride));
+
+        foreach (var baseMember in hideableMembers)
+        {
+            var sourceLocation = baseMember.Locations.FirstOrDefault(l => l?.IsInSource == true);
+
+            LogInheritanceHidingFound(_logger, newName, baseType.Name);
+
+            conflicts.Add(new RenameConflict
+            {
+                Type = ConflictType.HidesInheritedMember,
+                Severity = ConflictSeverity.Warning,
+                Description = $"New name '{newName}' hides inherited member from {baseType.Name}",
+                Location = sourceLocation
+            });
+        }
+    }
+
+    private void CheckInterfaceImplementationConflicts(
+        ISymbol symbol,
+        string newName,
+        List<RenameConflict> conflicts)
     {
         try
         {
@@ -588,25 +577,25 @@ public class RenameSymbolService
             {
                 if (iface == null) continue;
 
-                var interfaceMethods = iface.GetMembers(newName).OfType<IMethodSymbol>();
-                foreach (var interfaceMethod in interfaceMethods)
+                var matchingMethods = iface.GetMembers(newName)
+                    .OfType<IMethodSymbol>()
+                    .Where(interfaceMethod => interfaceMethod != null && SignaturesMatch(methodSymbol, interfaceMethod));
+
+                foreach (var interfaceMethod in matchingMethods)
                 {
-                    if (interfaceMethod != null && SignaturesMatch(methodSymbol, interfaceMethod))
+                    conflicts.Add(new RenameConflict
                     {
-                        conflicts.Add(new RenameConflict
-                        {
-                            Type = ConflictType.InterfaceImplementation,
-                            Severity = ConflictSeverity.Info,
-                            Description = $"After rename, method will implement {iface.Name}.{newName}",
-                            Location = interfaceMethod.Locations.FirstOrDefault()
-                        });
-                    }
+                        Type = ConflictType.InterfaceImplementation,
+                        Severity = ConflictSeverity.Info,
+                        Description = $"After rename, method will implement {iface.Name}.{newName}",
+                        Location = interfaceMethod.Locations.FirstOrDefault()
+                    });
                 }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking interface implementation conflicts for symbol {SymbolName}", symbol.Name);
+            LogInterfaceConflictsError(_logger, ex, symbol.Name);
         }
     }
 
@@ -619,53 +608,26 @@ public class RenameSymbolService
         RenameRequest request,
         CancellationToken ct)
     {
-        _logger.LogDebug("PerformRenameAsync: Renaming symbol '{SymbolName}' of kind {Kind} to '{NewName}'",
-            symbol.Name, symbol.Kind, request.NewName);
+        LogPerformRename(_logger, symbol.Name, symbol.Kind, request.NewName);
 
         var solution = _workspace.Solution;
 
         // CRITICAL: The symbol must be from the current solution's compilation,
         // not from a cached compilation. Roslyn symbols are tied to a specific compilation.
         // If the symbol is from an old compilation, Renamer won't find all references.
-        // CRITICAL: Ensure symbol is from current solution's compilation
         // Re-resolve the symbol to ensure it's from the current compilation
         var resolvedSymbol = await ResolveSymbolInCurrentCompilationAsync(symbol, solution, ct);
         if (resolvedSymbol != null)
         {
-            _logger.LogInformation("Using re-resolved symbol '{SymbolName}' from current compilation", resolvedSymbol.Name);
+            LogUsingReResolvedSymbol(_logger, resolvedSymbol.Name);
             symbol = resolvedSymbol;
         }
         else
         {
-            _logger.LogWarning("Could not re-resolve symbol '{SymbolName}', using original symbol", symbol.Name);
+            LogUsingOriginalSymbol(_logger, symbol.Name);
         }
 
-        // Log symbol details for debugging
-        _logger.LogInformation("Renaming symbol: Name='{Name}', Kind={Kind}, ContainingType={ContainingType}, Locations={LocationCount}",
-            symbol.Name, symbol.Kind, symbol.ContainingType?.Name ?? "none", symbol.Locations.Length);
-
-        // Log solution state
-        _logger.LogInformation("Solution has {ProjectCount} projects, {DocumentCount} total documents",
-            solution.Projects.Count(), solution.Projects.Sum(p => p.Documents.Count()));
-
-        // DEBUG: Manually find references using SymbolFinder to see what Roslyn can find
-        try
-        {
-            var references = await Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindReferencesAsync(
-                symbol, solution, ct);
-            var refList = references.ToList();
-            _logger.LogInformation("SymbolFinder found {ReferenceGroupCount} reference groups", refList.Count);
-            foreach (var refGroup in refList)
-            {
-                var locations = refGroup.Locations.ToList();
-                _logger.LogInformation("  Symbol '{SymbolName}' has {LocationCount} reference locations",
-                    refGroup.Definition.Name, locations.Count);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error using SymbolFinder");
-        }
+        await LogRenameDiagnosticsAsync(symbol, solution, ct);
 
         var optionSet = solution.Options;
 
@@ -692,108 +654,147 @@ public class RenameSymbolService
         var modifiedFiles = new HashSet<string>();
         var renamedCount = 0;
 
+        // Use Roslyn's Renamer API for the actual rename.
+        // Failures propagate to RenameSymbolAsync, which logs them and converts them to a failed result.
+        #pragma warning disable CS0618
+        var newSolution = await Renamer.RenameSymbolAsync(
+            solution,
+            symbol,
+            request.NewName,
+            optionSet,
+            ct);
+        #pragma warning restore CS0618
+
+        // Calculate changes
+        var changes = newSolution.GetChanges(solution);
+        var projectChanges = changes.GetProjectChanges().ToList();
+        LogRenameProjectChanges(_logger, projectChanges.Count);
+
+        var fileChanges = new List<FileChange>();
+
+        foreach (var projectChange in projectChanges)
+        {
+            var changedDocs = projectChange.GetChangedDocuments().ToList();
+            LogProjectChangedDocuments(_logger, projectChange.NewProject.Name, changedDocs.Count);
+
+            foreach (var docId in changedDocs)
+            {
+                var oldDoc = solution.GetDocument(docId);
+                var newDoc = newSolution.GetDocument(docId);
+
+                if (oldDoc == null || newDoc == null)
+                {
+                    continue;
+                }
+
+                var oldText = await oldDoc.GetTextAsync(ct);
+                var newText = await newDoc.GetTextAsync(ct);
+                var textChanges = newText.GetTextChanges(oldText).ToList();
+
+                LogDocumentTextChanges(_logger, oldDoc.Name, textChanges.Count);
+
+                if (textChanges.Count == 0)
+                {
+                    continue;
+                }
+
+                modifiedFiles.Add(oldDoc.FilePath ?? docId.ToString());
+                renamedCount += CountSymbolRenames(oldText, textChanges, request);
+
+                if (request.PreviewOnly)
+                {
+                    fileChanges.Add(new FileChange
+                    {
+                        FilePath = oldDoc.FilePath ?? "",
+                        Changes = textChanges.Select(tc => new TextChange
+                        {
+                            Span = tc.Span,
+                            NewText = tc.NewText!
+                        }).ToList()
+                    });
+                }
+            }
+        }
+
+        // Apply changes if not preview mode
+        if (!request.PreviewOnly && !_workspace.Solution.Workspace.TryApplyChanges(newSolution))
+        {
+            return RenameResult.Failed(ApplyChangesFailedErrors);
+        }
+
+        return new RenameResult
+        {
+            Success = true,
+            RenamedCount = renamedCount,
+            FilesModified = modifiedFiles.ToList(),
+            Preview = request.PreviewOnly ? fileChanges : null
+        };
+    }
+
+    /// <summary>
+    /// Count actual symbol renames, not just text change spans.
+    /// Roslyn may consolidate multiple renames into fewer text changes.
+    /// </summary>
+    private int CountSymbolRenames(
+        SourceText oldText,
+        List<Microsoft.CodeAnalysis.Text.TextChange> textChanges,
+        RenameRequest request)
+    {
+        int symbolRenames = 0;
+        foreach (var change in textChanges)
+        {
+            var oldTextSpan = oldText.GetSubText(change.Span).ToString();
+            LogTextChange(_logger, change.Span, oldTextSpan, change.NewText);
+
+            // Count occurrences of old name being replaced
+            // Handle case where Roslyn does bulk replacements
+            if (change.NewText != null)
+            {
+                int oldNameCount = CountOccurrences(oldTextSpan, request.OldName);
+                int newNameCount = CountOccurrences(change.NewText, request.NewName);
+                symbolRenames += Math.Max(oldNameCount, newNameCount);
+            }
+        }
+        return symbolRenames;
+    }
+
+    /// <summary>
+    /// Diagnostic logging of the symbol, the solution and the references Roslyn can find.
+    /// Skipped entirely unless Information logging is enabled, as finding references is expensive.
+    /// </summary>
+    private async Task LogRenameDiagnosticsAsync(ISymbol symbol, Solution solution, CancellationToken ct)
+    {
+        if (!_logger.IsEnabled(LogLevel.Information))
+        {
+            return;
+        }
+
+        LogRenamingSymbolDetails(_logger, symbol.Name, symbol.Kind, symbol.ContainingType?.Name ?? "none", symbol.Locations.Length);
+
+        var projectCount = 0;
+        var documentCount = 0;
+        foreach (var project in solution.Projects)
+        {
+            projectCount++;
+            documentCount += project.DocumentIds.Count;
+        }
+        LogSolutionState(_logger, projectCount, documentCount);
+
         try
         {
-            // Use Roslyn's Renamer API for the actual rename
-            #pragma warning disable CS0618
-            var newSolution = await Renamer.RenameSymbolAsync(
-                solution,
-                symbol,
-                request.NewName,
-                optionSet,
-                ct);
-            #pragma warning restore CS0618
-
-            // Calculate changes
-            var changes = newSolution.GetChanges(solution);
-            var projectChanges = changes.GetProjectChanges().ToList();
-            _logger.LogInformation("Rename operation completed. Project changes: {ProjectChangeCount}",
-                projectChanges.Count);
-
-            var fileChanges = new List<FileChange>();
-
-            foreach (var projectChange in projectChanges)
+            var references = await Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindReferencesAsync(
+                symbol, solution, ct);
+            var refList = references.ToList();
+            LogReferenceGroupCount(_logger, refList.Count);
+            foreach (var refGroup in refList)
             {
-                var changedDocs = projectChange.GetChangedDocuments().ToList();
-                _logger.LogInformation("Project '{ProjectName}' has {ChangedDocCount} changed documents",
-                    projectChange.NewProject.Name, changedDocs.Count);
-
-                foreach (var docId in changedDocs)
-                {
-                    var oldDoc = solution.GetDocument(docId);
-                    var newDoc = newSolution.GetDocument(docId);
-
-                    if (oldDoc != null && newDoc != null)
-                    {
-                        var oldText = await oldDoc.GetTextAsync(ct);
-                        var newText = await newDoc.GetTextAsync(ct);
-                        var textChanges = newText.GetTextChanges(oldText).ToList();
-
-                        _logger.LogInformation("Document '{DocName}' has {ChangeCount} text changes",
-                            oldDoc.Name, textChanges.Count);
-
-                        // Count actual symbol renames, not just text change spans
-                        // Roslyn may consolidate multiple renames into fewer text changes
-                        int symbolRenames = 0;
-                        foreach (var change in textChanges)
-                        {
-                            var oldTextSpan = oldText.GetSubText(change.Span).ToString();
-                            _logger.LogDebug("Text change at span {Span}: '{OldText}' -> '{NewText}'",
-                                change.Span, oldTextSpan, change.NewText);
-
-                            // Count occurrences of old name being replaced
-                            // Handle case where Roslyn does bulk replacements
-                            if (change.NewText != null)
-                            {
-                                int oldNameCount = CountOccurrences(oldTextSpan, request.OldName);
-                                int newNameCount = CountOccurrences(change.NewText, request.NewName);
-                                symbolRenames += Math.Max(oldNameCount, newNameCount);
-                            }
-                        }
-
-                        if (textChanges.Any())
-                        {
-                            modifiedFiles.Add(oldDoc.FilePath ?? docId.ToString());
-                            renamedCount += symbolRenames;
-
-                            if (request.PreviewOnly)
-                            {
-                                fileChanges.Add(new FileChange
-                                {
-                                    FilePath = oldDoc.FilePath ?? "",
-                                    Changes = textChanges.Select(tc => new TextChange
-                                    {
-                                        Span = tc.Span,
-                                        NewText = tc.NewText!
-                                    }).ToList()
-                                });
-                            }
-                        }
-                    }
-                }
+                var locationCount = refGroup.Locations.Count();
+                LogReferenceLocationCount(_logger, refGroup.Definition.Name, locationCount);
             }
-
-            // Apply changes if not preview mode
-            if (!request.PreviewOnly)
-            {
-                if (!_workspace.Solution.Workspace.TryApplyChanges(newSolution))
-                {
-                    return RenameResult.Failed(new[] { "Failed to apply rename changes to workspace" });
-                }
-            }
-
-            return new RenameResult
-            {
-                Success = true,
-                RenamedCount = renamedCount,
-                FilesModified = modifiedFiles.ToList(),
-                Preview = request.PreviewOnly ? fileChanges : null
-            };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Failed to perform rename");
-            throw;
+            LogSymbolFinderError(_logger, ex);
         }
     }
 
@@ -815,12 +816,9 @@ public class RenameSymbolService
         }
 
         // Check symbol kind
-        if (request.SymbolKind != SymbolKind.Any)
+        if (request.SymbolKind != SymbolKind.Any && !MatchesSymbolKind(symbol, request.SymbolKind))
         {
-            if (!MatchesSymbolKind(symbol, request.SymbolKind))
-            {
-                return false;
-            }
+            return false;
         }
 
         // Check containing type
@@ -835,17 +833,16 @@ public class RenameSymbolService
         }
 
         // Ensure symbol is in source code (not metadata)
-        var sourceLocations = symbol.Locations.Where(l => l != null && l.IsInSource).ToList();
-        if (!sourceLocations.Any())
+        if (!symbol.Locations.Any(l => l != null && l.IsInSource))
         {
-            _logger.LogDebug("Symbol '{SymbolName}' is not in source code", symbol.Name);
+            LogSymbolNotInSource(_logger, symbol.Name);
             return false;
         }
 
         // Additional validation for specific symbol types
         if (!IsSymbolAccessibleForRename(symbol))
         {
-            _logger.LogDebug("Symbol '{SymbolName}' is not accessible for rename", symbol.Name);
+            LogSymbolNotAccessible(_logger, symbol.Name);
             return false;
         }
 
@@ -861,7 +858,7 @@ public class RenameSymbolService
         }
 
         // Special handling for type parameters - check if the name matches the pattern
-        if (request.SymbolKind == SymbolKind.TypeParameter && !(symbol is ITypeParameterSymbol))
+        if (request.SymbolKind == SymbolKind.TypeParameter && symbol is not ITypeParameterSymbol)
         {
             return false;
         }
@@ -869,7 +866,7 @@ public class RenameSymbolService
         return true;
     }
 
-    private bool MatchesSymbolKind(ISymbol symbol, SymbolKind requestedKind)
+    private static bool MatchesSymbolKind(ISymbol symbol, SymbolKind requestedKind)
     {
         if (symbol == null)
             return false;
@@ -914,30 +911,17 @@ public class RenameSymbolService
     // These methods are now handled by SymbolSelector in the SymbolFinderService.
     // The logic has been preserved and improved with better separation of concerns.
 
-    private bool IsSymbolAccessibleForRename(ISymbol symbol)
+    private static bool IsSymbolAccessibleForRename(ISymbol symbol)
     {
         if (symbol == null)
         {
             return false;
         }
 
-        // Can't rename symbols from metadata
-        if (!symbol.Locations.Any(l => l.IsInSource))
-            return false;
-
-        // Can't rename compiler-generated symbols
-        if (symbol.IsImplicitlyDeclared)
-            return false;
-
-        // Can't rename symbols in generated code
-        var attributes = symbol.GetAttributes();
-        if (attributes.Any(a => a.AttributeClass?.Name == "GeneratedCodeAttribute"))
-            return false;
-
-        return true;
+        return CanRenameSymbol(symbol);
     }
 
-    private bool IsValidIdentifier(string name)
+    private static bool IsValidIdentifier(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
             return false;
@@ -956,25 +940,9 @@ public class RenameSymbolService
         return true;
     }
 
-    private bool IsKeyword(string name)
-    {
-        var keywords = new HashSet<string>
-        {
-            "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked",
-            "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else",
-            "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for",
-            "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is", "lock",
-            "long", "namespace", "new", "null", "object", "operator", "out", "override", "params",
-            "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed", "short",
-            "sizeof", "stackalloc", "static", "string", "struct", "switch", "this", "throw", "true",
-            "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual",
-            "void", "volatile", "while"
-        };
+    private static bool IsKeyword(string name) => CSharpKeywords.Contains(name);
 
-        return keywords.Contains(name);
-    }
-
-    private bool CanRenameSymbol(ISymbol symbol)
+    private static bool CanRenameSymbol(ISymbol symbol)
     {
         // Cannot rename symbols from metadata
         if (!symbol.Locations.Any(l => l.IsInSource))
@@ -992,29 +960,14 @@ public class RenameSymbolService
         return true;
     }
 
-    private bool IsPublicApi(ISymbol symbol)
+    private static bool IsPublicApi(ISymbol symbol)
     {
         return symbol.DeclaredAccessibility == Accessibility.Public ||
                symbol.DeclaredAccessibility == Accessibility.Protected ||
                symbol.DeclaredAccessibility == Accessibility.ProtectedOrInternal;
     }
 
-    private IEnumerable<ISymbol> FilterByKind(IEnumerable<ISymbol> symbols, SymbolKind kind)
-    {
-        return kind switch
-        {
-            SymbolKind.Class => symbols.OfType<INamedTypeSymbol>().Where(s => s.TypeKind == TypeKind.Class),
-            SymbolKind.Interface => symbols.OfType<INamedTypeSymbol>().Where(s => s.TypeKind == TypeKind.Interface),
-            SymbolKind.Method => symbols.OfType<IMethodSymbol>(),
-            SymbolKind.Property => symbols.OfType<IPropertySymbol>(),
-            SymbolKind.Field => symbols.OfType<IFieldSymbol>(),
-            SymbolKind.Parameter => symbols.OfType<IParameterSymbol>(),
-            SymbolKind.Namespace => symbols.OfType<INamespaceSymbol>(),
-            _ => symbols
-        };
-    }
-
-    private bool SignaturesMatch(IMethodSymbol method1, IMethodSymbol method2)
+    private static bool SignaturesMatch(IMethodSymbol method1, IMethodSymbol method2)
     {
         if (method1.Parameters.Length != method2.Parameters.Length)
             return false;
@@ -1046,11 +999,11 @@ public class RenameRequest
     public int? Line { get; init; }
     public int? Column { get; init; }
     public bool RenameInComments { get; init; } = true;
-    public bool RenameInStrings { get; init; } = false;
-    public bool RenameOverloads { get; init; } = false;
-    public bool PreviewOnly { get; init; } = false;
-    public bool ForcePublicApiChange { get; init; } = false;
-    public bool AllowKeywordNames { get; init; } = false;
+    public bool RenameInStrings { get; init; }
+    public bool RenameOverloads { get; init; }
+    public bool PreviewOnly { get; init; }
+    public bool ForcePublicApiChange { get; init; }
+    public bool AllowKeywordNames { get; init; }
     public ConflictHandling HandleConflicts { get; init; } = ConflictHandling.Abort;
 }
 

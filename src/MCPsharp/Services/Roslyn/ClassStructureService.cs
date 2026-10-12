@@ -30,8 +30,7 @@ public class ClassStructureService
         // Find the class symbol
         var classSymbol = compilation.GetSymbolsWithName(className, SymbolFilter.Type)
             .OfType<INamedTypeSymbol>()
-            .Where(t => t.TypeKind == TypeKind.Class)
-            .FirstOrDefault();
+            .FirstOrDefault(t => t.TypeKind == TypeKind.Class);
 
         if (classSymbol == null)
         {
@@ -57,7 +56,7 @@ public class ClassStructureService
             {
                 Name = prop.Name,
                 Type = prop.Type.ToDisplayString(),
-                Accessibility = prop.DeclaredAccessibility.ToString().ToLower(),
+                Accessibility = prop.DeclaredAccessibility.ToString().ToLowerInvariant(),
                 HasGetter = prop.GetMethod != null,
                 HasSetter = prop.SetMethod != null,
                 Line = location?.GetLineSpan().StartLinePosition.Line ?? 0
@@ -79,7 +78,7 @@ public class ClassStructureService
             {
                 Name = method.Name,
                 ReturnType = method.ReturnType.ToDisplayString(),
-                Accessibility = method.DeclaredAccessibility.ToString().ToLower(),
+                Accessibility = method.DeclaredAccessibility.ToString().ToLowerInvariant(),
                 IsOverride = method.IsOverride,
                 IsVirtual = method.IsVirtual,
                 IsAbstract = method.IsAbstract,
@@ -102,7 +101,7 @@ public class ClassStructureService
             {
                 Name = field.Name,
                 Type = field.Type.ToDisplayString(),
-                Accessibility = field.DeclaredAccessibility.ToString().ToLower(),
+                Accessibility = field.DeclaredAccessibility.ToString().ToLowerInvariant(),
                 IsReadOnly = field.IsReadOnly,
                 IsConst = field.IsConst,
                 IsStatic = field.IsStatic,
@@ -133,7 +132,7 @@ public class ClassStructureService
             Name = classSymbol.Name,
             Namespace = classSymbol.ContainingNamespace?.ToDisplayString() ?? "",
             Kind = "class",
-            Accessibility = classSymbol.DeclaredAccessibility.ToString().ToLower(),
+            Accessibility = classSymbol.DeclaredAccessibility.ToString().ToLowerInvariant(),
             IsAbstract = classSymbol.IsAbstract,
             IsSealed = classSymbol.IsSealed,
             IsStatic = classSymbol.IsStatic,
