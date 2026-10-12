@@ -63,10 +63,13 @@ public class ExtractMethodApplyTests
         }
     }
 
+    private static string Lf(string text) => text.ReplaceLineEndings("\n");
+
     private async Task<string> CreateFileAsync(string name, string content)
     {
         var path = Path.Combine(_projectPath, name);
-        await File.WriteAllTextAsync(path, content);
+        // Raw string literals pick up the checkout's line endings (CRLF on Windows); tests expect LF
+        await File.WriteAllTextAsync(path, Lf(content));
         await _workspace.AddDocumentAsync(path);
         return path;
     }
@@ -138,7 +141,7 @@ public class ExtractMethodApplyTests
             }
 
             """;
-        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(expected));
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(Lf(expected)));
         await AssertCompilesAsync(path);
     }
 
@@ -155,7 +158,7 @@ public class ExtractMethodApplyTests
         Assert.That(result.Preview, Is.Not.Null);
         Assert.That(result.Preview!.ModifiedCode, Does.Contain("var total = ComputeTotal(input);"));
         Assert.That(result.Preview.ModifiedCode, Does.Contain("private int ComputeTotal(int input)"));
-        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(CalculatorSource));
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(Lf(CalculatorSource)));
         Assert.That(await _bulkEdit.GetAvailableRollbacksAsync(), Is.Empty);
     }
 
@@ -166,12 +169,12 @@ public class ExtractMethodApplyTests
 
         var result = await ExtractAsync(path, 9, 10, "ComputeTotal");
         Assert.That(result.Applied, Is.True, result.Error?.Message);
-        Assert.That(await File.ReadAllTextAsync(path), Is.Not.EqualTo(CalculatorSource));
+        Assert.That(await File.ReadAllTextAsync(path), Is.Not.EqualTo(Lf(CalculatorSource)));
 
         var rollback = await _bulkEdit.RollbackBulkEditAsync(result.RollbackId!);
 
         Assert.That(rollback.Success, Is.True, rollback.Error);
-        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(CalculatorSource));
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(Lf(CalculatorSource)));
 
         // The next extraction resynchronises the workspace with the restored file
         var again = await ExtractAsync(path, 9, 10, "ComputeTotal", preview: true);
@@ -191,7 +194,7 @@ public class ExtractMethodApplyTests
         Assert.That(result.Applied, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo("COMPILATION_ERRORS"));
         Assert.That(result.NewDiagnostics, Has.Some.Matches<ExtractionDiagnostic>(d => d!.Severity == "Error" && d.Id == "CS0120"));
-        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(CalculatorSource));
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(Lf(CalculatorSource)));
         Assert.That(await _bulkEdit.GetAvailableRollbacksAsync(), Is.Empty);
     }
 
@@ -295,7 +298,7 @@ public class ExtractMethodApplyTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo("CONTROL_FLOW_EXITS"));
-        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(source));
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(Lf(source)));
     }
 
     [Test]
