@@ -8,6 +8,17 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
+    /// <summary>
+    /// Options for deserialising structured tool arguments (architecture definitions, violations,
+    /// refactoring suggestions, bulk edits). Property names are matched case-insensitively and enums
+    /// accept names or numbers, so objects returned by other tools (serialised in camelCase) round-trip.
+    /// </summary>
+    private static readonly JsonSerializerOptions ToolArgumentJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
+
     private string GetProjectPathFromArguments(JsonDocument arguments)
     {
         var context = _projectContext.GetProjectContext();

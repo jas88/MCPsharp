@@ -57,8 +57,10 @@ public sealed partial class BulkEditService
             // Use glob pattern matching
             try
             {
+                // Rooted patterns are matched relative to the deepest existing directory they start from
+                var rootDir = DetermineRootDirectory(pattern);
                 var matcher = new Matcher();
-                matcher.AddInclude(pattern);
+                matcher.AddInclude(Path.IsPathRooted(pattern) ? Path.GetRelativePath(rootDir, Path.GetFullPath(pattern)) : pattern);
 
                 if (options.ExcludedFiles != null)
                 {
@@ -68,8 +70,6 @@ public sealed partial class BulkEditService
                     }
                 }
 
-                // Determine the root directory for the pattern
-                var rootDir = DetermineRootDirectory(pattern);
                 var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(rootDir)));
 
                 foreach (var file in result.Files)

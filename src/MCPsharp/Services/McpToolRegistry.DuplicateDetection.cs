@@ -219,7 +219,7 @@ public partial class McpToolRegistry
             if (duplicatesElement.HasValue && duplicatesElement.Value.ValueKind == JsonValueKind.Array)
             {
                 // Parse provided duplicates
-                duplicates = JsonSerializer.Deserialize<List<MCPsharp.Models.DuplicateGroup>>(duplicatesElement.Value.GetRawText()) ?? new List<MCPsharp.Models.DuplicateGroup>();
+                duplicates = JsonSerializer.Deserialize<List<MCPsharp.Models.DuplicateGroup>>(duplicatesElement.Value.GetRawText(), ToolArgumentJsonOptions) ?? new List<MCPsharp.Models.DuplicateGroup>();
             }
             else
             {
@@ -410,7 +410,7 @@ public partial class McpToolRegistry
                 };
             }
 
-            var suggestion = JsonSerializer.Deserialize<MCPsharp.Models.RefactoringSuggestion>(suggestionElement.Value.GetRawText());
+            var suggestion = JsonSerializer.Deserialize<MCPsharp.Models.RefactoringSuggestion>(suggestionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             if (suggestion == null)
             {
                 return new ToolCallResult

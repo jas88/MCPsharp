@@ -156,7 +156,7 @@ public partial class McpToolRegistry
             var edits = new List<FileEdit>();
             foreach (var editElement in editsArray.EnumerateArray())
             {
-                var edit = JsonSerializer.Deserialize<FileEdit>(editElement.GetRawText());
+                var edit = JsonSerializer.Deserialize<FileEdit>(editElement.GetRawText(), ToolArgumentJsonOptions);
                 if (edit != null)
                 {
                     edits.Add(edit);
@@ -332,7 +332,7 @@ public partial class McpToolRegistry
             var operations = new List<MultiFileOperation>();
             foreach (var operationElement in operationsArray.EnumerateArray())
             {
-                var operation = JsonSerializer.Deserialize<MultiFileOperation>(operationElement.GetRawText());
+                var operation = JsonSerializer.Deserialize<MultiFileOperation>(operationElement.GetRawText(), ToolArgumentJsonOptions);
                 if (operation != null)
                 {
                     operations.Add(operation);
@@ -482,7 +482,7 @@ public partial class McpToolRegistry
             else if (bulkEditOpType == BulkEditOperationType.MultiFileEdit)
             {
                 var operationsArray = arguments.RootElement.GetProperty("operations");
-                var multiFileOperations = JsonSerializer.Deserialize<List<MultiFileOperation>>(operationsArray.GetRawText()) ?? new List<MultiFileOperation>();
+                var multiFileOperations = JsonSerializer.Deserialize<List<MultiFileOperation>>(operationsArray.GetRawText(), ToolArgumentJsonOptions) ?? new List<MultiFileOperation>();
 
                 var editOperations = multiFileOperations.Select(op => new MultiFileEditOperation
                 {

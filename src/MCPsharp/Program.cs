@@ -220,6 +220,8 @@ sealed partial class Program
                 streamingProcessor: streamingProcessor,
                 progressTracker: progressTracker,
                 tempFileManager: tempFileManager,
+                sqlMigrationAnalyzer: new MCPsharp.Services.Phase3.SqlMigrationAnalyzerService(
+                    loggerFactory.CreateLogger<MCPsharp.Services.Phase3.SqlMigrationAnalyzerService>(), loggerFactory),
                 universalFileOps: universalFileOps,
                 unifiedAnalysis: unifiedAnalysis,
                 bulkOperationsHub: bulkOperationsHub,

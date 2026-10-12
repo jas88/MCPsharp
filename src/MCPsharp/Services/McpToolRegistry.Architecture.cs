@@ -31,7 +31,7 @@ public partial class McpToolRegistry
             if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
                 // Parse architecture definition from JSON
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
+                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             }
 
             var result = await _architectureValidator.ValidateArchitectureAsync(projectPath, definition, ct);
@@ -85,7 +85,7 @@ public partial class McpToolRegistry
 
             if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
+                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             }
 
             var violations = await _architectureValidator.DetectLayerViolationsAsync(projectPath, definition, ct);
@@ -135,7 +135,7 @@ public partial class McpToolRegistry
 
             if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
+                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             }
 
             var analysis = await _architectureValidator.AnalyzeDependenciesAsync(projectPath, definition, ct);
@@ -186,7 +186,7 @@ public partial class McpToolRegistry
 
             if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
+                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             }
 
             var report = await _architectureValidator.GetArchitectureReportAsync(projectPath, definition, ct);
@@ -233,7 +233,7 @@ public partial class McpToolRegistry
         try
         {
             var definitionElement = arguments.RootElement.GetProperty("definition");
-            var definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.GetRawText());
+            var definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.GetRawText(), ToolArgumentJsonOptions);
 
             if (definition == null)
             {
@@ -287,7 +287,7 @@ public partial class McpToolRegistry
 
             if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
+                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             }
 
             var circularDependencies = await _architectureValidator.AnalyzeCircularDependenciesAsync(projectPath, definition, ct);
@@ -336,7 +336,7 @@ public partial class McpToolRegistry
 
             if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
+                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             }
 
             var diagram = await _architectureValidator.GenerateArchitectureDiagramAsync(projectPath, definition, ct);
@@ -377,7 +377,7 @@ public partial class McpToolRegistry
         try
         {
             var violationsElement = arguments.RootElement.GetProperty("violations");
-            var violations = JsonSerializer.Deserialize<List<LayerViolation>>(violationsElement.GetRawText());
+            var violations = JsonSerializer.Deserialize<List<LayerViolation>>(violationsElement.GetRawText(), ToolArgumentJsonOptions);
 
             if (violations == null)
             {
@@ -431,7 +431,7 @@ public partial class McpToolRegistry
         {
             var typeName = arguments.RootElement.GetProperty("typeName").GetString();
             var definitionElement = arguments.RootElement.GetProperty("definition");
-            var definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.GetRawText());
+            var definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.GetRawText(), ToolArgumentJsonOptions);
 
             if (string.IsNullOrEmpty(typeName) || definition == null)
             {
