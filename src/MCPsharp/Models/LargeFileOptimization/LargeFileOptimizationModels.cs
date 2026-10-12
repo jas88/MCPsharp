@@ -118,6 +118,10 @@ public class MethodOptimizationResult
     public required string MethodName { get; init; }
     public required string ClassName { get; init; }
     public required string FilePath { get; init; }
+    /// <summary>1-based first line of the method declaration (0 when unknown).</summary>
+    public int StartLine { get; init; }
+    /// <summary>1-based last line of the method declaration (0 when unknown).</summary>
+    public int EndLine { get; init; }
     public required MethodMetrics CurrentMetrics { get; init; }
     public required List<MethodRefactoringStrategy> RefactoringStrategies { get; init; } = new();
     public required List<CodeExample> BeforeAfterExamples { get; init; } = new();

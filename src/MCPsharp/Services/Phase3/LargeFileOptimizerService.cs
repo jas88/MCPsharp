@@ -1,11 +1,11 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using MCPsharp.Models.LargeFileOptimization;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Models.Roslyn;
+using MCPsharp.Services.Phase3.LargeFileOptimization;
 
 namespace MCPsharp.Services.Phase3;
 
@@ -226,10 +226,13 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         var priority = CalculateMethodOptimizationPriority(currentMetrics);
         var estimatedEffort = EstimateMethodEffort(refactoringStrategies);
         var expectedBenefit = CalculateMethodExpectedBenefit(currentMetrics, refactoringStrategies);
+        var lineSpan = targetMethod.GetLocation().GetLineSpan();
 
         return new MethodOptimizationResult
         {
             MethodName = methodName,
+            StartLine = lineSpan.StartLinePosition.Line + 1,
+            EndLine = lineSpan.EndLinePosition.Line + 1,
             ClassName = containingClass.Identifier.Text,
             FilePath = filePath,
             CurrentMetrics = currentMetrics,
@@ -254,15 +257,17 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
         if (!string.IsNullOrEmpty(methodName))
         {
-            // Analyze specific method
-            var methodDeclarations = root.DescendantNodes()
+            // Analyze a specific member: methods first, then constructors, accessors and other function-like members
+            SyntaxNode? member = root.DescendantNodes()
                 .OfType<MethodDeclarationSyntax>()
-                .Where(m => m.Identifier.Text.Equals(methodName, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+                .FirstOrDefault(m => m.Identifier.Text.Equals(methodName, StringComparison.OrdinalIgnoreCase));
+            member ??= root.DescendantNodes()
+                .Where(CodeComplexityCalculator.IsMeasuredMember)
+                .FirstOrDefault(n => CodeComplexityCalculator.GetMemberName(n).Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
-            if (methodDeclarations.Count > 0)
+            if (member != null)
             {
-                return CalculateMethodComplexity(methodDeclarations[0]);
+                return CalculateMethodComplexity(member);
             }
         }
 
@@ -301,13 +306,24 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
         if (largeFile.LargeMethods.Count > 0)
         {
-            foreach (var methodName in largeFile.LargeMethods)
+            foreach (var methodEntry in largeFile.LargeMethods)
             {
+                // Entries are formatted "Name (N lines)"
+                var separator = methodEntry.IndexOf(" (", StringComparison.Ordinal);
+                var methodName = separator > 0 ? methodEntry[..separator] : methodEntry;
                 var methodOptimization = await OptimizeLargeMethodAsync(filePath, methodName, cancellationToken);
                 actions.AddRange(ConvertToOptimizationActions(methodOptimization));
                 totalEffort += methodOptimization.EstimatedEffortHours;
                 totalBenefit += methodOptimization.ExpectedBenefit;
             }
+        }
+
+        // Add complexity hotspot fixes
+        foreach (var action in ConvertHotspotsToActions(filePath, largeFile.OverallComplexity.Hotspots))
+        {
+            actions.Add(action);
+            totalEffort += action.EstimatedEffortHours;
+            totalBenefit += action.ExpectedBenefit;
         }
 
         // Add code smell fixes
@@ -605,151 +621,6 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         }
     }
 
-    private static ComplexityMetrics CalculateFileComplexity(SyntaxNode root, CancellationToken cancellationToken)
-    {
-        var cyclomaticComplexity = 0;
-        var cognitiveComplexity = 0;
-        var maxNestingDepth = 0;
-        var decisionPoints = 0;
-        var hotspots = new List<ComplexityHotspot>();
-
-        // Traverse all methods in the file
-        var methodDeclarations = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
-
-        foreach (var method in methodDeclarations)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var methodComplexity = CalculateMethodComplexity(method);
-            cyclomaticComplexity = Math.Max(cyclomaticComplexity, methodComplexity.CyclomaticComplexity);
-            cognitiveComplexity = Math.Max(cognitiveComplexity, methodComplexity.CognitiveComplexity);
-            maxNestingDepth = Math.Max(maxNestingDepth, methodComplexity.MaximumNestingDepth);
-            decisionPoints += methodComplexity.NumberOfDecisionPoints;
-            hotspots.AddRange(methodComplexity.Hotspots);
-        }
-
-        // Calculate simplified Halstead metrics
-        var text = root.GetText().ToString();
-        var halsteadMetrics = CalculateHalsteadMetrics(text);
-
-        // Calculate maintainability index (simplified)
-        var maintainabilityIndex = CalculateMaintainabilityIndex(
-            cyclomaticComplexity,
-            text.Length,
-            halsteadMetrics.volume);
-
-        var complexityLevel = DetermineComplexityLevel(cyclomaticComplexity, cognitiveComplexity);
-
-        return new ComplexityMetrics
-        {
-            CyclomaticComplexity = cyclomaticComplexity,
-            CognitiveComplexity = cognitiveComplexity,
-            HalsteadVolume = halsteadMetrics.volume,
-            HalsteadDifficulty = halsteadMetrics.difficulty,
-            MaintainabilityIndex = maintainabilityIndex,
-            MaximumNestingDepth = maxNestingDepth,
-            NumberOfDecisionPoints = decisionPoints,
-            ComplexityLevel = complexityLevel,
-            Hotspots = hotspots
-        };
-    }
-
-    private static ComplexityMetrics CalculateMethodComplexity(MethodDeclarationSyntax method)
-    {
-        var cyclomaticComplexity = 1; // Base complexity
-        var cognitiveComplexity = 0;
-        var maxNestingDepth = 0;
-        var decisionPoints = 0;
-        var hotspots = new List<ComplexityHotspot>();
-
-        // Analyze method body
-        var body = method.Body;
-        if (body != null)
-        {
-            var result = ComplexityAnalyzer.Analyze(body);
-
-            cyclomaticComplexity += result.CyclomaticComplexity;
-            cognitiveComplexity += result.CognitiveComplexity;
-            maxNestingDepth = result.MaxNestingDepth;
-            decisionPoints = result.DecisionPoints;
-
-            // Identify complexity hotspots
-            hotspots = IdentifyComplexityHotspots();
-        }
-
-        // Calculate Halstead metrics
-        var methodText = method.GetText().ToString();
-        var halsteadMetrics = CalculateHalsteadMetrics(methodText);
-
-        // Calculate maintainability index
-        var maintainabilityIndex = CalculateMaintainabilityIndex(
-            cyclomaticComplexity,
-            methodText.Length,
-            halsteadMetrics.volume);
-
-        var complexityLevel = DetermineComplexityLevel(cyclomaticComplexity, cognitiveComplexity);
-
-        return new ComplexityMetrics
-        {
-            CyclomaticComplexity = cyclomaticComplexity,
-            CognitiveComplexity = cognitiveComplexity,
-            HalsteadVolume = halsteadMetrics.volume,
-            HalsteadDifficulty = halsteadMetrics.difficulty,
-            MaintainabilityIndex = maintainabilityIndex,
-            MaximumNestingDepth = maxNestingDepth,
-            NumberOfDecisionPoints = decisionPoints,
-            ComplexityLevel = complexityLevel,
-            Hotspots = hotspots
-        };
-    }
-
-    private static (int volume, int difficulty) CalculateHalsteadMetrics(string code)
-    {
-        // Simplified Halstead metrics calculation
-        var operators = Regex.Count(code, @"(\+|\-|\*|\/|%|=|==|!=|<|>|<=|>=|&&|\|\||!|\+\+|\-\-)");
-        var operands = Regex.Count(code, @"\b[a-zA-Z_][a-zA-Z0-9_]*\b");
-
-        var vocabulary = operators + operands;
-        var length = code.Length;
-
-        var volume = vocabulary > 0 ? length * Math.Log(vocabulary, 2) : 0;
-        var difficulty = operands > 0 ? (operators / 2.0) * (operands / 2.0) : 0;
-
-        return ((int)volume, (int)difficulty);
-    }
-
-    private static double CalculateMaintainabilityIndex(int cyclomaticComplexity, int linesOfCode, int halsteadVolume)
-    {
-        // Simplified maintainability index calculation
-        if (halsteadVolume == 0) return 100.0;
-
-        var maintainabilityIndex = 171.0
-            - 5.2 * Math.Log(halsteadVolume)
-            - 0.23 * cyclomaticComplexity
-            - 16.2 * Math.Log(linesOfCode);
-
-        return Math.Max(0, Math.Min(100, maintainabilityIndex));
-    }
-
-    private static ComplexityLevel DetermineComplexityLevel(int cyclomatic, int cognitive)
-    {
-        var maxComplexity = Math.Max(cyclomatic, cognitive);
-
-        if (maxComplexity <= 10) return ComplexityLevel.Simple;
-        if (maxComplexity <= 20) return ComplexityLevel.Moderate;
-        if (maxComplexity <= 50) return ComplexityLevel.Complex;
-        return ComplexityLevel.VeryComplex;
-    }
-
-    private static List<ComplexityHotspot> IdentifyComplexityHotspots()
-    {
-        var hotspots = new List<ComplexityHotspot>();
-
-        // This is a simplified implementation
-        // In practice, you'd want to identify specific complex blocks
-
-        return hotspots;
-    }
-
     #endregion
 
     #region Class Analysis Methods
@@ -787,45 +658,6 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
             GodClassScore = godClassScore,
             IsTooLarge = lineCount > 300 || methodDeclarations.Count > 20,
             HasTooManyResponsibilities = responsibilities.Count > 5
-        };
-    }
-
-    private static ComplexityMetrics CalculateClassComplexity(ClassDeclarationSyntax classDecl, CancellationToken cancellationToken)
-    {
-        var methodDeclarations = classDecl.DescendantNodes().OfType<MethodDeclarationSyntax>();
-        var maxCyclomatic = 0;
-        var maxCognitive = 0;
-        var maxNestingDepth = 0;
-        var totalDecisionPoints = 0;
-        var allHotspots = new List<ComplexityHotspot>();
-
-        foreach (var method in methodDeclarations)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var methodComplexity = CalculateMethodComplexity(method);
-            maxCyclomatic = Math.Max(maxCyclomatic, methodComplexity.CyclomaticComplexity);
-            maxCognitive = Math.Max(maxCognitive, methodComplexity.CognitiveComplexity);
-            maxNestingDepth = Math.Max(maxNestingDepth, methodComplexity.MaximumNestingDepth);
-            totalDecisionPoints += methodComplexity.NumberOfDecisionPoints;
-            allHotspots.AddRange(methodComplexity.Hotspots);
-        }
-
-        var classText = classDecl.GetText().ToString();
-        var halsteadMetrics = CalculateHalsteadMetrics(classText);
-        var maintainabilityIndex = CalculateMaintainabilityIndex(maxCyclomatic, classText.Length, halsteadMetrics.volume);
-        var complexityLevel = DetermineComplexityLevel(maxCyclomatic, maxCognitive);
-
-        return new ComplexityMetrics
-        {
-            CyclomaticComplexity = maxCyclomatic,
-            CognitiveComplexity = maxCognitive,
-            HalsteadVolume = halsteadMetrics.volume,
-            HalsteadDifficulty = halsteadMetrics.difficulty,
-            MaintainabilityIndex = maintainabilityIndex,
-            MaximumNestingDepth = maxNestingDepth,
-            NumberOfDecisionPoints = totalDecisionPoints,
-            ComplexityLevel = complexityLevel,
-            Hotspots = allHotspots
         };
     }
 
@@ -961,7 +793,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
             GodMethodScore = godMethodScore,
             IsTooLarge = lineCount > GodMethodThreshold,
             HasTooManyParameters = parameterCount > MaxParameters,
-            IsTooComplex = complexity.CyclomaticComplexity > HighComplexityThreshold
+            IsTooComplex = IsTooComplex(complexity)
         };
     }
 
@@ -1098,7 +930,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         var complexity = CalculateMethodComplexity(methodDecl);
 
         // Calculate God method score
-        var godMethodScore = CalculateGodMethodScore(lineCount, parameterCount, localVariableCount, complexity.CyclomaticComplexity);
+        var godMethodScore = CalculateGodMethodScore(lineCount, parameterCount, localVariableCount, complexity);
 
         // Identify violations
         if (lineCount > GodMethodThreshold)
@@ -1112,6 +944,12 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
         if (complexity.CyclomaticComplexity > HighComplexityThreshold)
             violations.Add($"Too high cyclomatic complexity: {complexity.CyclomaticComplexity} (threshold: {HighComplexityThreshold})");
+
+        if (complexity.CognitiveComplexity > CognitiveComplexityThreshold)
+            violations.Add($"Too high cognitive complexity: {complexity.CognitiveComplexity} (threshold: {CognitiveComplexityThreshold})");
+
+        if (complexity.MaximumNestingDepth > MaxNestingDepthThreshold)
+            violations.Add($"Too deeply nested: {complexity.MaximumNestingDepth} levels (threshold: {MaxNestingDepthThreshold})");
 
         // Find problematic parameters
 
@@ -1127,6 +965,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         }
 
         // Find high complexity blocks
+        var highComplexityBlocks = DescribeComplexBlocks(complexity);
 
         // Generate recommended refactorings first
         var methodMetrics = new MethodMetrics
@@ -1154,7 +993,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
             }, // Placeholder
             IsTooLarge = lineCount > GodMethodThreshold,
             HasTooManyParameters = parameterCount > MaxParameters,
-            IsTooComplex = complexity.CyclomaticComplexity > HighComplexityThreshold
+            IsTooComplex = IsTooComplex(complexity)
         };
 
         var recommendedRefactorings = GenerateMethodRefactoringStrategies(methodMetrics);
@@ -1170,19 +1009,21 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
             Violations = violations,
             TooManyParameters = methodDecl.ParameterList.Parameters.Select(p => p.Identifier.Text).ToList(),
             TooManyLocals = tooManyLocals,
-            HighComplexityBlocks = new List<string>(),
+            HighComplexityBlocks = highComplexityBlocks,
             RecommendedRefactorings = recommendedRefactorings
         };
 
         return godMethodAnalysis;
     }
 
-    private static double CalculateGodMethodScore(int lineCount, int parameterCount, int localVariableCount, int cyclomaticComplexity)
+    private static double CalculateGodMethodScore(int lineCount, int parameterCount, int localVariableCount, ComplexityMetrics complexity)
     {
         var lineScore = Math.Min(1.0, lineCount / (double)GodMethodThreshold);
         var parameterScore = Math.Min(1.0, parameterCount / (double)MaxParameters);
         var localScore = Math.Min(1.0, localVariableCount / 10.0);
-        var complexityScore = Math.Min(1.0, cyclomaticComplexity / (double)HighComplexityThreshold);
+        var complexityScore = Math.Min(1.0, Math.Max(
+            complexity.CyclomaticComplexity / (double)HighComplexityThreshold,
+            complexity.CognitiveComplexity / (double)CognitiveComplexityThreshold));
 
         return (lineScore + parameterScore + localScore + complexityScore) / 4.0;
     }
@@ -1240,7 +1081,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
                 StrategyName = "Extract Method",
                 Description = "Extract logical sections of the method into separate methods",
                 RefactoringType = MethodRefactoringType.ExtractMethod,
-                TargetLines = new List<string>(),
+                TargetLines = DescribeComplexBlocks(metrics.Complexity),
                 Confidence = 0.9,
                 EstimatedEffortHours = 2,
                 Pros = new List<string> { "Improved readability", "Better reusability", "Easier testing" },
@@ -1270,11 +1111,28 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
                 StrategyName = "Replace Conditional with Polymorphism",
                 Description = "Replace complex conditional logic with polymorphic dispatch",
                 RefactoringType = MethodRefactoringType.ReplaceConditional,
-                TargetLines = new List<string>(),
+                TargetLines = DescribeComplexBlocks(metrics.Complexity),
                 Confidence = 0.7,
-                EstimatedEffortHours = 6,
+                EstimatedEffortHours = 4 + (metrics.Complexity.CyclomaticComplexity - HighComplexityThreshold) / 5,
                 Pros = new List<string> { "Reduced complexity", "Better extensibility", "Cleaner code" },
                 Cons = new List<string> { "Requires new classes", "More complex structure" }
+            });
+        }
+
+        if (metrics.Complexity.CognitiveComplexity > CognitiveComplexityThreshold
+            || metrics.Complexity.MaximumNestingDepth > MaxNestingDepthThreshold)
+        {
+            strategies.Add(new MethodRefactoringStrategy
+            {
+                StrategyName = "Simplify Nested Conditionals",
+                Description = $"Flatten nesting (depth {metrics.Complexity.MaximumNestingDepth}) and reduce cognitive complexity "
+                    + $"({metrics.Complexity.CognitiveComplexity}) with guard clauses and extracted helpers",
+                RefactoringType = MethodRefactoringType.SimplifyConditional,
+                TargetLines = DescribeComplexBlocks(metrics.Complexity),
+                Confidence = 0.8,
+                EstimatedEffortHours = 2 + Math.Max(0, metrics.Complexity.CognitiveComplexity - CognitiveComplexityThreshold) / 5,
+                Pros = new List<string> { "Easier to read", "Fewer paths to hold in mind", "Simpler tests" },
+                Cons = new List<string> { "More, smaller methods" }
             });
         }
 
@@ -1495,8 +1353,8 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
                 EstimatedEffortHours = strategy.EstimatedEffortHours,
                 ExpectedBenefit = 0.7,
                 FilePath = methodOptimization.FilePath,
-                StartLine = 1, // Would need actual line numbers
-                EndLine = 50,  // Would need actual line numbers
+                StartLine = methodOptimization.StartLine,
+                EndLine = methodOptimization.EndLine,
                 Dependencies = new List<string>(),
                 RefactoringSuggestions = new List<RefactoringSuggestion>(),
                 IsRecommended = true
@@ -1610,7 +1468,9 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
             MethodsNeedingRefactoring = largeFiles.Sum(f => f.LargeMethods.Count),
             GodClassesDetected = 0,
             GodMethodsDetected = 0,
-            AverageComplexityScore = 0,
+            AverageComplexityScore = largeFiles.Count == 0
+                ? 0
+                : largeFiles.Average(f => (double)f.OverallComplexity.CyclomaticComplexity),
             TotalCodeSmells = largeFiles.Sum(f => f.CodeSmells.Count),
             CodeSmellsBySeverity = new Dictionary<CodeSmellSeverity, int>(),
             FilesByPriority = new Dictionary<OptimizationPriority, int>()
@@ -1841,31 +1701,4 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file {FilePath}")]
     private static partial void LogFileAnalysisError(ILogger logger, Exception exception, string filePath);
-}
-
-/// <summary>
-/// Helper class for analyzing code complexity
-/// </summary>
-internal static class ComplexityAnalyzer
-{
-    public sealed class AnalysisResult
-    {
-        public int CyclomaticComplexity { get; set; }
-        public int CognitiveComplexity { get; set; }
-        public int MaxNestingDepth { get; set; }
-        public int DecisionPoints { get; set; }
-    }
-
-    public static AnalysisResult Analyze(BlockSyntax block)
-    {
-        var result = new AnalysisResult();
-
-        // This is a simplified implementation
-        // In practice, you'd walk the syntax tree and count:
-        // - Decision points (if, switch, while, for, foreach)
-        // - Logical operators (&&, ||)
-        // - Nesting depth for cognitive complexity
-
-        return result;
-    }
 }
