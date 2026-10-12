@@ -1,5 +1,6 @@
 using System;
 using MCPsharp.Services.Roslyn;
+using Microsoft.CodeAnalysis.CSharp;
 using NUnit.Framework;
 using System.IO;
 using System.Linq;
@@ -41,7 +42,7 @@ public class RoslynWorkspaceInitializationTests
         Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}. " +
             $"This indicates MSBuildWorkspace is loading references correctly." +
-            Describe(workspace));
+            await DescribeAsync(workspace));
 
         // Verify semantic operations are available or close to being available
         Assert.That(health.CanDoSyntaxOperations, Is.True, "Should be able to do syntax operations");
@@ -109,7 +110,7 @@ public class RoslynWorkspaceInitializationTests
         Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}. " +
             $"Regression test: Previously passing .sln file caused fallback to AdhocWorkspace with 15k errors." +
-            Describe(workspace));
+            await DescribeAsync(workspace));
 
         workspace.Dispose();
     }
@@ -138,7 +139,7 @@ public class RoslynWorkspaceInitializationTests
         Assert.That(health.TotalFiles > 0, Is.True, "Should have source files");
         Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}." +
-            Describe(workspace));
+            await DescribeAsync(workspace));
 
         workspace.Dispose();
     }
@@ -146,14 +147,32 @@ public class RoslynWorkspaceInitializationTests
     /// <summary>
     /// Explain a high error count: sample errors, analyzer load failures and the generators each project references.
     /// </summary>
-    private static string Describe(RoslynWorkspace workspace)
+    private static async Task<string> DescribeAsync(RoslynWorkspace workspace)
     {
         var health = workspace.GetHealth();
-        var analyzers = workspace.GetProjects().Select(p =>
-            $"{p.Name}: {string.Join(", ", p.AnalyzerReferences.Select(r => r.Display).Where(n => n != null && n.Contains("Generator", StringComparison.OrdinalIgnoreCase)))}");
+        var projects = workspace.GetProjects();
+        var analyzers = projects.Select(p =>
+            $"{p.Name} ({(p.ParseOptions as CSharpParseOptions)?.LanguageVersion}): " +
+            string.Join(", ", p.AnalyzerReferences.Select(r => r.FullPath).Where(n => n != null && n.Contains("Generator", StringComparison.OrdinalIgnoreCase))));
+
+        // Show the start of the generated logging source, to compare its signatures with the declarations
+        var generatedSample = string.Empty;
+        var main = projects.FirstOrDefault(p => p.Name == "MCPsharp");
+        if (main != null)
+        {
+            var generated = (await main.GetSourceGeneratedDocumentsAsync())
+                .FirstOrDefault(d => d.Name.Contains("LoggerMessage", StringComparison.OrdinalIgnoreCase));
+            if (generated != null)
+            {
+                var text = (await generated.GetTextAsync()).ToString();
+                generatedSample = $"{generated.FilePath}\n{string.Join("\n", text.Split('\n').Take(60))}";
+            }
+        }
+
         return $"\nSample errors:\n{string.Join("\n", health.ErrorSamples)}" +
             $"\nAnalyzer load failures:\n{string.Join("\n", health.AnalyzerLoadFailures)}" +
-            $"\nGenerator references:\n{string.Join("\n", analyzers)}";
+            $"\nGenerator references:\n{string.Join("\n", analyzers)}" +
+            $"\nGenerated logging source:\n{generatedSample}";
     }
 
     private static string GetProjectPath()

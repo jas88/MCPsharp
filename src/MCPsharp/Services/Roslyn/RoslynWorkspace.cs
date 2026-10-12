@@ -283,7 +283,7 @@ public partial class RoslynWorkspace : IDisposable
             errorSamples.AddRange(diagnostics
                 .Where(d => d.Id is "CS8784" or "CS8785")
                 .Concat(errors)
-                .Select(d => $"{compilation.AssemblyName}: {d.Id} {d.GetMessage(CultureInfo.InvariantCulture)}")
+                .Select(d => $"{compilation.AssemblyName}: {d.Id} {d.GetMessage(CultureInfo.InvariantCulture)} at {d.Location.GetLineSpan()}")
                 .Distinct(StringComparer.Ordinal)
                 .Take(MaxErrorSamples - errorSamples.Count));
         }
