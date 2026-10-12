@@ -32,6 +32,16 @@ public class LargeFileInfo
     public required List<CodeSmell> CodeSmells { get; init; } = new();
     public required double OptimizationPriority { get; init; }
     public required List<string> ImmediateActions { get; init; } = new();
+
+    /// <summary>
+    /// Classes in the file with a god-class severity above <c>None</c>
+    /// </summary>
+    public int GodClassCount { get; init; }
+
+    /// <summary>
+    /// Methods in the file with a god-method severity above <c>None</c>
+    /// </summary>
+    public int GodMethodCount { get; init; }
 }
 
 /// <summary>

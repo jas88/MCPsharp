@@ -564,7 +564,10 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
             var largeClasses = new List<string>();
             var largeMethods = new List<string>();
 
-            // Find large classes
+            var godClassCount = 0;
+            var godMethodCount = 0;
+
+            // Find large classes and god classes (same scoring as DetectGodClassesAsync)
             var classDeclarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
             foreach (var classDecl in classDeclarations)
             {
@@ -573,9 +576,14 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
                 {
                     largeClasses.Add($"{classDecl.Identifier.Text} ({classLineCount} lines)");
                 }
+
+                if (AnalyzeGodClass(classDecl, semanticModel, filePath).Severity != GodClassSeverity.None)
+                {
+                    godClassCount++;
+                }
             }
 
-            // Find large methods
+            // Find large methods and god methods (same scoring as DetectGodMethodsAsync)
             var methodDeclarations = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
             foreach (var methodDecl in methodDeclarations)
             {
@@ -583,6 +591,11 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
                 if (methodLineCount > 50) // Large method threshold
                 {
                     largeMethods.Add($"{methodDecl.Identifier.Text} ({methodLineCount} lines)");
+                }
+
+                if (AnalyzeGodMethod(methodDecl, filePath).Severity != GodMethodSeverity.None)
+                {
+                    godMethodCount++;
                 }
             }
 
@@ -610,7 +623,9 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
                 OverallComplexity = overallComplexity,
                 CodeSmells = codeSmells,
                 OptimizationPriority = priority,
-                ImmediateActions = immediateActions
+                ImmediateActions = immediateActions,
+                GodClassCount = godClassCount,
+                GodMethodCount = godMethodCount
             };
         }
         catch (Exception ex)
@@ -1466,8 +1481,8 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
             FilesNeedingOptimization = largeFiles.Count,
             ClassesNeedingSplitting = largeFiles.Sum(f => f.LargeClasses.Count),
             MethodsNeedingRefactoring = largeFiles.Sum(f => f.LargeMethods.Count),
-            GodClassesDetected = 0,
-            GodMethodsDetected = 0,
+            GodClassesDetected = largeFiles.Sum(f => f.GodClassCount),
+            GodMethodsDetected = largeFiles.Sum(f => f.GodMethodCount),
             AverageComplexityScore = largeFiles.Count == 0
                 ? 0
                 : largeFiles.Average(f => (double)f.OverallComplexity.CyclomaticComplexity),

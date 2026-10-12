@@ -56,6 +56,8 @@ public class LargeFileOptimizerComplexityTests
             public int Simple(int x) => x + 1;
         """;
 
+    private static readonly string[] ExpectedGodClassNames = { "Everything" };
+
     private RoslynWorkspace _workspace = null!;
     private LargeFileOptimizerService _service = null!;
     private string _directory = null!;
@@ -176,6 +178,60 @@ public class LargeFileOptimizerComplexityTests
             Assert.That(result.LargeFiles[0].OverallComplexity.CognitiveComplexity, Is.EqualTo(21));
             Assert.That(result.Statistics.AverageComplexityScore, Is.EqualTo(11));
         });
+    }
+
+    [Test]
+    public async Task AnalyzeLargeFilesAsync_CountsGodClassesAndGodMethods()
+    {
+        await AddDocumentAsync("Processor.cs", ProcessorSource + "}\n" + BuildGodClassSource());
+
+        var result = await _service.AnalyzeLargeFilesAsync(_directory, maxLines: 10);
+        var godClasses = await _service.DetectGodClassesAsync(_directory);
+        var godMethods = await _service.DetectGodMethodsAsync(_directory);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Statistics.GodClassesDetected, Is.EqualTo(1));
+            Assert.That(result.Statistics.GodMethodsDetected, Is.EqualTo(1), "Process is a god method; the one-liners are not");
+            Assert.That(result.Statistics.GodClassesDetected, Is.EqualTo(godClasses.Count));
+            Assert.That(result.Statistics.GodMethodsDetected, Is.EqualTo(godMethods.Count));
+            Assert.That(godClasses.Select(c => c.ClassName), Is.EqualTo(ExpectedGodClassNames));
+        });
+    }
+
+    [Test]
+    public async Task AnalyzeLargeFilesAsync_SmallFilesDoNotContributeGodCounts()
+    {
+        await AddDocumentAsync("Processor.cs", ProcessorSource + "}\n");
+
+        var result = await _service.AnalyzeLargeFilesAsync(_directory, maxLines: 10_000);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.LargeFiles, Is.Empty);
+            Assert.That(result.Statistics.GodClassesDetected, Is.Zero);
+            Assert.That(result.Statistics.GodMethodsDetected, Is.Zero);
+        });
+    }
+
+    /// <summary>
+    /// A class with 25 methods across six responsibilities and 20 fields: a god class whose methods are all trivial.
+    /// </summary>
+    private static string BuildGodClassSource()
+    {
+        var prefixes = new[] { "Get", "Validate", "Calculate", "Save", "Send", "Parse" };
+        var builder = new StringBuilder("public class Everything\n{\n");
+        for (var i = 0; i < 20; i++)
+        {
+            builder.Append("    private int _field").Append(i).Append(";\n");
+        }
+
+        for (var i = 0; i < 25; i++)
+        {
+            builder.Append("    public int ").Append(prefixes[i % prefixes.Length]).Append("Item").Append(i).Append("() => ").Append(i).Append(";\n");
+        }
+
+        return builder.Append("}\n").ToString();
     }
 
     private async Task<string> AddDocumentAsync(string fileName, string content)
