@@ -115,6 +115,109 @@ public class PathContainmentTests
 
     #endregion
 
+    #region Symbolic links
+
+    [Test]
+    public void IsWithin_DirectoryLinkPointingOutside_IsNotContained()
+    {
+        var link = CreateDirectoryLinkOrIgnore(Path.Combine(_root, "escape"), _sibling);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(PathContainment.IsWithin(_root, link), Is.False);
+            Assert.That(PathContainment.IsWithin(_root, Path.Combine(link, "secret.txt")), Is.False);
+            Assert.That(PathContainment.IsWithin(_root, Path.Combine(link, "new", "file.txt")), Is.False,
+                "a file to be created beneath an escaping link is outside the root");
+            Assert.That(PathContainment.TryResolveWithin(_root, "escape/secret.txt", out _), Is.False);
+        });
+    }
+
+    [Test]
+    public void IsWithin_FileLinkPointingOutside_IsNotContained()
+    {
+        var link = CreateFileLinkOrIgnore(Path.Combine(_root, "parent-link.txt"), Path.Combine(_parent, "parent.txt"));
+
+        Assert.That(PathContainment.IsWithin(_root, link), Is.False);
+    }
+
+    [Test]
+    public void IsWithin_DanglingLinkPointingOutside_IsNotContained()
+    {
+        var link = CreateFileLinkOrIgnore(Path.Combine(_root, "dangling.txt"), Path.Combine(_sibling, "not-yet.txt"));
+
+        Assert.That(PathContainment.IsWithin(_root, link), Is.False);
+    }
+
+    [Test]
+    public void IsWithin_LinkPointingInsideRoot_IsContained()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "real"));
+        var link = CreateDirectoryLinkOrIgnore(Path.Combine(_root, "alias"), Path.Combine(_root, "real"));
+
+        Assert.That(PathContainment.IsWithin(_root, Path.Combine(link, "file.cs")), Is.True);
+    }
+
+    [Test]
+    public void IsWithin_RootReachedThroughLink_ContainsRealAndLinkedPaths()
+    {
+        var linkedRoot = CreateDirectoryLinkOrIgnore(Path.Combine(_parent, "root-link"), _root);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(PathContainment.IsWithin(linkedRoot, Path.Combine(_root, "inside.txt")), Is.True);
+            Assert.That(PathContainment.IsWithin(_root, Path.Combine(linkedRoot, "inside.txt")), Is.True);
+            Assert.That(PathContainment.IsWithin(linkedRoot, Path.Combine(linkedRoot, "missing", "new.txt")), Is.True);
+            Assert.That(PathContainment.IsWithin(linkedRoot, Path.Combine(_sibling, "secret.txt")), Is.False);
+        });
+    }
+
+    [Test]
+    public async Task FileOperationsService_ReadThroughEscapingLink_IsRejected()
+    {
+        CreateDirectoryLinkOrIgnore(Path.Combine(_root, "escape"), _sibling);
+        var service = new FileOperationsService(_root);
+
+        var read = await service.ReadFileAsync(Path.Combine("escape", "secret.txt"));
+        var write = await service.WriteFileAsync(Path.Combine("escape", "written.txt"), "x");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(read.Success, Is.False);
+            Assert.That(write.Success, Is.False);
+            Assert.That(File.Exists(Path.Combine(_sibling, "written.txt")), Is.False);
+        });
+    }
+
+    private static string CreateDirectoryLinkOrIgnore(string link, string target)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(link, target);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            Assert.Ignore($"Symbolic links cannot be created here: {ex.Message}");
+        }
+
+        return link;
+    }
+
+    private static string CreateFileLinkOrIgnore(string link, string target)
+    {
+        try
+        {
+            File.CreateSymbolicLink(link, target);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            Assert.Ignore($"Symbolic links cannot be created here: {ex.Message}");
+        }
+
+        return link;
+    }
+
+    #endregion
+
     #region Services using containment checks
 
     [Test]
