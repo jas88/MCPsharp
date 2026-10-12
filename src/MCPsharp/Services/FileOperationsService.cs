@@ -501,12 +501,7 @@ public partial class FileOperationsService
         return Path.GetFullPath(Path.Combine(_rootPath, relativePath));
     }
 
-    private bool ValidatePath(string fullPath)
-    {
-        // Ensure path is within project root
-        var normalizedPath = Path.GetFullPath(fullPath);
-        return normalizedPath.StartsWith(_rootPath, StringComparison.OrdinalIgnoreCase);
-    }
+    private bool ValidatePath(string fullPath) => PathContainment.IsWithin(_rootPath, fullPath);
 
     private static Encoding DetectEncoding(string path)
     {

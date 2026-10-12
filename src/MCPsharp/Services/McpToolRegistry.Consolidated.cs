@@ -64,15 +64,8 @@ public partial class McpToolRegistry
     /// <summary>
     /// Resolve a tool path argument against the open project root, rejecting paths that escape it.
     /// </summary>
-    private static bool TryResolvePathInRoot(string root, string path, out string fullPath)
-    {
-        fullPath = Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(root, path));
-        var relative = Path.GetRelativePath(root, fullPath);
-        return !Path.IsPathRooted(relative)
-               && relative != ".."
-               && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-               && !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
-    }
+    private static bool TryResolvePathInRoot(string root, string path, out string fullPath) =>
+        PathContainment.TryResolveWithin(root, path, out fullPath);
 
     /// <summary>
     /// Resolve a required path argument within the open project.

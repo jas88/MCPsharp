@@ -118,7 +118,7 @@ public partial class McpToolRegistry
                 documentsToAnalyze.AddRange(
                     solution.Projects
                         .SelectMany(p => p.Documents)
-                        .Where(d => d.FilePath?.StartsWith(fullPath, StringComparison.OrdinalIgnoreCase) == true));
+                        .Where(d => d.FilePath != null && PathContainment.IsWithin(fullPath, d.FilePath)));
             }
 
             if (documentsToAnalyze.Count == 0)
@@ -332,7 +332,7 @@ public partial class McpToolRegistry
                 documentsToFix.AddRange(
                     solution.Projects
                         .SelectMany(p => p.Documents)
-                        .Where(d => d.FilePath?.StartsWith(fullPath, StringComparison.OrdinalIgnoreCase) == true));
+                        .Where(d => d.FilePath != null && PathContainment.IsWithin(fullPath, d.FilePath)));
             }
 
             if (documentsToFix.Count == 0)

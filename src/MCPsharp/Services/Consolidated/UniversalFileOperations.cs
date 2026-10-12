@@ -15,6 +15,8 @@ namespace MCPsharp.Services.Consolidated;
 /// </summary>
 public partial class UniversalFileOperations
 {
+    private const string OutsideRootError = "Path is outside project root";
+
     private readonly string _rootPath;
     private readonly FileOperationsService _fileOperations;
     private readonly ILogger<UniversalFileOperations> _logger;
@@ -44,6 +46,16 @@ public partial class UniversalFileOperations
 
             // Determine if this is a directory or file
             var fullPath = GetFullPath(request.Path);
+            if (!ValidatePath(fullPath))
+            {
+                return new FileInfoResponse
+                {
+                    Path = request.Path,
+                    Error = OutsideRootError,
+                    Metadata = new ResponseMetadata { ProcessingTime = stopwatch.Elapsed, Success = false }
+                };
+            }
+
             var isDirectory = Directory.Exists(fullPath) && !File.Exists(fullPath);
 
             if (isDirectory)
@@ -94,7 +106,7 @@ public partial class UniversalFileOperations
                 return new FileContentResponse
                 {
                     Path = request.Path,
-                    Error = "Path is outside project root",
+                    Error = OutsideRootError,
                     Metadata = new ResponseMetadata { ProcessingTime = stopwatch.Elapsed, Success = false }
                 };
             }
@@ -167,6 +179,21 @@ public partial class UniversalFileOperations
                 RequestId = request.RequestId ?? Guid.NewGuid().ToString(),
                 Operation = request.Operation
             };
+
+            // Validate reports an outside path as a validation result; every other operation is refused
+            if (request.Operation != FileOperationType.Validate &&
+                (!ValidatePath(GetFullPath(request.Path)) ||
+                 (request.DestinationPath != null && !ValidatePath(GetFullPath(request.DestinationPath)))))
+            {
+                return new FileOperationResponse
+                {
+                    Path = request.Path,
+                    RequestId = response.RequestId,
+                    Operation = request.Operation,
+                    Error = OutsideRootError,
+                    Metadata = new ResponseMetadata { ProcessingTime = stopwatch.Elapsed, Success = false }
+                };
+            }
 
             switch (request.Operation)
             {
@@ -601,7 +628,7 @@ public partial class UniversalFileOperations
             {
                 Type = ValidationType.Path,
                 Severity = ValidationSeverity.Error,
-                Message = "Path is outside project root"
+                Message = OutsideRootError
             });
         }
 
@@ -855,11 +882,7 @@ public partial class UniversalFileOperations
         return Path.GetFullPath(Path.Combine(_rootPath, path));
     }
 
-    private bool ValidatePath(string fullPath)
-    {
-        var normalizedPath = Path.GetFullPath(fullPath);
-        return normalizedPath.StartsWith(_rootPath, StringComparison.OrdinalIgnoreCase);
-    }
+    private bool ValidatePath(string fullPath) => PathContainment.IsWithin(_rootPath, fullPath);
 
     private static bool IsHidden(FileSystemInfo info)
     {

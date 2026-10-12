@@ -289,7 +289,7 @@ public sealed partial class ReferenceIndexerService
             ? Path.GetDirectoryName(solution.FilePath)
             : null;
 
-        if (solutionDir != null && filePath.StartsWith(solutionDir, StringComparison.OrdinalIgnoreCase))
+        if (solutionDir != null && PathContainment.IsWithin(solutionDir, filePath))
         {
             return Path.GetRelativePath(solutionDir, filePath);
         }

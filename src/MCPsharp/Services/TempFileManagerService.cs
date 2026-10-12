@@ -133,7 +133,7 @@ public partial class TempFileManagerService : ITempFileManager, IDisposable
 
     public Task<bool> IsTempFileAsync(string filePath)
     {
-        var result = filePath.StartsWith(_tempBasePath, StringComparison.OrdinalIgnoreCase) &&
+        var result = PathContainment.IsWithin(_tempBasePath, filePath) &&
                _fileCreationTimes.ContainsKey(filePath);
         return Task.FromResult(result);
     }

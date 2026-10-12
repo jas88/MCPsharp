@@ -223,14 +223,14 @@ public partial class SecurityManager : ISecurityManager
             if (!_permissions.TryGetValue(analyzerId, out var permissions))
             {
                 // Default: allow access to workspace directory
-                return Path.GetFullPath(path).StartsWith(Path.GetFullPath(_basePath), StringComparison.OrdinalIgnoreCase);
+                return PathContainment.IsWithin(_basePath, path);
             }
 
             var fullPath = Path.GetFullPath(path);
 
             // Check denied paths first
             if (permissions.DeniedPaths.Any(deniedPath =>
-                    fullPath.StartsWith(Path.GetFullPath(deniedPath), StringComparison.OrdinalIgnoreCase)))
+                    PathContainment.IsWithin(deniedPath, fullPath)))
             {
                 return false;
             }
@@ -239,7 +239,7 @@ public partial class SecurityManager : ISecurityManager
             if (permissions.AllowedPaths.Any())
             {
                 return permissions.AllowedPaths.Any(allowedPath =>
-                    fullPath.StartsWith(Path.GetFullPath(allowedPath), StringComparison.OrdinalIgnoreCase));
+                    PathContainment.IsWithin(allowedPath, fullPath));
             }
 
             // Default: allow if not explicitly denied

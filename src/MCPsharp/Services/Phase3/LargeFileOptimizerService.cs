@@ -508,7 +508,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
     private static bool IsFileInProject(string filePath, string projectPath)
     {
-        return filePath.StartsWith(projectPath, StringComparison.OrdinalIgnoreCase);
+        return PathContainment.IsWithin(projectPath, filePath);
     }
 
     private static double ConvertToDouble(OptimizationPriority priority)
