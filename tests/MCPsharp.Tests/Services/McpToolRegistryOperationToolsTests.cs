@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Text.Json;
 using MCPsharp.Models;
 using MCPsharp.Models.Analyzers;
+using MCPsharp.Models.Refactoring;
 using MCPsharp.Services;
 using MCPsharp.Services.AI;
 using MCPsharp.Services.Analyzers;
@@ -237,6 +238,63 @@ public class Calculator
             end_line = 8,
             method_name = "ComputeAndPrint"
         });
+    }
+
+    [Test]
+    public async Task ExtractMethod_WithoutPreview_RewritesFileAndRollbackRestoresIt()
+    {
+        var path = Path.Combine(_projectPath, "Calculator.cs");
+
+        var result = await Execute("extract_method", new
+        {
+            file_path = "Calculator.cs",
+            start_line = 7,
+            end_line = 8,
+            method_name = "ComputeAndPrint"
+        });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        var extraction = (ExtractMethodResult)result.Result!;
+        Assert.That(extraction.Applied, Is.True);
+        Assert.That(extraction.FilePath, Is.EqualTo(path));
+        Assert.That(extraction.RollbackId, Is.Not.Null.And.Not.Empty);
+
+        var rewritten = await File.ReadAllTextAsync(path);
+        Assert.That(rewritten, Does.Contain("var sum = ComputeAndPrint(a, b);"));
+        Assert.That(rewritten, Does.Contain("private static int ComputeAndPrint(int a, int b)"));
+
+        var rollback = await Execute("rollback_bulk_edit", new { rollbackId = extraction.RollbackId });
+
+        Assert.That(rollback.Success, Is.True, rollback.Error);
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(CalculatorSource));
+    }
+
+    [Test]
+    public async Task ExtractMethod_Preview_DoesNotModifyFile()
+    {
+        var result = await Execute("extract_method", new
+        {
+            file_path = "Calculator.cs",
+            start_line = 7,
+            end_line = 8,
+            method_name = "ComputeAndPrint",
+            preview = true
+        });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        var extraction = (ExtractMethodResult)result.Result!;
+        Assert.That(extraction.Applied, Is.False);
+        Assert.That(extraction.Preview, Is.Not.Null);
+        Assert.That(await File.ReadAllTextAsync(Path.Combine(_projectPath, "Calculator.cs")), Is.EqualTo(CalculatorSource));
+    }
+
+    [Test]
+    public async Task ExtractMethod_PathOutsideProject_IsRejected()
+    {
+        var result = await Execute("extract_method", new { file_path = "../elsewhere.cs", start_line = 1, end_line = 1 });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("outside the project root"));
     }
 
     [Test]

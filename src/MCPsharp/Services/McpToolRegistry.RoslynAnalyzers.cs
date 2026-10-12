@@ -209,24 +209,35 @@ public partial class McpToolRegistry
             return ToolError("Missing required parameters 'start_line' and 'end_line'");
         }
 
+        // Without preview the file is rewritten, so a rollback session must be recordable first
+        var preview = GetBoolArgument(arguments, "preview") ?? false;
+        if (!preview && _bulkEditService == null)
+        {
+            return ToolError("extract_method cannot apply changes without the rollback service; call it with preview=true to only compute the extraction");
+        }
+
         await EnsureWorkspaceInitializedAsync();
 
         var service = new ExtractMethodService(
             _workspace,
-            _loggerFactory?.CreateLogger<ExtractMethodService>() ?? NullLogger<ExtractMethodService>.Instance);
+            _loggerFactory?.CreateLogger<ExtractMethodService>() ?? NullLogger<ExtractMethodService>.Instance,
+            _bulkEditService);
 
         var result = await service.ExtractMethodAsync(new ExtractMethodRequest
         {
             FilePath = filePath,
             StartLine = startLine.Value,
             EndLine = endLine.Value,
+            StartColumn = GetIntArgument(arguments, "start_column"),
+            EndColumn = GetIntArgument(arguments, "end_column"),
             MethodName = GetStringArgument(arguments, "method_name"),
             Accessibility = GetStringArgument(arguments, "accessibility") ?? "private",
-            Preview = GetBoolArgument(arguments, "preview") ?? true
+            MakeStatic = GetBoolArgument(arguments, "make_static"),
+            Preview = preview
         }, ct);
 
         return result.Success
             ? new ToolCallResult { Success = true, Result = result }
-            : ToolError(result.Error?.Message ?? "Method extraction failed");
+            : new ToolCallResult { Success = false, Error = result.Error?.Message ?? "Method extraction failed", Result = result };
     }
 }

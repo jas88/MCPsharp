@@ -257,6 +257,9 @@ public sealed class MultiProjectSolutionFixture : IDisposable
         startInfo.ArgumentList.Add("restore");
         startInfo.ArgumentList.Add(solutionPath);
         startInfo.ArgumentList.Add("-nodeReuse:false");
+        // Restoring the solution's projects in parallel can race on a shared project's
+        // obj/project.assets.json ("already exists") under load
+        startInfo.ArgumentList.Add("--disable-parallel");
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start 'dotnet restore'");

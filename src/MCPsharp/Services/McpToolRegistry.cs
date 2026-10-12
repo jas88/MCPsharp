@@ -1430,7 +1430,7 @@ Edit types:
             new McpTool
             {
                 Name = "extract_method",
-                Description = "Extract selected code into a new method with automatic parameter inference. Requires an open project. Returns the generated method, call site and inferred parameters; the file itself is not rewritten (apply the result with file_edit).",
+                Description = "Extract the selected statements (or, with start/end columns, a single expression) into a new method of the containing type, inferring parameters (by value or ref), returned variables (value or tuple), async, static and type parameters. Requires an open project. Unless preview is true the file is rewritten on disk and in the workspace after recording a rollback session (undo with rollback_bulk_edit using the returned rollbackId); the change is refused, without writing, if it would introduce compilation errors.",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -1455,6 +1455,20 @@ Edit types:
                     },
                     new PropertyDefinition
                     {
+                        Name = "start_column",
+                        Type = "integer",
+                        Description = "Starting column on start_line (1-based, optional; default: start of line)",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
+                        Name = "end_column",
+                        Type = "integer",
+                        Description = "Ending column on end_line (1-based, inclusive, optional; default: end of line)",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
                         Name = "method_name",
                         Type = "string",
                         Description = "Name for the extracted method (optional, auto-generated if not provided)",
@@ -1470,11 +1484,18 @@ Edit types:
                     },
                     new PropertyDefinition
                     {
+                        Name = "make_static",
+                        Type = "boolean",
+                        Description = "Force the extracted method to be static (true) or an instance method (false); default: static when the selection uses no instance members",
+                        Required = false
+                    },
+                    new PropertyDefinition
+                    {
                         Name = "preview",
                         Type = "boolean",
-                        Description = "Include a before/after preview of the containing method (default: true)",
+                        Description = "Only compute the extraction and return a before/after preview without modifying the file (default: false, which rewrites the file)",
                         Required = false,
-                        Default = true
+                        Default = false
                     }
                 )
             }

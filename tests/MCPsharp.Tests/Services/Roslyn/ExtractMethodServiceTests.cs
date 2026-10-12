@@ -6,6 +6,9 @@ namespace MCPsharp.Tests.Services.Roslyn;
 
 public class ExtractMethodServiceTests
 {
+    private static readonly string[] ExpectedParameterNames = ["a"];
+    private static readonly string[] ExpectedReturnVariables = ["result"];
+
     private RoslynWorkspace _workspace = null!;
     private ExtractMethodService _service = null!;
     private string _testProjectPath = null!;
@@ -112,9 +115,12 @@ class Calculator
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Extraction, Is.Not.Null);
-        Assert.That(result.Extraction.Parameters.Count, Is.EqualTo(2));
-        Assert.That(result.Extraction.Parameters, Does.Contain(result.Extraction.Parameters.FirstOrDefault(p => p.Name == "a")));
-        Assert.That(result.Extraction.Parameters, Does.Contain(result.Extraction.Parameters.FirstOrDefault(p => p.Name == "result" && p.Modifier == "out")));
+        // 'a' flows in; 'result' is declared in the selection and used afterwards, so it is returned
+        Assert.That(result.Extraction.Parameters.Select(p => p.Name), Is.EqualTo(ExpectedParameterNames));
+        Assert.That(result.Extraction.Parameters[0].Modifier, Is.Null);
+        Assert.That(result.Extraction.ReturnVariables, Is.EqualTo(ExpectedReturnVariables));
+        Assert.That(result.Extraction.ReturnType, Is.EqualTo("int"));
+        Assert.That(result.Extraction.CallSite.Code, Is.EqualTo("var result = ExtractedMethod(a);"));
     }
 
     [Test]
@@ -642,7 +648,8 @@ class Test
         var result = await _service.ExtractMethodAsync(request);
 
         Assert.That(result.Success, Is.True);
-        // Should have ref parameter for counter
+        Assert.That(result.Extraction!.Parameters.Single(p => p.Name == "counter").Modifier, Is.EqualTo("ref"));
+        Assert.That(result.Extraction.CallSite.Code, Is.EqualTo("ExtractedMethod(ref counter);"));
     }
 
     #endregion
