@@ -1,8 +1,8 @@
 using System.Diagnostics;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using MCPsharp.Models.Navigation;
 using MCPsharp.Services.Roslyn;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace MCPsharp.Services.Navigation;
 

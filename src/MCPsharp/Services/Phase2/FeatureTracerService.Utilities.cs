@@ -1,6 +1,6 @@
-using Microsoft.CodeAnalysis;
 using System.Text.RegularExpressions;
 using MCPsharp.Models.Roslyn;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Phase2;
 

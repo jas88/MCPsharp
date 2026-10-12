@@ -1,8 +1,8 @@
+using System.Collections.Concurrent;
+using MCPsharp.Models;
+using MCPsharp.Services.Roslyn;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
-using MCPsharp.Services.Roslyn;
-using MCPsharp.Models;
 
 namespace MCPsharp.Services.Phase3;
 

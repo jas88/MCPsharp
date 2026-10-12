@@ -1,6 +1,6 @@
-using NUnit.Framework;
-using MCPsharp.Services.Analyzers;
 using MCPsharp.Models.Analyzers;
+using MCPsharp.Services.Analyzers;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.Analyzers;
 

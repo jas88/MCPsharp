@@ -1,6 +1,6 @@
+using MCPsharp.Services.Analyzers;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
-using MCPsharp.Services.Analyzers;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Integration;

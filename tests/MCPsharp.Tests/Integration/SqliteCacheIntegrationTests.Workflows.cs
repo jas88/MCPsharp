@@ -1,7 +1,7 @@
-using NUnit.Framework;
-using MCPsharp.Services;
-using MCPsharp.Models;
 using System.Text.Json;
+using MCPsharp.Models;
+using MCPsharp.Services;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Integration;
 

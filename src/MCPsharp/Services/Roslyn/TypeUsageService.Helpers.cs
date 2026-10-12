@@ -1,6 +1,6 @@
+using MCPsharp.Models.Roslyn;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using MCPsharp.Models.Roslyn;
 
 namespace MCPsharp.Services.Roslyn;
 

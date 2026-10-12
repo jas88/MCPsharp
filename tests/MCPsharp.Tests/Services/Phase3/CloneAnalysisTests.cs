@@ -1,9 +1,9 @@
+using MCPsharp.Models;
+using MCPsharp.Services.Phase3.DuplicateDetection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using NUnit.Framework;
-using MCPsharp.Models;
-using MCPsharp.Services.Phase3.DuplicateDetection;
 
 namespace MCPsharp.Tests.Services.Phase3;
 

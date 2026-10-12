@@ -1,10 +1,10 @@
 using System.Text;
+using MCPsharp.Models.Refactoring;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MCPsharp.Models.Refactoring;
 
 namespace MCPsharp.Services.Roslyn;
 

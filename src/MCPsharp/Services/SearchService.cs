@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.IO;
-using System.Text;
 using System.Text.RegularExpressions;
 using MCPsharp.Models.Search;
 using Microsoft.Extensions.FileSystemGlobbing;

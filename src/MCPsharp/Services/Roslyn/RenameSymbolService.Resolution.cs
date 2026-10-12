@@ -1,5 +1,5 @@
-using Microsoft.CodeAnalysis;
 using MCPsharp.Services.Roslyn.SymbolSearch;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Roslyn;
 

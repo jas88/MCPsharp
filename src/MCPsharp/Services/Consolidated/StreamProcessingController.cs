@@ -1,9 +1,6 @@
-using Microsoft.Extensions.Logging;
 using MCPsharp.Models.Consolidated;
-using MCPsharp.Models.Streaming;
-using MCPsharp.Services;
+using Microsoft.Extensions.Logging;
 using ConsolidatedStream = MCPsharp.Models.Consolidated;
-using StreamingStream = MCPsharp.Models.Streaming;
 
 namespace MCPsharp.Services.Consolidated;
 

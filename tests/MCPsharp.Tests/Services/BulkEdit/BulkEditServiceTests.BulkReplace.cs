@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
-using NUnit.Framework;
-using MCPsharp.Services;
 using MCPsharp.Models.BulkEdit;
+using MCPsharp.Services;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.BulkEdit;
 

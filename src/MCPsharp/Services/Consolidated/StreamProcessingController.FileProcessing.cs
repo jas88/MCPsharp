@@ -1,6 +1,4 @@
 using MCPsharp.Models.Consolidated;
-using MCPsharp.Models.Streaming;
-using MCPsharp.Models;
 using ConsolidatedStream = MCPsharp.Models.Consolidated;
 
 namespace MCPsharp.Services.Consolidated;

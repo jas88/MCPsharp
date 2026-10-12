@@ -1,13 +1,13 @@
 using System.Collections.Immutable;
+using MCPsharp.Models.Analyzers;
+using MCPsharp.Services;
+using MCPsharp.Services.Analyzers;
+using MCPsharp.Services.Analyzers.Fixes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MCPsharp.Models.Analyzers;
-using MCPsharp.Services;
-using MCPsharp.Services.Analyzers;
-using MCPsharp.Services.Analyzers.Fixes;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Integration;

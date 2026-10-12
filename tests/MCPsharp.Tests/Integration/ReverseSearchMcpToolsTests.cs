@@ -2,7 +2,6 @@ using System.Text.Json;
 using MCPsharp.Models;
 using MCPsharp.Services;
 using MCPsharp.Services.Roslyn;
-using MCPsharp.Tests.TestFixtures;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Integration;

@@ -1,11 +1,9 @@
-using MCPsharp.Services;
-using MCPsharp.Services.Phase2;
-using MCPsharp.Services.Phase3;
-using MCPsharp.Services.Consolidated;
-using MCPsharp.Services.Roslyn;
-using MCPsharp.Services.AI;
-using MCPsharp.Services.Database;
 using MCPsharp.Models;
+using MCPsharp.Services;
+using MCPsharp.Services.AI;
+using MCPsharp.Services.Consolidated;
+using MCPsharp.Services.Database;
+using MCPsharp.Services.Roslyn;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp;

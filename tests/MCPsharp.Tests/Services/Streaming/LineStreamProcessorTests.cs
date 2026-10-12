@@ -1,9 +1,7 @@
-using System.Collections.Generic;
 using System.Text;
-using System.Threading.Tasks;
-using NUnit.Framework;
 using MCPsharp.Models.Streaming;
 using MCPsharp.Services.Streaming;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.Streaming;
 

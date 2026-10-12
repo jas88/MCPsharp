@@ -1,5 +1,5 @@
-using NUnit.Framework;
 using MCPsharp.Models;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 

@@ -1,6 +1,6 @@
-using Microsoft.CodeAnalysis;
 using MCPsharp.Models;
 using MCPsharp.Services.Phase3.DuplicateDetection;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Phase3;
 

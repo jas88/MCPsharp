@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using MCPsharp.Models;
 using MCPsharp.Services;
 using NUnit.Framework;

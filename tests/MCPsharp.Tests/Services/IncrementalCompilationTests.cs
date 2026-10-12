@@ -1,8 +1,6 @@
-using System.Text;
 using MCPsharp.Models;
 using MCPsharp.Services;
 using MCPsharp.Services.Roslyn;
-using Microsoft.CodeAnalysis;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;

@@ -1,8 +1,7 @@
 using System.Collections.Immutable;
-using System.Reflection;
+using MCPsharp.Models.Analyzers;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.Extensions.Logging;
-using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Services.Analyzers;
 

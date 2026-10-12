@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace MCPsharp.Models.SqlMigration;
 
 /// <summary>

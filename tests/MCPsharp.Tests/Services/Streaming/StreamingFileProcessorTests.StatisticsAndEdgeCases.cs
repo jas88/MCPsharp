@@ -1,8 +1,8 @@
+using MCPsharp.Models.Streaming;
+using MCPsharp.Services;
+using MCPsharp.Tests.TestData;
 using NSubstitute;
 using NUnit.Framework;
-using MCPsharp.Services;
-using MCPsharp.Models.Streaming;
-using MCPsharp.Tests.TestData;
 
 namespace MCPsharp.Tests.Services.Streaming;
 

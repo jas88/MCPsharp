@@ -1,16 +1,14 @@
-using Microsoft.Extensions.Logging;
-using MCPsharp.Models.Consolidated;
 using MCPsharp.Models.Architecture;
+using MCPsharp.Models.Consolidated;
+using Microsoft.Extensions.Logging;
+using ArchitectureDependencyRule = MCPsharp.Models.Architecture.DependencyRule;
+using ArchitectureRecommendation = MCPsharp.Models.Architecture.ArchitectureRecommendation;
 using ConsolidatedArchitectureDefinition = MCPsharp.Models.Consolidated.ArchitectureDefinition;
 using ConsolidatedArchitectureLayer = MCPsharp.Models.Consolidated.ArchitectureLayer;
 using ConsolidatedArchitectureWarning = MCPsharp.Models.Consolidated.ArchitectureWarning;
-using ArchitectureRecommendation = MCPsharp.Models.Architecture.ArchitectureRecommendation;
-using ConsolidatedDependencyRule = MCPsharp.Models.Consolidated.DependencyRule;
-using ArchitectureDependencyRule = MCPsharp.Models.Architecture.DependencyRule;
-using ConsolidatedDependencyNode = MCPsharp.Models.Consolidated.DependencyNode;
-using ArchitectureDependencyNode = MCPsharp.Models.Architecture.DependencyNode;
 using ConsolidatedDependencyEdge = MCPsharp.Models.Consolidated.DependencyEdge;
-using ArchitectureDependencyEdge = MCPsharp.Models.Architecture.DependencyEdge;
+using ConsolidatedDependencyNode = MCPsharp.Models.Consolidated.DependencyNode;
+using ConsolidatedDependencyRule = MCPsharp.Models.Consolidated.DependencyRule;
 
 namespace MCPsharp.Services.Consolidated.Analyzers;
 

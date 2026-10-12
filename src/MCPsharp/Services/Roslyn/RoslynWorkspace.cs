@@ -1,7 +1,7 @@
+using MCPsharp.Services.Caching;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
-using MCPsharp.Services.Caching;
 
 namespace MCPsharp.Services.Roslyn;
 

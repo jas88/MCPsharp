@@ -1,5 +1,5 @@
-using NUnit.Framework;
 using MCPsharp.Services.Roslyn;
+using NUnit.Framework;
 using SymbolKind = MCPsharp.Services.Roslyn.SymbolKind;
 
 namespace MCPsharp.Tests.Services.Roslyn;

@@ -1,7 +1,7 @@
 using System.Text.Json;
+using MCPsharp.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MCPsharp.Models;
 
 namespace MCPsharp.Services;
 

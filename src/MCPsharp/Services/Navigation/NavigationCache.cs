@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
+using MCPsharp.Models.Navigation;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MCPsharp.Models.Navigation;
 
 namespace MCPsharp.Services.Navigation;
 

@@ -1,12 +1,12 @@
 using System.Collections.Immutable;
+using MCPsharp.Models;
+using MCPsharp.Models.Analyzers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
-using MCPsharp.Models;
-using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Services.Analyzers;
 

@@ -1,6 +1,5 @@
-using System;
-using Microsoft.Extensions.Logging;
 using MCPsharp.Models.Streaming;
+using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;
 

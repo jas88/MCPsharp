@@ -1,8 +1,8 @@
+using MCPsharp.Models.Architecture;
+using MCPsharp.Services.Roslyn;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using MCPsharp.Models.Architecture;
-using MCPsharp.Services.Roslyn;
 
 namespace MCPsharp.Services.Phase3;
 

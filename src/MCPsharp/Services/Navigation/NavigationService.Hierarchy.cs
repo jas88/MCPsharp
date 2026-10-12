@@ -1,9 +1,9 @@
 using System.Diagnostics;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.FindSymbols;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using MCPsharp.Models.Navigation;
 using MCPsharp.Services.Roslyn;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace MCPsharp.Services.Navigation;
 

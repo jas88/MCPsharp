@@ -1,6 +1,5 @@
 using System.Text.Json;
 using MCPsharp.Models;
-using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;
 

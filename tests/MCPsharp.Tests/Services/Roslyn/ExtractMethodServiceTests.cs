@@ -1,5 +1,5 @@
-using MCPsharp.Services.Roslyn;
 using MCPsharp.Models.Refactoring;
+using MCPsharp.Services.Roslyn;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.Roslyn;

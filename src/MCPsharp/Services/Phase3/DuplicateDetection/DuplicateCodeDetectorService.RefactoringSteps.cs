@@ -1,5 +1,5 @@
-using Microsoft.CodeAnalysis;
 using MCPsharp.Models;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Phase3;
 

@@ -1,7 +1,5 @@
-using Microsoft.CodeAnalysis;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Services.Roslyn;
-using MCPsharp.Tests.TestFixtures;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;

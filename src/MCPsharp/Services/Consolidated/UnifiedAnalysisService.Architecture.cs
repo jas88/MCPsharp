@@ -1,6 +1,6 @@
 using System.Globalization;
-using MCPsharp.Models.Consolidated;
 using MCPsharp.Models.Architecture;
+using MCPsharp.Models.Consolidated;
 using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Consolidated;

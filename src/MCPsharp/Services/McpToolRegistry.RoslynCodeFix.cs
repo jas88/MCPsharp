@@ -2,7 +2,6 @@ using System.Text.Json;
 using MCPsharp.Models;
 using MCPsharp.Models.Analyzers;
 using MCPsharp.Services.Analyzers;
-using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;
 

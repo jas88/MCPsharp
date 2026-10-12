@@ -1,6 +1,6 @@
+using MCPsharp.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using MCPsharp.Models;
 
 namespace MCPsharp.Services.Phase3;
 

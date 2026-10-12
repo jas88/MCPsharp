@@ -1,6 +1,6 @@
-using Microsoft.CodeAnalysis;
 using System.Text.RegularExpressions;
 using MCPsharp.Models.Architecture;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Phase3;
 

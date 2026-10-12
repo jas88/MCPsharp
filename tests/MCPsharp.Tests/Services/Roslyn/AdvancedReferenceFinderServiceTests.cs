@@ -1,7 +1,7 @@
+using MCPsharp.Models.Roslyn;
+using MCPsharp.Services.Roslyn;
 using NSubstitute;
 using NUnit.Framework;
-using MCPsharp.Services.Roslyn;
-using MCPsharp.Models.Roslyn;
 
 namespace MCPsharp.Tests.Services.Roslyn;
 

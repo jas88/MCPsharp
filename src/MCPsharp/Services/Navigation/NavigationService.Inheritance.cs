@@ -1,7 +1,7 @@
 using System.Diagnostics;
+using MCPsharp.Models.Navigation;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
-using MCPsharp.Models.Navigation;
 
 namespace MCPsharp.Services.Navigation;
 

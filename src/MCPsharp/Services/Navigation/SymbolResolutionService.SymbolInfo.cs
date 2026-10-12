@@ -1,5 +1,5 @@
-using Microsoft.CodeAnalysis;
 using MCPsharp.Models.Navigation;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Navigation;
 

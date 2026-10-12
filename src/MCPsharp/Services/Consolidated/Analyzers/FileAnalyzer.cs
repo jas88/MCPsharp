@@ -1,6 +1,6 @@
-using Microsoft.Extensions.Logging;
-using MCPsharp.Models.Consolidated;
 using System.Text.RegularExpressions;
+using MCPsharp.Models.Consolidated;
+using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services.Consolidated.Analyzers;
 
