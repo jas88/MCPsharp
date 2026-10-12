@@ -15,10 +15,6 @@
 
     <!-- MinVer configuration for this repo -->
     <MinVerMinimumMajorMinor>0.1</MinVerMinimumMajorMinor>
-
-    <!-- Temporarily disable TreatWarningsAsErrors while adopting build-standards -->
-    <!-- TODO: Re-enable after fixing existing analyzer warnings -->
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <!-- Keep existing analyzer references in csproj files -->
