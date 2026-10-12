@@ -29,12 +29,25 @@ public class BulkEditServiceTests : FileServiceTestBase
         _service = new BulkEditService(CreateNullLogger<BulkEditService>());
     }
 
+    [TearDown]
+    protected override void TearDown()
+    {
+        _service?.Dispose();
+        base.TearDown();
+    }
+
     [Test]
     public void Constructor_WithLogger_ShouldInitializeSuccessfully()
     {
         // Act & Assert
-        Assert.DoesNotThrow(() => new BulkEditService(CreateNullLogger<BulkEditService>()));
-        Assert.DoesNotThrow(() => new BulkEditService(null)); // Logger should be optional
+        Assert.DoesNotThrow(() =>
+        {
+            using var service = new BulkEditService(CreateNullLogger<BulkEditService>());
+        });
+        Assert.DoesNotThrow(() =>
+        {
+            using var service = new BulkEditService(null); // Logger should be optional
+        });
     }
 
     [Test]
@@ -202,6 +215,42 @@ public class BulkEditServiceTests : FileServiceTestBase
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
         Assert.That(result.FileResults[0].ChangeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task ConditionalEditAsync_WithCreateBackups_ShouldRecordBackupInResult()
+    {
+        // Arrange
+        const string originalContent = "TODO: Fix this issue\nSome other content";
+        var testFile = CreateTestFile(originalContent);
+        var condition = new BulkEditCondition
+        {
+            ConditionType = BulkConditionType.FileContains,
+            Pattern = "TODO:"
+        };
+        var edits = new List<TextEdit>
+        {
+            new ReplaceEdit
+            {
+                StartLine = 1,
+                StartColumn = 1,
+                EndLine = 1,
+                EndColumn = 1,
+                NewText = "FIXME: Fix this issue"
+            }
+        };
+        var options = new BulkEditOptions { CreateBackups = true };
+
+        // Act
+        var result = await _service.ConditionalEditAsync(new[] { testFile }, condition, edits, options);
+
+        // Assert
+        Assert.That(result.Success, Is.True);
+        var fileResult = result.FileResults[0];
+        Assert.That(fileResult.BackupCreated, Is.True);
+        Assert.That(fileResult.BackupPath, Is.Not.Null.And.Not.Empty);
+        Assert.That(File.Exists(fileResult.BackupPath), Is.True);
+        Assert.That(await File.ReadAllTextAsync(fileResult.BackupPath!), Is.EqualTo(originalContent));
     }
 
     [Test]

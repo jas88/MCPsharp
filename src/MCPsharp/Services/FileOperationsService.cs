@@ -30,6 +30,11 @@ public partial class FileOperationsService
     }
 
     /// <summary>
+    /// Gets the absolute, normalized root directory that all file operations are confined to.
+    /// </summary>
+    public string RootPath => _rootPath;
+
+    /// <summary>
     /// List files in the project, optionally filtered by glob pattern
     /// </summary>
     /// <param name="pattern">Glob pattern (e.g., "**/*.cs", "src/**/*.csproj")</param>

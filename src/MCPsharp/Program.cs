@@ -114,7 +114,7 @@ sealed partial class Program
             var workflowAnalyzer = new MCPsharp.Services.Phase2.WorkflowAnalyzerService();
 
             // Supporting services
-            var bulkEditService = new BulkEditService(loggerFactory.CreateLogger<BulkEditService>());
+            using var bulkEditService = new BulkEditService(loggerFactory.CreateLogger<BulkEditService>());
             var progressTracker = new ProgressTrackerService(loggerFactory.CreateLogger<ProgressTrackerService>());
             var tempFileManager = new TempFileManagerService();
             var streamingProcessor = new StreamingFileProcessor(

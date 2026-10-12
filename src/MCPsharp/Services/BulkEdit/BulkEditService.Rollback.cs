@@ -8,7 +8,7 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Rollback and recovery management for bulk edit operations
 /// </summary>
-public partial class BulkEditService
+public sealed partial class BulkEditService
 {
     /// <inheritdoc />
     public async Task<BulkEditResult> RollbackBulkEditAsync(

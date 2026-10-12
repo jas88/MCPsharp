@@ -41,6 +41,23 @@ public class FileOperationsServiceTests
     }
 
     [Test]
+    public void RootPath_ShouldReturnNormalizedAbsolutePath()
+    {
+        // Arrange
+        var subDir = Path.Combine(_testRoot, "sub");
+        Directory.CreateDirectory(subDir);
+        var nonNormalizedPath = Path.Combine(subDir, "..", "sub");
+
+        // Act
+        var service = new FileOperationsService(nonNormalizedPath);
+
+        // Assert
+        Assert.That(_service.RootPath, Is.EqualTo(Path.GetFullPath(_testRoot)));
+        Assert.That(service.RootPath, Is.EqualTo(Path.GetFullPath(subDir)));
+        Assert.That(Path.IsPathRooted(service.RootPath), Is.True);
+    }
+
+    [Test]
     public void ListFiles_ShouldReturnAllFiles_WhenNoPatternSpecified()
     {
         // Arrange

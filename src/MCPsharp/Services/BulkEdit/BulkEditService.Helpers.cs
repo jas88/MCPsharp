@@ -12,7 +12,7 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Helper methods for file resolution, condition checking, and utility functions
 /// </summary>
-public partial class BulkEditService
+public sealed partial class BulkEditService
 {
     /// <summary>
     /// Timeout applied to user-supplied regular expressions evaluated by bulk edit helpers.

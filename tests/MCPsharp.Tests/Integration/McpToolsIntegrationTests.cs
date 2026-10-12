@@ -32,6 +32,7 @@ public class McpToolsIntegrationTests : IntegrationTestBase
     {
         base.Setup();
         SetupRealisticEnvironment();
+        _bulkEdit = new BulkEditService();
     }
 
     // Initialize services in async method to properly setup workspace
@@ -46,13 +47,13 @@ public class McpToolsIntegrationTests : IntegrationTestBase
         _typeUsage = new TypeUsageService(_workspace, _symbolQuery);
         _referenceFinder = new AdvancedReferenceFinderService(
             _workspace, _symbolQuery, _callerAnalysis, _callChain, _typeUsage);
-        _bulkEdit = new BulkEditService();
     }
 
     [TearDown]
     protected override void TearDown()
     {
         _workspace?.Dispose();
+        _bulkEdit?.Dispose();
         base.TearDown();
     }
 

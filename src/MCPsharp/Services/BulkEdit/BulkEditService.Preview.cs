@@ -8,7 +8,7 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Preview and preview-related functionality for bulk edit operations
 /// </summary>
-public partial class BulkEditService
+public sealed partial class BulkEditService
 {
     /// <inheritdoc />
     public async Task<PreviewResult> PreviewBulkChangesAsync(

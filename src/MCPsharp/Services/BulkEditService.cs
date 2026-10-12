@@ -17,7 +17,7 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Service for performing bulk edit operations across multiple files with parallel processing
 /// </summary>
-public partial class BulkEditService : IBulkEditService
+public sealed partial class BulkEditService : IBulkEditService, IDisposable
 {
     private readonly ILogger<BulkEditService> _logger;
     private readonly string _tempDirectory;
@@ -33,6 +33,14 @@ public partial class BulkEditService : IBulkEditService
 
         // Ensure temp directory exists
         Directory.CreateDirectory(_tempDirectory);
+    }
+
+    /// <summary>
+    /// Releases the semaphore used to throttle parallel file processing.
+    /// </summary>
+    public void Dispose()
+    {
+        _processingSemaphore.Dispose();
     }
 
     /// <inheritdoc />

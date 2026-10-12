@@ -373,7 +373,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteTool));
+            LogToolExecutionFailed(_logger, ex, request.Name);
             return new ToolCallResult
             {
                 Success = false,
@@ -2400,4 +2400,7 @@ Edit types:
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool operation {Operation} failed")]
     private static partial void LogToolOperationFailed(ILogger logger, Exception exception, string operation);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Tool {ToolName} execution failed")]
+    private static partial void LogToolExecutionFailed(ILogger logger, Exception exception, string toolName);
 }

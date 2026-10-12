@@ -44,6 +44,7 @@ public class PerformanceTests : PerformanceTestBase
     protected override void TearDown()
     {
         _workspace?.Dispose();
+        _bulkEdit?.Dispose();
         base.TearDown();
     }
 

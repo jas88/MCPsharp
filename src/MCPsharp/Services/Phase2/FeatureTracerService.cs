@@ -68,11 +68,7 @@ public partial class FeatureTracerService : IFeatureTracerService
         _symbolQuery = symbolQuery ?? throw new ArgumentNullException(nameof(symbolQuery));
         _referenceFinder = referenceFinder ?? throw new ArgumentNullException(nameof(referenceFinder));
 
-        // Extract root path from file operations service
-        // FileOperationsService constructor stores the absolute path
-        var projectPathField = typeof(FileOperationsService).GetField("_rootPath",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        _rootPath = projectPathField?.GetValue(_fileOps) as string ?? "";
+        _rootPath = _fileOps.RootPath;
     }
 
     /// <summary>

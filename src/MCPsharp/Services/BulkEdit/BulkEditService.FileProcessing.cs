@@ -8,7 +8,7 @@ namespace MCPsharp.Services;
 /// <summary>
 /// File processing methods for different bulk edit operation types
 /// </summary>
-public partial class BulkEditService
+public sealed partial class BulkEditService
 {
     private async Task<FileBulkEditResult> ProcessFileForBulkReplace(
         string filePath,
@@ -184,11 +184,12 @@ public partial class BulkEditService
             // Apply edits (in preview mode, just track changes)
             var newContent = content;
             var changes = new List<FileChange>();
+            string? backupPath = null;
 
             if (!options.PreviewMode)
             {
                 // Create backup if needed
-                var backupPath = rollbackInfo?.Files.FirstOrDefault(f => f.OriginalPath == filePath)?.BackupPath;
+                backupPath = rollbackInfo?.Files.FirstOrDefault(f => f.OriginalPath == filePath)?.BackupPath;
                 if (options.CreateBackups && backupPath == null)
                 {
                     backupPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
@@ -218,7 +219,8 @@ public partial class BulkEditService
                 ProcessStartTime = startTime,
                 ProcessEndTime = DateTime.UtcNow,
                 EditDuration = DateTime.UtcNow - startTime,
-                BackupCreated = false,
+                BackupPath = backupPath,
+                BackupCreated = !string.IsNullOrEmpty(backupPath),
                 Skipped = false
             };
         }
