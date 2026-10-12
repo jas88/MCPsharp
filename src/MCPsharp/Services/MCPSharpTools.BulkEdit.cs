@@ -573,6 +573,7 @@ public partial class McpToolRegistry
             }
 
             var result = await _bulkEditService.RollbackBulkEditAsync(rollbackId, cancellationToken);
+            await SyncWorkspaceWithRestoredFilesAsync(result, cancellationToken);
 
             return new ToolCallResult { Success = result.Success, Result = result, Error = result.Error };
         }
@@ -580,6 +581,30 @@ public partial class McpToolRegistry
         {
             LogToolOperationFailed(_logger, ex, nameof(ExecuteRollbackBulkEdit));
             return new ToolCallResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// Reloads every file a rollback restored into the Roslyn workspace, so workspace-based tools
+    /// see the restored text rather than the edited text. Files that are not part of the loaded
+    /// solution are ignored; dependent projects are refreshed by <see cref="Roslyn.RoslynWorkspace.UpdateDocumentAsync"/>.
+    /// </summary>
+    private async Task SyncWorkspaceWithRestoredFilesAsync(BulkEditResult rollbackResult, CancellationToken cancellationToken)
+    {
+        if (_workspace == null)
+        {
+            return;
+        }
+
+        var restoredPaths = rollbackResult.FileResults
+            .Where(r => r.Success && !r.Skipped)
+            .Select(r => r.FilePath)
+            .Where(File.Exists);
+
+        foreach (var path in restoredPaths)
+        {
+            var restoredText = await File.ReadAllTextAsync(path, cancellationToken);
+            await _workspace.UpdateDocumentAsync(path, restoredText, cancellationToken);
         }
     }
 

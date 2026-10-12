@@ -270,6 +270,37 @@ public class Calculator
     }
 
     [Test]
+    public async Task ExtractMethod_ThenRollback_RestoresWorkspaceDocumentText()
+    {
+        var path = Path.Combine(_projectPath, "Calculator.cs");
+
+        var result = await Execute("extract_method", new
+        {
+            file_path = "Calculator.cs",
+            start_line = 7,
+            end_line = 8,
+            method_name = "ComputeAndPrint"
+        });
+        Assert.That(result.Success, Is.True, result.Error);
+        var extraction = (ExtractMethodResult)result.Result!;
+
+        var extracted = await WorkspaceTextAsync(path);
+        Assert.That(extracted, Does.Contain("ComputeAndPrint"), "extract_method should update the workspace");
+
+        var rollback = await Execute("rollback_bulk_edit", new { rollbackId = extraction.RollbackId });
+        Assert.That(rollback.Success, Is.True, rollback.Error);
+
+        Assert.That(await WorkspaceTextAsync(path), Is.EqualTo(CalculatorSource));
+    }
+
+    private async Task<string> WorkspaceTextAsync(string path)
+    {
+        var document = _workspace.GetDocument(path);
+        Assert.That(document, Is.Not.Null, $"{path} should be in the workspace");
+        return (await document!.GetTextAsync()).ToString();
+    }
+
+    [Test]
     public async Task ExtractMethod_Preview_DoesNotModifyFile()
     {
         var result = await Execute("extract_method", new
