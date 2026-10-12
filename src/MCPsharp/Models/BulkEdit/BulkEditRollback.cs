@@ -1,57 +1,6 @@
 ﻿namespace MCPsharp.Models.BulkEdit;
 
 /// <summary>
-/// Session for tracking rollback information
-/// </summary>
-public class RollbackSession
-{
-    /// <summary>
-    /// Unique identifier for the rollback session
-    /// </summary>
-    public required string SessionId { get; init; }
-
-    /// <summary>
-    /// Original operation type that created this session
-    /// </summary>
-    public required BulkEditOperationType OperationType { get; init; }
-
-    /// <summary>
-    /// When the session was created
-    /// </summary>
-    public required DateTime CreatedAt { get; init; }
-
-    /// <summary>
-    /// When the session expires
-    /// </summary>
-    public required DateTime ExpiresAt { get; init; }
-
-    /// <summary>
-    /// List of files that were modified in the original operation
-    /// </summary>
-    public required IReadOnlyList<RollbackFileInfo> ModifiedFiles { get; init; }
-
-    /// <summary>
-    /// Directory where backups are stored
-    /// </summary>
-    public required string BackupDirectory { get; init; }
-
-    /// <summary>
-    /// Whether the session is still active
-    /// </summary>
-    public required bool IsActive { get; init; }
-
-    /// <summary>
-    /// Description of the original operation
-    /// </summary>
-    public string? Description { get; init; }
-
-    /// <summary>
-    /// Metadata about the original operation
-    /// </summary>
-    public Dictionary<string, object>? Metadata { get; init; }
-}
-
-/// <summary>
 /// Information about a file that can be rolled back
 /// </summary>
 public class RollbackFileInfo
@@ -90,8 +39,6 @@ public class RollbackFileInfo
     /// Size of the backup file in bytes
     /// </summary>
     public long BackupSize { get; set; }
-
-    // Additional properties for compatibility with RollbackService
 
     /// <summary>
     /// Whether the backup file exists
@@ -323,20 +270,20 @@ public class RollbackInfo
     /// </summary>
     public IReadOnlyList<RollbackFileInfo> Files { get; set; } = [];
 
-    // Additional properties expected by RollbackService
+    // Convenience aliases
 
     /// <summary>
-    /// Operation ID (alias for OriginalOperationId for RollbackService compatibility)
+    /// Operation ID (alias for OriginalOperationId)
     /// </summary>
     public string OperationId => OriginalOperationId;
 
     /// <summary>
-    /// Rollback size (alias for TotalBackupSize for RollbackService compatibility)
+    /// Rollback size (alias for TotalBackupSize)
     /// </summary>
     public long RollbackSize => TotalBackupSize;
 
     /// <summary>
-    /// Whether rollback can be performed (alias for IsRollbackPossible for RollbackService compatibility)
+    /// Whether rollback can be performed (IsRollbackPossible and not expired)
     /// </summary>
     public bool CanRollback => IsRollbackPossible && (ExpiresAt == null || ExpiresAt > DateTime.UtcNow);
 
