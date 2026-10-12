@@ -30,7 +30,6 @@ public partial class McpToolRegistry
     private ClassStructureService? _classStructure;
     private SemanticEditService? _semanticEdit;
     private ReferenceFinderService? _referenceFinder;
-    private ProjectParserService? _projectParser;
 
     // Advanced reverse search services
     private ICallerAnalysisService? _callerAnalysis;
@@ -1467,7 +1466,6 @@ Edit types:
                 _classStructure = new ClassStructureService(_workspace);
                 _semanticEdit = new SemanticEditService(_workspace, _classStructure);
                 _referenceFinder = new ReferenceFinderService(_workspace);
-                _projectParser = new ProjectParserService();
 
                 // Initialize hybrid search service with graceful degradation
                 var logger = _loggerFactory?.CreateLogger<HybridSearchService>()
@@ -1526,7 +1524,6 @@ Edit types:
                 _classStructure = new ClassStructureService(_workspace);
                 _semanticEdit = new SemanticEditService(_workspace, _classStructure);
                 _referenceFinder = new ReferenceFinderService(_workspace);
-                _projectParser = new ProjectParserService();
 
                 // Initialize hybrid search service with graceful degradation
                 var logger = _loggerFactory?.CreateLogger<HybridSearchService>()
@@ -2185,18 +2182,15 @@ Edit types:
         };
     }
 
-    private async Task<ToolCallResult> ExecuteParseProject(JsonDocument arguments)
+    private static async Task<ToolCallResult> ExecuteParseProject(JsonDocument arguments)
     {
-        // ProjectParser doesn't need workspace initialization
-        _projectParser ??= new ProjectParserService();
-
         var projectPath = arguments.RootElement.GetProperty("projectPath").GetString();
         if (string.IsNullOrEmpty(projectPath))
         {
             return new ToolCallResult { Success = false, Error = "ProjectPath is required" };
         }
 
-        var result = await _projectParser.ParseProjectAsync(projectPath);
+        var result = await ProjectParserService.ParseProjectAsync(projectPath);
         if (result == null)
         {
             return new ToolCallResult { Success = false, Error = $"Failed to parse project at '{projectPath}'" };

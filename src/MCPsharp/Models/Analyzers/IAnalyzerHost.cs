@@ -168,17 +168,28 @@ public record AnalyzerHealthStatus
 /// <summary>
 /// Event args for analyzer loaded
 /// </summary>
-public record AnalyzerLoadedEventArgs(string AnalyzerId, AnalyzerInfo AnalyzerInfo);
+public sealed class AnalyzerLoadedEventArgs(string analyzerId, AnalyzerInfo analyzerInfo) : EventArgs
+{
+    public string AnalyzerId { get; } = analyzerId;
+    public AnalyzerInfo AnalyzerInfo { get; } = analyzerInfo;
+}
 
 /// <summary>
 /// Event args for analyzer unloaded
 /// </summary>
-public record AnalyzerUnloadedEventArgs(string AnalyzerId);
+public sealed class AnalyzerUnloadedEventArgs(string analyzerId) : EventArgs
+{
+    public string AnalyzerId { get; } = analyzerId;
+}
 
 /// <summary>
 /// Event args for analysis completed
 /// </summary>
-public record AnalysisCompletedEventArgs(string SessionId, AnalysisSessionResult Result);
+public sealed class AnalysisCompletedEventArgs(string sessionId, AnalysisSessionResult result) : EventArgs
+{
+    public string SessionId { get; } = sessionId;
+    public AnalysisSessionResult Result { get; } = result;
+}
 
 /// <summary>
 /// Result of unloading an analyzer

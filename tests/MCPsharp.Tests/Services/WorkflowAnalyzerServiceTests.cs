@@ -22,7 +22,7 @@ public class WorkflowAnalyzerServiceTests
         var nonExistentPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
 
         // Act
-        var result = await _service.FindWorkflowsAsync(nonExistentPath);
+        var result = await WorkflowAnalyzerService.FindWorkflowsAsync(nonExistentPath);
 
         // Assert
         Assert.That(result, Is.Empty);
@@ -43,7 +43,7 @@ public class WorkflowAnalyzerServiceTests
             File.WriteAllText(Path.Combine(workflowsPath, "readme.md"), "Not a workflow");
 
             // Act
-            var result = await _service.FindWorkflowsAsync(tempPath);
+            var result = await WorkflowAnalyzerService.FindWorkflowsAsync(tempPath);
 
             // Assert
             Assert.That(result, Has.Count.EqualTo(2));
@@ -311,7 +311,7 @@ public class WorkflowAnalyzerServiceTests
         };
 
         // Act
-        var result = await _service.ValidateWorkflowConsistencyAsync(workflow, project);
+        var result = await WorkflowAnalyzerService.ValidateWorkflowConsistencyAsync(workflow, project);
 
         // Assert
         Assert.That(result, Is.Empty);
@@ -359,7 +359,7 @@ public class WorkflowAnalyzerServiceTests
         };
 
         // Act
-        var result = await _service.ValidateWorkflowConsistencyAsync(workflow, project);
+        var result = await WorkflowAnalyzerService.ValidateWorkflowConsistencyAsync(workflow, project);
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
@@ -405,7 +405,7 @@ public class WorkflowAnalyzerServiceTests
         };
 
         // Act
-        var result = await _service.ValidateWorkflowConsistencyAsync(workflow, project);
+        var result = await WorkflowAnalyzerService.ValidateWorkflowConsistencyAsync(workflow, project);
 
         // Assert
         Assert.That(result, Has.Some.Property("Type").EqualTo("MissingBuildStep"));
@@ -450,7 +450,7 @@ public class WorkflowAnalyzerServiceTests
         };
 
         // Act
-        var result = await _service.ValidateWorkflowConsistencyAsync(workflow, project);
+        var result = await WorkflowAnalyzerService.ValidateWorkflowConsistencyAsync(workflow, project);
 
         // Assert
         Assert.That(result, Has.None.Property("Type").EqualTo("MissingBuildStep"));

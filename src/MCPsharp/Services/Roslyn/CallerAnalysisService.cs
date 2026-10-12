@@ -85,7 +85,7 @@ public class CallerAnalysisService : ICallerAnalysisService
             return null;
 
         // Filter to only direct callers
-        var directCallers = result.DirectCallers;
+        var directCallers = result.DirectCallers.ToList();
 
         // If no direct callers found, return null to indicate no matches
         if (directCallers.Count == 0)
@@ -108,7 +108,7 @@ public class CallerAnalysisService : ICallerAnalysisService
             return null;
 
         // Filter to only indirect callers
-        var indirectCallers = result.IndirectCallers;
+        var indirectCallers = result.IndirectCallers.ToList();
 
         // If no indirect callers found, return null to indicate no matches
         if (indirectCallers.Count == 0)

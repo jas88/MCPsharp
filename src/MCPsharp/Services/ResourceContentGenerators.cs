@@ -270,7 +270,7 @@ public sealed class ResourceContentGenerators
     /// <summary>
     /// Generates the usage guidance resource content.
     /// </summary>
-    public McpResourceContent GenerateGuidance()
+    public static McpResourceContent GenerateGuidance()
     {
         var sb = new StringBuilder();
 

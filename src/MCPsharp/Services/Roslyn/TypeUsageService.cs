@@ -74,7 +74,7 @@ public class TypeUsageService : ITypeUsageService
     public async Task<List<TypeUsageInfo>> FindInstantiationsAsync(string typeName, CancellationToken cancellationToken = default)
     {
         var result = await FindTypeUsagesAsync(typeName, cancellationToken);
-        return result?.Instantiations ?? new List<TypeUsageInfo>();
+        return result?.Instantiations.ToList() ?? new List<TypeUsageInfo>();
     }
 
     public async Task<InheritanceAnalysis> AnalyzeInheritanceAsync(string typeName, CancellationToken cancellationToken = default)
@@ -367,7 +367,7 @@ public class TypeUsageService : ITypeUsageService
                         UsagesByKind = typeResult.UsagesByKind.ToDictionary(
                             kvp => kvp.Key,
                             kvp => kvp.Value.Count),
-                        FilesUsedIn = typeResult.UsedInFiles,
+                        FilesUsedIn = typeResult.UsedInFiles.ToList(),
                         IsPubliclyUsed = typeResult.Usages.Any(u => u.AccessModifier == "public"),
                         IsTestOnly = typeResult.UsedInFiles.All(f => IsTestFile(f)),
                         FirstUsage = TimeSpan.Zero, // Placeholder

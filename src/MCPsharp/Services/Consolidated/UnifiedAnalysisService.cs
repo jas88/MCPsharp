@@ -25,7 +25,6 @@ public partial class UnifiedAnalysisService
     private readonly SymbolQueryService? _symbolQuery;
     private readonly ClassStructureService? _classStructure;
     private readonly ReferenceFinderService? _referenceFinder;
-    private readonly ProjectParserService? _projectParser;
     private readonly IArchitectureValidatorService? _architectureValidator;
     private readonly IDuplicateCodeDetectorService? _duplicateDetector;
     private readonly ILogger<UnifiedAnalysisService> _logger;
@@ -35,7 +34,6 @@ public partial class UnifiedAnalysisService
         SymbolQueryService? symbolQuery = null,
         ClassStructureService? classStructure = null,
         ReferenceFinderService? referenceFinder = null,
-        ProjectParserService? projectParser = null,
         IArchitectureValidatorService? architectureValidator = null,
         IDuplicateCodeDetectorService? duplicateDetector = null,
         ILogger<UnifiedAnalysisService>? logger = null)
@@ -44,7 +42,6 @@ public partial class UnifiedAnalysisService
         _symbolQuery = symbolQuery;
         _classStructure = classStructure;
         _referenceFinder = referenceFinder;
-        _projectParser = projectParser;
         _architectureValidator = architectureValidator;
         _duplicateDetector = duplicateDetector;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<UnifiedAnalysisService>.Instance;
@@ -85,13 +82,13 @@ public partial class UnifiedAnalysisService
             }
 
             // References
-            if (request.Options?.Include.HasFlag(IncludeFlags.Dependencies) == true || request.Scope == AnalysisScope.References || request.Scope == AnalysisScope.All)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Dependencies) == true || request.Scope == AnalysisScope.References || request.Scope == AnalysisScope.All)
             {
                 response.References = await GetSymbolReferencesAsync(request.SymbolName, request.Context);
             }
 
             // Callers
-            if (request.Options?.Include.HasFlag(IncludeFlags.Dependencies) == true && request.Scope == AnalysisScope.All)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Dependencies) == true && request.Scope == AnalysisScope.All)
             {
                 response.Callers = await GetSymbolCallersAsync(request.SymbolName, request.Context);
             }
@@ -103,13 +100,13 @@ public partial class UnifiedAnalysisService
             }
 
             // Related symbols
-            if (request.Options?.Include.HasFlag(IncludeFlags.Suggestions) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Suggestions) == true)
             {
                 response.RelatedSymbols = await FindRelatedSymbolsAsync(request.SymbolName, request.Context);
             }
 
             // Metrics
-            if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Metrics) == true)
             {
                 response.Metrics = await CalculateSymbolMetricsAsync(request.SymbolName, request.Context);
             }
@@ -182,7 +179,7 @@ public partial class UnifiedAnalysisService
             }
 
             // Implementations
-            if (request.Options?.Include.HasFlag(IncludeFlags.Dependencies) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Dependencies) == true)
             {
                 response.Implementations = await GetTypeImplementationsAsync(request.TypeName, request.Context);
             }
@@ -194,7 +191,7 @@ public partial class UnifiedAnalysisService
             }
 
             // Type metrics
-            if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Metrics) == true)
             {
                 response.Metrics = await CalculateTypeMetricsAsync(request.TypeName, request.Context);
             }
@@ -268,7 +265,7 @@ public partial class UnifiedAnalysisService
             }
 
             // Issues and suggestions
-            if (request.Options?.Include.HasFlag(IncludeFlags.Suggestions) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Suggestions) == true)
             {
                 response.Issues = await DetectFileIssuesAsync(request.FilePath, ct);
                 response.Suggestions = await GenerateFileSuggestionsAsync(request.FilePath, ct);
@@ -305,16 +302,6 @@ public partial class UnifiedAnalysisService
 
         try
         {
-            if (_projectParser == null)
-            {
-                return new ProjectAnalysisResponse
-                {
-                    ProjectPath = request.ProjectPath,
-                    Error = "Project analysis service not available",
-                    Metadata = new ResponseMetadata { Success = false, ProcessingTime = stopwatch.Elapsed }
-                };
-            }
-
             var response = new ProjectAnalysisResponse
             {
                 ProjectPath = request.ProjectPath,
@@ -344,7 +331,7 @@ public partial class UnifiedAnalysisService
             }
 
             // Metrics
-            if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Metrics) == true)
             {
                 response.Metrics = await CalculateProjectMetricsAsync(request.ProjectPath, ct);
             }
@@ -426,7 +413,7 @@ public partial class UnifiedAnalysisService
             };
 
             // Generate recommendations
-            if (request.Options?.Include.HasFlag(IncludeFlags.Suggestions) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Suggestions) == true)
             {
                 var recommendations = await _architectureValidator.GetRecommendationsAsync(layerViolations, ct);
                 response.Recommendations = recommendations.Select(r => new MCPsharp.Models.Consolidated.ArchitectureRecommendation
@@ -440,7 +427,7 @@ public partial class UnifiedAnalysisService
             }
 
             // Architecture metrics
-            if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Metrics) == true)
             {
                 response.Metrics = CalculateArchitectureMetrics(scopeString, architectureDefinition);
             }
@@ -500,7 +487,7 @@ public partial class UnifiedAnalysisService
             }
 
             // Impact analysis
-            if (request.Options?.Include.HasFlag(IncludeFlags.Dependencies) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Dependencies) == true)
             {
                 response.ImpactAnalysis = await AnalyzeDependencyImpactAsync(request.Scope.ToString());
             }
@@ -512,7 +499,7 @@ public partial class UnifiedAnalysisService
             }
 
             // Dependency metrics
-            if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Metrics) == true)
             {
                 response.Metrics = CalculateDependencyMetrics(response.Graph);
             }
@@ -609,7 +596,7 @@ public partial class UnifiedAnalysisService
             }
 
             // Recommendations
-            if (request.Options?.Include.HasFlag(IncludeFlags.Suggestions) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Suggestions) == true)
             {
                 response.Recommendations = GenerateQualityRecommendations(response);
             }

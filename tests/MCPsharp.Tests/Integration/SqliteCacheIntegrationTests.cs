@@ -257,7 +257,7 @@ public class SqliteCacheIntegrationTests
             () => generators.GenerateStructure());
         _resourceRegistry.RegisterResource(
             new McpResource { Uri = "project://guidance", Name = "Guidance" },
-            () => generators.GenerateGuidance());
+            () => ResourceContentGenerators.GenerateGuidance());
 
         // Act
         var result = _resourceRegistry.ListResources();
@@ -342,7 +342,7 @@ public class SqliteCacheIntegrationTests
         var structure = generators.GenerateStructure();
         var dependencies = generators.GenerateDependencies();
         var symbols = generators.GenerateSymbolsSummary();
-        var guidance = generators.GenerateGuidance();
+        var guidance = ResourceContentGenerators.GenerateGuidance();
 
         // Assert - All resources generate valid content
         Assert.That(overview.Uri, Is.EqualTo("project://overview"));

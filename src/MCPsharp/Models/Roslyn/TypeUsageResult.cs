@@ -22,56 +22,56 @@ public class TypeUsageResult
     /// <summary>
     /// Get declarations of this type
     /// </summary>
-    public List<TypeUsageInfo> Declarations =>
-        Usages.Where(u => u.UsageKind == TypeUsageKind.TypeDeclaration).ToList();
+    public IEnumerable<TypeUsageInfo> Declarations =>
+        Usages.Where(u => u.UsageKind == TypeUsageKind.TypeDeclaration);
 
     /// <summary>
     /// Get instantiations of this type
     /// </summary>
-    public List<TypeUsageInfo> Instantiations =>
-        Usages.Where(u => u.UsageKind == TypeUsageKind.Instantiation).ToList();
+    public IEnumerable<TypeUsageInfo> Instantiations =>
+        Usages.Where(u => u.UsageKind == TypeUsageKind.Instantiation);
 
     /// <summary>
     /// Get method parameter usages
     /// </summary>
-    public List<TypeUsageInfo> ParameterUsages =>
-        Usages.Where(u => u.UsageKind == TypeUsageKind.Parameter).ToList();
+    public IEnumerable<TypeUsageInfo> ParameterUsages =>
+        Usages.Where(u => u.UsageKind == TypeUsageKind.Parameter);
 
     /// <summary>
     /// Get return type usages
     /// </summary>
-    public List<TypeUsageInfo> ReturnUsages =>
-        Usages.Where(u => u.UsageKind == TypeUsageKind.ReturnType).ToList();
+    public IEnumerable<TypeUsageInfo> ReturnUsages =>
+        Usages.Where(u => u.UsageKind == TypeUsageKind.ReturnType);
 
     /// <summary>
     /// Get property usages
     /// </summary>
-    public List<TypeUsageInfo> PropertyUsages =>
-        Usages.Where(u => u.UsageKind == TypeUsageKind.Property).ToList();
+    public IEnumerable<TypeUsageInfo> PropertyUsages =>
+        Usages.Where(u => u.UsageKind == TypeUsageKind.Property);
 
     /// <summary>
     /// Get field usages
     /// </summary>
-    public List<TypeUsageInfo> FieldUsages =>
-        Usages.Where(u => u.UsageKind == TypeUsageKind.Field).ToList();
+    public IEnumerable<TypeUsageInfo> FieldUsages =>
+        Usages.Where(u => u.UsageKind == TypeUsageKind.Field);
 
     /// <summary>
     /// Get generic constraint usages
     /// </summary>
-    public List<TypeUsageInfo> GenericConstraintUsages =>
-        Usages.Where(u => u.UsageKind == TypeUsageKind.GenericConstraint).ToList();
+    public IEnumerable<TypeUsageInfo> GenericConstraintUsages =>
+        Usages.Where(u => u.UsageKind == TypeUsageKind.GenericConstraint);
 
     /// <summary>
     /// Get inheritance usages (base class, interface implementation)
     /// </summary>
-    public List<TypeUsageInfo> InheritanceUsages =>
-        Usages.Where(u => u.UsageKind == TypeUsageKind.BaseClass || u.UsageKind == TypeUsageKind.InterfaceImplementation).ToList();
+    public IEnumerable<TypeUsageInfo> InheritanceUsages =>
+        Usages.Where(u => u.UsageKind == TypeUsageKind.BaseClass || u.UsageKind == TypeUsageKind.InterfaceImplementation);
 
     /// <summary>
     /// Get files where this type is used
     /// </summary>
-    public List<string> UsedInFiles =>
-        Usages.Select(u => u.File).Distinct().ToList();
+    public IEnumerable<string> UsedInFiles =>
+        Usages.Select(u => u.File).Distinct();
 }
 
 /// <summary>

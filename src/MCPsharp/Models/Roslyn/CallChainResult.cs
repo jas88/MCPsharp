@@ -22,32 +22,46 @@ public class CallChainResult
     /// <summary>
     /// Get shortest paths
     /// </summary>
-    public List<CallChainPath> ShortestPaths =>
-        Paths.Where(p => p.Length == Paths.Min(x => x.Length)).ToList();
+    public IEnumerable<CallChainPath> ShortestPaths
+    {
+        get
+        {
+            if (Paths.Count == 0)
+                return [];
+            var min = Paths.Min(x => x.Length);
+            return Paths.Where(p => p.Length == min);
+        }
+    }
 
     /// <summary>
     /// Get longest paths
     /// </summary>
-    public List<CallChainPath> LongestPaths =>
-        Paths.Where(p => p.Length == Paths.Max(x => x.Length)).ToList();
+    public IEnumerable<CallChainPath> LongestPaths
+    {
+        get
+        {
+            if (Paths.Count == 0)
+                return [];
+            var max = Paths.Max(x => x.Length);
+            return Paths.Where(p => p.Length == max);
+        }
+    }
 
     /// <summary>
     /// Get unique calling methods (direct callers)
     /// </summary>
-    public List<MethodSignature> UniqueCallers =>
+    public IEnumerable<MethodSignature> UniqueCallers =>
         Paths.Where(p => p.Length > 0)
              .Select(p => p.Steps[0].FromMethod)
-             .Distinct()
-             .ToList();
+             .Distinct();
 
     /// <summary>
     /// Get unique called methods (for forward analysis)
     /// </summary>
-    public List<MethodSignature> UniqueCallees =>
+    public IEnumerable<MethodSignature> UniqueCallees =>
         Paths.Where(p => p.Length > 0)
              .Select(p => p.Steps[^1].ToMethod)
-             .Distinct()
-             .ToList();
+             .Distinct();
 }
 
 /// <summary>
@@ -108,10 +122,10 @@ public class CallChainStep
     /// </summary>
     public string Location => $"{Path.GetFileName(File)}:{Line + 1}:{Column + 1}";
 
-    // Additional properties for compatibility
-    public string? ToMethod_Name => ToMethod.Name;
+    /// <summary>
+    /// Name of the called method
+    /// </summary>
     public string? MethodName => ToMethod.Name;
-    public string Location_ReadOnly => Location;
 }
 
 /// <summary>

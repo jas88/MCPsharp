@@ -202,7 +202,7 @@ sealed partial class Program
 
             resourceRegistry.RegisterResource(
                 new McpResource { Uri = ProjectResourceUris.Guidance, Name = "Usage Guide", Description = "Best practices for using MCPsharp", MimeType = "text/markdown" },
-                () => resourceGenerators.GenerateGuidance());
+                () => ResourceContentGenerators.GenerateGuidance());
 
             LogRegisteredMCPResources(logger, 5);
 

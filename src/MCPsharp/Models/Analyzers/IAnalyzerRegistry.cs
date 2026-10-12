@@ -117,9 +117,16 @@ public record AnalyzerDependency
 /// <summary>
 /// Event args for analyzer registered
 /// </summary>
-public record AnalyzerRegisteredEventArgs(string AnalyzerId, AnalyzerInfo AnalyzerInfo);
+public sealed class AnalyzerRegisteredEventArgs(string analyzerId, AnalyzerInfo analyzerInfo) : EventArgs
+{
+    public string AnalyzerId { get; } = analyzerId;
+    public AnalyzerInfo AnalyzerInfo { get; } = analyzerInfo;
+}
 
 /// <summary>
 /// Event args for analyzer unregistered
 /// </summary>
-public record AnalyzerUnregisteredEventArgs(string AnalyzerId);
+public sealed class AnalyzerUnregisteredEventArgs(string analyzerId) : EventArgs
+{
+    public string AnalyzerId { get; } = analyzerId;
+}

@@ -127,7 +127,7 @@ public partial class AdvancedReferenceFinderService
         {
             TargetSymbol = result.TargetSymbol,
             TargetSignature = result.TargetSignature,
-            Callers = result.DirectCallers,
+            Callers = result.DirectCallers.ToList(),
             AnalysisTime = result.AnalysisTime,
             Metadata = result.Metadata
         };
@@ -423,8 +423,8 @@ public partial class AdvancedReferenceFinderService
             ForwardCallChains = forwardChains,
             CallPatterns = patterns,
             RecursiveCallChains = recursive,
-            TotalDirectCallers = callers?.DirectCallers.Count ?? 0,
-            TotalIndirectCallers = callers?.IndirectCallers.Count ?? 0,
+            TotalDirectCallers = callers?.DirectCallers.Count() ?? 0,
+            TotalIndirectCallers = callers?.IndirectCallers.Count() ?? 0,
             TotalBackwardPaths = backwardChains?.TotalPaths ?? 0,
             TotalForwardPaths = forwardChains?.TotalPaths ?? 0,
             HasRecursiveCalls = (recursive?.Count ?? 0) > 0,
@@ -455,7 +455,7 @@ public partial class AdvancedReferenceFinderService
             DependencyAnalysis = dependencies,
             GenericUsages = generic,
             TotalUsages = usages?.TotalUsages ?? 0,
-            InstantiationCount = usages?.Instantiations.Count ?? 0,
+            InstantiationCount = usages?.Instantiations.Count() ?? 0,
             DerivedTypeCount = inheritance?.DerivedClasses.Count ?? 0,
             InterfaceImplementationCount = inheritance?.InterfaceImplementations.Count ?? 0,
             DependencyCount = dependencies?.TotalDependencies ?? 0,

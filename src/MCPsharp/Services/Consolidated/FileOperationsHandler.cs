@@ -348,10 +348,10 @@ public partial class FileOperationsHandler
         // Parse include flags
         if (element.TryGetProperty("include", out var includeElement) && includeElement.ValueKind == JsonValueKind.Array)
         {
-            var includeFlags = IncludeFlags.Default;
+            var includeFlags = IncludeOptions.None;
             foreach (var flagElement in includeElement.EnumerateArray())
             {
-                if (Enum.TryParse<IncludeFlags>(flagElement.GetString(), true, out var flag))
+                if (Enum.TryParse<IncludeOptions>(flagElement.GetString(), true, out var flag))
                 {
                     includeFlags |= flag;
                 }

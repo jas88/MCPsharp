@@ -12,12 +12,12 @@ public enum DetailLevel
 }
 
 /// <summary>
-/// Flags for additional data to include in responses
+/// Additional data to include in responses
 /// </summary>
 [Flags]
-public enum IncludeFlags
+public enum IncludeOptions
 {
-    Default = 0,
+    None = 0,
     Metadata = 1 << 0,
     Dependencies = 1 << 1,
     Metrics = 1 << 2,
@@ -141,7 +141,7 @@ public class ToolOptions
     /// <summary>
     /// Additional data to include
     /// </summary>
-    public IncludeFlags Include { get; set; } = IncludeFlags.Default;
+    public IncludeOptions Include { get; set; } = IncludeOptions.None;
 
     /// <summary>
     /// Filters to apply

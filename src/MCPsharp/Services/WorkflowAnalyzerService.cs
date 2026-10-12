@@ -37,7 +37,7 @@ public partial class WorkflowAnalyzerService
     /// </summary>
     /// <param name="projectRoot">Root directory of the project</param>
     /// <returns>List of absolute paths to workflow files</returns>
-    public Task<IReadOnlyList<string>> FindWorkflowsAsync(string projectRoot)
+    public static Task<IReadOnlyList<string>> FindWorkflowsAsync(string projectRoot)
     {
         var workflowsDir = Path.Combine(projectRoot, ".github", "workflows");
 
@@ -119,7 +119,7 @@ public partial class WorkflowAnalyzerService
     /// <param name="workflow">Workflow to validate</param>
     /// <param name="project">Project information</param>
     /// <returns>List of validation issues found</returns>
-    public Task<IReadOnlyList<WorkflowValidationIssue>> ValidateWorkflowConsistencyAsync(
+    public static Task<IReadOnlyList<WorkflowValidationIssue>> ValidateWorkflowConsistencyAsync(
         WorkflowInfo workflow,
         CsprojInfo project)
     {

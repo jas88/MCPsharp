@@ -344,7 +344,7 @@ public partial class UniversalFileOperations
                     response.Encoding = readResult.Encoding;
 
                     // Include content preview if requested
-                    if (request.Options?.Include.HasFlag(IncludeFlags.Preview) == true)
+                    if (request.Options?.Include.HasFlag(IncludeOptions.Preview) == true)
                     {
                         response.ContentPreview = GenerateContentPreview(readResult.Content ?? string.Empty, 500);
                     }
@@ -358,7 +358,7 @@ public partial class UniversalFileOperations
             }
 
             // Include dependencies if requested
-            if (request.Options?.Include.HasFlag(IncludeFlags.Dependencies) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Dependencies) == true)
             {
                 response.Dependencies = await ExtractFileDependenciesAsync(fullPath, ct);
             }

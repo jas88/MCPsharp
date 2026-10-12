@@ -80,7 +80,7 @@ jobs:
     public async Task FindWorkflowsAsync_FindsYmlFiles()
     {
         var projectRoot = Path.GetDirectoryName(Path.GetDirectoryName(_testWorkflowDir))!;
-        var workflows = await _service.FindWorkflowsAsync(projectRoot);
+        var workflows = await WorkflowAnalyzerService.FindWorkflowsAsync(projectRoot);
 
         Assert.That(workflows.Count, Is.EqualTo(2));
         Assert.That(workflows, Has.Some.Matches<string>(w => w is not null && w.EndsWith("build.yml", StringComparison.Ordinal)));
