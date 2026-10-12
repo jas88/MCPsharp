@@ -229,5 +229,16 @@ public class ExceptionLoggingAnalyzer : DiagnosticAnalyzer
         return null;
     }
 
-    private sealed record ExceptionReferenceInfo(string VariableName, Location Location);
+    private sealed class ExceptionReferenceInfo
+    {
+        public ExceptionReferenceInfo(string variableName, Location location)
+        {
+            VariableName = variableName;
+            Location = location;
+        }
+
+        public string VariableName { get; }
+
+        public Location Location { get; }
+    }
 }

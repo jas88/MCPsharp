@@ -47,8 +47,9 @@ public class ExceptionLoggingFixer : CodeFixProvider
             return;
 
         // Get exception variable name from diagnostic properties
-        if (!diagnostic.Properties.TryGetValue("ExceptionVariable", out var exceptionVarName) ||
-            string.IsNullOrEmpty(exceptionVarName))
+        // (pattern match rather than string.IsNullOrEmpty: netstandard2.0 lacks its nullability annotations)
+        if (!diagnostic.Properties.TryGetValue("ExceptionVariable", out var exceptionVariable) ||
+            exceptionVariable is not { Length: > 0 } exceptionVarName)
             return;
 
         context.RegisterCodeFix(

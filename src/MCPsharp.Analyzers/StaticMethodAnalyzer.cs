@@ -157,10 +157,11 @@ public class StaticMethodAnalyzer : DiagnosticAnalyzer
     private static bool HasSpecialAttributes(IMethodSymbol methodSymbol)
     {
         // Check for attributes that might require instance context
-        var attributeNames = methodSymbol.GetAttributes()
-            .Select(a => a.AttributeClass?.Name)
-            .Where(n => n != null)
-            .ToHashSet();
+        var attributeNames = new HashSet<string>(
+            methodSymbol.GetAttributes()
+                .Select(a => a.AttributeClass?.Name)
+                .OfType<string>(),
+            StringComparer.Ordinal);
 
         // Common attributes that might require instance context
         var specialAttributes = new[]
