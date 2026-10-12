@@ -7,9 +7,9 @@ namespace MCPsharp.Services.Phase3.DuplicateDetection;
 /// <summary>
 /// Service for calculating code complexity metrics
 /// </summary>
-public class ComplexityCalculator
+public static class ComplexityCalculator
 {
-    public ComplexityMetrics CalculateComplexity(SyntaxNode node)
+    public static ComplexityMetrics CalculateComplexity(SyntaxNode node)
     {
         // Calculate cyclomatic complexity
         var cyclomaticComplexity = 1; // Base complexity
@@ -66,7 +66,7 @@ public class ComplexityCalculator
         };
     }
 
-    public int CalculateCognitiveComplexity(SyntaxNode node)
+    public static int CalculateCognitiveComplexity(SyntaxNode node)
     {
         var complexity = 0;
 
@@ -125,7 +125,7 @@ public class ComplexityCalculator
         return complexity;
     }
 
-    public int CalculateNestingDepth(SyntaxNode node)
+    public static int CalculateNestingDepth(SyntaxNode node)
     {
         var maxDepth = 0;
 

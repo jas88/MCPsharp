@@ -5,9 +5,9 @@ namespace MCPsharp.Services.Phase3.DuplicateDetection;
 /// <summary>
 /// Service for calculating similarity metrics between code blocks
 /// </summary>
-public class SimilarityCalculatorService
+public static class SimilarityCalculatorService
 {
-    public async Task<double> CalculateSimilarityAsync(
+    public static async Task<double> CalculateSimilarityAsync(
         CodeBlock block1,
         CodeBlock block2,
         DuplicateDetectionOptions options,
@@ -29,7 +29,7 @@ public class SimilarityCalculatorService
         return await Task.FromResult(overallSimilarity);
     }
 
-    public double CalculateStructuralSimilarity(CodeBlock block1, CodeBlock block2)
+    public static double CalculateStructuralSimilarity(CodeBlock block1, CodeBlock block2)
     {
         // Compare AST structure hashes
         if (block1.AstStructure.StructuralHash == block2.AstStructure.StructuralHash)
@@ -52,7 +52,7 @@ public class SimilarityCalculatorService
         return (double)matches / seq1.Count;
     }
 
-    public double CalculateTokenSimilarity(CodeBlock block1, CodeBlock block2, DuplicateDetectionOptions options)
+    public static double CalculateTokenSimilarity(CodeBlock block1, CodeBlock block2, DuplicateDetectionOptions options)
     {
         if (block1.Tokens == null || block2.Tokens == null)
             return 0.0;
@@ -75,7 +75,7 @@ public class SimilarityCalculatorService
         return 1.0 - ((double)distance / maxLen);
     }
 
-    public List<CodeToken> FilterTokens(IReadOnlyList<CodeToken> tokens, DuplicateDetectionOptions options)
+    public static List<CodeToken> FilterTokens(IReadOnlyList<CodeToken> tokens, DuplicateDetectionOptions options)
     {
         var filtered = new List<CodeToken>();
 
@@ -96,7 +96,7 @@ public class SimilarityCalculatorService
         return filtered;
     }
 
-    public int CalculateLevenshteinDistance<T>(IList<T> sequence1, IList<T> sequence2)
+    public static int CalculateLevenshteinDistance<T>(IList<T> sequence1, IList<T> sequence2)
     {
         var matrix = new int[sequence1.Count + 1, sequence2.Count + 1];
 
@@ -120,7 +120,7 @@ public class SimilarityCalculatorService
         return matrix[sequence1.Count, sequence2.Count];
     }
 
-    public async Task<double> CalculateStructuralSimilarityAsync(
+    public static async Task<double> CalculateStructuralSimilarityAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
         CancellationToken cancellationToken)
@@ -128,7 +128,7 @@ public class SimilarityCalculatorService
         return await Task.FromResult(CalculateStructuralSimilarity(codeBlock1, codeBlock2));
     }
 
-    public async Task<double> CalculateTokenSimilarityAsync(
+    public static async Task<double> CalculateTokenSimilarityAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
         CodeComparisonOptions options,
@@ -143,7 +143,7 @@ public class SimilarityCalculatorService
         return await Task.FromResult(CalculateTokenSimilarity(codeBlock1, codeBlock2, detectionOptions));
     }
 
-    public async Task<double> CalculateSemanticSimilarityAsync(
+    public static async Task<double> CalculateSemanticSimilarityAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
         CancellationToken cancellationToken)

@@ -10,25 +10,39 @@ namespace MCPsharp.Services.Phase3.DuplicateDetection;
 /// <summary>
 /// Utility methods for duplicate detection operations
 /// </summary>
-public static class DuplicateDetectionUtils
+public static partial class DuplicateDetectionUtils
 {
+    private const int RegexTimeoutMilliseconds = 1000;
+
+    [GeneratedRegex(@"//.*$", RegexOptions.Multiline, RegexTimeoutMilliseconds)]
+    private static partial Regex LineCommentRegex();
+
+    [GeneratedRegex(@"/\*.*?\*/", RegexOptions.Singleline, RegexTimeoutMilliseconds)]
+    private static partial Regex BlockCommentRegex();
+
+    [GeneratedRegex(@"\s+", RegexOptions.None, RegexTimeoutMilliseconds)]
+    private static partial Regex WhitespaceRegex();
+
+    [GeneratedRegex(@"\b[a-zA-Z_][a-zA-Z0-9_]*\b", RegexOptions.None, RegexTimeoutMilliseconds)]
+    private static partial Regex IdentifierRegex();
+
     public static string NormalizeCode(string code, DuplicateDetectionOptions options)
     {
         if (options.IgnoreTrivialDifferences)
         {
             // Remove comments
-            code = Regex.Replace(code, @"//.*$", "", RegexOptions.Multiline);
-            code = Regex.Replace(code, @"/\*.*?\*/", "", RegexOptions.Singleline);
+            code = LineCommentRegex().Replace(code, "");
+            code = BlockCommentRegex().Replace(code, "");
 
             // Normalize whitespace
-            code = Regex.Replace(code, @"\s+", " ");
+            code = WhitespaceRegex().Replace(code, " ");
             code = code.Trim();
         }
 
         if (options.IgnoreIdentifiers)
         {
             // Replace identifiers with placeholder
-            code = Regex.Replace(code, @"\b[a-zA-Z_][a-zA-Z0-9_]*\b", "IDENTIFIER");
+            code = IdentifierRegex().Replace(code, "IDENTIFIER");
         }
 
         return code;
@@ -36,9 +50,7 @@ public static class DuplicateDetectionUtils
 
     public static string ComputeHash(string input)
     {
-        using var sha256 = SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(input);
-        var hash = sha256.ComputeHash(bytes);
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToBase64String(hash);
     }
 

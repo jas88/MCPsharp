@@ -6,7 +6,7 @@ namespace MCPsharp.Services.Phase3.SqlMigration;
 /// <summary>
 /// Estimates migration execution time and resource requirements
 /// </summary>
-internal class ExecutionEstimator
+internal sealed partial class ExecutionEstimator
 {
     private readonly ILogger<ExecutionEstimator> _logger;
 
@@ -17,7 +17,7 @@ internal class ExecutionEstimator
 
     public MigrationExecutionEstimate EstimateMigrationExecution(string migrationName, MigrationInfo migration)
     {
-        _logger.LogInformation("Estimating execution for migration: {MigrationName}", migrationName);
+        LogEstimatingExecution(_logger, migrationName);
 
         var estimate = new MigrationExecutionEstimate
         {
@@ -35,7 +35,7 @@ internal class ExecutionEstimator
         return estimate;
     }
 
-    private TimeSpan EstimateExecutionTime(List<MigrationOperation> operations)
+    private static TimeSpan EstimateExecutionTime(List<MigrationOperation> operations)
     {
         // Simple estimation based on operation types
         var baseTime = TimeSpan.FromSeconds(1);
@@ -50,7 +50,7 @@ internal class ExecutionEstimator
         return baseTime + operationTime + complexTime;
     }
 
-    private long EstimateDiskSpace(List<MigrationOperation> operations)
+    private static long EstimateDiskSpace(List<MigrationOperation> operations)
     {
         // Simple estimation - would be more sophisticated in reality
         var createTableOps = operations.Count(o => o.Type.Equals("CreateTable", StringComparison.OrdinalIgnoreCase));
@@ -59,7 +59,7 @@ internal class ExecutionEstimator
         return (createTableOps * 1024 * 1024) + (addColumnOps * 1024 * 100); // MB
     }
 
-    private bool RequiresDowntime(List<MigrationOperation> operations)
+    private static bool RequiresDowntime(List<MigrationOperation> operations)
     {
         // Check for operations that typically require downtime
         return operations.Any(o =>
@@ -67,10 +67,10 @@ internal class ExecutionEstimator
             o.Type.Equals("AlterColumn", StringComparison.OrdinalIgnoreCase) ||
             (o.Type.Equals("Sql", StringComparison.OrdinalIgnoreCase) &&
              !string.IsNullOrEmpty(o.SqlStatement) &&
-             o.SqlStatement.ToLowerInvariant().Contains("alter")));
+             o.SqlStatement.Contains("alter", StringComparison.InvariantCultureIgnoreCase)));
     }
 
-    private List<string> IdentifyRiskFactors(List<MigrationOperation> operations)
+    private static List<string> IdentifyRiskFactors(List<MigrationOperation> operations)
     {
         var riskFactors = new List<string>();
 
@@ -96,7 +96,7 @@ internal class ExecutionEstimator
         return riskFactors.Distinct().ToList();
     }
 
-    private List<string> IdentifyPrerequisites(List<MigrationOperation> operations)
+    private static List<string> IdentifyPrerequisites(List<MigrationOperation> operations)
     {
         var prerequisites = new List<string>();
 
@@ -113,7 +113,7 @@ internal class ExecutionEstimator
         return prerequisites.Distinct().ToList();
     }
 
-    private Dictionary<string, object> EstimateResources(List<MigrationOperation> operations)
+    private static Dictionary<string, object> EstimateResources(List<MigrationOperation> operations)
     {
         return new Dictionary<string, object>
         {
@@ -123,4 +123,7 @@ internal class ExecutionEstimator
             ["RequiresExclusiveLock"] = RequiresDowntime(operations)
         };
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Estimating execution for migration: {MigrationName}")]
+    private static partial void LogEstimatingExecution(ILogger logger, string migrationName);
 }

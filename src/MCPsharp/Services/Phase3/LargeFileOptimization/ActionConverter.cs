@@ -5,9 +5,9 @@ namespace MCPsharp.Services.Phase3.LargeFileOptimization;
 /// <summary>
 /// Service for converting analysis results into optimization actions
 /// </summary>
-internal class ActionConverter
+internal static class ActionConverter
 {
-    public List<OptimizationAction> ConvertToOptimizationActions(ClassOptimizationResult classOptimization)
+    public static List<OptimizationAction> ConvertToOptimizationActions(ClassOptimizationResult classOptimization)
     {
         var actions = new List<OptimizationAction>();
 
@@ -35,7 +35,7 @@ internal class ActionConverter
         return actions;
     }
 
-    public List<OptimizationAction> ConvertToOptimizationActions(MethodOptimizationResult methodOptimization)
+    public static List<OptimizationAction> ConvertToOptimizationActions(MethodOptimizationResult methodOptimization)
     {
         var actions = new List<OptimizationAction>();
 
@@ -63,7 +63,7 @@ internal class ActionConverter
         return actions;
     }
 
-    public OptimizationAction ConvertCodeSmellToAction(CodeSmell codeSmell)
+    public static OptimizationAction ConvertCodeSmellToAction(CodeSmell codeSmell)
     {
         return new OptimizationAction
         {
@@ -83,7 +83,7 @@ internal class ActionConverter
         };
     }
 
-    public List<string> GenerateRecommendedActions(
+    public static List<string> GenerateRecommendedActions(
         List<SplittingStrategy> splittingStrategies,
         List<RefactoringSuggestion> refactoringSuggestions)
     {
@@ -102,24 +102,24 @@ internal class ActionConverter
         return actions;
     }
 
-    public List<string> GenerateImmediateActions(
+    public static List<string> GenerateImmediateActions(
         List<string> largeClasses,
         List<string> largeMethods,
         List<CodeSmell> codeSmells)
     {
         var actions = new List<string>();
 
-        if (largeClasses.Any())
+        if (largeClasses.Count != 0)
         {
             actions.Add($"Split large classes: {string.Join(", ", largeClasses)}");
         }
 
-        if (largeMethods.Any())
+        if (largeMethods.Count != 0)
         {
             actions.Add($"Refactor large methods: {string.Join(", ", largeMethods)}");
         }
 
-        if (codeSmells.Any())
+        if (codeSmells.Count != 0)
         {
             actions.Add($"Address {codeSmells.Count} code smells");
         }

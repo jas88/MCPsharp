@@ -10,12 +10,10 @@ namespace MCPsharp.Services.Phase3.LargeFileOptimization;
 /// <summary>
 /// Service for calculating code complexity metrics (cyclomatic, cognitive, Halstead, etc.)
 /// </summary>
-internal class ComplexityCalculator
+internal static class ComplexityCalculator
 {
-    private const int HighComplexityThreshold = 10;
-    private const int MaxNestingDepth = 4;
 
-    public async Task<ComplexityMetrics> CalculateFileComplexity(
+    public static async Task<ComplexityMetrics> CalculateFileComplexity(
         SyntaxNode root,
         SemanticModel semanticModel,
         CancellationToken cancellationToken)
@@ -66,7 +64,7 @@ internal class ComplexityCalculator
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<ComplexityMetrics> CalculateMethodComplexity(
+    public static async Task<ComplexityMetrics> CalculateMethodComplexity(
         MethodDeclarationSyntax method,
         SemanticModel semanticModel,
         CancellationToken cancellationToken)
@@ -81,8 +79,7 @@ internal class ComplexityCalculator
         var body = method.Body;
         if (body != null)
         {
-            var analyzer = new ComplexityAnalyzer();
-            var result = analyzer.Analyze(body);
+            var result = ComplexityAnalyzer.Analyze(body);
 
             cyclomaticComplexity += result.CyclomaticComplexity;
             cognitiveComplexity += result.CognitiveComplexity;
@@ -90,7 +87,7 @@ internal class ComplexityCalculator
             decisionPoints = result.DecisionPoints;
 
             // Identify complexity hotspots
-            hotspots = IdentifyComplexityHotspots(body, result);
+            hotspots = IdentifyComplexityHotspots();
         }
 
         // Calculate Halstead metrics
@@ -119,11 +116,11 @@ internal class ComplexityCalculator
         };
     }
 
-    public (int volume, int difficulty) CalculateHalsteadMetrics(string code)
+    public static (int volume, int difficulty) CalculateHalsteadMetrics(string code)
     {
         // Simplified Halstead metrics calculation
-        var operators = Regex.Matches(code, @"(\+|\-|\*|\/|%|=|==|!=|<|>|<=|>=|&&|\|\||!|\+\+|\-\-)").Count;
-        var operands = Regex.Matches(code, @"\b[a-zA-Z_][a-zA-Z0-9_]*\b").Count;
+        var operators = Regex.Count(code, @"(\+|\-|\*|\/|%|=|==|!=|<|>|<=|>=|&&|\|\||!|\+\+|\-\-)");
+        var operands = Regex.Count(code, @"\b[a-zA-Z_][a-zA-Z0-9_]*\b");
 
         var vocabulary = operators + operands;
         var length = code.Length;
@@ -134,7 +131,7 @@ internal class ComplexityCalculator
         return ((int)volume, (int)difficulty);
     }
 
-    public double CalculateMaintainabilityIndex(int cyclomaticComplexity, int linesOfCode, int halsteadVolume)
+    public static double CalculateMaintainabilityIndex(int cyclomaticComplexity, int linesOfCode, int halsteadVolume)
     {
         // Simplified maintainability index calculation
         if (halsteadVolume == 0) return 100.0;
@@ -147,7 +144,7 @@ internal class ComplexityCalculator
         return Math.Max(0, Math.Min(100, maintainabilityIndex));
     }
 
-    public ComplexityLevel DetermineComplexityLevel(int cyclomatic, int cognitive)
+    public static ComplexityLevel DetermineComplexityLevel(int cyclomatic, int cognitive)
     {
         var maxComplexity = Math.Max(cyclomatic, cognitive);
 
@@ -157,9 +154,7 @@ internal class ComplexityCalculator
         return ComplexityLevel.VeryComplex;
     }
 
-    private List<ComplexityHotspot> IdentifyComplexityHotspots(
-        BlockSyntax body,
-        ComplexityAnalyzer.AnalysisResult result)
+    private static List<ComplexityHotspot> IdentifyComplexityHotspots()
     {
         var hotspots = new List<ComplexityHotspot>();
 

@@ -10,7 +10,7 @@ namespace MCPsharp.Services.Phase3;
 /// Comprehensive SQL migration analysis service for Entity Framework migrations
 /// Phase 3 implementation - Coordinator service
 /// </summary>
-public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
+public partial class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
 {
     private readonly ILogger<SqlMigrationAnalyzerService> _logger;
     private readonly MigrationParser _migrationParser;
@@ -39,7 +39,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
 
     public async Task<MigrationAnalysisResult> AnalyzeMigrationsAsync(string projectPath, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Starting migration analysis for project: {ProjectPath}", projectPath);
+        LogStartingMigrationAnalysis(_logger, projectPath);
 
         var result = new MigrationAnalysisResult();
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -52,7 +52,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
 
             // Get all migration files
             var migrationFiles = await _migrationParser.GetMigrationFilesAsync(projectPath, cancellationToken);
-            _logger.LogInformation("Found {Count} migration files", migrationFiles.Count);
+            LogFoundMigrationFiles(_logger, migrationFiles.Count);
 
             // Analyze each migration
             foreach (var file in migrationFiles)
@@ -65,7 +65,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to parse migration file: {File}", file);
+                    LogMigrationFileSkipped(_logger, ex, file);
                 }
             }
 
@@ -73,13 +73,13 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
             result.Migrations = result.Migrations.OrderBy(m => m.CreatedAt).ToList();
 
             // Analyze dependencies
-            await _dependencyAnalyzer.AnalyzeDependenciesAsync(result.Migrations, cancellationToken);
+            await DependencyAnalyzer.AnalyzeDependenciesAsync(result.Migrations, cancellationToken);
 
             // Detect breaking changes
-            result.BreakingChanges = await _breakingChangeAnalyzer.DetectBreakingChangesInMigrationsAsync(result.Migrations, cancellationToken);
+            result.BreakingChanges = await BreakingChangeAnalyzer.DetectBreakingChangesInMigrationsAsync(result.Migrations, cancellationToken);
 
             // Build schema changes
-            _schemaEvolutionTracker.BuildSchemaChanges(result);
+            SchemaEvolutionTracker.BuildSchemaChanges(result);
 
             result.Summary.TotalMigrations = result.Migrations.Count;
             result.Summary.AppliedMigrations = result.Migrations.Count(m => m.IsApplied);
@@ -91,13 +91,12 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
             stopwatch.Stop();
             result.Summary.TotalAnalysisTime = stopwatch.Elapsed;
 
-            _logger.LogInformation("Migration analysis completed in {Elapsed}: {TotalMigrations} migrations, {BreakingChanges} breaking changes",
-                stopwatch.Elapsed, result.Summary.TotalMigrations, result.Summary.BreakingChanges);
+            LogMigrationAnalysisCompleted(_logger, stopwatch.Elapsed, result.Summary.TotalMigrations, result.Summary.BreakingChanges);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Migration analysis failed for project: {ProjectPath}", projectPath);
-            throw;
+            LogMigrationAnalysisFailed(_logger, ex, projectPath);
+            throw new InvalidOperationException($"Migration analysis failed for project '{projectPath}': {ex.Message}", ex);
         }
 
         return result;
@@ -105,7 +104,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
 
     public async Task<List<MigrationHistory>> GetMigrationHistoryAsync(string dbContextPath, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Getting migration history from DbContext: {DbContextPath}", dbContextPath);
+        LogGettingMigrationHistory(_logger, dbContextPath);
 
         var history = new List<MigrationHistory>();
 
@@ -129,7 +128,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
                 {
                     // In a real implementation, we would connect to the database and query the __EFMigrationsHistory table
                     // For now, return a placeholder implementation
-                    _logger.LogInformation("Would query migration history from database: {ConnectionString}", connectionInfo);
+                    LogWouldQueryMigrationHistory(_logger, connectionInfo);
                 }
             }
 
@@ -142,13 +141,13 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
 
                 if (configParam != null)
                 {
-                    _logger.LogDebug("DbContext configured via options pattern");
+                    LogDbContextOptionsPattern(_logger);
                 }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get migration history from DbContext: {DbContextPath}", dbContextPath);
+            LogMigrationHistoryFailed(_logger, ex, dbContextPath);
         }
 
         return history;
@@ -156,7 +155,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
 
     public async Task<List<BreakingChange>> DetectBreakingChangesAsync(string fromMigration, string toMigration, string projectPath, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Detecting breaking changes from {From} to {To}", fromMigration, toMigration);
+        LogDetectingBreakingChanges(_logger, fromMigration, toMigration);
 
         var breakingChanges = new List<BreakingChange>();
 
@@ -187,7 +186,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to detect breaking changes from {From} to {To}", fromMigration, toMigration);
+            LogBreakingChangeDetectionFailed(_logger, ex, fromMigration, toMigration);
         }
 
         return breakingChanges;
@@ -195,7 +194,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
 
     public async Task<MigrationDependency> GetMigrationDependenciesAsync(string migrationName, string projectPath, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Getting dependencies for migration: {MigrationName}", migrationName);
+        LogGettingDependencies(_logger, migrationName);
 
         var dependency = new MigrationDependency
         {
@@ -220,7 +219,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get dependencies for migration: {MigrationName}", migrationName);
+            LogDependenciesFailed(_logger, ex, migrationName);
         }
 
         return dependency;
@@ -228,7 +227,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
 
     public async Task<MigrationReport> GenerateMigrationReportAsync(string projectPath, bool includeHistory = true, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Generating migration report for project: {ProjectPath}", projectPath);
+        LogGeneratingReport(_logger, projectPath);
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
@@ -248,17 +247,17 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
             if (includeHistory)
             {
                 // This would query actual database history in a real implementation
-                _logger.LogDebug("Migration history inclusion requested");
+                LogMigrationHistoryRequested(_logger);
             }
 
-            _logger.LogInformation("Migration report generated in {Elapsed}", stopwatch.Elapsed);
+            LogReportGeneratedIn(_logger, stopwatch.Elapsed);
 
             return report;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Failed to generate migration report for project: {ProjectPath}", projectPath);
-            throw;
+            LogReportGenerationFailed(_logger, ex, projectPath);
+            throw new InvalidOperationException($"Failed to generate migration report for project '{projectPath}': {ex.Message}", ex);
         }
     }
 
@@ -269,7 +268,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
 
     public async Task<SchemaEvolution> TrackSchemaEvolutionAsync(string projectPath, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Tracking schema evolution for project: {ProjectPath}", projectPath);
+        LogTrackingProjectSchemaEvolution(_logger, projectPath);
 
         try
         {
@@ -279,14 +278,14 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to track schema evolution for project: {ProjectPath}", projectPath);
+            LogSchemaEvolutionFailed(_logger, ex, projectPath);
             return new SchemaEvolution();
         }
     }
 
     public async Task<List<MigrationValidationIssue>> ValidateMigrationsAsync(string projectPath, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Validating migrations for project: {ProjectPath}", projectPath);
+        LogValidatingProjectMigrations(_logger, projectPath);
 
         var issues = new List<MigrationValidationIssue>();
 
@@ -297,7 +296,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to validate migrations for project: {ProjectPath}", projectPath);
+            LogMigrationValidationFailed(_logger, ex, projectPath);
         }
 
         return issues;
@@ -305,7 +304,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
 
     public async Task<MigrationExecutionEstimate> EstimateMigrationExecutionAsync(string migrationName, string projectPath, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Estimating execution for migration: {MigrationName}", migrationName);
+        LogEstimatingExecution(_logger, migrationName);
 
         var estimate = new MigrationExecutionEstimate
         {
@@ -325,7 +324,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to estimate migration execution: {MigrationName}", migrationName);
+            LogExecutionEstimateFailed(_logger, ex, migrationName);
         }
 
         return estimate;
@@ -341,7 +340,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
         return await _providerDetector.DetectDatabaseProviderAsync(projectPath, cancellationToken);
     }
 
-    private string? ExtractConnectionInfo(MethodDeclarationSyntax onConfiguringMethod)
+    private static string? ExtractConnectionInfo(MethodDeclarationSyntax onConfiguringMethod)
     {
         // Extract connection string from UseSqlServer, UseNpgsql, etc.
         var invocations = onConfiguringMethod.DescendantNodes().OfType<InvocationExpressionSyntax>();
@@ -349,7 +348,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
         foreach (var invocation in invocations)
         {
             var memberAccess = invocation.Expression as MemberAccessExpressionSyntax;
-            if (memberAccess?.Name?.Identifier.Text?.StartsWith("Use") == true)
+            if (memberAccess?.Name?.Identifier.Text?.StartsWith("Use", StringComparison.Ordinal) == true)
             {
                 var connectionString = ExtractConnectionString(invocation);
                 if (!string.IsNullOrEmpty(connectionString))
@@ -362,19 +361,85 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
         return null;
     }
 
-    private string? ExtractConnectionString(InvocationExpressionSyntax invocation)
+    private static string? ExtractConnectionString(InvocationExpressionSyntax invocation)
     {
         if (invocation.ArgumentList?.Arguments.Any() == true)
         {
             var firstArg = invocation.ArgumentList.Arguments[0];
-            if (firstArg.Expression is LiteralExpressionSyntax literal)
+            if (firstArg.Expression is LiteralExpressionSyntax literal && literal.Kind() == SyntaxKind.StringLiteralExpression)
             {
-                if (literal.Kind() == SyntaxKind.StringLiteralExpression)
-                {
-                    return literal.Token.ValueText;
-                }
+                return literal.Token.ValueText;
             }
         }
         return null;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting migration analysis for project: {ProjectPath}")]
+    private static partial void LogStartingMigrationAnalysis(ILogger logger, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Found {Count} migration files")]
+    private static partial void LogFoundMigrationFiles(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to parse migration file: {File}")]
+    private static partial void LogMigrationFileSkipped(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Migration analysis completed in {Elapsed}: {TotalMigrations} migrations, {BreakingChanges} breaking changes")]
+    private static partial void LogMigrationAnalysisCompleted(ILogger logger, TimeSpan elapsed, int totalMigrations, int breakingChanges);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Migration analysis failed for project: {ProjectPath}")]
+    private static partial void LogMigrationAnalysisFailed(ILogger logger, Exception exception, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Getting migration history from DbContext: {DbContextPath}")]
+    private static partial void LogGettingMigrationHistory(ILogger logger, string dbContextPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Would query migration history from database: {ConnectionString}")]
+    private static partial void LogWouldQueryMigrationHistory(ILogger logger, string connectionString);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "DbContext configured via options pattern")]
+    private static partial void LogDbContextOptionsPattern(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to get migration history from DbContext: {DbContextPath}")]
+    private static partial void LogMigrationHistoryFailed(ILogger logger, Exception exception, string dbContextPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Detecting breaking changes from {From} to {To}")]
+    private static partial void LogDetectingBreakingChanges(ILogger logger, string from, string to);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to detect breaking changes from {From} to {To}")]
+    private static partial void LogBreakingChangeDetectionFailed(ILogger logger, Exception exception, string from, string to);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Getting dependencies for migration: {MigrationName}")]
+    private static partial void LogGettingDependencies(ILogger logger, string migrationName);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to get dependencies for migration: {MigrationName}")]
+    private static partial void LogDependenciesFailed(ILogger logger, Exception exception, string migrationName);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Generating migration report for project: {ProjectPath}")]
+    private static partial void LogGeneratingReport(ILogger logger, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Migration history inclusion requested")]
+    private static partial void LogMigrationHistoryRequested(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Migration report generated in {Elapsed}")]
+    private static partial void LogReportGeneratedIn(ILogger logger, TimeSpan elapsed);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to generate migration report for project: {ProjectPath}")]
+    private static partial void LogReportGenerationFailed(ILogger logger, Exception exception, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Tracking schema evolution for project: {ProjectPath}")]
+    private static partial void LogTrackingProjectSchemaEvolution(ILogger logger, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to track schema evolution for project: {ProjectPath}")]
+    private static partial void LogSchemaEvolutionFailed(ILogger logger, Exception exception, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Validating migrations for project: {ProjectPath}")]
+    private static partial void LogValidatingProjectMigrations(ILogger logger, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to validate migrations for project: {ProjectPath}")]
+    private static partial void LogMigrationValidationFailed(ILogger logger, Exception exception, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Estimating execution for migration: {MigrationName}")]
+    private static partial void LogEstimatingExecution(ILogger logger, string migrationName);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to estimate migration execution: {MigrationName}")]
+    private static partial void LogExecutionEstimateFailed(ILogger logger, Exception exception, string migrationName);
 }

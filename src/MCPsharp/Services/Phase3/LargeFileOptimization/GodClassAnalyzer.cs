@@ -9,14 +9,14 @@ namespace MCPsharp.Services.Phase3.LargeFileOptimization;
 /// <summary>
 /// Service for detecting and analyzing God class anti-patterns
 /// </summary>
-internal class GodClassAnalyzer
+internal static class GodClassAnalyzer
 {
     private const int GodClassThreshold = 20; // methods
     private const int MaxFieldCount = 20;
     private const int MaxResponsibilities = 5;
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<GodClassAnalysis> AnalyzeGodClass(
+    public static async Task<GodClassAnalysis> AnalyzeGodClass(
         ClassDeclarationSyntax classDecl,
         SemanticModel semanticModel,
         string filePath,
@@ -24,7 +24,7 @@ internal class GodClassAnalyzer
     {
         var className = classDecl.Identifier.Text;
         var violations = new List<string>();
-        var responsibilities = IdentifyClassResponsibilities(classDecl, semanticModel);
+        var responsibilities = IdentifyClassResponsibilities(classDecl);
         var methods = classDecl.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
         var fields = classDecl.DescendantNodes().OfType<FieldDeclarationSyntax>().ToList();
 
@@ -57,7 +57,7 @@ internal class GodClassAnalyzer
         var highCouplingClasses = IdentifyHighCouplingClasses(classDecl, semanticModel);
 
         // Generate recommended splits
-        var recommendedSplits = GenerateClassSplittingStrategies(classDecl, semanticModel, responsibilities);
+        var recommendedSplits = GenerateClassSplittingStrategies(classDecl, responsibilities);
 
         var severity = DetermineGodClassSeverity(godClassScore);
 
@@ -76,7 +76,7 @@ internal class GodClassAnalyzer
         };
     }
 
-    public double CalculateGodClassScore(
+    public static double CalculateGodClassScore(
         ClassDeclarationSyntax classDecl,
         List<MethodDeclarationSyntax> methods,
         List<FieldDeclarationSyntax> fields,
@@ -90,7 +90,7 @@ internal class GodClassAnalyzer
         return (methodScore + fieldScore + responsibilityScore + lineCountScore) / 4.0;
     }
 
-    public GodClassSeverity DetermineGodClassSeverity(double score)
+    public static GodClassSeverity DetermineGodClassSeverity(double score)
     {
         if (score <= 0.3) return GodClassSeverity.None;
         if (score <= 0.5) return GodClassSeverity.Low;
@@ -99,9 +99,8 @@ internal class GodClassAnalyzer
         return GodClassSeverity.Critical;
     }
 
-    private List<string> IdentifyClassResponsibilities(
-        ClassDeclarationSyntax classDecl,
-        SemanticModel semanticModel)
+    private static List<string> IdentifyClassResponsibilities(
+        ClassDeclarationSyntax classDecl)
     {
         var methodNames = classDecl.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
@@ -114,37 +113,39 @@ internal class GodClassAnalyzer
         foreach (var methodName in methodNames)
         {
             var pattern = IdentifyResponsibilityPattern(methodName);
-            if (!responsibilitiesByPattern.ContainsKey(pattern))
+            if (!responsibilitiesByPattern.TryGetValue(pattern, out var value))
             {
-                responsibilitiesByPattern[pattern] = new List<string>();
+                value = new List<string>();
+                responsibilitiesByPattern[pattern] = value;
             }
-            responsibilitiesByPattern[pattern].Add(methodName);
+
+            value.Add(methodName);
         }
 
         return responsibilitiesByPattern.Keys.ToList();
     }
 
-    private string IdentifyResponsibilityPattern(string methodName)
+    private static string IdentifyResponsibilityPattern(string methodName)
     {
-        if (methodName.StartsWith("Get") || methodName.StartsWith("Set"))
+        if (methodName.StartsWith("Get", StringComparison.Ordinal) || methodName.StartsWith("Set", StringComparison.Ordinal))
             return "Data Access";
-        if (methodName.StartsWith("Validate") || methodName.StartsWith("Check"))
+        if (methodName.StartsWith("Validate", StringComparison.Ordinal) || methodName.StartsWith("Check", StringComparison.Ordinal))
             return "Validation";
-        if (methodName.StartsWith("Calculate") || methodName.StartsWith("Compute"))
+        if (methodName.StartsWith("Calculate", StringComparison.Ordinal) || methodName.StartsWith("Compute", StringComparison.Ordinal))
             return "Calculation";
-        if (methodName.StartsWith("Save") || methodName.StartsWith("Load") || methodName.StartsWith("Delete"))
+        if (methodName.StartsWith("Save", StringComparison.Ordinal) || methodName.StartsWith("Load", StringComparison.Ordinal) || methodName.StartsWith("Delete", StringComparison.Ordinal))
             return "Persistence";
-        if (methodName.StartsWith("Render") || methodName.StartsWith("Draw"))
+        if (methodName.StartsWith("Render", StringComparison.Ordinal) || methodName.StartsWith("Draw", StringComparison.Ordinal))
             return "Rendering";
-        if (methodName.StartsWith("Send") || methodName.StartsWith("Receive"))
+        if (methodName.StartsWith("Send", StringComparison.Ordinal) || methodName.StartsWith("Receive", StringComparison.Ordinal))
             return "Communication";
-        if (methodName.StartsWith("Parse") || methodName.StartsWith("Format"))
+        if (methodName.StartsWith("Parse", StringComparison.Ordinal) || methodName.StartsWith("Format", StringComparison.Ordinal))
             return "Data Processing";
 
         return "Other";
     }
 
-    private List<string> IdentifyHighCouplingClasses(
+    private static List<string> IdentifyHighCouplingClasses(
         ClassDeclarationSyntax classDecl,
         SemanticModel semanticModel)
     {
@@ -160,9 +161,8 @@ internal class GodClassAnalyzer
         return highCouplingClasses;
     }
 
-    private List<SplittingStrategy> GenerateClassSplittingStrategies(
+    private static List<SplittingStrategy> GenerateClassSplittingStrategies(
         ClassDeclarationSyntax classDecl,
-        SemanticModel semanticModel,
         List<string> responsibilities)
     {
         var strategies = new List<SplittingStrategy>();
@@ -173,7 +173,7 @@ internal class GodClassAnalyzer
             strategies.Add(new SplittingStrategy
             {
                 StrategyName = $"Extract {responsibility}",
-                Description = $"Extract {responsibility.ToLower()} functionality into a separate class",
+                Description = $"Extract {responsibility.ToLowerInvariant()} functionality into a separate class",
                 TargetMembers = new List<string>(),
                 NewClassName = $"{className}{responsibility.Replace(" ", "")}",
                 SplitType = SplitType.GroupByResponsibility,

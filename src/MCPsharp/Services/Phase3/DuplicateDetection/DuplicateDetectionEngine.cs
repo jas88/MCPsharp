@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using MCPsharp.Models;
 
 namespace MCPsharp.Services.Phase3.DuplicateDetection;
@@ -6,20 +5,9 @@ namespace MCPsharp.Services.Phase3.DuplicateDetection;
 /// <summary>
 /// Engine for finding exact and near duplicates using various algorithms
 /// </summary>
-public class DuplicateDetectionEngine
+public static class DuplicateDetectionEngine
 {
-    private readonly SimilarityCalculatorService _similarityCalculator;
-    private readonly ILogger<DuplicateDetectionEngine> _logger;
-
-    public DuplicateDetectionEngine(
-        SimilarityCalculatorService similarityCalculator,
-        ILogger<DuplicateDetectionEngine> logger)
-    {
-        _similarityCalculator = similarityCalculator;
-        _logger = logger;
-    }
-
-    public async Task<List<DuplicateGroup>> FindExactDuplicatesAsync(
+    public static async Task<List<DuplicateGroup>> FindExactDuplicatesAsync(
         List<CodeBlock> codeBlocks,
         DuplicateDetectionOptions options,
         CancellationToken cancellationToken)
@@ -33,9 +21,9 @@ public class DuplicateDetectionEngine
 
             var blocksList = hashGroup.ToList();
             var similarityScore = 1.0; // Exact duplicates have 100% similarity
-            var lineCount = blocksList.First().EndLine - blocksList.First().StartLine + 1;
-            var complexity = blocksList.First().Complexity.OverallScore;
-            var duplicateType = DuplicateDetectionUtils.DetermineDuplicateType(blocksList.First());
+            var lineCount = blocksList[0].EndLine - blocksList[0].StartLine + 1;
+            var complexity = blocksList[0].Complexity.OverallScore;
+            var duplicateType = DuplicateDetectionUtils.DetermineDuplicateType(blocksList[0]);
 
             duplicateGroups.Add(new DuplicateGroup
             {
@@ -64,7 +52,7 @@ public class DuplicateDetectionEngine
         return await Task.FromResult(duplicateGroups.OrderByDescending(g => g.Complexity).ToList());
     }
 
-    public async Task<List<DuplicateGroup>> FindNearDuplicatesAsync(
+    public static async Task<List<DuplicateGroup>> FindNearDuplicatesAsync(
         List<CodeBlock> codeBlocks,
         double similarityThreshold,
         DuplicateDetectionOptions options,
@@ -102,12 +90,12 @@ public class DuplicateDetectionEngine
                         processedPairs.Add(pairKey);
 
                         // Calculate similarity
-                        var similarity = await _similarityCalculator.CalculateSimilarityAsync(block1, block2, options, cancellationToken);
+                        var similarity = await SimilarityCalculatorService.CalculateSimilarityAsync(block1, block2, options, cancellationToken);
 
                         if (similarity >= similarityThreshold)
                         {
                             // Find or create duplicate group
-                            var existingGroup = FindOrCreateNearDuplicateGroup(duplicateGroups, block1, block2, similarity, options);
+                            var existingGroup = FindOrCreateNearDuplicateGroup(duplicateGroups, block1, block2);
 
                             if (existingGroup == null)
                             {
@@ -122,12 +110,10 @@ public class DuplicateDetectionEngine
         return await Task.FromResult(duplicateGroups.OrderByDescending(g => g.SimilarityScore).ThenByDescending(g => g.Complexity).ToList());
     }
 
-    private DuplicateGroup? FindOrCreateNearDuplicateGroup(
+    private static DuplicateGroup? FindOrCreateNearDuplicateGroup(
         List<DuplicateGroup> groups,
         CodeBlock block1,
-        CodeBlock block2,
-        double similarity,
-        DuplicateDetectionOptions options)
+        CodeBlock block2)
     {
         // Find if either block is already in a group
         var existingGroup = groups.FirstOrDefault(g =>
@@ -152,7 +138,7 @@ public class DuplicateDetectionEngine
         return existingGroup;
     }
 
-    private DuplicateGroup CreateNearDuplicateGroup(
+    private static DuplicateGroup CreateNearDuplicateGroup(
         CodeBlock block1,
         CodeBlock block2,
         double similarity,
@@ -188,7 +174,7 @@ public class DuplicateDetectionEngine
         };
     }
 
-    private DuplicateGroup UpdateDuplicateGroup(DuplicateGroup group, List<CodeBlock> updatedBlocks)
+    private static DuplicateGroup UpdateDuplicateGroup(DuplicateGroup group, List<CodeBlock> updatedBlocks)
     {
         var lineCount = (int)updatedBlocks.Average(cb => cb.EndLine - cb.StartLine + 1);
         var complexity = (int)updatedBlocks.Average(cb => cb.Complexity.OverallScore);
@@ -210,7 +196,7 @@ public class DuplicateDetectionEngine
         };
     }
 
-    public async Task<DuplicateType?> DetermineDuplicateTypeAsync(
+    public static async Task<DuplicateType?> DetermineDuplicateTypeAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
         double similarity,
@@ -230,7 +216,7 @@ public class DuplicateDetectionEngine
         });
     }
 
-    public async Task<List<CodeDifference>> FindCodeDifferencesAsync(
+    public static async Task<List<CodeDifference>> FindCodeDifferencesAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
         CodeComparisonOptions options,
@@ -267,7 +253,7 @@ public class DuplicateDetectionEngine
         return await Task.FromResult(differences);
     }
 
-    public async Task<List<CommonPattern>> FindCommonPatternsAsync(
+    public static async Task<List<CommonPattern>> FindCommonPatternsAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
         CancellationToken cancellationToken)

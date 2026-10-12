@@ -5,9 +5,9 @@ namespace MCPsharp.Services.Phase3.LargeFileOptimization;
 /// <summary>
 /// Service for priority calculation, effort estimation, and optimization planning
 /// </summary>
-internal class OptimizationPlanner
+internal static class OptimizationPlanner
 {
-    public OptimizationPriority CalculateOptimizationPriority(ClassMetrics metrics)
+    public static OptimizationPriority CalculateOptimizationPriority(ClassMetrics metrics)
     {
         if (metrics.GodClassScore.GodClassScore > 0.8) return OptimizationPriority.Critical;
         if (metrics.GodClassScore.GodClassScore > 0.6) return OptimizationPriority.High;
@@ -15,7 +15,7 @@ internal class OptimizationPlanner
         return OptimizationPriority.Low;
     }
 
-    public OptimizationPriority CalculateMethodOptimizationPriority(MethodMetrics metrics)
+    public static OptimizationPriority CalculateMethodOptimizationPriority(MethodMetrics metrics)
     {
         if (metrics.GodMethodScore.GodMethodScore > 0.8) return OptimizationPriority.Critical;
         if (metrics.GodMethodScore.GodMethodScore > 0.6) return OptimizationPriority.High;
@@ -23,7 +23,7 @@ internal class OptimizationPlanner
         return OptimizationPriority.Low;
     }
 
-    public OptimizationPriority CalculateFileOptimizationPriority(
+    public static OptimizationPriority CalculateFileOptimizationPriority(
         int lineCount,
         int largeClassCount,
         int largeMethodCount,
@@ -41,7 +41,7 @@ internal class OptimizationPlanner
         return OptimizationPriority.Low;
     }
 
-    public int EstimateEffort(
+    public static int EstimateEffort(
         List<SplittingStrategy> splittingStrategies,
         List<RefactoringSuggestion> refactoringSuggestions)
     {
@@ -49,22 +49,22 @@ internal class OptimizationPlanner
                refactoringSuggestions.Sum(r => r.EstimatedEffortHours);
     }
 
-    public int EstimateMethodEffort(List<MethodRefactoringStrategy> strategies)
+    public static int EstimateMethodEffort(List<MethodRefactoringStrategy> strategies)
     {
         return strategies.Sum(s => s.EstimatedEffortHours);
     }
 
-    public double CalculateExpectedBenefit(ClassMetrics metrics, List<SplittingStrategy> strategies)
+    public static double CalculateExpectedBenefit(ClassMetrics metrics, List<SplittingStrategy> strategies)
     {
         return strategies.Count * 0.3 + metrics.GodClassScore.GodClassScore * 0.5;
     }
 
-    public double CalculateMethodExpectedBenefit(MethodMetrics metrics, List<MethodRefactoringStrategy> strategies)
+    public static double CalculateMethodExpectedBenefit(MethodMetrics metrics, List<MethodRefactoringStrategy> strategies)
     {
         return strategies.Count * 0.2 + metrics.GodMethodScore.GodMethodScore * 0.4;
     }
 
-    public OptimizationPriority DetermineOverallPriority(LargeFileInfo largeFile)
+    public static OptimizationPriority DetermineOverallPriority(LargeFileInfo largeFile)
     {
         if (largeFile.OptimizationPriority > 0.8) return OptimizationPriority.Critical;
         if (largeFile.OptimizationPriority > 0.6) return OptimizationPriority.High;
@@ -72,7 +72,7 @@ internal class OptimizationPlanner
         return OptimizationPriority.Low;
     }
 
-    public List<string> GeneratePrerequisites(List<OptimizationAction> actions)
+    public static List<string> GeneratePrerequisites(List<OptimizationAction> actions)
     {
         var prerequisites = new List<string>();
 
@@ -89,7 +89,7 @@ internal class OptimizationPlanner
         return prerequisites;
     }
 
-    public List<string> GenerateRisks(List<OptimizationAction> actions)
+    public static List<string> GenerateRisks(List<OptimizationAction> actions)
     {
         var risks = new List<string>();
 
@@ -106,7 +106,7 @@ internal class OptimizationPlanner
         return risks;
     }
 
-    public List<string> GeneratePlanRecommendations(List<OptimizationAction> actions, LargeFileInfo largeFile)
+    public static List<string> GeneratePlanRecommendations(List<OptimizationAction> actions, LargeFileInfo largeFile)
     {
         var recommendations = new List<string>();
 
@@ -117,7 +117,7 @@ internal class OptimizationPlanner
         return recommendations;
     }
 
-    public List<OptimizationRecommendation> GenerateGlobalRecommendations(List<LargeFileInfo> largeFiles, int totalFiles)
+    public static List<OptimizationRecommendation> GenerateGlobalRecommendations(List<LargeFileInfo> largeFiles, int totalFiles)
     {
         var recommendations = new List<OptimizationRecommendation>();
 
@@ -138,7 +138,7 @@ internal class OptimizationPlanner
         return recommendations;
     }
 
-    public OptimizationStatistics CalculateOptimizationStatistics(List<LargeFileInfo> largeFiles)
+    public static OptimizationStatistics CalculateOptimizationStatistics(List<LargeFileInfo> largeFiles)
     {
         var statistics = new OptimizationStatistics
         {
@@ -156,17 +156,17 @@ internal class OptimizationPlanner
         // Calculate code smells by severity
         foreach (var file in largeFiles)
         {
-            foreach (var smell in file.CodeSmells)
+            foreach (var severity in file.CodeSmells.Select(smell => smell.Severity))
             {
-                statistics.CodeSmellsBySeverity[smell.Severity] =
-                    statistics.CodeSmellsBySeverity.GetValueOrDefault(smell.Severity, 0) + 1;
+                statistics.CodeSmellsBySeverity[severity] =
+                    statistics.CodeSmellsBySeverity.GetValueOrDefault(severity, 0) + 1;
             }
         }
 
         return statistics;
     }
 
-    public RiskAssessment AssessOptimizationRisks(List<OptimizationAction> actions)
+    public static RiskAssessment AssessOptimizationRisks(List<OptimizationAction> actions)
     {
         var riskFactors = new List<RiskFactor>();
         var overallRisk = RiskLevel.Low;
@@ -211,20 +211,20 @@ internal class OptimizationPlanner
         };
     }
 
-    public List<string> GenerateEffortRecommendations(
+    public static List<string> GenerateEffortRecommendations(
         List<OptimizationAction> actions,
         List<string> highImpactActions,
         List<string> lowEffortHighBenefitActions)
     {
         var recommendations = new List<string>();
 
-        if (lowEffortHighBenefitActions.Any())
+        if (lowEffortHighBenefitActions.Count != 0)
         {
             recommendations.Add("Start with low-effort, high-benefit actions:");
             recommendations.AddRange(lowEffortHighBenefitActions.Select(a => $"  - {a}"));
         }
 
-        if (highImpactActions.Any())
+        if (highImpactActions.Count != 0)
         {
             recommendations.Add("High-impact actions to prioritize:");
             recommendations.AddRange(highImpactActions.Select(a => $"  - {a}"));
@@ -236,7 +236,7 @@ internal class OptimizationPlanner
         return recommendations;
     }
 
-    public double ConvertPriorityToDouble(OptimizationPriority priority)
+    public static double ConvertPriorityToDouble(OptimizationPriority priority)
     {
         return priority switch
         {

@@ -9,18 +9,17 @@ namespace MCPsharp.Services.Phase3.LargeFileOptimization;
 /// <summary>
 /// Service for detecting and analyzing God method anti-patterns
 /// </summary>
-internal class GodMethodAnalyzer
+internal static class GodMethodAnalyzer
 {
     private const int GodMethodThreshold = 50; // lines
     private const int MaxParameters = 7;
     private const int HighComplexityThreshold = 10;
     private const int MaxLocalVariables = 10;
 
-    public async Task<GodMethodAnalysis> AnalyzeGodMethod(
+    public static async Task<GodMethodAnalysis> AnalyzeGodMethod(
         MethodDeclarationSyntax methodDecl,
         SemanticModel semanticModel,
         string filePath,
-        ComplexityCalculator complexityCalculator,
         CancellationToken cancellationToken)
     {
         var methodName = methodDecl.Identifier.Text;
@@ -53,7 +52,7 @@ internal class GodMethodAnalyzer
         }
 
         // Calculate complexity
-        var complexity = await complexityCalculator.CalculateMethodComplexity(methodDecl, semanticModel, cancellationToken);
+        var complexity = await ComplexityCalculator.CalculateMethodComplexity(methodDecl, semanticModel, cancellationToken);
 
         // Calculate God method score
         var godMethodScore = CalculateGodMethodScore(lineCount, parameterCount, localVariableCount, complexity.CyclomaticComplexity);
@@ -113,7 +112,7 @@ internal class GodMethodAnalyzer
             IsTooComplex = complexity.CyclomaticComplexity > HighComplexityThreshold
         };
 
-        var recommendedRefactorings = GenerateMethodRefactoringStrategies(methodDecl, semanticModel, methodMetrics);
+        var recommendedRefactorings = GenerateMethodRefactoringStrategies(methodMetrics);
 
         return new GodMethodAnalysis
         {
@@ -130,7 +129,7 @@ internal class GodMethodAnalyzer
         };
     }
 
-    public double CalculateGodMethodScore(
+    public static double CalculateGodMethodScore(
         int lineCount,
         int parameterCount,
         int localVariableCount,
@@ -144,7 +143,7 @@ internal class GodMethodAnalyzer
         return (lineScore + parameterScore + localScore + complexityScore) / 4.0;
     }
 
-    public GodMethodSeverity DetermineGodMethodSeverity(double score)
+    public static GodMethodSeverity DetermineGodMethodSeverity(double score)
     {
         if (score <= 0.3) return GodMethodSeverity.None;
         if (score <= 0.5) return GodMethodSeverity.Low;
@@ -153,9 +152,7 @@ internal class GodMethodAnalyzer
         return GodMethodSeverity.Critical;
     }
 
-    private List<MethodRefactoringStrategy> GenerateMethodRefactoringStrategies(
-        MethodDeclarationSyntax methodDecl,
-        SemanticModel semanticModel,
+    private static List<MethodRefactoringStrategy> GenerateMethodRefactoringStrategies(
         MethodMetrics metrics)
     {
         var strategies = new List<MethodRefactoringStrategy>();

@@ -6,7 +6,7 @@ namespace MCPsharp.Services.Phase3.SqlMigration;
 /// <summary>
 /// Generates reports and risk assessments for migrations
 /// </summary>
-internal class ReportGenerator
+internal sealed partial class ReportGenerator
 {
     private readonly ILogger<ReportGenerator> _logger;
 
@@ -17,7 +17,7 @@ internal class ReportGenerator
 
     public MigrationReport GenerateReport(string projectPath, MigrationAnalysisResult analysisResult, SchemaEvolution evolution, TimeSpan analysisTime)
     {
-        _logger.LogInformation("Generating migration report for project: {ProjectPath}", projectPath);
+        LogGeneratingReport(_logger, projectPath);
 
         var report = new MigrationReport
         {
@@ -34,15 +34,15 @@ internal class ReportGenerator
             BreakingChanges = analysisResult.BreakingChanges,
             Evolution = evolution,
             RiskAssessment = BuildRiskAssessment(analysisResult),
-            Recommendations = BuildRecommendations(analysisResult, evolution),
-            Statistics = BuildStatistics(analysisResult, evolution)
+            Recommendations = BuildRecommendations(analysisResult),
+            Statistics = BuildStatistics(analysisResult)
         };
 
-        _logger.LogInformation("Migration report generated successfully");
+        LogReportGenerated(_logger);
         return report;
     }
 
-    private RiskAssessment BuildRiskAssessment(MigrationAnalysisResult analysisResult)
+    private static RiskAssessment BuildRiskAssessment(MigrationAnalysisResult analysisResult)
     {
         var riskAssessment = new RiskAssessment
         {
@@ -80,7 +80,7 @@ internal class ReportGenerator
         return riskAssessment;
     }
 
-    private RiskLevel CalculateOverallRisk(MigrationAnalysisResult analysisResult)
+    private static RiskLevel CalculateOverallRisk(MigrationAnalysisResult analysisResult)
     {
         var criticalCount = analysisResult.BreakingChanges.Count(bc => bc.Severity == Severity.Critical);
         var highCount = analysisResult.BreakingChanges.Count(bc => bc.Severity == Severity.High);
@@ -95,7 +95,7 @@ internal class ReportGenerator
         return RiskLevel.Low;
     }
 
-    private RiskLevel CalculateMigrationRisk(MigrationInfo migration)
+    private static RiskLevel CalculateMigrationRisk(MigrationInfo migration)
     {
         var criticalOps = migration.Operations.Count(o =>
             o.Type.Equals("DropTable", StringComparison.OrdinalIgnoreCase));
@@ -113,7 +113,7 @@ internal class ReportGenerator
         return RiskLevel.Low;
     }
 
-    private List<string> IdentifyMigrationRiskFactors(MigrationInfo migration)
+    private static List<string> IdentifyMigrationRiskFactors(MigrationInfo migration)
     {
         var riskFactors = new List<string>();
 
@@ -139,7 +139,7 @@ internal class ReportGenerator
         return riskFactors.Distinct().ToList();
     }
 
-    private List<string> GenerateMitigationStrategies(MigrationInfo migration)
+    private static List<string> GenerateMitigationStrategies(MigrationInfo migration)
     {
         var strategies = new List<string>();
 
@@ -162,7 +162,7 @@ internal class ReportGenerator
         return strategies.Distinct().ToList();
     }
 
-    private Recommendations BuildRecommendations(MigrationAnalysisResult analysisResult, SchemaEvolution evolution)
+    private static Recommendations BuildRecommendations(MigrationAnalysisResult analysisResult)
     {
         var recommendations = new Recommendations();
 
@@ -173,7 +173,7 @@ internal class ReportGenerator
         recommendations.BestPractices.Add("Review breaking changes before deployment");
 
         // Warnings based on analysis
-        if (analysisResult.BreakingChanges.Any())
+        if (analysisResult.BreakingChanges.Count != 0)
         {
             recommendations.Warnings.Add($"{analysisResult.BreakingChanges.Count} breaking changes detected");
         }
@@ -197,7 +197,7 @@ internal class ReportGenerator
         return recommendations;
     }
 
-    private Dictionary<string, object> BuildStatistics(MigrationAnalysisResult analysisResult, SchemaEvolution evolution)
+    private static Dictionary<string, object> BuildStatistics(MigrationAnalysisResult analysisResult)
     {
         var stats = new Dictionary<string, object>();
 
@@ -217,7 +217,7 @@ internal class ReportGenerator
         stats["OperationStatistics"] = operationStats;
 
         // Timeline statistics
-        if (analysisResult.Migrations.Any())
+        if (analysisResult.Migrations.Count != 0)
         {
             var firstMigration = analysisResult.Migrations.Min(m => m.CreatedAt);
             var lastMigration = analysisResult.Migrations.Max(m => m.CreatedAt);
@@ -226,4 +226,10 @@ internal class ReportGenerator
 
         return stats;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Generating migration report for project: {ProjectPath}")]
+    private static partial void LogGeneratingReport(ILogger logger, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Migration report generated successfully")]
+    private static partial void LogReportGenerated(ILogger logger);
 }

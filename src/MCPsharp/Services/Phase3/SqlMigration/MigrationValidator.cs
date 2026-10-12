@@ -6,7 +6,7 @@ namespace MCPsharp.Services.Phase3.SqlMigration;
 /// <summary>
 /// Validates migrations for issues and best practices
 /// </summary>
-internal class MigrationValidator
+internal sealed partial class MigrationValidator
 {
     private readonly ILogger<MigrationValidator> _logger;
 
@@ -17,7 +17,7 @@ internal class MigrationValidator
 
     public List<MigrationValidationIssue> ValidateMigrations(List<MigrationInfo> migrations)
     {
-        _logger.LogInformation("Validating {MigrationCount} migrations", migrations.Count);
+        LogValidatingMigrations(_logger, migrations.Count);
 
         var issues = new List<MigrationValidationIssue>();
 
@@ -40,12 +40,12 @@ internal class MigrationValidator
         return issues;
     }
 
-    private List<MigrationValidationIssue> ValidateMigrationFile(MigrationInfo migration)
+    private static List<MigrationValidationIssue> ValidateMigrationFile(MigrationInfo migration)
     {
         var issues = new List<MigrationValidationIssue>();
 
         // Check for empty migrations
-        if (!migration.Operations.Any())
+        if (migration.Operations.Count == 0)
         {
             issues.Add(new MigrationValidationIssue
             {
@@ -58,46 +58,46 @@ internal class MigrationValidator
         }
 
         // Check for missing primary keys in create table operations
-        foreach (var operation in migration.Operations.Where(o => o.Type.Equals("CreateTable", StringComparison.OrdinalIgnoreCase)))
+        // This is a simplified check - in reality would need to parse the table structure
+        foreach (var operation in migration.Operations.Where(o => o.Type.Equals("CreateTable", StringComparison.OrdinalIgnoreCase)
+                     && !o.Parameters.ContainsKey("primaryKey")))
         {
-            // This is a simplified check - in reality would need to parse the table structure
-            if (!operation.Parameters.ContainsKey("primaryKey"))
+            issues.Add(new MigrationValidationIssue
             {
-                issues.Add(new MigrationValidationIssue
-                {
-                    Type = "MissingPrimaryKey",
-                    Severity = Severity.Medium,
-                    Message = $"CreateTable operation for '{operation.TableName}' may be missing primary key",
-                    MigrationFile = migration.FilePath,
-                    Recommendation = "Ensure all tables have appropriate primary keys"
-                });
-            }
+                Type = "MissingPrimaryKey",
+                Severity = Severity.Medium,
+                Message = $"CreateTable operation for '{operation.TableName}' may be missing primary key",
+                MigrationFile = migration.FilePath,
+                Recommendation = "Ensure all tables have appropriate primary keys"
+            });
         }
 
         // Check for potentially dangerous SQL operations
-        foreach (var operation in migration.Operations.Where(o => o.Type.Equals("Sql", StringComparison.OrdinalIgnoreCase)))
+        var sqlStatements = migration.Operations
+            .Where(o => o.Type.Equals("Sql", StringComparison.OrdinalIgnoreCase))
+            .Select(o => o.SqlStatement)
+            .OfType<string>()
+            .Where(s => s.Length > 0);
+        foreach (var statement in sqlStatements)
         {
-            if (!string.IsNullOrEmpty(operation.SqlStatement))
+            var sql = statement.ToLowerInvariant();
+            if (sql.Contains("delete") || sql.Contains("truncate") || sql.Contains("drop"))
             {
-                var sql = operation.SqlStatement.ToLowerInvariant();
-                if (sql.Contains("delete") || sql.Contains("truncate") || sql.Contains("drop"))
+                issues.Add(new MigrationValidationIssue
                 {
-                    issues.Add(new MigrationValidationIssue
-                    {
-                        Type = "DangerousSql",
-                        Severity = Severity.High,
-                        Message = "Custom SQL contains potentially dangerous operations",
-                        MigrationFile = migration.FilePath,
-                        Recommendation = "Review custom SQL operations carefully"
-                    });
-                }
+                    Type = "DangerousSql",
+                    Severity = Severity.High,
+                    Message = "Custom SQL contains potentially dangerous operations",
+                    MigrationFile = migration.FilePath,
+                    Recommendation = "Review custom SQL operations carefully"
+                });
             }
         }
 
         return issues;
     }
 
-    private List<MigrationValidationIssue> ValidateMigrationSequence(List<MigrationInfo> migrations)
+    private static List<MigrationValidationIssue> ValidateMigrationSequence(List<MigrationInfo> migrations)
     {
         var issues = new List<MigrationValidationIssue>();
 
@@ -139,7 +139,7 @@ internal class MigrationValidator
         return issues;
     }
 
-    private List<MigrationValidationIssue> ValidateDataLossRisks(List<MigrationInfo> migrations)
+    private static List<MigrationValidationIssue> ValidateDataLossRisks(List<MigrationInfo> migrations)
     {
         var issues = new List<MigrationValidationIssue>();
 
@@ -176,7 +176,7 @@ internal class MigrationValidator
         return issues;
     }
 
-    private List<MigrationValidationIssue> ValidateDatabaseProviderConsistency(List<MigrationInfo> migrations)
+    private static List<MigrationValidationIssue> ValidateDatabaseProviderConsistency(List<MigrationInfo> migrations)
     {
         var issues = new List<MigrationValidationIssue>();
 
@@ -196,4 +196,7 @@ internal class MigrationValidator
 
         return issues;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Validating {MigrationCount} migrations")]
+    private static partial void LogValidatingMigrations(ILogger logger, int migrationCount);
 }

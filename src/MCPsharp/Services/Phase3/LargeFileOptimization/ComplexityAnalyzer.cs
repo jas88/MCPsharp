@@ -5,9 +5,9 @@ namespace MCPsharp.Services.Phase3.LargeFileOptimization;
 /// <summary>
 /// Helper class for analyzing code complexity
 /// </summary>
-internal class ComplexityAnalyzer
+internal static class ComplexityAnalyzer
 {
-    public class AnalysisResult
+    public sealed class AnalysisResult
     {
         public int CyclomaticComplexity { get; set; }
         public int CognitiveComplexity { get; set; }
@@ -15,7 +15,7 @@ internal class ComplexityAnalyzer
         public int DecisionPoints { get; set; }
     }
 
-    public AnalysisResult Analyze(BlockSyntax block)
+    public static AnalysisResult Analyze(BlockSyntax block)
     {
         var result = new AnalysisResult();
 

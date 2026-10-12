@@ -9,10 +9,10 @@ namespace MCPsharp.Services.Phase3.LargeFileOptimization;
 /// <summary>
 /// Service for generating refactoring suggestions and code examples
 /// </summary>
-internal class RefactoringGenerator
+internal static class RefactoringGenerator
 {
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<RefactoringSuggestion?> GenerateRefactoringSuggestion(
+    public static async Task<RefactoringSuggestion?> GenerateRefactoringSuggestion(
         CodeSmell codeSmell,
         SyntaxNode root,
         SemanticModel semanticModel,
@@ -48,7 +48,7 @@ internal class RefactoringGenerator
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<RefactoringSuggestion>> GenerateClassRefactoringSuggestions(
+    public static async Task<List<RefactoringSuggestion>> GenerateClassRefactoringSuggestions(
         ClassDeclarationSyntax classDecl,
         SemanticModel semanticModel,
         ClassMetrics metrics,
@@ -85,7 +85,7 @@ internal class RefactoringGenerator
         return suggestions;
     }
 
-    public List<CodeExample> GenerateClassBeforeAfterExamples(
+    public static List<CodeExample> GenerateClassBeforeAfterExamples(
         ClassDeclarationSyntax classDecl,
         List<SplittingStrategy> strategies)
     {
@@ -106,7 +106,7 @@ internal class RefactoringGenerator
         return examples;
     }
 
-    public List<CodeExample> GenerateMethodBeforeAfterExamples(
+    public static List<CodeExample> GenerateMethodBeforeAfterExamples(
         MethodDeclarationSyntax methodDecl,
         List<MethodRefactoringStrategy> strategies)
     {
@@ -127,9 +127,9 @@ internal class RefactoringGenerator
         return examples;
     }
 
-    public RefactoringType ConvertToRefactoringType(string patternName)
+    public static RefactoringType ConvertToRefactoringType(string patternName)
     {
-        return patternName.ToLower() switch
+        return patternName.ToLowerInvariant() switch
         {
             "extract method" => RefactoringType.ExtractMethod,
             "extract class" => RefactoringType.ExtractClass,
@@ -144,13 +144,13 @@ internal class RefactoringGenerator
         };
     }
 
-    private double CalculateExpectedBenefit(double impactScore, double applicability)
+    private static double CalculateExpectedBenefit(double impactScore, double applicability)
     {
         // Combine impact score and applicability to get a benefit score (0.0 - 1.0)
         return (impactScore * 0.7 + applicability * 0.3);
     }
 
-    private int CalculatePriority(CodeSmellSeverity severity, double impactScore)
+    private static int CalculatePriority(CodeSmellSeverity severity, double impactScore)
     {
         // Calculate priority (1-5) based on severity and impact
         var severityWeight = severity switch
@@ -168,7 +168,7 @@ internal class RefactoringGenerator
         return Math.Min(5, severityWeight + impactAdjustment);
     }
 
-    private double CalculateClassExpectedBenefit(ClassMetrics metrics)
+    private static double CalculateClassExpectedBenefit(ClassMetrics metrics)
     {
         // Calculate benefit based on class metrics
         var benefit = 0.0;
@@ -185,7 +185,7 @@ internal class RefactoringGenerator
         return Math.Min(1.0, benefit);
     }
 
-    private int CalculateClassPriority(ClassMetrics metrics)
+    private static int CalculateClassPriority(ClassMetrics metrics)
     {
         // Calculate priority (1-5) based on class metrics
         var priority = 1;

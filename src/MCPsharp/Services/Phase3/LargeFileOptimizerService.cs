@@ -12,7 +12,7 @@ namespace MCPsharp.Services.Phase3;
 /// <summary>
 /// Service for analyzing and optimizing large C# files to improve code quality and maintainability
 /// </summary>
-public class LargeFileOptimizerService : ILargeFileOptimizerService
+public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 {
     private readonly RoslynWorkspace _workspace;
     private readonly ILogger<LargeFileOptimizerService>? _logger;
@@ -22,7 +22,6 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
     private const int GodClassThreshold = 20; // methods
     private const int GodMethodThreshold = 50; // lines
     private const int MaxParameters = 7;
-    private const int MaxNestingDepth = 4;
     private const int HighComplexityThreshold = 10;
 
     public LargeFileOptimizerService(
@@ -80,7 +79,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         // Analyze each syntax tree
         foreach (var syntaxTree in compilation.SyntaxTrees)
         {
-            if (string.IsNullOrEmpty(syntaxTree.FilePath) || !syntaxTree.FilePath.EndsWith(".cs") || !IsFileInProject(syntaxTree.FilePath, projectPath))
+            if (string.IsNullOrEmpty(syntaxTree.FilePath) || !syntaxTree.FilePath.EndsWith(".cs", StringComparison.Ordinal) || !IsFileInProject(syntaxTree.FilePath, projectPath))
                 continue;
 
             filesAnalyzed++;
@@ -152,7 +151,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         if (classDeclarations.Count == 0)
             throw new InvalidOperationException("No classes found in the specified file");
 
-        var targetClass = classDeclarations.First();
+        var targetClass = classDeclarations[0];
         var classSymbol = semanticModel.GetDeclaredSymbol(targetClass, cancellationToken);
         if (classSymbol == null)
             throw new InvalidOperationException("Could not get semantic information for the class");
@@ -161,13 +160,13 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         var currentMetrics = await AnalyzeClassMetrics(targetClass, semanticModel, cancellationToken);
 
         // Generate splitting strategies
-        var splittingStrategies = GenerateSplittingStrategies(targetClass, semanticModel, currentMetrics);
+        var splittingStrategies = GenerateSplittingStrategies(targetClass, currentMetrics);
 
         // Generate refactoring suggestions
-        var refactoringSuggestions = await GenerateClassRefactoringSuggestions(targetClass, semanticModel, currentMetrics, cancellationToken);
+        var refactoringSuggestions = await GenerateClassRefactoringSuggestions(targetClass, currentMetrics);
 
         // Generate before/after examples
-        var beforeAfterExamples = GenerateClassBeforeAfterExamples(targetClass, splittingStrategies);
+        var beforeAfterExamples = GenerateClassBeforeAfterExamples(splittingStrategies);
 
         // Calculate priority and effort
         var priority = CalculateOptimizationPriority(currentMetrics);
@@ -210,19 +209,19 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         if (methodDeclarations.Count == 0)
             throw new InvalidOperationException($"Method '{methodName}' not found in the specified file");
 
-        var targetMethod = methodDeclarations.First();
+        var targetMethod = methodDeclarations[0];
         var containingClass = targetMethod.FirstAncestorOrSelf<ClassDeclarationSyntax>();
         if (containingClass == null)
             throw new InvalidOperationException("Method must be within a class");
 
         // Analyze current metrics
-        var currentMetrics = await AnalyzeMethodMetrics(targetMethod, semanticModel, cancellationToken);
+        var currentMetrics = await AnalyzeMethodMetrics(targetMethod);
 
         // Generate refactoring strategies
-        var refactoringStrategies = GenerateMethodRefactoringStrategies(targetMethod, semanticModel, currentMetrics);
+        var refactoringStrategies = GenerateMethodRefactoringStrategies(currentMetrics);
 
         // Generate before/after examples
-        var beforeAfterExamples = GenerateMethodBeforeAfterExamples(targetMethod, refactoringStrategies);
+        var beforeAfterExamples = GenerateMethodBeforeAfterExamples(refactoringStrategies);
 
         // Calculate priority and effort
         var priority = CalculateMethodOptimizationPriority(currentMetrics);
@@ -264,12 +263,12 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
             if (methodDeclarations.Count > 0)
             {
-                return await CalculateMethodComplexity(methodDeclarations.First(), semanticModel, cancellationToken);
+                return await CalculateMethodComplexity(methodDeclarations[0]);
             }
         }
 
         // Analyze entire file
-        return await CalculateFileComplexity(root, semanticModel, cancellationToken);
+        return await CalculateFileComplexity(root, cancellationToken);
     }
 
     public async Task<OptimizationPlan> GenerateOptimizationPlanAsync(string filePath, CancellationToken cancellationToken = default)
@@ -290,7 +289,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         var totalBenefit = 0.0;
 
         // Generate actions for each type of optimization needed
-        if (largeFile.LargeClasses.Any())
+        if (largeFile.LargeClasses.Count != 0)
         {
             foreach (var className in largeFile.LargeClasses)
             {
@@ -301,7 +300,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
             }
         }
 
-        if (largeFile.LargeMethods.Any())
+        if (largeFile.LargeMethods.Count > 0)
         {
             foreach (var methodName in largeFile.LargeMethods)
             {
@@ -337,7 +336,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
             TotalExpectedBenefit = totalBenefit,
             Prerequisites = GeneratePrerequisites(actions),
             Risks = GenerateRisks(actions),
-            Recommendations = GeneratePlanRecommendations(actions, largeFile)
+            Recommendations = GeneratePlanRecommendations()
         };
     }
 
@@ -350,7 +349,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         foreach (var syntaxTree in compilation.SyntaxTrees)
         {
-            if (!syntaxTree.FilePath?.EndsWith(".cs") == true) continue;
+            if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true) continue;
             if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath) continue;
             if (syntaxTree.FilePath == null || !IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
 
@@ -360,7 +359,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
             foreach (var classDecl in classDeclarations)
             {
-                var godClassAnalysis = await AnalyzeGodClass(classDecl, semanticModel, syntaxTree.FilePath, cancellationToken);
+                var godClassAnalysis = await AnalyzeGodClass(classDecl, semanticModel, syntaxTree.FilePath);
                 if (godClassAnalysis.Severity != GodClassSeverity.None)
                 {
                     godClasses.Add(godClassAnalysis);
@@ -380,17 +379,16 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         foreach (var syntaxTree in compilation.SyntaxTrees)
         {
-            if (!syntaxTree.FilePath?.EndsWith(".cs") == true) continue;
+            if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true) continue;
             if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath) continue;
             if (syntaxTree.FilePath == null || !IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
 
             var root = await syntaxTree.GetRootAsync(cancellationToken);
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
             var methodDeclarations = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
 
             foreach (var methodDecl in methodDeclarations)
             {
-                var godMethodAnalysis = await AnalyzeGodMethod(methodDecl, semanticModel, syntaxTree.FilePath, cancellationToken);
+                var godMethodAnalysis = await AnalyzeGodMethod(methodDecl, syntaxTree.FilePath);
                 if (godMethodAnalysis.Severity != GodMethodSeverity.None)
                 {
                     godMethods.Add(godMethodAnalysis);
@@ -416,19 +414,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
-        var codeSmells = new List<CodeSmell>();
-
-        // Analyze different types of code smells
-        codeSmells.AddRange(await DetectLongParameterListSmells(root, semanticModel, filePath, cancellationToken));
-        codeSmells.AddRange(await DetectLongMethodSmells(root, semanticModel, filePath, cancellationToken));
-        codeSmells.AddRange(await DetectLargeClassSmells(root, semanticModel, filePath, cancellationToken));
-        codeSmells.AddRange(await DetectComplexConditionalSmells(root, semanticModel, filePath, cancellationToken));
-        codeSmells.AddRange(await DetectDuplicateCodeSmells(root, semanticModel, filePath, cancellationToken));
-        codeSmells.AddRange(await DetectMagicNumberSmells(root, semanticModel, filePath, cancellationToken));
-        codeSmells.AddRange(await DetectFeatureEnvySmells(root, semanticModel, filePath, cancellationToken));
-        codeSmells.AddRange(await DetectDataClumpsSmells(root, semanticModel, filePath, cancellationToken));
-
-        return codeSmells.OrderByDescending(cs => cs.ImpactScore).ToList();
+        return LargeFileOptimization.CodeSmellDetector.AnalyzeCodeSmells(root, semanticModel, filePath, cancellationToken);
     }
 
     public async Task<List<RefactoringSuggestion>> SuggestRefactoringPatternsAsync(string filePath, List<CodeSmell> issues, CancellationToken cancellationToken = default)
@@ -444,13 +430,11 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         if (semanticModel == null)
             throw new InvalidOperationException($"Unable to get semantic model for file: {filePath}");
 
-        var root = await syntaxTree.GetRootAsync(cancellationToken);
-
         var suggestions = new List<RefactoringSuggestion>();
 
         foreach (var issue in issues)
         {
-            var suggestion = await GenerateRefactoringSuggestion(issue, root, semanticModel, cancellationToken);
+            var suggestion = await GenerateRefactoringSuggestion(issue);
             if (suggestion != null)
             {
                 suggestions.Add(suggestion);
@@ -494,7 +478,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         var riskAssessment = AssessOptimizationRisks(optimizationPlan.Actions);
 
         // Generate recommendations
-        var recommendations = GenerateEffortRecommendations(optimizationPlan.Actions, highImpactActions, lowEffortHighBenefitActions);
+        var recommendations = GenerateEffortRecommendations(highImpactActions, lowEffortHighBenefitActions);
 
         return new OptimizationEstimate
         {
@@ -511,12 +495,12 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Helper Methods
 
-    private bool IsFileInProject(string filePath, string projectPath)
+    private static bool IsFileInProject(string filePath, string projectPath)
     {
         return filePath.StartsWith(projectPath, StringComparison.OrdinalIgnoreCase);
     }
 
-    private double ConvertToDouble(OptimizationPriority priority)
+    private static double ConvertToDouble(OptimizationPriority priority)
     {
         return priority switch
         {
@@ -528,7 +512,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
-    private FileSizeCategory CategorizeFileSize(int lineCount)
+    private static FileSizeCategory CategorizeFileSize(int lineCount)
     {
         if (lineCount < 200) return FileSizeCategory.Small;
         if (lineCount < 500) return FileSizeCategory.Medium;
@@ -552,7 +536,6 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
             var largeClasses = new List<string>();
             var largeMethods = new List<string>();
-            var codeSmells = new List<CodeSmell>();
 
             // Find large classes
             var classDeclarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
@@ -577,10 +560,10 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
             }
 
             // Analyze code smells
-            codeSmells = await AnalyzeCodeSmellsAsync(filePath, cancellationToken);
+            var codeSmells = await AnalyzeCodeSmellsAsync(filePath, cancellationToken);
 
             // Calculate overall complexity
-            var overallComplexity = await CalculateFileComplexity(root, semanticModel, cancellationToken);
+            var overallComplexity = await CalculateFileComplexity(root, cancellationToken);
 
             // Calculate optimization priority
             var priorityScore = CalculateFileOptimizationPriority(lineCount, largeClasses.Count, largeMethods.Count, codeSmells.Count);
@@ -606,12 +589,12 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         catch (Exception ex)
         {
             // Log error and continue
-            _logger?.LogError(ex, "Error analyzing file {FilePath}", filePath);
+            if (_logger is not null) LogFileAnalysisError(_logger, ex, filePath);
             return null;
         }
     }
 
-    private async Task<ComplexityMetrics> CalculateFileComplexity(SyntaxNode root, SemanticModel semanticModel, CancellationToken cancellationToken)
+    private static async Task<ComplexityMetrics> CalculateFileComplexity(SyntaxNode root, CancellationToken cancellationToken)
     {
         var cyclomaticComplexity = 0;
         var cognitiveComplexity = 0;
@@ -624,7 +607,8 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         foreach (var method in methodDeclarations)
         {
-            var methodComplexity = await CalculateMethodComplexity(method, semanticModel, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var methodComplexity = await CalculateMethodComplexity(method);
             cyclomaticComplexity = Math.Max(cyclomaticComplexity, methodComplexity.CyclomaticComplexity);
             cognitiveComplexity = Math.Max(cognitiveComplexity, methodComplexity.CognitiveComplexity);
             maxNestingDepth = Math.Max(maxNestingDepth, methodComplexity.MaximumNestingDepth);
@@ -659,7 +643,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<ComplexityMetrics> CalculateMethodComplexity(MethodDeclarationSyntax method, SemanticModel semanticModel, CancellationToken cancellationToken)
+    private static async Task<ComplexityMetrics> CalculateMethodComplexity(MethodDeclarationSyntax method)
     {
         var cyclomaticComplexity = 1; // Base complexity
         var cognitiveComplexity = 0;
@@ -671,8 +655,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         var body = method.Body;
         if (body != null)
         {
-            var analyzer = new ComplexityAnalyzer();
-            var result = analyzer.Analyze(body);
+            var result = ComplexityAnalyzer.Analyze(body);
 
             cyclomaticComplexity += result.CyclomaticComplexity;
             cognitiveComplexity += result.CognitiveComplexity;
@@ -680,7 +663,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
             decisionPoints = result.DecisionPoints;
 
             // Identify complexity hotspots
-            hotspots = IdentifyComplexityHotspots(body, result);
+            hotspots = IdentifyComplexityHotspots();
         }
 
         // Calculate Halstead metrics
@@ -709,11 +692,11 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
-    private (int volume, int difficulty) CalculateHalsteadMetrics(string code)
+    private static (int volume, int difficulty) CalculateHalsteadMetrics(string code)
     {
         // Simplified Halstead metrics calculation
-        var operators = Regex.Matches(code, @"(\+|\-|\*|\/|%|=|==|!=|<|>|<=|>=|&&|\|\||!|\+\+|\-\-)").Count;
-        var operands = Regex.Matches(code, @"\b[a-zA-Z_][a-zA-Z0-9_]*\b").Count;
+        var operators = Regex.Count(code, @"(\+|\-|\*|\/|%|=|==|!=|<|>|<=|>=|&&|\|\||!|\+\+|\-\-)");
+        var operands = Regex.Count(code, @"\b[a-zA-Z_][a-zA-Z0-9_]*\b");
 
         var vocabulary = operators + operands;
         var length = code.Length;
@@ -724,7 +707,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return ((int)volume, (int)difficulty);
     }
 
-    private double CalculateMaintainabilityIndex(int cyclomaticComplexity, int linesOfCode, int halsteadVolume)
+    private static double CalculateMaintainabilityIndex(int cyclomaticComplexity, int linesOfCode, int halsteadVolume)
     {
         // Simplified maintainability index calculation
         if (halsteadVolume == 0) return 100.0;
@@ -737,7 +720,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return Math.Max(0, Math.Min(100, maintainabilityIndex));
     }
 
-    private ComplexityLevel DetermineComplexityLevel(int cyclomatic, int cognitive)
+    private static ComplexityLevel DetermineComplexityLevel(int cyclomatic, int cognitive)
     {
         var maxComplexity = Math.Max(cyclomatic, cognitive);
 
@@ -747,7 +730,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return ComplexityLevel.VeryComplex;
     }
 
-    private List<ComplexityHotspot> IdentifyComplexityHotspots(BlockSyntax body, ComplexityAnalyzer.AnalysisResult result)
+    private static List<ComplexityHotspot> IdentifyComplexityHotspots()
     {
         var hotspots = new List<ComplexityHotspot>();
 
@@ -761,7 +744,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Class Analysis Methods
 
-    private async Task<ClassMetrics> AnalyzeClassMetrics(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, CancellationToken cancellationToken)
+    private static async Task<ClassMetrics> AnalyzeClassMetrics(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var lineCount = classDecl.GetText().Lines.Count;
         var methodDeclarations = classDecl.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
@@ -770,16 +753,16 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         var constructorDeclarations = classDecl.DescendantNodes().OfType<ConstructorDeclarationSyntax>().ToList();
 
         // Calculate complexity
-        var complexity = await CalculateClassComplexity(classDecl, semanticModel, cancellationToken);
+        var complexity = await CalculateClassComplexity(classDecl, cancellationToken);
 
         // Analyze responsibilities
-        var responsibilities = IdentifyClassResponsibilities(classDecl, semanticModel);
+        var responsibilities = IdentifyClassResponsibilities(classDecl);
 
         // Analyze dependencies
         var dependencies = IdentifyClassDependencies(classDecl, semanticModel);
 
         // Analyze God class score
-        var godClassScore = await AnalyzeGodClass(classDecl, semanticModel, classDecl.SyntaxTree.FilePath, cancellationToken);
+        var godClassScore = await AnalyzeGodClass(classDecl, semanticModel, classDecl.SyntaxTree.FilePath);
 
         return new ClassMetrics
         {
@@ -797,7 +780,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
-    private async Task<ComplexityMetrics> CalculateClassComplexity(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, CancellationToken cancellationToken)
+    private static async Task<ComplexityMetrics> CalculateClassComplexity(ClassDeclarationSyntax classDecl, CancellationToken cancellationToken)
     {
         var methodDeclarations = classDecl.DescendantNodes().OfType<MethodDeclarationSyntax>();
         var maxCyclomatic = 0;
@@ -808,7 +791,8 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
         foreach (var method in methodDeclarations)
         {
-            var methodComplexity = await CalculateMethodComplexity(method, semanticModel, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var methodComplexity = await CalculateMethodComplexity(method);
             maxCyclomatic = Math.Max(maxCyclomatic, methodComplexity.CyclomaticComplexity);
             maxCognitive = Math.Max(maxCognitive, methodComplexity.CognitiveComplexity);
             maxNestingDepth = Math.Max(maxNestingDepth, methodComplexity.MaximumNestingDepth);
@@ -835,7 +819,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
-    private List<string> IdentifyClassResponsibilities(ClassDeclarationSyntax classDecl, SemanticModel semanticModel)
+    private static List<string> IdentifyClassResponsibilities(ClassDeclarationSyntax classDecl)
     {
         var methodNames = classDecl.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
@@ -848,37 +832,39 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         foreach (var methodName in methodNames)
         {
             var pattern = IdentifyResponsibilityPattern(methodName);
-            if (!responsibilitiesByPattern.ContainsKey(pattern))
+            if (!responsibilitiesByPattern.TryGetValue(pattern, out var value))
             {
-                responsibilitiesByPattern[pattern] = new List<string>();
+                value = new List<string>();
+                responsibilitiesByPattern[pattern] = value;
             }
-            responsibilitiesByPattern[pattern].Add(methodName);
+
+            value.Add(methodName);
         }
 
         return responsibilitiesByPattern.Keys.ToList();
     }
 
-    private string IdentifyResponsibilityPattern(string methodName)
+    private static string IdentifyResponsibilityPattern(string methodName)
     {
-        if (methodName.StartsWith("Get") || methodName.StartsWith("Set"))
+        if (methodName.StartsWith("Get", StringComparison.Ordinal) || methodName.StartsWith("Set", StringComparison.Ordinal))
             return "Data Access";
-        if (methodName.StartsWith("Validate") || methodName.StartsWith("Check"))
+        if (methodName.StartsWith("Validate", StringComparison.Ordinal) || methodName.StartsWith("Check", StringComparison.Ordinal))
             return "Validation";
-        if (methodName.StartsWith("Calculate") || methodName.StartsWith("Compute"))
+        if (methodName.StartsWith("Calculate", StringComparison.Ordinal) || methodName.StartsWith("Compute", StringComparison.Ordinal))
             return "Calculation";
-        if (methodName.StartsWith("Save") || methodName.StartsWith("Load") || methodName.StartsWith("Delete"))
+        if (methodName.StartsWith("Save", StringComparison.Ordinal) || methodName.StartsWith("Load", StringComparison.Ordinal) || methodName.StartsWith("Delete", StringComparison.Ordinal))
             return "Persistence";
-        if (methodName.StartsWith("Render") || methodName.StartsWith("Draw"))
+        if (methodName.StartsWith("Render", StringComparison.Ordinal) || methodName.StartsWith("Draw", StringComparison.Ordinal))
             return "Rendering";
-        if (methodName.StartsWith("Send") || methodName.StartsWith("Receive"))
+        if (methodName.StartsWith("Send", StringComparison.Ordinal) || methodName.StartsWith("Receive", StringComparison.Ordinal))
             return "Communication";
-        if (methodName.StartsWith("Parse") || methodName.StartsWith("Format"))
+        if (methodName.StartsWith("Parse", StringComparison.Ordinal) || methodName.StartsWith("Format", StringComparison.Ordinal))
             return "Data Processing";
 
         return "Other";
     }
 
-    private List<string> IdentifyClassDependencies(ClassDeclarationSyntax classDecl, SemanticModel semanticModel)
+    private static List<string> IdentifyClassDependencies(ClassDeclarationSyntax classDecl, SemanticModel semanticModel)
     {
         var dependencies = new HashSet<string>();
         var classSymbol = semanticModel.GetDeclaredSymbol(classDecl);
@@ -918,7 +904,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Method Analysis Methods
 
-    private async Task<MethodMetrics> AnalyzeMethodMetrics(MethodDeclarationSyntax methodDecl, SemanticModel semanticModel, CancellationToken cancellationToken)
+    private static async Task<MethodMetrics> AnalyzeMethodMetrics(MethodDeclarationSyntax methodDecl)
     {
         var lineCount = methodDecl.GetText().Lines.Count;
         var parameterCount = methodDecl.ParameterList.Parameters.Count;
@@ -947,10 +933,10 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         }
 
         // Calculate complexity
-        var complexity = await CalculateMethodComplexity(methodDecl, semanticModel, cancellationToken);
+        var complexity = await CalculateMethodComplexity(methodDecl);
 
         // Analyze God method score
-        var godMethodScore = await AnalyzeGodMethod(methodDecl, semanticModel, methodDecl.SyntaxTree.FilePath, cancellationToken);
+        var godMethodScore = await AnalyzeGodMethod(methodDecl, methodDecl.SyntaxTree.FilePath);
 
         return new MethodMetrics
         {
@@ -974,11 +960,11 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
     #region God Class Analysis
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<GodClassAnalysis> AnalyzeGodClass(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
+    private static async Task<GodClassAnalysis> AnalyzeGodClass(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, string filePath)
     {
         var className = classDecl.Identifier.Text;
         var violations = new List<string>();
-        var responsibilities = IdentifyClassResponsibilities(classDecl, semanticModel);
+        var responsibilities = IdentifyClassResponsibilities(classDecl);
         var methods = classDecl.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
         var fields = classDecl.DescendantNodes().OfType<FieldDeclarationSyntax>().ToList();
 
@@ -1011,7 +997,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         var highCouplingClasses = IdentifyHighCouplingClasses(classDecl, semanticModel);
 
         // Generate recommended splits
-        var recommendedSplits = GenerateClassSplittingStrategies(classDecl, semanticModel, responsibilities);
+        var recommendedSplits = GenerateClassSplittingStrategies(classDecl, responsibilities);
 
         var severity = DetermineGodClassSeverity(godClassScore);
 
@@ -1030,7 +1016,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
-    private double CalculateGodClassScore(ClassDeclarationSyntax classDecl, List<MethodDeclarationSyntax> methods, List<FieldDeclarationSyntax> fields, List<string> responsibilities)
+    private static double CalculateGodClassScore(ClassDeclarationSyntax classDecl, List<MethodDeclarationSyntax> methods, List<FieldDeclarationSyntax> fields, List<string> responsibilities)
     {
         var methodScore = Math.Min(1.0, methods.Count / (double)GodClassThreshold);
         var fieldScore = Math.Min(1.0, fields.Count / 20.0);
@@ -1040,7 +1026,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return (methodScore + fieldScore + responsibilityScore + lineCountScore) / 4.0;
     }
 
-    private GodClassSeverity DetermineGodClassSeverity(double score)
+    private static GodClassSeverity DetermineGodClassSeverity(double score)
     {
         if (score <= 0.3) return GodClassSeverity.None;
         if (score <= 0.5) return GodClassSeverity.Low;
@@ -1049,7 +1035,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return GodClassSeverity.Critical;
     }
 
-    private List<string> IdentifyHighCouplingClasses(ClassDeclarationSyntax classDecl, SemanticModel semanticModel)
+    private static List<string> IdentifyHighCouplingClasses(ClassDeclarationSyntax classDecl, SemanticModel semanticModel)
     {
         var highCouplingClasses = new List<string>();
         var classSymbol = semanticModel.GetDeclaredSymbol(classDecl);
@@ -1067,7 +1053,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region God Method Analysis
 
-    private async Task<GodMethodAnalysis> AnalyzeGodMethod(MethodDeclarationSyntax methodDecl, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
+    private static async Task<GodMethodAnalysis> AnalyzeGodMethod(MethodDeclarationSyntax methodDecl, string filePath)
     {
         var methodName = methodDecl.Identifier.Text;
         var className = methodDecl.FirstAncestorOrSelf<ClassDeclarationSyntax>()?.Identifier.Text ?? "Unknown";
@@ -1100,7 +1086,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         }
 
         // Calculate complexity
-        var complexity = await CalculateMethodComplexity(methodDecl, semanticModel, cancellationToken);
+        var complexity = await CalculateMethodComplexity(methodDecl);
 
         // Calculate God method score
         var godMethodScore = CalculateGodMethodScore(lineCount, parameterCount, localVariableCount, complexity.CyclomaticComplexity);
@@ -1162,7 +1148,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
             IsTooComplex = complexity.CyclomaticComplexity > HighComplexityThreshold
         };
 
-        var recommendedRefactorings = GenerateMethodRefactoringStrategies(methodDecl, semanticModel, methodMetrics);
+        var recommendedRefactorings = GenerateMethodRefactoringStrategies(methodMetrics);
 
         // Create a GodMethodAnalysis object for the metrics
         var godMethodAnalysis = new GodMethodAnalysis
@@ -1174,7 +1160,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
             Severity = DetermineGodMethodSeverity(godMethodScore),
             Violations = violations,
             TooManyParameters = methodDecl.ParameterList.Parameters.Select(p => p.Identifier.Text).ToList(),
-            TooManyLocals = new List<string>(),
+            TooManyLocals = tooManyLocals,
             HighComplexityBlocks = new List<string>(),
             RecommendedRefactorings = recommendedRefactorings
         };
@@ -1182,7 +1168,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return godMethodAnalysis;
     }
 
-    private double CalculateGodMethodScore(int lineCount, int parameterCount, int localVariableCount, int cyclomaticComplexity)
+    private static double CalculateGodMethodScore(int lineCount, int parameterCount, int localVariableCount, int cyclomaticComplexity)
     {
         var lineScore = Math.Min(1.0, lineCount / (double)GodMethodThreshold);
         var parameterScore = Math.Min(1.0, parameterCount / (double)MaxParameters);
@@ -1192,7 +1178,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return (lineScore + parameterScore + localScore + complexityScore) / 4.0;
     }
 
-    private GodMethodSeverity DetermineGodMethodSeverity(double score)
+    private static GodMethodSeverity DetermineGodMethodSeverity(double score)
     {
         if (score <= 0.3) return GodMethodSeverity.None;
         if (score <= 0.5) return GodMethodSeverity.Low;
@@ -1201,21 +1187,11 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return GodMethodSeverity.Critical;
     }
 
-    private List<string> IdentifyHighComplexityBlocks(MethodDeclarationSyntax methodDecl, ComplexityMetrics complexity)
-    {
-        var highComplexityBlocks = new List<string>();
-
-        // This is a simplified implementation
-        // In practice, you'd identify specific blocks with high complexity
-
-        return highComplexityBlocks;
-    }
-
     #endregion
 
     #region Refactoring Strategy Generation
 
-    private List<SplittingStrategy> GenerateSplittingStrategies(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, ClassMetrics metrics)
+    private static List<SplittingStrategy> GenerateSplittingStrategies(ClassDeclarationSyntax classDecl, ClassMetrics metrics)
     {
         var strategies = new List<SplittingStrategy>();
         var className = classDecl.Identifier.Text;
@@ -1228,7 +1204,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
                 var strategy = new SplittingStrategy
                 {
                     StrategyName = $"Extract {responsibility}",
-                    Description = $"Extract {responsibility.ToLower()} functionality into a separate class",
+                    Description = $"Extract {responsibility.ToLowerInvariant()} functionality into a separate class",
                     TargetMembers = new List<string>(),
                     NewClassName = $"{className}{responsibility.Replace(" ", "")}",
                     SplitType = SplitType.GroupByResponsibility,
@@ -1244,7 +1220,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return strategies;
     }
 
-    private List<MethodRefactoringStrategy> GenerateMethodRefactoringStrategies(MethodDeclarationSyntax methodDecl, SemanticModel semanticModel, MethodMetrics metrics)
+    private static List<MethodRefactoringStrategy> GenerateMethodRefactoringStrategies(MethodMetrics metrics)
     {
         var strategies = new List<MethodRefactoringStrategy>();
 
@@ -1296,7 +1272,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return strategies;
     }
 
-    private List<SplittingStrategy> GenerateClassSplittingStrategies(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, List<string> responsibilities)
+    private static List<SplittingStrategy> GenerateClassSplittingStrategies(ClassDeclarationSyntax classDecl, List<string> responsibilities)
     {
         var strategies = new List<SplittingStrategy>();
         var className = classDecl.Identifier.Text;
@@ -1306,7 +1282,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
             strategies.Add(new SplittingStrategy
             {
                 StrategyName = $"Extract {responsibility}",
-                Description = $"Extract {responsibility.ToLower()} functionality into a separate class",
+                Description = $"Extract {responsibility.ToLowerInvariant()} functionality into a separate class",
                 TargetMembers = new List<string>(),
                 NewClassName = $"{className}{responsibility.Replace(" ", "")}",
                 SplitType = SplitType.GroupByResponsibility,
@@ -1324,7 +1300,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Code Generation Methods
 
-    private List<CodeExample> GenerateClassBeforeAfterExamples(ClassDeclarationSyntax classDecl, List<SplittingStrategy> strategies)
+    private static List<CodeExample> GenerateClassBeforeAfterExamples(List<SplittingStrategy> strategies)
     {
         var examples = new List<CodeExample>();
 
@@ -1343,7 +1319,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return examples;
     }
 
-    private List<CodeExample> GenerateMethodBeforeAfterExamples(MethodDeclarationSyntax methodDecl, List<MethodRefactoringStrategy> strategies)
+    private static List<CodeExample> GenerateMethodBeforeAfterExamples(List<MethodRefactoringStrategy> strategies)
     {
         var examples = new List<CodeExample>();
 
@@ -1366,7 +1342,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Priority and Effort Calculation
 
-    private OptimizationPriority CalculateOptimizationPriority(ClassMetrics metrics)
+    private static OptimizationPriority CalculateOptimizationPriority(ClassMetrics metrics)
     {
         if (metrics.GodClassScore.GodClassScore > 0.8) return OptimizationPriority.Critical;
         if (metrics.GodClassScore.GodClassScore > 0.6) return OptimizationPriority.High;
@@ -1374,7 +1350,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return OptimizationPriority.Low;
     }
 
-    private OptimizationPriority CalculateMethodOptimizationPriority(MethodMetrics metrics)
+    private static OptimizationPriority CalculateMethodOptimizationPriority(MethodMetrics metrics)
     {
         if (metrics.GodMethodScore.GodMethodScore > 0.8) return OptimizationPriority.Critical;
         if (metrics.GodMethodScore.GodMethodScore > 0.6) return OptimizationPriority.High;
@@ -1382,7 +1358,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return OptimizationPriority.Low;
     }
 
-    private OptimizationPriority CalculateFileOptimizationPriority(int lineCount, int largeClassCount, int largeMethodCount, int codeSmellCount)
+    private static OptimizationPriority CalculateFileOptimizationPriority(int lineCount, int largeClassCount, int largeMethodCount, int codeSmellCount)
     {
         var score = 0.0;
         score += lineCount / 1000.0;
@@ -1396,23 +1372,29 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return OptimizationPriority.Low;
     }
 
-    private int EstimateEffort(List<SplittingStrategy> splittingStrategies, List<RefactoringSuggestion> refactoringSuggestions)
+    private static int EstimateEffort(List<SplittingStrategy> splittingStrategies, List<RefactoringSuggestion> refactoringSuggestions)
     {
         return splittingStrategies.Sum(s => s.EstimatedEffortHours) +
                refactoringSuggestions.Sum(r => r.EstimatedEffortHours);
     }
 
-    private int EstimateMethodEffort(List<MethodRefactoringStrategy> strategies)
+    private static int EstimateMethodEffort(List<MethodRefactoringStrategy> strategies)
     {
         return strategies.Sum(s => s.EstimatedEffortHours);
     }
 
-    private double CalculateExpectedBenefit(ClassMetrics metrics, List<SplittingStrategy> strategies)
+    private static double CalculateExpectedBenefit(ClassMetrics metrics, List<SplittingStrategy> strategies)
     {
         return strategies.Count * 0.3 + metrics.GodClassScore.GodClassScore * 0.5;
     }
 
-    private double CalculateMethodExpectedBenefit(MethodMetrics metrics, List<MethodRefactoringStrategy> strategies)
+    private static double CalculateExpectedBenefit(double impactScore, double applicability)
+    {
+        // Combine impact score and applicability to get a benefit score (0.0 - 1.0)
+        return (impactScore * 0.7 + applicability * 0.3);
+    }
+
+    private static double CalculateMethodExpectedBenefit(MethodMetrics metrics, List<MethodRefactoringStrategy> strategies)
     {
         return strategies.Count * 0.2 + metrics.GodMethodScore.GodMethodScore * 0.4;
     }
@@ -1421,7 +1403,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Utility Methods
 
-    private List<string> GenerateRecommendedActions(List<SplittingStrategy> splittingStrategies, List<RefactoringSuggestion> refactoringSuggestions)
+    private static List<string> GenerateRecommendedActions(List<SplittingStrategy> splittingStrategies, List<RefactoringSuggestion> refactoringSuggestions)
     {
         var actions = new List<string>();
 
@@ -1438,21 +1420,21 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return actions;
     }
 
-    private List<string> GenerateImmediateActions(List<string> largeClasses, List<string> largeMethods, List<CodeSmell> codeSmells)
+    private static List<string> GenerateImmediateActions(List<string> largeClasses, List<string> largeMethods, List<CodeSmell> codeSmells)
     {
         var actions = new List<string>();
 
-        if (largeClasses.Any())
+        if (largeClasses.Count != 0)
         {
             actions.Add($"Split large classes: {string.Join(", ", largeClasses)}");
         }
 
-        if (largeMethods.Any())
+        if (largeMethods.Count != 0)
         {
             actions.Add($"Refactor large methods: {string.Join(", ", largeMethods)}");
         }
 
-        if (codeSmells.Any())
+        if (codeSmells.Count != 0)
         {
             actions.Add($"Address {codeSmells.Count} code smells");
         }
@@ -1460,7 +1442,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return actions;
     }
 
-    private List<OptimizationAction> ConvertToOptimizationActions(ClassOptimizationResult classOptimization)
+    private static List<OptimizationAction> ConvertToOptimizationActions(ClassOptimizationResult classOptimization)
     {
         var actions = new List<OptimizationAction>();
 
@@ -1488,7 +1470,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return actions;
     }
 
-    private List<OptimizationAction> ConvertToOptimizationActions(MethodOptimizationResult methodOptimization)
+    private static List<OptimizationAction> ConvertToOptimizationActions(MethodOptimizationResult methodOptimization)
     {
         var actions = new List<OptimizationAction>();
 
@@ -1516,7 +1498,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return actions;
     }
 
-    private OptimizationAction ConvertCodeSmellToAction(CodeSmell codeSmell)
+    private static OptimizationAction ConvertCodeSmellToAction(CodeSmell codeSmell)
     {
         return new OptimizationAction
         {
@@ -1536,7 +1518,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
-    private OptimizationPriority DetermineOverallPriority(LargeFileInfo largeFile)
+    private static OptimizationPriority DetermineOverallPriority(LargeFileInfo largeFile)
     {
         if (largeFile.OptimizationPriority > 0.8) return OptimizationPriority.Critical;
         if (largeFile.OptimizationPriority > 0.6) return OptimizationPriority.High;
@@ -1544,7 +1526,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return OptimizationPriority.Low;
     }
 
-    private List<string> GeneratePrerequisites(List<OptimizationAction> actions)
+    private static List<string> GeneratePrerequisites(List<OptimizationAction> actions)
     {
         var prerequisites = new List<string>();
 
@@ -1561,7 +1543,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return prerequisites;
     }
 
-    private List<string> GenerateRisks(List<OptimizationAction> actions)
+    private static List<string> GenerateRisks(List<OptimizationAction> actions)
     {
         var risks = new List<string>();
 
@@ -1578,7 +1560,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return risks;
     }
 
-    private List<string> GeneratePlanRecommendations(List<OptimizationAction> actions, LargeFileInfo largeFile)
+    private static List<string> GeneratePlanRecommendations()
     {
         var recommendations = new List<string>();
 
@@ -1589,7 +1571,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return recommendations;
     }
 
-    private List<OptimizationRecommendation> GenerateGlobalRecommendations(List<LargeFileInfo> largeFiles, int totalFiles)
+    private static List<OptimizationRecommendation> GenerateGlobalRecommendations(List<LargeFileInfo> largeFiles, int totalFiles)
     {
         var recommendations = new List<OptimizationRecommendation>();
 
@@ -1610,7 +1592,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return recommendations;
     }
 
-    private OptimizationStatistics CalculateOptimizationStatistics(List<LargeFileInfo> largeFiles)
+    private static OptimizationStatistics CalculateOptimizationStatistics(List<LargeFileInfo> largeFiles)
     {
         var statistics = new OptimizationStatistics
         {
@@ -1628,10 +1610,10 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         // Calculate code smells by severity
         foreach (var file in largeFiles)
         {
-            foreach (var smell in file.CodeSmells)
+            foreach (var severity in file.CodeSmells.Select(smell => smell.Severity))
             {
-                statistics.CodeSmellsBySeverity[smell.Severity] =
-                    statistics.CodeSmellsBySeverity.GetValueOrDefault(smell.Severity, 0) + 1;
+                statistics.CodeSmellsBySeverity[severity] =
+                    statistics.CodeSmellsBySeverity.GetValueOrDefault(severity, 0) + 1;
             }
         }
 
@@ -1640,207 +1622,10 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #endregion
 
-    #region Code Smell Detection
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<CodeSmell>> DetectLongParameterListSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
-    {
-        var codeSmells = new List<CodeSmell>();
-
-        var methodDeclarations = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
-
-        foreach (var method in methodDeclarations)
-        {
-            if (method.ParameterList.Parameters.Count > MaxParameters)
-            {
-                var codeSmell = new CodeSmell
-                {
-                    SmellType = "Long Parameter List",
-                    Description = $"Method has {method.ParameterList.Parameters.Count} parameters (threshold: {MaxParameters})",
-                    Severity = DetermineCodeSmellSeverity(method.ParameterList.Parameters.Count - MaxParameters, MaxParameters),
-                    FilePath = filePath,
-                    StartLine = method.GetLocation().GetLineSpan().StartLinePosition.Line,
-                    EndLine = method.GetLocation().GetLineSpan().EndLinePosition.Line,
-                    AffectedCode = method.GetText().ToString(),
-                    Suggestion = "Consider using a parameter object or reducing the number of parameters",
-                    ImpactScore = Math.Min(1.0, (method.ParameterList.Parameters.Count - MaxParameters) / (double)MaxParameters),
-                    RefactoringPatterns = new List<RefactoringPattern>
-                    {
-                        new RefactoringPattern
-                        {
-                            PatternName = "Introduce Parameter Object",
-                            Description = "Group related parameters into a parameter object",
-                            Steps = new List<string> { "Create parameter object class", "Replace parameters with object", "Update method calls" },
-                            Applicability = 0.9,
-                            EstimatedEffort = 3
-                        }
-                    }
-                };
-
-                codeSmells.Add(codeSmell);
-            }
-        }
-
-        return codeSmells;
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<CodeSmell>> DetectLongMethodSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
-    {
-        var codeSmells = new List<CodeSmell>();
-
-        var methodDeclarations = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
-
-        foreach (var method in methodDeclarations)
-        {
-            var lineCount = method.GetText().Lines.Count;
-            if (lineCount > GodMethodThreshold)
-            {
-                var codeSmell = new CodeSmell
-                {
-                    SmellType = "Long Method",
-                    Description = $"Method has {lineCount} lines (threshold: {GodMethodThreshold})",
-                    Severity = DetermineCodeSmellSeverity(lineCount - GodMethodThreshold, GodMethodThreshold),
-                    FilePath = filePath,
-                    StartLine = method.GetLocation().GetLineSpan().StartLinePosition.Line,
-                    EndLine = method.GetLocation().GetLineSpan().EndLinePosition.Line,
-                    AffectedCode = method.GetText().ToString(),
-                    Suggestion = "Consider extracting smaller methods from this large method",
-                    ImpactScore = Math.Min(1.0, (lineCount - GodMethodThreshold) / (double)GodMethodThreshold),
-                    RefactoringPatterns = new List<RefactoringPattern>
-                    {
-                        new RefactoringPattern
-                        {
-                            PatternName = "Extract Method",
-                            Description = "Extract logical sections into separate methods",
-                            Steps = new List<string> { "Identify logical groups", "Extract into new methods", "Replace with method calls" },
-                            Applicability = 0.95,
-                            EstimatedEffort = 2
-                        }
-                    }
-                };
-
-                codeSmells.Add(codeSmell);
-            }
-        }
-
-        return codeSmells;
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<CodeSmell>> DetectLargeClassSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
-    {
-        var codeSmells = new List<CodeSmell>();
-
-        var classDeclarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
-
-        foreach (var classDecl in classDeclarations)
-        {
-            var methodCount = classDecl.DescendantNodes().OfType<MethodDeclarationSyntax>().Count();
-            if (methodCount > GodClassThreshold)
-            {
-                var codeSmell = new CodeSmell
-                {
-                    SmellType = "Large Class",
-                    Description = $"Class has {methodCount} methods (threshold: {GodClassThreshold})",
-                    Severity = DetermineCodeSmellSeverity(methodCount - GodClassThreshold, GodClassThreshold),
-                    FilePath = filePath,
-                    StartLine = classDecl.GetLocation().GetLineSpan().StartLinePosition.Line,
-                    EndLine = classDecl.GetLocation().GetLineSpan().EndLinePosition.Line,
-                    AffectedCode = classDecl.GetText().ToString(),
-                    Suggestion = "Consider splitting this class into smaller, more focused classes",
-                    ImpactScore = Math.Min(1.0, (methodCount - GodClassThreshold) / (double)GodClassThreshold),
-                    RefactoringPatterns = new List<RefactoringPattern>
-                    {
-                        new RefactoringPattern
-                        {
-                            PatternName = "Extract Class",
-                            Description = "Extract related functionality into separate classes",
-                            Steps = new List<string> { "Identify responsibilities", "Create new classes", "Move methods and fields", "Update references" },
-                            Applicability = 0.9,
-                            EstimatedEffort = 8
-                        }
-                    }
-                };
-
-                codeSmells.Add(codeSmell);
-            }
-        }
-
-        return codeSmells;
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<CodeSmell>> DetectComplexConditionalSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
-    {
-        var codeSmells = new List<CodeSmell>();
-
-        // This is a simplified implementation
-        // In practice, you'd analyze nested conditionals, switch statements, etc.
-
-        return codeSmells;
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<CodeSmell>> DetectDuplicateCodeSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
-    {
-        var codeSmells = new List<CodeSmell>();
-
-        // This is a simplified implementation
-        // In practice, you'd use duplicate code detection algorithms
-
-        return codeSmells;
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<CodeSmell>> DetectMagicNumberSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
-    {
-        var codeSmells = new List<CodeSmell>();
-
-        // This is a simplified implementation
-        // In practice, you'd identify numeric literals that should be constants
-
-        return codeSmells;
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<CodeSmell>> DetectFeatureEnvySmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
-    {
-        var codeSmells = new List<CodeSmell>();
-
-        // This is a simplified implementation
-        // In practice, you'd analyze method calls to other classes
-
-        return codeSmells;
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<CodeSmell>> DetectDataClumpsSmells(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
-    {
-        var codeSmells = new List<CodeSmell>();
-
-        // This is a simplified implementation
-        // In practice, you'd identify groups of parameters that always appear together
-
-        return codeSmells;
-    }
-
-    private CodeSmellSeverity DetermineCodeSmellSeverity(int excess, int threshold)
-    {
-        var ratio = excess / (double)threshold;
-
-        if (ratio <= 0.2) return CodeSmellSeverity.Minor;
-        if (ratio <= 0.5) return CodeSmellSeverity.Major;
-        if (ratio <= 1.0) return CodeSmellSeverity.Critical;
-        return CodeSmellSeverity.Blocker;
-    }
-
-    #endregion
-
     #region Refactoring Suggestion Generation
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<RefactoringSuggestion?> GenerateRefactoringSuggestion(CodeSmell codeSmell, SyntaxNode root, SemanticModel semanticModel, CancellationToken cancellationToken)
+    private static async Task<RefactoringSuggestion?> GenerateRefactoringSuggestion(CodeSmell codeSmell)
     {
         if (codeSmell.RefactoringPatterns.Count == 0)
             return null;
@@ -1871,9 +1656,9 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
-    private RefactoringType ConvertToRefactoringType(string patternName)
+    private static RefactoringType ConvertToRefactoringType(string patternName)
     {
-        return patternName.ToLower() switch
+        return patternName.ToLowerInvariant() switch
         {
             "extract method" => RefactoringType.ExtractMethod,
             "extract class" => RefactoringType.ExtractClass,
@@ -1889,7 +1674,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<RefactoringSuggestion>> GenerateClassRefactoringSuggestions(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, ClassMetrics metrics, CancellationToken cancellationToken)
+    private static async Task<List<RefactoringSuggestion>> GenerateClassRefactoringSuggestions(ClassDeclarationSyntax classDecl, ClassMetrics metrics)
     {
         var suggestions = new List<RefactoringSuggestion>();
 
@@ -1922,13 +1707,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return suggestions;
     }
 
-    private double CalculateExpectedBenefit(double impactScore, double applicability)
-    {
-        // Combine impact score and applicability to get a benefit score (0.0 - 1.0)
-        return (impactScore * 0.7 + applicability * 0.3);
-    }
-
-    private int CalculatePriority(CodeSmellSeverity severity, double impactScore)
+    private static int CalculatePriority(CodeSmellSeverity severity, double impactScore)
     {
         // Calculate priority (1-5) based on severity and impact
         var severityWeight = severity switch
@@ -1946,7 +1725,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return Math.Min(5, severityWeight + impactAdjustment);
     }
 
-    private double CalculateClassExpectedBenefit(ClassMetrics metrics)
+    private static double CalculateClassExpectedBenefit(ClassMetrics metrics)
     {
         // Calculate benefit based on class metrics
         var benefit = 0.0;
@@ -1963,7 +1742,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         return Math.Min(1.0, benefit);
     }
 
-    private int CalculateClassPriority(ClassMetrics metrics)
+    private static int CalculateClassPriority(ClassMetrics metrics)
     {
         // Calculate priority (1-5) based on class metrics
         var priority = 1;
@@ -1984,7 +1763,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Risk Assessment
 
-    private RiskAssessment AssessOptimizationRisks(List<OptimizationAction> actions)
+    private static RiskAssessment AssessOptimizationRisks(List<OptimizationAction> actions)
     {
         var riskFactors = new List<RiskFactor>();
         var overallRisk = RiskLevel.Low;
@@ -2029,17 +1808,17 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
-    private List<string> GenerateEffortRecommendations(List<OptimizationAction> actions, List<string> highImpactActions, List<string> lowEffortHighBenefitActions)
+    private static List<string> GenerateEffortRecommendations(List<string> highImpactActions, List<string> lowEffortHighBenefitActions)
     {
         var recommendations = new List<string>();
 
-        if (lowEffortHighBenefitActions.Any())
+        if (lowEffortHighBenefitActions.Count != 0)
         {
             recommendations.Add("Start with low-effort, high-benefit actions:");
             recommendations.AddRange(lowEffortHighBenefitActions.Select(a => $"  - {a}"));
         }
 
-        if (highImpactActions.Any())
+        if (highImpactActions.Count != 0)
         {
             recommendations.Add("High-impact actions to prioritize:");
             recommendations.AddRange(highImpactActions.Select(a => $"  - {a}"));
@@ -2052,14 +1831,17 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
     }
 
     #endregion
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file {FilePath}")]
+    private static partial void LogFileAnalysisError(ILogger logger, Exception exception, string filePath);
 }
 
 /// <summary>
 /// Helper class for analyzing code complexity
 /// </summary>
-internal class ComplexityAnalyzer
+internal static class ComplexityAnalyzer
 {
-    public class AnalysisResult
+    public sealed class AnalysisResult
     {
         public int CyclomaticComplexity { get; set; }
         public int CognitiveComplexity { get; set; }
@@ -2067,7 +1849,7 @@ internal class ComplexityAnalyzer
         public int DecisionPoints { get; set; }
     }
 
-    public AnalysisResult Analyze(BlockSyntax block)
+    public static AnalysisResult Analyze(BlockSyntax block)
     {
         var result = new AnalysisResult();
 

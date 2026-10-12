@@ -6,7 +6,7 @@ namespace MCPsharp.Services.Phase3.SqlMigration;
 /// <summary>
 /// Analyzes migrations to detect breaking changes
 /// </summary>
-internal class BreakingChangeAnalyzer
+internal sealed partial class BreakingChangeAnalyzer
 {
     private readonly ILogger<BreakingChangeAnalyzer> _logger;
 
@@ -16,7 +16,7 @@ internal class BreakingChangeAnalyzer
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<BreakingChange>> DetectBreakingChangesInMigrationsAsync(List<MigrationInfo> migrations, CancellationToken cancellationToken = default)
+    public static async Task<List<BreakingChange>> DetectBreakingChangesInMigrationsAsync(List<MigrationInfo> migrations, CancellationToken cancellationToken = default)
     {
         var breakingChanges = new List<BreakingChange>();
 
@@ -39,7 +39,7 @@ internal class BreakingChangeAnalyzer
 
     public List<BreakingChange> DetectBreakingChangesInRange(List<MigrationInfo> migrations, string fromMigration, string toMigration)
     {
-        _logger.LogInformation("Detecting breaking changes from {From} to {To}", fromMigration, toMigration);
+        LogDetectingBreakingChanges(_logger, fromMigration, toMigration);
 
         var breakingChanges = new List<BreakingChange>();
 
@@ -63,7 +63,7 @@ internal class BreakingChangeAnalyzer
         return breakingChanges;
     }
 
-    private BreakingChange? AnalyzeOperationForBreakingChanges(MigrationOperation operation, MigrationInfo migration, MigrationInfo? previousMigration)
+    private static BreakingChange? AnalyzeOperationForBreakingChanges(MigrationOperation operation, MigrationInfo migration, MigrationInfo? previousMigration)
     {
         // Analyze operation for breaking changes
         switch (operation.Type.ToLowerInvariant())
@@ -128,17 +128,14 @@ internal class BreakingChangeAnalyzer
         return null;
     }
 
-    private bool IsBreakingColumnChange(MigrationOperation operation)
+    private static bool IsBreakingColumnChange(MigrationOperation operation)
     {
-        // Check for breaking column changes
-        if (operation.Parameters.TryGetValue("type", out var newType) ||
-            operation.Parameters.TryGetValue("maxLength", out var _maxLength) ||
-            operation.Parameters.TryGetValue("nullable", out var _nullable))
-        {
-            // Type changes, reducing length, or making non-nullable are potentially breaking
-            return true;
-        }
-
-        return false;
+        // Type changes, reducing length, or making non-nullable are potentially breaking
+        return operation.Parameters.ContainsKey("type") ||
+            operation.Parameters.ContainsKey("maxLength") ||
+            operation.Parameters.ContainsKey("nullable");
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Detecting breaking changes from {From} to {To}")]
+    private static partial void LogDetectingBreakingChanges(ILogger logger, string from, string to);
 }

@@ -32,7 +32,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         var startTime = DateTime.UtcNow;
 
         // Use provided definition or detect best fit
-        var architecture = definition ?? await DetectBestFitArchitecture(projectPath, cancellationToken);
+        var architecture = definition ?? await DetectBestFitArchitecture(cancellationToken);
 
         var violations = new List<LayerViolation>();
         var warnings = new List<ArchitectureWarning>();
@@ -61,7 +61,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         // Analyze each syntax tree
         foreach (var syntaxTree in compilation.SyntaxTrees)
         {
-            if (string.IsNullOrEmpty(syntaxTree.FilePath) || !syntaxTree.FilePath.EndsWith(".cs"))
+            if (string.IsNullOrEmpty(syntaxTree.FilePath) || !syntaxTree.FilePath.EndsWith(".cs", StringComparison.Ordinal))
                 continue;
 
             analyzedFiles.Add(syntaxTree.FilePath);
@@ -85,8 +85,8 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
                 }
 
                 // Validate type against architectural rules
-                var typeViolations = await ValidateTypeAsync(symbol, layer, architecture, syntaxTree.FilePath, cancellationToken);
-                var typeWarnings = await AnalyzeTypeWarningsAsync(symbol, layer, architecture, syntaxTree.FilePath, cancellationToken);
+                var typeViolations = await ValidateTypeAsync(symbol, layer, architecture, syntaxTree.FilePath);
+                var typeWarnings = await AnalyzeTypeWarningsAsync(symbol, layer, syntaxTree.FilePath);
 
                 violations.AddRange(typeViolations);
                 warnings.AddRange(typeWarnings);
@@ -124,7 +124,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
     public async Task<DependencyAnalysisResult> AnalyzeDependenciesAsync(string projectPath, ArchitectureDefinition? definition = null, CancellationToken cancellationToken = default)
     {
         var startTime = DateTime.UtcNow;
-        var architecture = definition ?? await DetectBestFitArchitecture(projectPath, cancellationToken);
+        var architecture = definition ?? await DetectBestFitArchitecture(cancellationToken);
 
         var nodes = new List<DependencyNode>();
         var edges = new List<DependencyEdge>();
@@ -147,7 +147,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         // Build dependency graph
         foreach (var syntaxTree in compilation.SyntaxTrees)
         {
-            if (!syntaxTree.FilePath?.EndsWith(".cs") == true) continue;
+            if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true) continue;
 
             var semanticModel = compilation.GetSemanticModel(syntaxTree);
             var root = await syntaxTree.GetRootAsync(cancellationToken);
@@ -165,22 +165,22 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
                 nodes.Add(node);
 
                 // Analyze dependencies
-                var dependencies = await AnalyzeTypeDependencies(symbol, semanticModel, architecture, syntaxTree.FilePath, cancellationToken);
+                var dependencies = await AnalyzeTypeDependencies(symbol, architecture, syntaxTree.FilePath);
                 edges.AddRange(dependencies);
 
                 // Update layer dependencies
                 if (!string.IsNullOrEmpty(layer))
                 {
-                    foreach (var dep in dependencies)
+                    foreach (var toLayer in dependencies.Select(dep => dep.ToLayer).Where(l => !string.IsNullOrEmpty(l) && l != layer))
                     {
-                        if (!string.IsNullOrEmpty(dep.ToLayer) && dep.ToLayer != layer)
+                        if (!layerDependencies.TryGetValue(layer, out var targets))
                         {
-                            if (!layerDependencies.ContainsKey(layer))
-                                layerDependencies[layer] = new List<string>();
-
-                            if (!layerDependencies[layer].Contains(dep.ToLayer))
-                                layerDependencies[layer].Add(dep.ToLayer);
+                            targets = new List<string>();
+                            layerDependencies[layer] = targets;
                         }
+
+                        if (!targets.Contains(toLayer))
+                            targets.Add(toLayer);
                     }
                 }
             }
@@ -205,7 +205,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
 
     public async Task<ArchitectureReport> GetArchitectureReportAsync(string projectPath, ArchitectureDefinition? definition = null, CancellationToken cancellationToken = default)
     {
-        var architecture = definition ?? await DetectBestFitArchitecture(projectPath, cancellationToken);
+        var architecture = definition ?? await DetectBestFitArchitecture(cancellationToken);
 
         // Run all analyses
         var validationResult = await ValidateArchitectureAsync(projectPath, architecture, cancellationToken);
@@ -216,7 +216,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         var recommendations = await GetRecommendationsAsync(validationResult.Violations, cancellationToken);
 
         // Create summary
-        var summary = CreateReportSummary(validationResult, dependencyAnalysis, recommendations);
+        var summary = CreateReportSummary(validationResult);
 
         return new ArchitectureReport
         {
@@ -250,7 +250,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
 
     public async Task<ArchitectureDiagram> GenerateArchitectureDiagramAsync(string projectPath, ArchitectureDefinition? definition = null, CancellationToken cancellationToken = default)
     {
-        var architecture = definition ?? await DetectBestFitArchitecture(projectPath, cancellationToken);
+        var architecture = definition ?? await DetectBestFitArchitecture(cancellationToken);
         var dependencyAnalysis = await AnalyzeDependenciesAsync(projectPath, architecture, cancellationToken);
 
         return CreateArchitectureDiagram(dependencyAnalysis, architecture);
@@ -314,13 +314,12 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         if (syntaxReferences.Any())
         {
             var syntax = await syntaxReferences.First().GetSyntaxAsync(cancellationToken);
-            var semanticModel = compilation.GetSemanticModel(syntax.SyntaxTree);
             var filePath = syntax.SyntaxTree.FilePath;
 
-            var typeViolations = await ValidateTypeAsync(symbol, layer, definition, filePath, cancellationToken);
+            var typeViolations = await ValidateTypeAsync(symbol, layer, definition, filePath);
             violations.AddRange(typeViolations.Select(v => v.Description));
 
-            var typeDependencies = await AnalyzeTypeDependencies(symbol, semanticModel, definition, filePath, cancellationToken);
+            var typeDependencies = await AnalyzeTypeDependencies(symbol, definition, filePath);
             dependencies.AddRange(typeDependencies.Select(d => new DependencyInfo
             {
                 TargetType = d.To,
@@ -396,7 +395,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
-    private async Task<ArchitectureDefinition> DetectBestFitArchitecture(string projectPath, CancellationToken cancellationToken)
+    private async Task<ArchitectureDefinition> DetectBestFitArchitecture(CancellationToken cancellationToken)
     {
         // Simple heuristic-based detection based on namespace patterns
         var compilation = _workspace.GetCompilation();
@@ -419,64 +418,39 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         var scores = new Dictionary<string, int>();
         foreach (var arch in _predefinedArchitectures.Values)
         {
-            var score = 0;
-            foreach (var layer in arch.Layers)
-            {
-                foreach (var pattern in layer.NamespacePatterns)
-                {
-                    if (namespaces.Any(ns => MatchesPattern(ns, pattern)))
-                    {
-                        score++;
-                    }
-                }
-            }
-            scores[arch.Name] = score;
+            scores[arch.Name] = arch.Layers
+                .Sum(layer => layer.NamespacePatterns.Count(pattern => namespaces.Any(ns => MatchesPattern(ns, pattern))));
         }
 
         var bestFit = scores.OrderByDescending(kvp => kvp.Value).First().Key;
         return _predefinedArchitectures[bestFit];
     }
 
-    private bool MatchesPattern(string input, string pattern)
+    private static bool MatchesPattern(string input, string pattern)
     {
         // Simple glob pattern matching
         var regexPattern = Regex.Escape(pattern)
-            .Replace("\\*", ".*")
-            .Replace("\\?", ".");
+            .Replace("\\*", ".*", StringComparison.Ordinal)
+            .Replace("\\?", ".", StringComparison.Ordinal);
 
-        return Regex.IsMatch(input, $"^{regexPattern}$", RegexOptions.IgnoreCase);
+        return Regex.IsMatch(input, $"^{regexPattern}$", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
     }
 
-    private string IdentifyLayer(INamedTypeSymbol symbol, ArchitectureDefinition architecture)
+    private static string IdentifyLayer(INamedTypeSymbol symbol, ArchitectureDefinition architecture)
     {
         var namespaceName = symbol.ContainingNamespace?.ToDisplayString() ?? "";
         var className = symbol.Name;
 
-        foreach (var layer in architecture.Layers.OrderBy(l => l.Level))
-        {
-            // Check namespace patterns
-            foreach (var pattern in layer.NamespacePatterns)
-            {
-                if (MatchesPattern(namespaceName, pattern))
-                {
-                    return layer.Name;
-                }
-            }
+        // Check namespace patterns, then naming patterns
+        var match = architecture.Layers
+            .OrderBy(l => l.Level)
+            .FirstOrDefault(layer => layer.NamespacePatterns.Any(pattern => MatchesPattern(namespaceName, pattern))
+                || architecture.NamingPatterns.Any(np => np.LayerName == layer.Name && MatchesPattern(className, np.Pattern)));
 
-            // Check naming patterns
-            foreach (var namingPattern in architecture.NamingPatterns.Where(np => np.LayerName == layer.Name))
-            {
-                if (MatchesPattern(className, namingPattern.Pattern))
-                {
-                    return layer.Name;
-                }
-            }
-        }
-
-        return "Unknown";
+        return match?.Name ?? "Unknown";
     }
 
-    private async Task<List<LayerViolation>> ValidateTypeAsync(INamedTypeSymbol symbol, string layer, ArchitectureDefinition architecture, string filePath, CancellationToken cancellationToken)
+    private async Task<List<LayerViolation>> ValidateTypeAsync(INamedTypeSymbol symbol, string layer, ArchitectureDefinition architecture, string filePath)
     {
         var violations = new List<LayerViolation>();
 
@@ -505,13 +479,10 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         if (sourceLayer == null) return violations;
 
         // Get all dependencies of this type
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null) return violations;
-
-        var semanticModel = compilation.GetSemanticModel(symbol.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree ?? compilation.SyntaxTrees.First());
+        if (_workspace.GetCompilation() == null) return violations;
 
         // Analyze dependencies for violations
-        var dependencies = await AnalyzeTypeDependencies(symbol, semanticModel, architecture, filePath, cancellationToken);
+        var dependencies = await AnalyzeTypeDependencies(symbol, architecture, filePath);
 
         foreach (var dependency in dependencies)
         {
@@ -528,7 +499,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
                     FilePath = dependency.FilePath,
                     LineNumber = dependency.LineNumber,
                     ColumnNumber = 0,
-                    Severity = DetermineSeverity(sourceLayer, dependency.ToLayer, architecture),
+                    Severity = DetermineSeverity(sourceLayer, dependency.ToLayer),
                     CodeSnippet = $"// {dependency.From} -> {dependency.To}",
                     Recommendations = GenerateRecommendationsForDependency(sourceLayer.Name, dependency.ToLayer),
                     RuleViolated = "Layer Dependency Rule"
@@ -540,7 +511,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<ArchitectureWarning>> AnalyzeTypeWarningsAsync(INamedTypeSymbol symbol, string layer, ArchitectureDefinition architecture, string filePath, CancellationToken cancellationToken)
+    private static async Task<List<ArchitectureWarning>> AnalyzeTypeWarningsAsync(INamedTypeSymbol symbol, string layer, string filePath)
     {
         var warnings = new List<ArchitectureWarning>();
 
@@ -561,7 +532,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
     }
 
     #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<DependencyEdge>> AnalyzeTypeDependencies(INamedTypeSymbol symbol, SemanticModel semanticModel, ArchitectureDefinition architecture, string filePath, CancellationToken cancellationToken)
+    private static async Task<List<DependencyEdge>> AnalyzeTypeDependencies(INamedTypeSymbol symbol, ArchitectureDefinition architecture, string filePath)
     {
         var dependencies = new List<DependencyEdge>();
         var sourceLayer = IdentifyLayer(symbol, architecture);
@@ -607,7 +578,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return dependencies;
     }
 
-    private DependencyEdge CreateDependencyEdge(string from, string to, string fromLayer, string toLayer, DependencyType type, string filePath, Location? location)
+    private static DependencyEdge CreateDependencyEdge(string from, string to, string fromLayer, string toLayer, DependencyType type, string filePath, Location? location)
     {
         var lineSpan = location?.GetLineSpan();
 
@@ -624,7 +595,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
-    private bool IsDependencyAllowed(string fromLayer, string toLayer)
+    private static bool IsDependencyAllowed(string fromLayer, string toLayer)
     {
         if (string.IsNullOrEmpty(fromLayer) || string.IsNullOrEmpty(toLayer)) return true;
         if (fromLayer == toLayer) return true;
@@ -653,7 +624,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return fromLevel <= toLevel;
     }
 
-    private ViolationSeverity DetermineSeverity(ArchitecturalLayer sourceLayer, string targetLayer, ArchitectureDefinition architecture)
+    private static ViolationSeverity DetermineSeverity(ArchitecturalLayer sourceLayer, string targetLayer)
     {
         if (sourceLayer.IsCore && !targetLayer.Equals("Core", StringComparison.OrdinalIgnoreCase))
         {
@@ -673,7 +644,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return ViolationSeverity.Minor;
     }
 
-    private List<ArchitectureRecommendation> GenerateRecommendationsForDependency(string sourceLayer, string targetLayer)
+    private static List<ArchitectureRecommendation> GenerateRecommendationsForDependency(string sourceLayer, string targetLayer)
     {
         var recommendations = new List<ArchitectureRecommendation>();
 
@@ -700,7 +671,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return recommendations;
     }
 
-    private List<ArchitectureRecommendation> GenerateRecommendationsForViolation(LayerViolation violation)
+    private static List<ArchitectureRecommendation> GenerateRecommendationsForViolation(LayerViolation violation)
     {
         var recommendations = new List<ArchitectureRecommendation>();
 
@@ -732,7 +703,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return recommendations;
     }
 
-    private DependencyNode CreateDependencyNode(INamedTypeSymbol symbol, string layer, string filePath)
+    private static DependencyNode CreateDependencyNode(INamedTypeSymbol symbol, string layer, string filePath)
     {
         var nodeType = symbol.TypeKind switch
         {
@@ -762,43 +733,41 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
-    private int CalculateComplexity(INamedTypeSymbol symbol)
+    private static int CalculateComplexity(INamedTypeSymbol symbol)
     {
         // Simple complexity calculation based on members
-        var memberCount = symbol.GetMembers().Count();
+        var memberCount = symbol.GetMembers().Length;
         var methodCount = symbol.GetMembers().OfType<IMethodSymbol>().Count();
         var propertyCount = symbol.GetMembers().OfType<IPropertySymbol>().Count();
 
         return memberCount + (methodCount * 2) + propertyCount;
     }
 
-    private List<MCPsharp.Models.Architecture.CircularDependency> DetectCircularDependencies(List<DependencyNode> nodes, List<DependencyEdge> edges)
+    private static List<MCPsharp.Models.Architecture.CircularDependency> DetectCircularDependencies(List<DependencyNode> nodes, List<DependencyEdge> edges)
     {
         var circularDependencies = new List<MCPsharp.Models.Architecture.CircularDependency>();
         var graph = BuildDependencyGraph(nodes, edges);
         var visited = new HashSet<string>();
         var recursionStack = new HashSet<string>();
 
-        foreach (var node in nodes)
+        // visited is updated by HasCycle, so the filter must be evaluated lazily per node
+        foreach (var node in nodes.Where(n => !visited.Contains(n.Name)))
         {
-            if (!visited.Contains(node.Name))
+            var path = new List<string>();
+            if (HasCycle(node.Name, graph, visited, recursionStack, path))
             {
-                var path = new List<string>();
-                if (HasCycle(node.Name, graph, visited, recursionStack, path))
+                var cycle = ExtractCycle(path);
+                if (cycle.Count > 1)
                 {
-                    var cycle = ExtractCycle(path, graph);
-                    if (cycle.Count > 1)
+                    circularDependencies.Add(new MCPsharp.Models.Architecture.CircularDependency
                     {
-                        circularDependencies.Add(new MCPsharp.Models.Architecture.CircularDependency
-                        {
-                            Cycle = cycle,
-                            LayersInvolved = cycle.Select(n => nodes.FirstOrDefault(node => node.Name == n)?.Layer ?? "Unknown").Distinct().ToList(),
-                            CycleLength = cycle.Count,
-                            Severity = cycle.Count > 5 ? ViolationSeverity.Critical : ViolationSeverity.Major,
-                            Description = $"Circular dependency detected: {string.Join(" -> ", cycle)} -> {cycle.First()}",
-                            Edges = edges.Where(e => cycle.Contains(e.From) && cycle.Contains(e.To)).ToList()
-                        });
-                    }
+                        Cycle = cycle,
+                        LayersInvolved = cycle.Select(n => nodes.FirstOrDefault(node => node.Name == n)?.Layer ?? "Unknown").Distinct().ToList(),
+                        CycleLength = cycle.Count,
+                        Severity = cycle.Count > 5 ? ViolationSeverity.Critical : ViolationSeverity.Major,
+                        Description = $"Circular dependency detected: {string.Join(" -> ", cycle)} -> {cycle[0]}",
+                        Edges = edges.Where(e => cycle.Contains(e.From) && cycle.Contains(e.To)).ToList()
+                    });
                 }
             }
         }
@@ -806,7 +775,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return circularDependencies;
     }
 
-    private Dictionary<string, List<string>> BuildDependencyGraph(List<DependencyNode> nodes, List<DependencyEdge> edges)
+    private static Dictionary<string, List<string>> BuildDependencyGraph(List<DependencyNode> nodes, List<DependencyEdge> edges)
     {
         var graph = new Dictionary<string, List<string>>();
 
@@ -817,16 +786,16 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
 
         foreach (var edge in edges)
         {
-            if (graph.ContainsKey(edge.From))
+            if (graph.TryGetValue(edge.From, out var value))
             {
-                graph[edge.From].Add(edge.To);
+                value.Add(edge.To);
             }
         }
 
         return graph;
     }
 
-    private bool HasCycle(string node, Dictionary<string, List<string>> graph, HashSet<string> visited, HashSet<string> recursionStack, List<string> path)
+    private static bool HasCycle(string node, Dictionary<string, List<string>> graph, HashSet<string> visited, HashSet<string> recursionStack, List<string> path)
     {
         visited.Add(node);
         recursionStack.Add(node);
@@ -850,12 +819,12 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return false;
     }
 
-    private List<string> ExtractCycle(List<string> path, Dictionary<string, List<string>> graph)
+    private static List<string> ExtractCycle(List<string> path)
     {
         if (path.Count < 2) return path;
 
         // Find the start of the cycle
-        var lastNode = path.Last();
+        var lastNode = path[^1];
         var startIndex = path.IndexOf(lastNode);
 
         if (startIndex >= 0)
@@ -866,7 +835,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return path;
     }
 
-    private Dictionary<string, int> CalculateDependencyMetrics(List<DependencyNode> nodes, List<DependencyEdge> edges)
+    private static Dictionary<string, int> CalculateDependencyMetrics(List<DependencyNode> nodes, List<DependencyEdge> edges)
     {
         return new Dictionary<string, int>
         {
@@ -878,7 +847,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
-    private ArchitectureDiagram CreateArchitectureDiagram(DependencyAnalysisResult analysis, ArchitectureDefinition architecture)
+    private static ArchitectureDiagram CreateArchitectureDiagram(DependencyAnalysisResult analysis, ArchitectureDefinition architecture)
     {
         var nodes = new List<DiagramNode>();
         var edges = new List<DiagramEdge>();
@@ -980,7 +949,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
-    private string GetLayerColor(LayerType layerType)
+    private static string GetLayerColor(LayerType layerType)
     {
         return layerType switch
         {
@@ -995,7 +964,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
-    private string GetNodeTypeColor(NodeType nodeType)
+    private static string GetNodeTypeColor(NodeType nodeType)
     {
         return nodeType switch
         {
@@ -1007,7 +976,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
-    private ReportSummary CreateReportSummary(ArchitectureValidationResult validation, DependencyAnalysisResult dependency, List<ArchitectureRecommendation> recommendations)
+    private static ReportSummary CreateReportSummary(ArchitectureValidationResult validation)
     {
         var violationsBySeverity = validation.Violations.GroupBy(v => v.Severity).ToDictionary(g => g.Key, g => g.Count());
         var violationsByLayer = validation.Violations.GroupBy(v => v.SourceLayer).ToDictionary(g => g.Key, g => g.Count());
@@ -1033,12 +1002,12 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
-    private void ValidateArchitectureDefinition(ArchitectureDefinition definition)
+    private static void ValidateArchitectureDefinition(ArchitectureDefinition definition)
     {
         if (string.IsNullOrWhiteSpace(definition.Name))
             throw new ArgumentException("Architecture definition must have a name");
 
-        if (definition.Layers == null || !definition.Layers.Any())
+        if (definition.Layers == null || definition.Layers.Count == 0)
             throw new ArgumentException("Architecture definition must have at least one layer");
 
         // Check for duplicate layer names
