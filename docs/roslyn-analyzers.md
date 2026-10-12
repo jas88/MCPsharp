@@ -202,9 +202,19 @@ Load Roslyn analyzers from assembly or directory.
 **Returns**:
 ```json
 {
-  "analyzers_loaded": 15,
-  "analyzer_ids": ["Roslyn_CA1001", "Roslyn_CA2007", ...],
-  "assembly_path": "/path/to/assembly.dll"
+  "analyzersLoaded": 1,
+  "analyzers": [
+    {
+      "id": "Roslyn_CA1001",
+      "name": "CA1001",
+      "description": "Types that own disposable fields should be disposable",
+      "version": "1.0.0",
+      "author": "Microsoft",
+      "supportedExtensions": [".cs"],
+      "isEnabled": true,
+      "rules": null
+    }
+  ]
 }
 ```
 
@@ -218,21 +228,24 @@ Run loaded Roslyn analyzers on target path.
 **Returns**:
 ```json
 {
-  "success": true,
-  "analyzers_run": 15,
-  "issues_found": 42,
+  "analyzersRun": ["Roslyn_CA1001", "Roslyn_CA2007"],
+  "totalIssuesFound": 42,
+  "durationSeconds": 1.84,
   "issues": [
     {
-      "rule_id": "CA1001",
-      "file_path": "/path/to/file.cs",
-      "line": 123,
-      "column": 5,
+      "ruleId": "CA1001",
+      "analyzerId": "Roslyn_CA1001",
       "severity": "Warning",
-      "message": "Type owns disposable fields but is not disposable"
+      "message": "Type owns disposable fields but is not disposable",
+      "filePath": "/path/to/file.cs",
+      "line": 123,
+      "column": 5
     }
   ]
 }
 ```
+
+A failed run is reported as a tool error rather than in the result.
 
 ### `list_roslyn_analyzers`
 List all loaded Roslyn analyzers.
@@ -240,12 +253,24 @@ List all loaded Roslyn analyzers.
 **Returns**:
 ```json
 {
+  "totalAnalyzers": 1,
   "analyzers": [
     {
       "id": "Roslyn_CA1001",
       "name": "CA1001",
       "description": "Types that own disposable fields should be disposable",
-      "rules_count": 1
+      "version": "1.0.0",
+      "author": "Microsoft",
+      "supportedExtensions": [".cs"],
+      "isEnabled": true,
+      "rules": [
+        {
+          "id": "CA1001",
+          "title": "Types that own disposable fields should be disposable",
+          "category": "Design",
+          "severity": "Warning"
+        }
+      ]
     }
   ]
 }
