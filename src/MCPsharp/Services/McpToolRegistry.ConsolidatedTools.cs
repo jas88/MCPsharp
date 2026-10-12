@@ -212,9 +212,9 @@ public partial class McpToolRegistry
         new McpTool
         {
             Name = "analyze_architecture",
-            Description = "Unified architecture analysis against the default layered architecture: validation, layer violations and recommendations. Requires an open project.",
+            Description = "Unified architecture analysis of the open project against the default layered architecture: validation, layer violations, layer dependencies and recommendations. Requires an open project.",
             InputSchema = JsonSchemaHelper.CreateSchema(
-                Prop("scope", "string", "Analysis scope (default: all)", enumValues: AnalysisScopeValues),
+                Prop("scope", "string", "Sections to compute: definition = validation against the architecture, references = layer violations, dependencies = layer dependency graph, all = everything (default: all)", enumValues: AnalysisScopeValues),
                 DetailProp(),
                 IncludeProp())
         },
@@ -233,11 +233,11 @@ public partial class McpToolRegistry
         new McpTool
         {
             Name = "analyze_quality",
-            Description = "Unified code quality analysis: duplicates, complexity, maintainability and code smells. Requires an open project.",
+            Description = "Unified code quality analysis of the open project (or one file in it): duplicates, complexity, maintainability, test coverage and code smells. Requires an open project.",
             InputSchema = JsonSchemaHelper.CreateSchema(
-                Prop("scope", "string", "Analysis scope (default: all)", enumValues: AnalysisScopeValues),
+                Prop("scope", "string", "Label echoed in the response; use metrics to choose the analyses (default: all)", enumValues: AnalysisScopeValues),
                 Prop("metrics", "array", "Quality metrics to compute (default: all)", items: EnumItems(QualityMetricValues)),
-                Prop("file_path", "string", "Optional file to focus the analysis on"),
+                Prop("file_path", "string", "Optional file to analyse instead of the whole project (duplicates are detected project-wide and filtered to this file)"),
                 DetailProp(),
                 IncludeProp())
         }

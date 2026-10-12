@@ -377,6 +377,16 @@ public partial class UnifiedAnalysisService
                 };
             }
 
+            if (string.IsNullOrWhiteSpace(request.ProjectPath))
+            {
+                return new ArchitectureAnalysisResponse
+                {
+                    Scope = request.Scope.ToString(),
+                    Error = ProjectPathRequiredError,
+                    Metadata = new ResponseMetadata { Success = false, ProcessingTime = stopwatch.Elapsed }
+                };
+            }
+
             var response = new ArchitectureAnalysisResponse
             {
                 Scope = request.Scope.ToString(),
@@ -384,38 +394,56 @@ public partial class UnifiedAnalysisService
                 Metadata = new ResponseMetadata { Success = true, ProcessingTime = stopwatch.Elapsed }
             };
 
-            // Load or use provided architecture definition
-            var scopeString = request.Scope.ToString();
+            // The scope selects the sections: Definition validates the project against the architecture
+            // definition, References reports layer violations, Dependencies analyses layer dependencies.
+            var projectPath = request.ProjectPath;
             var architectureDefinition = ConvertToArchitectureDefinition(request.Definition ?? GetDefaultArchitectureDefinition());
+            var includeValidation = request.Scope is AnalysisScope.Definition or AnalysisScope.All;
+            var includeViolations = request.Scope is AnalysisScope.References or AnalysisScope.All;
+            var includeDependencies = request.Scope is AnalysisScope.Dependencies or AnalysisScope.All;
+            var includeRecommendations = request.Options?.Include.HasFlag(IncludeOptions.Suggestions) == true;
 
-            // Validate architecture
-            response.Validation = ConvertToValidationResult(await _architectureValidator.ValidateArchitectureAsync(scopeString, architectureDefinition, ct));
-
-            // Detect violations
-            var layerViolations = await _architectureValidator.DetectLayerViolationsAsync(scopeString, architectureDefinition, ct);
-            response.Violations = layerViolations.Select(v => new ArchitectureViolation
+            List<LayerViolation>? layerViolations = null;
+            if (includeValidation)
             {
-                From = v.SourceLayer,
-                To = v.TargetLayer,
-                Rule = v.RuleViolated,
-                Location = new MCPsharp.Models.Consolidated.Location { FilePath = v.FilePath, Line = v.LineNumber, Column = v.ColumnNumber },
-                Description = v.Description
-            }).ToList();
+                var validation = await _architectureValidator.ValidateArchitectureAsync(projectPath, architectureDefinition, ct);
+                response.Validation = ConvertToValidationResult(validation);
+                layerViolations = validation.Violations;
+            }
 
-            // Analyze dependencies
-            var dependencyAnalysis = await _architectureValidator.AnalyzeDependenciesAsync(scopeString, architectureDefinition, ct);
-            response.DependencyAnalysis = new DependencyAnalysisResponse
+            if (includeViolations || includeRecommendations)
             {
-                Scope = scopeString,
-                Depth = 2,
-                Graph = ConvertToDependencyGraph(dependencyAnalysis),
-                Metadata = new ResponseMetadata { Success = true }
-            };
+                layerViolations ??= await _architectureValidator.DetectLayerViolationsAsync(projectPath, architectureDefinition, ct);
+            }
+
+            if (includeViolations)
+            {
+                response.Violations = layerViolations!.Select(v => new ArchitectureViolation
+                {
+                    From = v.SourceLayer,
+                    To = v.TargetLayer,
+                    Rule = v.RuleViolated,
+                    Location = new MCPsharp.Models.Consolidated.Location { FilePath = v.FilePath, Line = v.LineNumber, Column = v.ColumnNumber },
+                    Description = v.Description
+                }).ToList();
+            }
+
+            if (includeDependencies)
+            {
+                var dependencyAnalysis = await _architectureValidator.AnalyzeDependenciesAsync(projectPath, architectureDefinition, ct);
+                response.DependencyAnalysis = new DependencyAnalysisResponse
+                {
+                    Scope = request.Scope.ToString(),
+                    Depth = 2,
+                    Graph = ConvertToDependencyGraph(dependencyAnalysis),
+                    Metadata = new ResponseMetadata { Success = true }
+                };
+            }
 
             // Generate recommendations
-            if (request.Options?.Include.HasFlag(IncludeOptions.Suggestions) == true)
+            if (includeRecommendations)
             {
-                var recommendations = await _architectureValidator.GetRecommendationsAsync(layerViolations, ct);
+                var recommendations = await _architectureValidator.GetRecommendationsAsync(layerViolations!, ct);
                 response.Recommendations = recommendations.Select(r => new MCPsharp.Models.Consolidated.ArchitectureRecommendation
                 {
                     Type = r.Type,
@@ -429,7 +457,7 @@ public partial class UnifiedAnalysisService
             // Architecture metrics
             if (request.Options?.Include.HasFlag(IncludeOptions.Metrics) == true)
             {
-                response.Metrics = CalculateArchitectureMetrics(scopeString, architectureDefinition);
+                response.Metrics = CalculateArchitectureMetrics(projectPath, architectureDefinition);
             }
 
             stopwatch.Stop();
@@ -535,6 +563,19 @@ public partial class UnifiedAnalysisService
 
         try
         {
+            // Quality metrics are computed over a file or directory: the focus file when given, else the project.
+            // The scope is a label only; the metrics list selects which analyses run.
+            var targetPath = string.IsNullOrWhiteSpace(request.FilePath) ? request.ProjectPath : request.FilePath;
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                return new QualityAnalysisResponse
+                {
+                    Scope = request.Scope.ToString(),
+                    Error = ProjectPathRequiredError,
+                    Metadata = new ResponseMetadata { ProcessingTime = stopwatch.Elapsed, Success = false }
+                };
+            }
+
             var response = new QualityAnalysisResponse
             {
                 Scope = request.Scope.ToString(),
@@ -543,11 +584,15 @@ public partial class UnifiedAnalysisService
             };
 
             // Duplicate code detection
+            // Duplicate detection loads a project, so it always runs on the project and is then narrowed to the focus file
             if ((request.Metrics.Contains(AnalysisQualityMetric.Duplicates) || request.Metrics.Contains(AnalysisQualityMetric.All))
-                && _duplicateDetector != null)
+                && _duplicateDetector != null && !string.IsNullOrWhiteSpace(request.ProjectPath))
             {
-                var duplicates = await _duplicateDetector.DetectDuplicatesAsync(request.Scope.ToString(), new DuplicateDetectionOptions(), ct);
-                response.Duplicates = duplicates.DuplicateGroups.Select(d => new DuplicateGroup
+                var duplicates = await _duplicateDetector.DetectDuplicatesAsync(request.ProjectPath, new DuplicateDetectionOptions(), ct);
+                var focusFile = string.IsNullOrWhiteSpace(request.FilePath) ? null : Path.GetFullPath(request.FilePath);
+                response.Duplicates = duplicates.DuplicateGroups
+                    .Where(d => focusFile == null || d.CodeBlocks.Any(b => string.Equals(Path.GetFullPath(b.FilePath), focusFile, PathContainment.Comparison)))
+                    .Select(d => new DuplicateGroup
                 {
                     Type = d.DuplicationType.ToString(),
                     Similarity = d.SimilarityScore,
@@ -568,25 +613,25 @@ public partial class UnifiedAnalysisService
             // Complexity analysis
             if (request.Metrics.Contains(AnalysisQualityMetric.Complexity) || request.Metrics.Contains(AnalysisQualityMetric.All))
             {
-                response.Complexity = await AnalyzeComplexityAsync(request.Scope.ToString(), ct);
+                response.Complexity = await AnalyzeComplexityAsync(targetPath, ct);
             }
 
             // Maintainability analysis
             if (request.Metrics.Contains(AnalysisQualityMetric.Maintainability) || request.Metrics.Contains(AnalysisQualityMetric.All))
             {
-                response.Maintainability = await AnalyzeMaintainabilityAsync(request.Scope.ToString(), ct);
+                response.Maintainability = await AnalyzeMaintainabilityAsync(targetPath, ct);
             }
 
             // Test coverage
             if (request.Metrics.Contains(AnalysisQualityMetric.TestCoverage) || request.Metrics.Contains(AnalysisQualityMetric.All))
             {
-                response.TestCoverage = AnalyzeTestCoverage(request.Scope.ToString());
+                response.TestCoverage = AnalyzeTestCoverage(targetPath);
             }
 
             // Code smells
             if (request.Metrics.Contains(AnalysisQualityMetric.CodeSmells) || request.Metrics.Contains(AnalysisQualityMetric.All))
             {
-                response.CodeSmells = await DetectCodeSmellsAsync(request.Scope.ToString(), ct);
+                response.CodeSmells = await DetectCodeSmellsAsync(targetPath, ct);
             }
 
             // Quality score
@@ -623,6 +668,46 @@ public partial class UnifiedAnalysisService
     }
 
     #region Private Helper Methods
+
+    private const string ProjectPathRequiredError = "A project path is required for this analysis";
+
+    /// <summary>
+    /// C# files to analyse for a target that is either a single file or a directory searched recursively.
+    /// </summary>
+    private static List<string> EnumerateCSharpFiles(string targetPath)
+    {
+        if (File.Exists(targetPath))
+        {
+            return string.Equals(Path.GetExtension(targetPath), ".cs", StringComparison.OrdinalIgnoreCase)
+                ? new List<string> { targetPath }
+                : new List<string>();
+        }
+
+        return Directory.Exists(targetPath)
+            ? Directory.GetFiles(targetPath, "*.cs", SearchOption.AllDirectories).ToList()
+            : throw new DirectoryNotFoundException($"Analysis target not found: {targetPath}");
+    }
+
+    /// <summary>
+    /// Directory of a project given either as its directory or as a project/solution file.
+    /// </summary>
+    private static string? ResolveProjectDirectory(string projectPath) =>
+        Directory.Exists(projectPath) ? projectPath : Path.GetDirectoryName(projectPath);
+
+    /// <summary>
+    /// Project file for a project given either as a .csproj file or as a directory containing one.
+    /// </summary>
+    private static string? ResolveProjectFile(string projectPath)
+    {
+        if (File.Exists(projectPath))
+        {
+            return string.Equals(Path.GetExtension(projectPath), ".csproj", StringComparison.OrdinalIgnoreCase) ? projectPath : null;
+        }
+
+        return Directory.Exists(projectPath)
+            ? Directory.GetFiles(projectPath, "*.csproj", SearchOption.TopDirectoryOnly).Order(StringComparer.Ordinal).FirstOrDefault()
+            : null;
+    }
 
     private static int CountAnalysisResults(object analysisResult)
     {
@@ -1595,7 +1680,8 @@ public partial class UnifiedAnalysisService
                 References = new List<ConsolidatedProjectReference>()
             };
 
-            if (Directory.Exists(Path.GetDirectoryName(projectPath)))
+            var projectDirectory = ResolveProjectDirectory(projectPath);
+            if (projectDirectory != null && Directory.Exists(projectDirectory))
             {
 
                 // Add basic configurations
@@ -1622,9 +1708,12 @@ public partial class UnifiedAnalysisService
         {
             var files = new List<ProjectFile>();
 
-                      // Get all C# files in the project directory
-            var projectDir = Path.GetDirectoryName(projectPath);
-            var filePaths = projectDir != null ? Directory.GetFiles(projectDir, "*.cs", SearchOption.AllDirectories) : Array.Empty<string>();
+            // Get all C# files in the project directory (the path itself when it is a directory,
+            // otherwise the directory containing the project file)
+            var projectDir = ResolveProjectDirectory(projectPath);
+            var filePaths = projectDir != null && Directory.Exists(projectDir)
+                ? Directory.GetFiles(projectDir, "*.cs", SearchOption.AllDirectories)
+                : Array.Empty<string>();
 
             foreach (var filePath in filePaths)
             {
@@ -1666,9 +1755,10 @@ public partial class UnifiedAnalysisService
                 AssemblyReferences = new List<AssemblyReference>()
             };
 
-            if (File.Exists(projectPath) && string.Equals(Path.GetExtension(projectPath), ".csproj", StringComparison.OrdinalIgnoreCase))
+            var projectFile = ResolveProjectFile(projectPath);
+            if (projectFile != null)
             {
-                var content = await File.ReadAllTextAsync(projectPath, ct);
+                var content = await File.ReadAllTextAsync(projectFile, ct);
 
                 // Extract NuGet package references
                 var packagePattern = @"<PackageReference\s+Include=""([^""]+)""";
@@ -1705,9 +1795,10 @@ public partial class UnifiedAnalysisService
                 BuildArtifacts = new List<string>()
             };
 
-            if (File.Exists(projectPath) && string.Equals(Path.GetExtension(projectPath), ".csproj", StringComparison.OrdinalIgnoreCase))
+            var projectFile = ResolveProjectFile(projectPath);
+            if (projectFile != null)
             {
-                var content = await File.ReadAllTextAsync(projectPath, ct);
+                var content = await File.ReadAllTextAsync(projectFile, ct);
 
                 // Extract target framework
                 var tfPattern = @"<TargetFramework>([^<]+)</TargetFramework>";
@@ -1730,7 +1821,7 @@ public partial class UnifiedAnalysisService
                 {
                     Name = "Build",
                     Command = "dotnet build",
-                    Inputs = new List<string> { projectPath },
+                    Inputs = new List<string> { projectFile },
                     Outputs = new List<string>()
                 });
             }
@@ -2058,12 +2149,12 @@ public partial class UnifiedAnalysisService
 
     #endregion
 
-    private async Task<ComplexityAnalysis?> AnalyzeComplexityAsync(string scope, CancellationToken ct)
+    private async Task<ComplexityAnalysis?> AnalyzeComplexityAsync(string targetPath, CancellationToken ct)
     {
         try
         {
-            // Get all C# files in the scope
-            var files = Directory.GetFiles(scope, "*.cs", SearchOption.AllDirectories);
+            // Get all C# files in the target file or directory
+            var files = EnumerateCSharpFiles(targetPath);
             var totalComplexity = 0;
             var fileComplexities = new List<FileComplexity>();
 
@@ -2082,7 +2173,7 @@ public partial class UnifiedAnalysisService
 
             return new ComplexityAnalysis
             {
-                Scope = scope,
+                Scope = targetPath,
                 TotalComplexity = totalComplexity,
                 AverageComplexity = averageComplexity,
                 MaxComplexity = maxComplexity,
@@ -2102,17 +2193,17 @@ public partial class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            LogErrorAnalyzingComplexityFor(_logger, ex, scope);
+            LogErrorAnalyzingComplexityFor(_logger, ex, targetPath);
         }
 
         return null;
     }
 
-    private async Task<MaintainabilityAnalysis?> AnalyzeMaintainabilityAsync(string scope, CancellationToken ct)
+    private async Task<MaintainabilityAnalysis?> AnalyzeMaintainabilityAsync(string targetPath, CancellationToken ct)
     {
         try
         {
-            var complexity = await AnalyzeComplexityAsync(scope, ct);
+            var complexity = await AnalyzeComplexityAsync(targetPath, ct);
             if (complexity == null) return null;
 
             // Calculate maintainability index (simplified version)
@@ -2120,7 +2211,7 @@ public partial class UnifiedAnalysisService
 
             return new MaintainabilityAnalysis
             {
-                Scope = scope,
+                Scope = targetPath,
                 MaintainabilityIndex = averageMaintainability,
                 TechnicalDebt = Math.Max(0, 100 - averageMaintainability), // Simplified
                 CodeQuality = averageMaintainability switch
@@ -2142,17 +2233,17 @@ public partial class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            LogErrorAnalyzingMaintainabilityFor(_logger, ex, scope);
+            LogErrorAnalyzingMaintainabilityFor(_logger, ex, targetPath);
         }
 
         return null;
     }
 
-    private TestCoverageAnalysis? AnalyzeTestCoverage(string scope)
+    private TestCoverageAnalysis? AnalyzeTestCoverage(string targetPath)
     {
         try
         {
-            var allFiles = Directory.GetFiles(scope, "*.cs", SearchOption.AllDirectories);
+            var allFiles = EnumerateCSharpFiles(targetPath);
             var testFiles = allFiles.Where(f => Path.GetFileName(f).Contains("Test") ||
                                                Path.GetDirectoryName(f)?.Contains("Test") == true ||
                                                Path.GetDirectoryName(f)?.Contains("test") == true).ToList();
@@ -2162,8 +2253,8 @@ public partial class UnifiedAnalysisService
 
             return new TestCoverageAnalysis
             {
-                Scope = scope,
-                TotalFiles = allFiles.Length,
+                Scope = targetPath,
+                TotalFiles = allFiles.Count,
                 TestFiles = testFiles.Count,
                 SourceFiles = sourceFiles.Count,
                 CoveragePercentage = coveragePercentage,
@@ -2180,18 +2271,18 @@ public partial class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            LogErrorAnalyzingTestCoverageFor(_logger, ex, scope);
+            LogErrorAnalyzingTestCoverageFor(_logger, ex, targetPath);
         }
 
         return null;
     }
 
-    private async Task<List<CodeSmell>> DetectCodeSmellsAsync(string scope, CancellationToken ct)
+    private async Task<List<CodeSmell>> DetectCodeSmellsAsync(string targetPath, CancellationToken ct)
     {
         try
         {
             var codeSmells = new List<CodeSmell>();
-            var files = Directory.GetFiles(scope, "*.cs", SearchOption.AllDirectories);
+            var files = EnumerateCSharpFiles(targetPath);
 
             foreach (var file in files.Take(10)) // Limit for performance
             {
@@ -2252,7 +2343,7 @@ public partial class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            LogErrorDetectingCodeSmellsFor(_logger, ex, scope);
+            LogErrorDetectingCodeSmellsFor(_logger, ex, targetPath);
         }
 
         return new List<CodeSmell>();

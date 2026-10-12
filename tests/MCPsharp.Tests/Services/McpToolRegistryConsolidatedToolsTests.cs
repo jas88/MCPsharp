@@ -246,5 +246,32 @@ public class Calculator
         await AssertSucceeds("analyze_quality", new { metrics = ComplexityMetric });
     }
 
+    [Test]
+    public async Task AnalyzeQuality_UsesProjectRootRatherThanScopeName()
+    {
+        await OpenProjectAsync();
+
+        var result = await Execute("analyze_quality", new { scope = "all", metrics = ComplexityMetric });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        var response = (MCPsharp.Models.Consolidated.QualityAnalysisResponse)result.Result!;
+        Assert.That(response.Scope, Is.EqualTo("All"));
+        Assert.That(response.Complexity, Is.Not.Null);
+        Assert.That(response.Complexity!.Scope, Is.EqualTo(_projectPath));
+        Assert.That(response.Complexity.FileCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task AnalyzeProject_InventoriesOnlyTheProjectDirectory()
+    {
+        await OpenProjectAsync();
+
+        var result = await Execute("analyze_project", new { detail = "standard" });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        var response = (MCPsharp.Models.Consolidated.ProjectAnalysisResponse)result.Result!;
+        Assert.That(response.Files!.Select(f => f.Path), Is.EqualTo(new[] { Path.Combine(_projectPath, "Calculator.cs") }));
+    }
+
     #endregion
 }
