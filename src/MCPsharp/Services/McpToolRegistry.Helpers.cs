@@ -8,6 +8,17 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
+    /// <summary>
+    /// Options for deserialising structured tool arguments (architecture definitions, violations,
+    /// refactoring suggestions, bulk edits). Property names are matched case-insensitively and enums
+    /// accept names or numbers, so objects returned by other tools (serialised in camelCase) round-trip.
+    /// </summary>
+    private static readonly JsonSerializerOptions ToolArgumentJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
+
     private string GetProjectPathFromArguments(JsonDocument arguments)
     {
         var context = _projectContext.GetProjectContext();
@@ -21,7 +32,7 @@ public partial class McpToolRegistry
 
     #region Additional Helper Methods for Duplicate Code Detection
 
-    private JsonElement? GetPropertyFromArguments(JsonDocument arguments, string propertyName)
+    private static JsonElement? GetPropertyFromArguments(JsonDocument arguments, string propertyName)
     {
         if (arguments.RootElement.TryGetProperty(propertyName, out var propertyElement))
         {
@@ -30,7 +41,7 @@ public partial class McpToolRegistry
         return null;
     }
 
-    private double GetDoubleFromArguments(JsonDocument arguments, string propertyName, double defaultValue)
+    private static double GetDoubleFromArguments(JsonDocument arguments, string propertyName, double defaultValue)
     {
         if (arguments.RootElement.TryGetProperty(propertyName, out var propertyElement) &&
             propertyElement.ValueKind == JsonValueKind.Number &&
@@ -41,15 +52,14 @@ public partial class McpToolRegistry
         return defaultValue;
     }
 
-    private string ComputeHash(string input)
+    private static string ComputeHash(string input)
     {
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
         var bytes = Encoding.UTF8.GetBytes(input);
-        var hash = sha256.ComputeHash(bytes);
+        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
         return Convert.ToBase64String(hash);
     }
 
-    private string? GetStringArgument(JsonDocument arguments, string parameterName)
+    private static string? GetStringArgument(JsonDocument arguments, string parameterName)
     {
         if (arguments.RootElement.TryGetProperty(parameterName, out var propertyElement))
         {
@@ -58,7 +68,7 @@ public partial class McpToolRegistry
         return null;
     }
 
-    private bool? GetBoolArgument(JsonDocument arguments, string parameterName)
+    private static bool? GetBoolArgument(JsonDocument arguments, string parameterName)
     {
         if (arguments.RootElement.TryGetProperty(parameterName, out var propertyElement))
         {
@@ -75,7 +85,7 @@ public partial class McpToolRegistry
         return null;
     }
 
-    private int? GetIntArgument(JsonDocument arguments, string parameterName)
+    private static int? GetIntArgument(JsonDocument arguments, string parameterName)
     {
         if (arguments.RootElement.TryGetProperty(parameterName, out var propertyElement))
         {
@@ -85,23 +95,6 @@ public partial class McpToolRegistry
             }
             if (propertyElement.ValueKind == JsonValueKind.String &&
                 int.TryParse(propertyElement.GetString(), out var parsedValue))
-            {
-                return parsedValue;
-            }
-        }
-        return null;
-    }
-
-    private double? GetDoubleArgument(JsonDocument arguments, string parameterName)
-    {
-        if (arguments.RootElement.TryGetProperty(parameterName, out var propertyElement))
-        {
-            if (propertyElement.ValueKind == JsonValueKind.Number && propertyElement.TryGetDouble(out var doubleValue))
-            {
-                return doubleValue;
-            }
-            if (propertyElement.ValueKind == JsonValueKind.String &&
-                double.TryParse(propertyElement.GetString(), out var parsedValue))
             {
                 return parsedValue;
             }

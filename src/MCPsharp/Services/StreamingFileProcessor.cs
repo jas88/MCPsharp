@@ -17,8 +17,9 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Service for streaming file processing operations
 /// </summary>
-public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
+public partial class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
 {
+    private static readonly JsonSerializerOptions IndentedJsonOptions = new() { WriteIndented = true };
     private readonly ILogger<StreamingFileProcessor> _logger;
     private readonly IProgressTracker _progressTracker;
     private readonly ITempFileManager _tempFileManager;
@@ -50,6 +51,81 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
     {
     }
 
+    // Compatibility methods for test expectations
+    public async Task<StreamResult> ProcessFileAsync(string filePath)
+    {
+        var request = new StreamProcessRequest
+        {
+            FilePath = filePath,
+            OutputPath = filePath + ".processed",
+            ProcessorType = StreamProcessorType.LineProcessor
+        };
+        var result = await ProcessFileAsync(request);
+        result.WasProcessed = result.Success;
+        result.ProcessedSize = result.BytesProcessed;
+
+        // Update statistics correctly
+        lock (_statisticsLock)
+        {
+            _statistics.TotalFilesProcessed++;
+            _statistics.TotalBytesProcessed += result.BytesProcessed;
+            if (_statistics.TotalFilesProcessed == 1)
+            {
+                _statistics.AverageProcessingTime = result.ProcessingTime;
+            }
+            else
+            {
+                if (_statistics.TotalFilesProcessed > 0)
+                {
+                    _statistics.AverageProcessingTime = TimeSpan.FromTicks(
+                        (_statistics.AverageProcessingTime.Ticks * (_statistics.TotalFilesProcessed - 1) + result.ProcessingTime.Ticks) / _statistics.TotalFilesProcessed);
+                }
+            }
+            _statistics.LastUpdated = DateTime.UtcNow;
+        }
+
+        return result;
+    }
+
+    public async Task<StreamResult> ProcessFileAsync(string filePath, StreamProcessRequest config)
+    {
+        config.FilePath = filePath;
+        if (string.IsNullOrEmpty(config.OutputPath))
+            config.OutputPath = filePath + ".processed";
+
+        var result = await ProcessFileAsync(config);
+        result.WasProcessed = result.Success;
+        result.ProcessedSize = result.BytesProcessed;
+
+        // Set OriginalSize if not already set
+        if (result.OriginalSize == 0 && File.Exists(filePath))
+        {
+            result.OriginalSize = new FileInfo(filePath).Length;
+        }
+
+        // Update statistics correctly
+        lock (_statisticsLock)
+        {
+            _statistics.TotalFilesProcessed++;
+            _statistics.TotalBytesProcessed += result.BytesProcessed;
+            if (_statistics.TotalFilesProcessed == 1)
+            {
+                _statistics.AverageProcessingTime = result.ProcessingTime;
+            }
+            else
+            {
+                if (_statistics.TotalFilesProcessed > 0)
+                {
+                    _statistics.AverageProcessingTime = TimeSpan.FromTicks(
+                        (_statistics.AverageProcessingTime.Ticks * (_statistics.TotalFilesProcessed - 1) + result.ProcessingTime.Ticks) / _statistics.TotalFilesProcessed);
+                }
+            }
+            _statistics.LastUpdated = DateTime.UtcNow;
+        }
+
+        return result;
+    }
+
     public async Task<StreamResult> ProcessFileAsync(StreamProcessRequest request, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -64,7 +140,6 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
 
         _operations.TryAdd(operation.OperationId, operation);
 
-        Exception? lastException = null;
 
         // Retry logic
         for (int attempt = 1; attempt <= request.RetryCount + 1; attempt++)
@@ -125,7 +200,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             catch (DivideByZeroException)
             {
                 // Fallback to simple processing for tests
-                _logger.LogWarning("Divide by zero in full processing, falling back to simple processing");
+                LogDivideByZeroInFull(_logger);
 
                 // Create timeout cancellation token if timeout is specified
                 if (request.ProcessingTimeout != Timeout.InfiniteTimeSpan && request.ProcessingTimeout > TimeSpan.Zero)
@@ -144,7 +219,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during file stream processing");
+                LogErrorDuringFileStreamProcessing(_logger, ex);
                 operation.Status = StreamOperationStatus.Failed;
                 operation.Exception = ex;
                 operation.ErrorMessage = $"Processing error: {ex.Message}";
@@ -155,8 +230,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             operation.CompletedAt = DateTime.UtcNow;
             await _progressTracker.CompleteProgressAsync(operation.OperationId);
 
-            _logger.LogInformation("Successfully processed file {FilePath} to {OutputPath} in {ProcessingTime}",
-                request.FilePath, request.OutputPath, result.ProcessingTime);
+            LogSuccessfullyProcessedFileToIn(_logger, request.FilePath, request.OutputPath, result.ProcessingTime);
 
             // Update statistics correctly
             lock (_statisticsLock)
@@ -194,20 +268,18 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
                 ? $"Operation timed out after {request.ProcessingTimeout.TotalSeconds:F1} seconds"
                 : "Operation was cancelled";
 
-            _logger.LogInformation("Operation {OperationId} was {Reason}", operation.OperationId,
-                isTimeout ? "timed out" : "cancelled");
+            LogOperationWas(_logger, operation.OperationId, isTimeout ? "timed out" : "cancelled");
 
             return CreateFailureResult(operation, errorMessage);
         }
         catch (Exception ex)
         {
-            lastException = ex;
-            _logger.LogWarning(ex, "Attempt {Attempt} failed for file {FilePath}", attempt, request.FilePath);
+            LogAttemptFailedForFile(_logger, ex, attempt, request.FilePath);
 
             // If this is not the last attempt, wait and retry
             if (attempt <= request.RetryCount)
             {
-                await Task.Delay(request.RetryDelay);
+                await Task.Delay(request.RetryDelay, cancellationToken);
                 continue;
             }
 
@@ -216,7 +288,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             operation.ErrorMessage = ex.Message;
             operation.CompletedAt = DateTime.UtcNow;
 
-            _logger.LogError(ex, "Failed to process file {FilePath} after {AttemptCount} attempts", request.FilePath, attempt);
+            LogFailedToProcessFileAfter(_logger, ex, request.FilePath, attempt);
             return CreateFailureResult(operation, ex.Message);
         }
         }
@@ -228,10 +300,9 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
     public async Task<List<StreamResult>> BulkTransformAsync(BulkTransformRequest request, IProgress<StreamProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         var results = new List<StreamResult>();
-        var inputFiles = await GetInputFilesAsync(request);
+        var inputFiles = GetInputFiles(request);
 
-        _logger.LogInformation("Starting bulk transformation of {Count} files with {MaxDegree} parallel workers",
-            inputFiles.Count, request.MaxDegreeOfParallelism);
+        LogStartingBulkTransformationOfFiles(_logger, inputFiles.Count, request.MaxDegreeOfParallelism);
 
         var semaphore = new SemaphoreSlim(request.MaxDegreeOfParallelism, request.MaxDegreeOfParallelism);
         var tasks = inputFiles.Select(async inputFile =>
@@ -261,8 +332,11 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         var allResults = await Task.WhenAll(tasks);
         results.AddRange(allResults);
 
-        _logger.LogInformation("Bulk transformation completed. Processed {Count} files with {SuccessCount} successes",
-            results.Count, results.Count(r => r.Success));
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            var successCount = results.Count(r => r.Success);
+            LogBulkTransformationCompletedProcessedFiles(_logger, results.Count, successCount);
+        }
 
         return results;
     }
@@ -276,15 +350,14 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         return null;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<bool> CancelOperationAsync(string operationId)
     {
         if (_operations.TryGetValue(operationId, out var operation))
         {
             operation.Status = StreamOperationStatus.Cancelled;
-            operation.CancellationTokenSource.Cancel();
+            await operation.CancellationTokenSource.CancelAsync();
 
-            _logger.LogInformation("Cancelled operation {OperationId}", operationId);
+            LogCancelledOperation(_logger, operationId);
             return true;
         }
         return false;
@@ -294,13 +367,13 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
     {
         if (!_operations.TryGetValue(operationId, out var operation))
         {
-            _logger.LogWarning("Operation {OperationId} not found for resume", operationId);
+            LogOperationNotFoundForResume(_logger, operationId);
             return null;
         }
 
         if (operation.LastCheckpoint == null)
         {
-            _logger.LogWarning("Operation {OperationId} has no checkpoint to resume from", operationId);
+            LogOperationHasNoCheckpointTo(_logger, operationId);
             return null;
         }
 
@@ -314,7 +387,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             operation.Status = StreamOperationStatus.Completed;
             operation.CompletedAt = DateTime.UtcNow;
 
-            _logger.LogInformation("Successfully resumed operation {OperationId}", operationId);
+            LogSuccessfullyResumedOperation(_logger, operationId);
             return result;
         }
         catch (Exception ex)
@@ -323,7 +396,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             operation.Exception = ex;
             operation.ErrorMessage = ex.Message;
 
-            _logger.LogError(ex, "Failed to resume operation {OperationId}", operationId);
+            LogFailedToResumeOperation(_logger, ex, operationId);
             return null;
         }
     }
@@ -362,19 +435,17 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         operation.LastCheckpoint = checkpoint;
         operation.LastCheckpointAt = DateTime.UtcNow;
 
-        _logger.LogDebug("Created checkpoint {CheckpointId} for operation {OperationId} at position {Position}",
-            checkpoint.CheckpointId, operationId, checkpoint.Position);
+        LogCreatedCheckpointForOperationAt(_logger, checkpoint.CheckpointId, operationId, checkpoint.Position);
 
         return checkpoint;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<StreamOperation>> ListOperationsAsync(int maxCount = 50)
+    public Task<List<StreamOperation>> ListOperationsAsync(int maxCount = 50)
     {
-        return _operations.Values
+        return Task.FromResult(_operations.Values
             .OrderByDescending(o => o.CreatedAt)
             .Take(maxCount)
-            .ToList();
+            .ToList());
     }
 
     public async Task CleanupAsync(TimeSpan? olderThan = null)
@@ -398,22 +469,21 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         await _tempFileManager.CleanupAsync(olderThan ?? TimeSpan.FromHours(2));
         await _progressTracker.CleanupAsync(olderThan ?? TimeSpan.FromHours(2));
 
-        if (toRemove.Count > 0)
+        if (toRemove.Count > 0 && _logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("Cleaned up {Count} completed operations older than {OlderThan}",
-                toRemove.Count, olderThan ?? TimeSpan.FromHours(24));
+            var retention = olderThan ?? TimeSpan.FromHours(24);
+            LogCleanedUpCompletedOperationsOlder(_logger, toRemove.Count, retention);
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<ChunkProcessor>> GetAvailableProcessorsAsync()
+    public Task<List<ChunkProcessor>> GetAvailableProcessorsAsync()
     {
-        return _processors.Select(kvp => new ChunkProcessor
+        return Task.FromResult(_processors.Select(kvp => new ChunkProcessor
         {
             Name = kvp.Key.ToString(),
             ProcessorType = kvp.Key,
             Options = new Dictionary<string, object>()
-        }).ToList();
+        }).ToList());
     }
 
     public async Task<(bool IsValid, List<string> Errors)> ValidateRequestAsync(StreamProcessRequest request)
@@ -464,8 +534,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         return (errors.Count == 0, errors);
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<TimeSpan> EstimateProcessingTimeAsync(StreamProcessRequest request)
+    public Task<TimeSpan> EstimateProcessingTimeAsync(StreamProcessRequest request)
     {
         try
         {
@@ -483,15 +552,16 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             };
 
             var seconds = (bytesPerSecond > 0 && fileSize >= 0) ? fileSize / bytesPerSecond : 1;
-            return TimeSpan.FromSeconds(seconds);
+            return Task.FromResult(TimeSpan.FromSeconds(seconds));
         }
-        catch
+        catch (Exception ex)
         {
-            return TimeSpan.FromMinutes(1); // Default estimate
+            LogProcessingTimeEstimateFailed(_logger, ex, request.FilePath);
+            return Task.FromResult(TimeSpan.FromMinutes(1)); // Default estimate
         }
     }
 
-    private Dictionary<StreamProcessorType, IStreamProcessor> InitializeProcessors()
+    private static Dictionary<StreamProcessorType, IStreamProcessor> InitializeProcessors()
     {
         return new Dictionary<StreamProcessorType, IStreamProcessor>
         {
@@ -523,7 +593,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var bytesRead = await inputStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+            var bytesRead = await inputStream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
             if (bytesRead == 0) break;
 
             var chunkData = new byte[bytesRead];
@@ -559,7 +629,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             }
             else
             {
-                await outputStream.WriteAsync(processedChunk.Data, 0, processedChunk.Data.Length, cancellationToken);
+                await outputStream.WriteAsync(processedChunk.Data.AsMemory(0, processedChunk.Data.Length), cancellationToken);
             }
 
             // Update progress
@@ -608,13 +678,12 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating StreamResult - ProcessedBytes: {ProcessedBytes}, ProcessingTime: {ProcessingTime} seconds, TotalSeconds: {TotalSeconds}",
-                processedBytes, processingTime, processingTime.TotalSeconds);
+            LogErrorCreatingStreamResultProcessedBytesProcessingTime(_logger, ex, processedBytes, processingTime, processingTime.TotalSeconds);
             throw;
         }
     }
 
-    private async Task<StreamResult> ProcessFileSimpleAsync(StreamProcessRequest request, CancellationToken cancellationToken)
+    private static async Task<StreamResult> ProcessFileSimpleAsync(StreamProcessRequest request, CancellationToken cancellationToken)
     {
         var startTime = DateTime.UtcNow;
 
@@ -745,7 +814,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var bytesRead = await inputStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+            var bytesRead = await inputStream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
             if (bytesRead == 0) break;
 
             var chunkData = new byte[bytesRead];
@@ -774,7 +843,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             }
             else
             {
-                await outputStream.WriteAsync(processedChunk.Data, 0, processedChunk.Data.Length, cancellationToken);
+                await outputStream.WriteAsync(processedChunk.Data.AsMemory(0, processedChunk.Data.Length), cancellationToken);
             }
 
             await _progressTracker.UpdateProgressAsync(operation.OperationId, processedBytes, processedChunks, processedLines, processedItems);
@@ -815,14 +884,12 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating StreamResult - ProcessedBytes: {ProcessedBytes}, ProcessingTime: {ProcessingTime} seconds, TotalSeconds: {TotalSeconds}",
-                processedBytes, processingTime, processingTime.TotalSeconds);
+            LogErrorCreatingStreamResultProcessedBytesProcessingTime(_logger, ex, processedBytes, processingTime, processingTime.TotalSeconds);
             throw;
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<string>> GetInputFilesAsync(BulkTransformRequest request)
+    private static List<string> GetInputFiles(BulkTransformRequest request)
     {
         var inputFiles = new List<string>();
 
@@ -843,7 +910,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         return inputFiles.Distinct().ToList();
     }
 
-    private string GetOutputPath(string inputFile, BulkTransformRequest request)
+    private static string GetOutputPath(string inputFile, BulkTransformRequest request)
     {
         var fileName = Path.GetFileName(inputFile);
         if (request.PreserveDirectoryStructure)
@@ -859,26 +926,26 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         return Path.Combine(request.OutputDirectory, fileName);
     }
 
-    private async Task WriteCompressedAsync(Stream outputStream, byte[] data, CancellationToken cancellationToken)
+    private static async Task WriteCompressedAsync(Stream outputStream, byte[] data, CancellationToken cancellationToken)
     {
         // Simple placeholder for compression - in practice, you'd use System.IO.Compression
-        await outputStream.WriteAsync(data, 0, data.Length, cancellationToken);
+        await outputStream.WriteAsync(data.AsMemory(0, data.Length), cancellationToken);
     }
 
     private async Task SaveCheckpointAsync(CheckpointData checkpoint)
     {
         try
         {
-            var json = JsonSerializer.Serialize(checkpoint, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(checkpoint, IndentedJsonOptions);
             await File.WriteAllTextAsync(checkpoint.CheckpointFilePath, json);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to save checkpoint {CheckpointId}", checkpoint.CheckpointId);
+            LogFailedToSaveCheckpoint(_logger, ex, checkpoint.CheckpointId);
         }
     }
 
-    private StreamResult CreateFailureResult(StreamOperation operation, string errorMessage)
+    private static StreamResult CreateFailureResult(StreamOperation operation, string errorMessage)
     {
         return new StreamResult
         {
@@ -900,83 +967,8 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during automatic cleanup");
+            LogErrorDuringAutomaticCleanup(_logger, ex);
         }
-    }
-
-    // Compatibility methods for test expectations
-    public async Task<StreamResult> ProcessFileAsync(string filePath)
-    {
-        var request = new StreamProcessRequest
-        {
-            FilePath = filePath,
-            OutputPath = filePath + ".processed",
-            ProcessorType = StreamProcessorType.LineProcessor
-        };
-        var result = await ProcessFileAsync(request);
-        result.WasProcessed = result.Success;
-        result.ProcessedSize = result.BytesProcessed;
-
-        // Update statistics correctly
-        lock (_statisticsLock)
-        {
-            _statistics.TotalFilesProcessed++;
-            _statistics.TotalBytesProcessed += result.BytesProcessed;
-            if (_statistics.TotalFilesProcessed == 1)
-            {
-                _statistics.AverageProcessingTime = result.ProcessingTime;
-            }
-            else
-            {
-                if (_statistics.TotalFilesProcessed > 0)
-                {
-                    _statistics.AverageProcessingTime = TimeSpan.FromTicks(
-                        (_statistics.AverageProcessingTime.Ticks * (_statistics.TotalFilesProcessed - 1) + result.ProcessingTime.Ticks) / _statistics.TotalFilesProcessed);
-                }
-            }
-            _statistics.LastUpdated = DateTime.UtcNow;
-        }
-
-        return result;
-    }
-
-    public async Task<StreamResult> ProcessFileAsync(string filePath, StreamProcessRequest config)
-    {
-        config.FilePath = filePath;
-        if (string.IsNullOrEmpty(config.OutputPath))
-            config.OutputPath = filePath + ".processed";
-
-        var result = await ProcessFileAsync(config);
-        result.WasProcessed = result.Success;
-        result.ProcessedSize = result.BytesProcessed;
-
-        // Set OriginalSize if not already set
-        if (result.OriginalSize == 0 && File.Exists(filePath))
-        {
-            result.OriginalSize = new FileInfo(filePath).Length;
-        }
-
-        // Update statistics correctly
-        lock (_statisticsLock)
-        {
-            _statistics.TotalFilesProcessed++;
-            _statistics.TotalBytesProcessed += result.BytesProcessed;
-            if (_statistics.TotalFilesProcessed == 1)
-            {
-                _statistics.AverageProcessingTime = result.ProcessingTime;
-            }
-            else
-            {
-                if (_statistics.TotalFilesProcessed > 0)
-                {
-                    _statistics.AverageProcessingTime = TimeSpan.FromTicks(
-                        (_statistics.AverageProcessingTime.Ticks * (_statistics.TotalFilesProcessed - 1) + result.ProcessingTime.Ticks) / _statistics.TotalFilesProcessed);
-                }
-            }
-            _statistics.LastUpdated = DateTime.UtcNow;
-        }
-
-        return result;
     }
 
     public async Task<List<StreamResult>> ProcessMultipleFilesAsync(string[] files, StreamProcessRequest config)
@@ -1019,7 +1011,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             catch (DivideByZeroException ex)
             {
                 // Special handling for divide by zero - use simple processing
-                _logger.LogWarning(ex, "Divide by zero error processing file {FilePath}, falling back to simple processing", filePath);
+                LogDivideByZeroErrorProcessing(_logger, ex, filePath);
                 try
                 {
                     var fileConfig = new StreamProcessRequest
@@ -1049,7 +1041,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
                 }
                 catch (Exception fallbackEx)
                 {
-                    _logger.LogError(fallbackEx, "Fallback simple processing also failed for file {FilePath}", filePath);
+                    LogFallbackSimpleProcessingAlsoFailed(_logger, fallbackEx, filePath);
                     return new StreamResult
                     {
                         Success = false,
@@ -1071,7 +1063,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             catch (Exception ex)
             {
                 // Return failure result instead of throwing
-                _logger.LogError(ex, "Error processing file {FilePath}", filePath);
+                LogErrorProcessingFile(_logger, ex, filePath);
                 return new StreamResult
                 {
                     Success = false,
@@ -1102,14 +1094,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         lock (_statisticsLock)
         {
             _statistics.TotalFilesProcessed += results.Count;
-            var totalBytes = 0L;
-            foreach (var result in results)
-            {
-                if (result.BytesProcessed > 0)
-                {
-                    totalBytes += result.BytesProcessed;
-                }
-            }
+            var totalBytes = results.Select(result => result.BytesProcessed).Where(bytes => bytes > 0).Sum();
             _statistics.TotalBytesProcessed += totalBytes;
             _statistics.LastUpdated = DateTime.UtcNow;
         }
@@ -1132,6 +1117,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             }
             catch (Exception ex)
             {
+                LogTransformFailed(_logger, ex, filePath);
                 return new StreamResult
                 {
                     Success = false,
@@ -1185,7 +1171,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to process file with transform: {FilePath}", filePath);
+            LogFailedToProcessFileWith(_logger, ex, filePath);
             return new StreamResult
             {
                 Success = false,
@@ -1287,12 +1273,11 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<ProcessingStatistics> GetProcessingStatisticsAsync()
+    public Task<ProcessingStatistics> GetProcessingStatisticsAsync()
     {
         _statistics.ActiveProcessingTasks = _operations.Values
             .Count(o => o.Status == StreamOperationStatus.Running || o.Status == StreamOperationStatus.Resumed);
-        return _statistics;
+        return Task.FromResult(_statistics);
     }
 
     public async Task ClearStatisticsAsync()
@@ -1327,12 +1312,84 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             CleanupAsync(TimeSpan.Zero).GetAwaiter().GetResult();
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Transform failed for file: {FilePath}")]
+    private static partial void LogTransformFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Could not estimate processing time for {FilePath}; using default")]
+    private static partial void LogProcessingTimeEstimateFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Divide by zero in full processing, falling back to simple processing")]
+    private static partial void LogDivideByZeroInFull(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error during file stream processing")]
+    private static partial void LogErrorDuringFileStreamProcessing(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Successfully processed file {FilePath} to {OutputPath} in {ProcessingTime}")]
+    private static partial void LogSuccessfullyProcessedFileToIn(ILogger logger, string filePath, string outputPath, TimeSpan processingTime);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Operation {OperationId} was {Reason}")]
+    private static partial void LogOperationWas(ILogger logger, string operationId, string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Attempt {Attempt} failed for file {FilePath}")]
+    private static partial void LogAttemptFailedForFile(ILogger logger, Exception exception, int attempt, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to process file {FilePath} after {AttemptCount} attempts")]
+    private static partial void LogFailedToProcessFileAfter(ILogger logger, Exception exception, string filePath, int attemptCount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting bulk transformation of {Count} files with {MaxDegree} parallel workers")]
+    private static partial void LogStartingBulkTransformationOfFiles(ILogger logger, int count, int maxDegree);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Bulk transformation completed. Processed {Count} files with {SuccessCount} successes")]
+    private static partial void LogBulkTransformationCompletedProcessedFiles(ILogger logger, int count, int successCount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cancelled operation {OperationId}")]
+    private static partial void LogCancelledOperation(ILogger logger, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Operation {OperationId} not found for resume")]
+    private static partial void LogOperationNotFoundForResume(ILogger logger, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Operation {OperationId} has no checkpoint to resume from")]
+    private static partial void LogOperationHasNoCheckpointTo(ILogger logger, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Successfully resumed operation {OperationId}")]
+    private static partial void LogSuccessfullyResumedOperation(ILogger logger, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to resume operation {OperationId}")]
+    private static partial void LogFailedToResumeOperation(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Created checkpoint {CheckpointId} for operation {OperationId} at position {Position}")]
+    private static partial void LogCreatedCheckpointForOperationAt(ILogger logger, string checkpointId, string operationId, long position);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cleaned up {Count} completed operations older than {OlderThan}")]
+    private static partial void LogCleanedUpCompletedOperationsOlder(ILogger logger, int count, TimeSpan olderThan);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error creating StreamResult - ProcessedBytes: {ProcessedBytes}, ProcessingTime: {ProcessingTime} seconds, TotalSeconds: {TotalSeconds}")]
+    private static partial void LogErrorCreatingStreamResultProcessedBytesProcessingTime(ILogger logger, Exception exception, long processedBytes, TimeSpan processingTime, double totalSeconds);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to save checkpoint {CheckpointId}")]
+    private static partial void LogFailedToSaveCheckpoint(ILogger logger, Exception exception, string checkpointId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error during automatic cleanup")]
+    private static partial void LogErrorDuringAutomaticCleanup(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Divide by zero error processing file {FilePath}, falling back to simple processing")]
+    private static partial void LogDivideByZeroErrorProcessing(ILogger logger, DivideByZeroException exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Fallback simple processing also failed for file {FilePath}")]
+    private static partial void LogFallbackSimpleProcessingAlsoFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error processing file {FilePath}")]
+    private static partial void LogErrorProcessingFile(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to process file with transform: {FilePath}")]
+    private static partial void LogFailedToProcessFileWith(ILogger logger, Exception exception, string filePath);
 }
 
 /// <summary>
 /// Mock implementation of IProgressTracker for testing
 /// </summary>
-internal class MockProgressTracker : IProgressTracker
+internal sealed class MockProgressTracker : IProgressTracker
 {
     private readonly Dictionary<string, StreamProgress> _progress = new();
 
@@ -1356,6 +1413,11 @@ internal class MockProgressTracker : IProgressTracker
             progress.ItemsProcessed = itemsProcessed;
             progress.LastUpdated = DateTime.UtcNow;
         }
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateProgressAsync(string operationId, MCPsharp.Models.Consolidated.ProgressInfo progressInfo, CancellationToken ct = default)
+    {
         return Task.CompletedTask;
     }
 
@@ -1430,17 +1492,12 @@ internal class MockProgressTracker : IProgressTracker
     {
         return Task.CompletedTask;
     }
-
-    public Task UpdateProgressAsync(string operationId, MCPsharp.Models.Consolidated.ProgressInfo progressInfo, CancellationToken ct = default)
-    {
-        return Task.CompletedTask;
-    }
 }
 
 /// <summary>
 /// Mock implementation of ITempFileManager for testing
 /// </summary>
-internal class MockTempFileManager : ITempFileManager
+internal sealed class MockTempFileManager : ITempFileManager
 {
     public Task<string> CreateTempFileAsync(string? prefix = null, string? extension = null, string? operationId = null)
     {
@@ -1493,7 +1550,11 @@ internal class MockTempFileManager : ITempFileManager
             }
             return Task.FromResult(true);
         }
-        catch
+        catch (IOException)
+        {
+            return Task.FromResult(false);
+        }
+        catch (UnauthorizedAccessException)
         {
             return Task.FromResult(false);
         }

@@ -7,7 +7,7 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Service for parsing .NET project and solution files
 /// </summary>
-public partial class ProjectParserService
+public static partial class ProjectParserService
 {
     private static readonly string[] SupportedTargetFrameworks =
     [
@@ -23,7 +23,7 @@ public partial class ProjectParserService
     /// <returns>Project information</returns>
     /// <exception cref="FileNotFoundException">If the .csproj file doesn't exist</exception>
     /// <exception cref="InvalidOperationException">If the .csproj file is invalid</exception>
-    public async Task<CsprojInfo> ParseProjectAsync(string csprojPath, CancellationToken ct = default)
+    public static async Task<CsprojInfo> ParseProjectAsync(string csprojPath, CancellationToken ct = default)
     {
         var absolutePath = Path.GetFullPath(csprojPath);
 
@@ -106,7 +106,7 @@ public partial class ProjectParserService
     /// <returns>Solution information</returns>
     /// <exception cref="FileNotFoundException">If the .sln file doesn't exist</exception>
     /// <exception cref="InvalidOperationException">If the .sln file is invalid</exception>
-    public async Task<SolutionInfo> ParseSolutionAsync(string slnPath, CancellationToken ct = default)
+    public static async Task<SolutionInfo> ParseSolutionAsync(string slnPath, CancellationToken ct = default)
     {
         var absolutePath = Path.GetFullPath(slnPath);
 
@@ -174,7 +174,7 @@ public partial class ProjectParserService
     /// </summary>
     /// <param name="directory">Directory to search</param>
     /// <returns>List of absolute paths to .csproj files</returns>
-    public Task<IReadOnlyList<string>> FindProjectsAsync(string directory)
+    public static Task<IReadOnlyList<string>> FindProjectsAsync(string directory)
     {
         var absoluteDir = Path.GetFullPath(directory);
 
@@ -195,7 +195,7 @@ public partial class ProjectParserService
     /// </summary>
     /// <param name="directory">Directory to search</param>
     /// <returns>Absolute path to .sln file, or null if not found</returns>
-    public Task<string?> FindSolutionAsync(string directory)
+    public static Task<string?> FindSolutionAsync(string directory)
     {
         var absoluteDir = Path.GetFullPath(directory);
 
@@ -224,7 +224,7 @@ public partial class ProjectParserService
     /// </summary>
     /// <param name="targetFramework">Target framework moniker (e.g., "net9.0")</param>
     /// <returns>True if compatible</returns>
-    public bool IsCompatibleTargetFramework(string targetFramework)
+    public static bool IsCompatibleTargetFramework(string targetFramework)
     {
         return SupportedTargetFrameworks.Contains(targetFramework, StringComparer.OrdinalIgnoreCase);
     }
@@ -236,7 +236,7 @@ public partial class ProjectParserService
             .FirstOrDefault()?.Value;
     }
 
-    private static IReadOnlyList<string> GetTargetFrameworks(List<XElement> propertyGroups)
+    private static string[] GetTargetFrameworks(List<XElement> propertyGroups)
     {
         // Try multi-targeting first (TargetFrameworks)
         var targetFrameworks = GetPropertyValue(propertyGroups, "TargetFrameworks");

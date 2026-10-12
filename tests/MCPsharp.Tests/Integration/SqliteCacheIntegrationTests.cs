@@ -13,6 +13,8 @@ namespace MCPsharp.Tests.Integration;
 [TestFixture]
 public class SqliteCacheIntegrationTests
 {
+    private static readonly string[] SampleProjectNames = ["Project1", "Project2"];
+
     private ProjectDatabase _database = null!;
     private ProjectContextManager _projectManager = null!;
     private McpResourceRegistry _resourceRegistry = null!;
@@ -65,7 +67,7 @@ public class SqliteCacheIntegrationTests
         _projectManager.OpenProject(_testProjectPath);
 
         // Set up resource generators
-        var generators = new ResourceContentGenerators(_projectManager, () => _database);
+        var generators = new ResourceContentGenerators(_projectManager);
 
         // Register resources
         _resourceRegistry.RegisterResource(
@@ -245,7 +247,7 @@ public class SqliteCacheIntegrationTests
     public void Resources_ListAllAvailable()
     {
         // Arrange
-        var generators = new ResourceContentGenerators(_projectManager, () => _database);
+        var generators = new ResourceContentGenerators(_projectManager);
 
         _resourceRegistry.RegisterResource(
             new McpResource { Uri = "project://overview", Name = "Overview" },
@@ -255,7 +257,7 @@ public class SqliteCacheIntegrationTests
             () => generators.GenerateStructure());
         _resourceRegistry.RegisterResource(
             new McpResource { Uri = "project://guidance", Name = "Guidance" },
-            () => generators.GenerateGuidance());
+            () => ResourceContentGenerators.GenerateGuidance());
 
         // Act
         var result = _resourceRegistry.ListResources();
@@ -311,7 +313,7 @@ public class SqliteCacheIntegrationTests
 
         var solutionInfo = JsonSerializer.Serialize(new {
             name = "Test.sln",
-            projects = new[] { "Project1", "Project2" }
+            projects = SampleProjectNames
         });
 
         // Act
@@ -333,14 +335,14 @@ public class SqliteCacheIntegrationTests
     {
         // Arrange
         _projectManager.OpenProject(_testProjectPath);
-        var generators = new ResourceContentGenerators(_projectManager, () => _database);
+        var generators = new ResourceContentGenerators(_projectManager);
 
         // Act
         var overview = generators.GenerateOverview();
         var structure = generators.GenerateStructure();
         var dependencies = generators.GenerateDependencies();
         var symbols = generators.GenerateSymbolsSummary();
-        var guidance = generators.GenerateGuidance();
+        var guidance = ResourceContentGenerators.GenerateGuidance();
 
         // Assert - All resources generate valid content
         Assert.That(overview.Uri, Is.EqualTo("project://overview"));
@@ -403,7 +405,7 @@ public class SqliteCacheIntegrationTests
         await _database.UpsertSymbolsBatchAsync(new[] { classSymbol, methodSymbol });
 
         // Set up resources
-        var generators = new ResourceContentGenerators(_projectManager, () => _database);
+        var generators = new ResourceContentGenerators(_projectManager);
         _resourceRegistry.RegisterResource(
             new McpResource { Uri = "project://overview", Name = "Overview" },
             () => generators.GenerateOverview());
@@ -557,7 +559,7 @@ public class SqliteCacheIntegrationTests
             });
 
         // Act & Assert
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _resourceRegistry.ReadResourceAsync("test://error"));
         Assert.That(ex!.Message, Is.EqualTo("Test error"));
     }

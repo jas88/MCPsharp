@@ -28,7 +28,7 @@ public class ResponseConfiguration
     /// <summary>
     /// Whether to include token count information in response metadata
     /// </summary>
-    public bool IncludeTokenCount { get; set; } = false;
+    public bool IncludeTokenCount { get; set; }
 
     /// <summary>
     /// Tools that are exempt from token limiting (wildcards supported)

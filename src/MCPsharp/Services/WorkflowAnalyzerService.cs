@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 using MCPsharp.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -11,12 +13,19 @@ namespace MCPsharp.Services;
 public partial class WorkflowAnalyzerService
 {
     private readonly IDeserializer _yamlDeserializer;
+    private readonly ILogger<WorkflowAnalyzerService> _logger;
 
     [GeneratedRegex(@"\$\{\{\s*secrets\.(\w+)\s*\}\}", RegexOptions.IgnoreCase)]
     private static partial Regex SecretReferenceRegex();
 
     public WorkflowAnalyzerService()
+        : this(null)
     {
+    }
+
+    public WorkflowAnalyzerService(ILogger<WorkflowAnalyzerService>? logger)
+    {
+        _logger = logger ?? NullLogger<WorkflowAnalyzerService>.Instance;
         _yamlDeserializer = new DeserializerBuilder()
             .WithNamingConvention(HyphenatedNamingConvention.Instance)
             .IgnoreUnmatchedProperties()
@@ -28,7 +37,7 @@ public partial class WorkflowAnalyzerService
     /// </summary>
     /// <param name="projectRoot">Root directory of the project</param>
     /// <returns>List of absolute paths to workflow files</returns>
-    public Task<IReadOnlyList<string>> FindWorkflowsAsync(string projectRoot)
+    public static Task<IReadOnlyList<string>> FindWorkflowsAsync(string projectRoot)
     {
         var workflowsDir = Path.Combine(projectRoot, ".github", "workflows");
 
@@ -94,10 +103,10 @@ public partial class WorkflowAnalyzerService
                 var workflow = await ParseWorkflowAsync(workflowPath);
                 workflows.Add(workflow);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 // Skip invalid workflow files
-                continue;
+                LogSkippedInvalidWorkflow(_logger, ex, workflowPath);
             }
         }
 
@@ -110,7 +119,7 @@ public partial class WorkflowAnalyzerService
     /// <param name="workflow">Workflow to validate</param>
     /// <param name="project">Project information</param>
     /// <returns>List of validation issues found</returns>
-    public Task<IReadOnlyList<WorkflowValidationIssue>> ValidateWorkflowConsistencyAsync(
+    public static Task<IReadOnlyList<WorkflowValidationIssue>> ValidateWorkflowConsistencyAsync(
         WorkflowInfo workflow,
         CsprojInfo project)
     {
@@ -312,17 +321,14 @@ public partial class WorkflowAnalyzerService
             kvp => kvp.Value?.ToString() ?? string.Empty);
     }
 
-    private static IReadOnlyList<string> ExtractSecrets(string yamlContent)
+    private static List<string> ExtractSecrets(string yamlContent)
     {
         var secrets = new HashSet<string>();
         var matches = SecretReferenceRegex().Matches(yamlContent);
 
-        foreach (Match match in matches)
+        foreach (var groups in matches.Select(match => match.Groups).Where(groups => groups.Count > 1))
         {
-            if (match.Groups.Count > 1)
-            {
-                secrets.Add(match.Groups[1].Value);
-            }
+            secrets.Add(groups[1].Value);
         }
 
         return secrets.ToList();
@@ -386,4 +392,7 @@ public partial class WorkflowAnalyzerService
 
         return tfVersion.Equals(workflowVersion, StringComparison.OrdinalIgnoreCase);
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Skipping invalid workflow file: {WorkflowPath}")]
+    private static partial void LogSkippedInvalidWorkflow(ILogger logger, Exception exception, string workflowPath);
 }

@@ -1,5 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models.Roslyn;
 
 namespace MCPsharp.Services.Roslyn;
@@ -7,13 +9,16 @@ namespace MCPsharp.Services.Roslyn;
 /// <summary>
 /// Advanced service for comprehensive reference finding and analysis
 /// </summary>
-public class AdvancedReferenceFinderService
+public partial class AdvancedReferenceFinderService
 {
+    private static readonly string[] CompatibleBaseTypes = { "object", "string", "int", "long", "double", "float", "bool", "decimal" };
+
     private readonly RoslynWorkspace _workspace;
     private readonly SymbolQueryService _symbolQuery;
     private readonly ICallerAnalysisService _callerAnalysis;
     private readonly ICallChainService _callChain;
     private readonly ITypeUsageService _typeUsage;
+    private readonly ILogger<AdvancedReferenceFinderService> _logger;
 
     public AdvancedReferenceFinderService(
         RoslynWorkspace workspace,
@@ -21,7 +26,19 @@ public class AdvancedReferenceFinderService
         ICallerAnalysisService callerAnalysis,
         ICallChainService callChain,
         ITypeUsageService typeUsage)
+        : this(workspace, symbolQuery, callerAnalysis, callChain, typeUsage, NullLogger<AdvancedReferenceFinderService>.Instance)
     {
+    }
+
+    public AdvancedReferenceFinderService(
+        RoslynWorkspace workspace,
+        SymbolQueryService symbolQuery,
+        ICallerAnalysisService callerAnalysis,
+        ICallChainService callChain,
+        ITypeUsageService typeUsage,
+        ILogger<AdvancedReferenceFinderService> logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _symbolQuery = symbolQuery ?? throw new ArgumentNullException(nameof(symbolQuery));
         _callerAnalysis = callerAnalysis ?? throw new ArgumentNullException(nameof(callerAnalysis));
@@ -73,6 +90,7 @@ public class AdvancedReferenceFinderService
         }
         catch (Exception ex)
         {
+            LogCallerAnalysisFailed(_logger, methodName, ex);
             // Return default result on error
             return new CallerResult
             {
@@ -109,7 +127,7 @@ public class AdvancedReferenceFinderService
         {
             TargetSymbol = result.TargetSymbol,
             TargetSignature = result.TargetSignature,
-            Callers = result.DirectCallers,
+            Callers = result.DirectCallers.ToList(),
             AnalysisTime = result.AnalysisTime,
             Metadata = result.Metadata
         };
@@ -133,6 +151,7 @@ public class AdvancedReferenceFinderService
         }
         catch (Exception ex)
         {
+            LogCallChainAnalysisFailed(_logger, methodName, ex);
             // Return default result on error
             return new CallChainResult
             {
@@ -175,6 +194,7 @@ public class AdvancedReferenceFinderService
         }
         catch (Exception ex)
         {
+            LogTypeUsageAnalysisFailed(_logger, typeName, ex);
             // Return default result on error
             return new TypeUsageResult
             {
@@ -210,6 +230,7 @@ public class AdvancedReferenceFinderService
         }
         catch (Exception ex)
         {
+            LogCallPatternAnalysisFailed(_logger, methodName, ex);
             // Return default result on error
             return new CallPatternAnalysis
             {
@@ -257,8 +278,9 @@ public class AdvancedReferenceFinderService
         {
             return await _typeUsage.AnalyzeInheritanceAsync(typeName, cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            LogInheritanceAnalysisFailed(_logger, typeName, ex);
             // Return default result on error
             return new InheritanceAnalysis
             {
@@ -341,8 +363,9 @@ public class AdvancedReferenceFinderService
         {
             return await _typeUsage.AnalyzeTypeDependenciesAsync(typeName, cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            LogTypeDependencyAnalysisFailed(_logger, typeName, ex);
             // Return default result on error
             return new TypeDependencyAnalysis
             {
@@ -400,8 +423,8 @@ public class AdvancedReferenceFinderService
             ForwardCallChains = forwardChains,
             CallPatterns = patterns,
             RecursiveCallChains = recursive,
-            TotalDirectCallers = callers?.DirectCallers.Count ?? 0,
-            TotalIndirectCallers = callers?.IndirectCallers.Count ?? 0,
+            TotalDirectCallers = callers?.DirectCallers.Count() ?? 0,
+            TotalIndirectCallers = callers?.IndirectCallers.Count() ?? 0,
             TotalBackwardPaths = backwardChains?.TotalPaths ?? 0,
             TotalForwardPaths = forwardChains?.TotalPaths ?? 0,
             HasRecursiveCalls = (recursive?.Count ?? 0) > 0,
@@ -432,7 +455,7 @@ public class AdvancedReferenceFinderService
             DependencyAnalysis = dependencies,
             GenericUsages = generic,
             TotalUsages = usages?.TotalUsages ?? 0,
-            InstantiationCount = usages?.Instantiations.Count ?? 0,
+            InstantiationCount = usages?.Instantiations.Count() ?? 0,
             DerivedTypeCount = inheritance?.DerivedClasses.Count ?? 0,
             InterfaceImplementationCount = inheritance?.InterfaceImplementations.Count ?? 0,
             DependencyCount = dependencies?.TotalDependencies ?? 0,
@@ -494,8 +517,7 @@ public class AdvancedReferenceFinderService
             // Wait a short time for workspace to initialize
             await Task.Delay(100, cancellationToken);
 
-            var compilation = _workspace.GetCompilation();
-            if (compilation == null)
+            if (!_workspace.IsInitialized)
             {
                 return new ReverseSearchCapabilities
                 {
@@ -507,7 +529,7 @@ public class AdvancedReferenceFinderService
                 };
             }
 
-            var totalFiles = compilation.SyntaxTrees.Count();
+            var totalFiles = _workspace.GetSourceTrees().Count;
             var totalTypes = await GetAllTypesAsync(cancellationToken);
             var totalMethods = await GetAllMethodsAsync(cancellationToken);
 
@@ -530,8 +552,9 @@ public class AdvancedReferenceFinderService
                 }
             };
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            LogCapabilitiesFailed(_logger, ex);
             // Return default capabilities on error
             return new ReverseSearchCapabilities
             {
@@ -546,14 +569,13 @@ public class AdvancedReferenceFinderService
 
     private async Task<List<MethodSignature>> GetAllMethodsAsync(CancellationToken cancellationToken)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return new List<MethodSignature>();
-
         var methods = new List<MethodSignature>();
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var methodDeclarations = root.DescendantNodes()
@@ -561,7 +583,7 @@ public class AdvancedReferenceFinderService
 
             foreach (var methodDecl in methodDeclarations)
             {
-                var symbol = semanticModel.GetDeclaredSymbol(methodDecl);
+                var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken);
                 if (symbol is IMethodSymbol methodSymbol)
                 {
                     methods.Add(CreateMethodSignature(methodSymbol));
@@ -574,14 +596,13 @@ public class AdvancedReferenceFinderService
 
     private async Task<List<string>> GetAllTypesAsync(CancellationToken cancellationToken)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return new List<string>();
-
         var types = new List<string>();
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var typeDeclarations = root.DescendantNodes()
@@ -589,7 +610,7 @@ public class AdvancedReferenceFinderService
 
             foreach (var typeDecl in typeDeclarations)
             {
-                var symbol = semanticModel.GetDeclaredSymbol(typeDecl);
+                var symbol = semanticModel.GetDeclaredSymbol(typeDecl, cancellationToken);
                 if (symbol != null)
                 {
                     types.Add(symbol.Name);
@@ -613,7 +634,7 @@ public class AdvancedReferenceFinderService
         return symbolInfo?.Symbol as IMethodSymbol;
     }
 
-    private MethodSignature CreateMethodSignature(IMethodSymbol symbol)
+    private static MethodSignature CreateMethodSignature(IMethodSymbol symbol)
     {
         var parameters = symbol.Parameters.Select(p => new ParameterInfo
         {
@@ -633,7 +654,7 @@ public class AdvancedReferenceFinderService
             ReturnType = symbol.ReturnType.ToDisplayString(),
             Parameters = parameters,
             ContainingType = symbol.ContainingType?.ToDisplayString() ?? "",
-            Accessibility = symbol.DeclaredAccessibility.ToString().ToLower(),
+            Accessibility = symbol.DeclaredAccessibility.ToString().ToLowerInvariant(),
             IsStatic = symbol.IsStatic,
             IsVirtual = symbol.IsVirtual,
             IsAbstract = symbol.IsAbstract,
@@ -644,7 +665,7 @@ public class AdvancedReferenceFinderService
         };
     }
 
-    private bool MatchesSignature(MethodSignature signature1, MethodSignature signature2, bool exactMatch)
+    private static bool MatchesSignature(MethodSignature signature1, MethodSignature signature2, bool exactMatch)
     {
         if (signature1.Name != signature2.Name)
             return false;
@@ -677,18 +698,17 @@ public class AdvancedReferenceFinderService
         return true;
     }
 
-    private bool AreTypesCompatible(string type1, string type2)
+    private static bool AreTypesCompatible(string type1, string type2)
     {
         // Simple compatibility check
         if (type1 == type2)
             return true;
 
-        var baseTypes = new[] { "object", "string", "int", "long", "double", "float", "bool", "decimal" };
-        if (baseTypes.Contains(type1) && baseTypes.Contains(type2))
+        if (CompatibleBaseTypes.Contains(type1) && CompatibleBaseTypes.Contains(type2))
             return true;
 
         // Handle generic types
-        if (type1.Contains("<") && type2.Contains("<"))
+        if (type1.Contains('<') && type2.Contains('<'))
         {
             var generic1 = type1.Substring(0, type1.IndexOf('<'));
             var generic2 = type2.Substring(0, type2.IndexOf('<'));
@@ -698,7 +718,7 @@ public class AdvancedReferenceFinderService
         return false;
     }
 
-    private double CalculateSimilarity(string str1, string str2)
+    private static double CalculateSimilarity(string str1, string str2)
     {
         // Simple Levenshtein distance based similarity
         var distance = CalculateLevenshteinDistance(str1, str2);
@@ -706,7 +726,7 @@ public class AdvancedReferenceFinderService
         return maxLength == 0 ? 1.0 : 1.0 - (double)distance / maxLength;
     }
 
-    private int CalculateLevenshteinDistance(string str1, string str2)
+    private static int CalculateLevenshteinDistance(string str1, string str2)
     {
         var matrix = new int[str1.Length + 1, str2.Length + 1];
 
@@ -734,6 +754,27 @@ public class AdvancedReferenceFinderService
     {
         return await _typeUsage.FindGenericUsagesAsync(typeName, cancellationToken);
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Caller analysis failed for method {MethodName}")]
+    private static partial void LogCallerAnalysisFailed(ILogger logger, string methodName, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Call chain analysis failed for method {MethodName}")]
+    private static partial void LogCallChainAnalysisFailed(ILogger logger, string methodName, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Type usage analysis failed for type {TypeName}")]
+    private static partial void LogTypeUsageAnalysisFailed(ILogger logger, string typeName, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Call pattern analysis failed for method {MethodName}")]
+    private static partial void LogCallPatternAnalysisFailed(ILogger logger, string methodName, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Inheritance analysis failed for type {TypeName}")]
+    private static partial void LogInheritanceAnalysisFailed(ILogger logger, string typeName, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Type dependency analysis failed for type {TypeName}")]
+    private static partial void LogTypeDependencyAnalysisFailed(ILogger logger, string typeName, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to determine reverse search capabilities")]
+    private static partial void LogCapabilitiesFailed(ILogger logger, Exception exception);
 }
 
 /// <summary>

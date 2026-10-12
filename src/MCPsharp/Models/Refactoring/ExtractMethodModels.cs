@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis;
-
 namespace MCPsharp.Models.Refactoring;
 
 /// <summary>
@@ -15,6 +13,11 @@ public record ExtractMethodRequest
     public string? MethodName { get; init; }
     public string? Accessibility { get; init; } = "private";
     public bool? MakeStatic { get; init; }
+
+    /// <summary>
+    /// When true (the default for direct service callers) the extraction is only computed and
+    /// previewed; when false the file is rewritten on disk and in the workspace.
+    /// </summary>
     public bool Preview { get; init; } = true;
 }
 
@@ -28,6 +31,26 @@ public record ExtractMethodResult
     public PreviewInfo? Preview { get; init; }
     public ErrorInfo? Error { get; init; }
     public List<WarningInfo> Warnings { get; init; } = new();
+
+    /// <summary>
+    /// Whether the extraction was written to disk and applied to the workspace.
+    /// </summary>
+    public bool Applied { get; init; }
+
+    /// <summary>
+    /// Absolute path of the rewritten (or previewed) file.
+    /// </summary>
+    public string? FilePath { get; init; }
+
+    /// <summary>
+    /// Rollback session recorded before the file was rewritten (usable with rollback_bulk_edit).
+    /// </summary>
+    public string? RollbackId { get; init; }
+
+    /// <summary>
+    /// Compiler diagnostics the extraction introduces into the document (empty when it compiles as before).
+    /// </summary>
+    public List<ExtractionDiagnostic> NewDiagnostics { get; init; } = new();
 
     public static ExtractMethodResult CreateSuccess(
         ExtractedMethodInfo extraction,
@@ -56,6 +79,20 @@ public record ExtractMethodResult
             }
         };
     }
+}
+
+/// <summary>
+/// A compiler diagnostic reported against the rewritten document.
+/// </summary>
+public record ExtractionDiagnostic
+{
+    public required string Id { get; init; }
+    public required string Severity { get; init; }
+    public required string Message { get; init; }
+    public int Line { get; init; }
+    public int Column { get; init; }
+
+    public override string ToString() => $"{Id} ({Line},{Column}): {Message}";
 }
 
 /// <summary>
@@ -98,7 +135,7 @@ public record ParameterInfo
 {
     public required string Name { get; init; }
     public required string Type { get; init; }
-    public string? Modifier { get; init; } // "ref", "out", "in", null
+    public string? Modifier { get; init; } // "ref" or null
 }
 
 /// <summary>
@@ -155,17 +192,4 @@ public record WarningInfo
     public required string Code { get; init; }
     public required string Message { get; init; }
     public int? Line { get; init; }
-}
-
-/// <summary>
-/// Internal data flow analysis result
-/// </summary>
-internal record DataFlowAnalysisResult
-{
-    public List<ISymbol> InputParameters { get; init; } = new();
-    public List<ISymbol> OutputVariables { get; init; } = new();
-    public List<ISymbol> RefParameters { get; init; } = new();
-    public List<ISymbol> CapturedVariables { get; init; } = new();
-    public bool HasMultipleReturns { get; init; }
-    public bool HasEarlyReturns { get; init; }
 }

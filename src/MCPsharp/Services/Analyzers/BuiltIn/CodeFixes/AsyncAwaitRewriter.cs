@@ -10,7 +10,7 @@ namespace MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
 /// Syntax rewriter for batch processing of async/await pattern fixes
 /// Efficiently processes multiple methods in a syntax tree
 /// </summary>
-public class AsyncAwaitRewriter : CSharpSyntaxRewriter
+public partial class AsyncAwaitRewriter : CSharpSyntaxRewriter
 {
     private readonly SemanticModel _semanticModel;
     private readonly ILogger? _logger;
@@ -57,30 +57,36 @@ public class AsyncAwaitRewriter : CSharpSyntaxRewriter
             newMethod = newMethod.WithModifiers(modifierList);
 
             // Track transformation
+            var lineNumber = GetLineNumber(node);
             _transformations.Add(new MethodTransformation
             {
                 MethodName = methodSymbol.Name,
                 FilePath = node.SyntaxTree.FilePath,
-                LineNumber = node.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
+                LineNumber = lineNumber,
                 WasGenericTask = isGenericTask,
                 Success = true
             });
 
-            _logger?.LogDebug("Transformed method {MethodName} at line {Line}",
-                methodSymbol.Name, node.GetLocation().GetLineSpan().StartLinePosition.Line + 1);
+            if (_logger != null)
+            {
+                LogMethodTransformed(_logger, methodSymbol.Name, lineNumber);
+            }
 
             return newMethod;
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error transforming method at line {Line}",
-                node.GetLocation().GetLineSpan().StartLinePosition.Line + 1);
+            var lineNumber = GetLineNumber(node);
+            if (_logger != null)
+            {
+                LogMethodTransformError(_logger, ex, lineNumber);
+            }
 
             _transformations.Add(new MethodTransformation
             {
                 MethodName = node.Identifier.Text,
                 FilePath = node.SyntaxTree.FilePath,
-                LineNumber = node.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
+                LineNumber = lineNumber,
                 Success = false,
                 ErrorMessage = ex.Message
             });
@@ -88,6 +94,15 @@ public class AsyncAwaitRewriter : CSharpSyntaxRewriter
             return base.VisitMethodDeclaration(node);
         }
     }
+
+    private static int GetLineNumber(MethodDeclarationSyntax node) =>
+        node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Transformed method {MethodName} at line {Line}")]
+    private static partial void LogMethodTransformed(ILogger logger, string methodName, int line);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error transforming method at line {Line}")]
+    private static partial void LogMethodTransformError(ILogger logger, Exception exception, int line);
 
     private bool ShouldTransformMethod(MethodDeclarationSyntax node)
     {
@@ -121,7 +136,7 @@ public class AsyncAwaitRewriter : CSharpSyntaxRewriter
     /// <summary>
     /// Internal rewriter for transforming return statements
     /// </summary>
-    private class AsyncReturnRewriter : CSharpSyntaxRewriter
+    private sealed class AsyncReturnRewriter : CSharpSyntaxRewriter
     {
         private readonly bool _isGenericTask;
 
@@ -134,7 +149,7 @@ public class AsyncAwaitRewriter : CSharpSyntaxRewriter
         {
             if (node.Expression == null)
             {
-                // return; -> return Task.CompletedTask;
+                // A bare return statement becomes a return of Task.CompletedTask
                 var completedTask = SyntaxFactory.ParseExpression("Task.CompletedTask");
                 return node.WithExpression(completedTask);
             }

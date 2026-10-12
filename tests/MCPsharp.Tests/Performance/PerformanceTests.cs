@@ -44,6 +44,7 @@ public class PerformanceTests : PerformanceTestBase
     protected override void TearDown()
     {
         _workspace?.Dispose();
+        _bulkEdit?.Dispose();
         base.TearDown();
     }
 
@@ -476,7 +477,7 @@ public class PerformanceTests : PerformanceTestBase
 
     #region Helper Methods
 
-    private List<string> GenerateTestFiles(int count)
+    private static List<string> GenerateTestFiles(int count)
     {
         return Enumerable.Range(0, count)
             .Select(i => CreateTempFile($@"
@@ -501,7 +502,7 @@ namespace TestProject{i}
             .ToList();
     }
 
-    private List<string> GenerateComplexCallChainFiles(int count)
+    private static List<string> GenerateComplexCallChainFiles(int count)
     {
         return Enumerable.Range(0, count)
             .Select(i => CreateTempFile($@"
@@ -535,7 +536,7 @@ namespace ChainTest{i}
             .ToList();
     }
 
-    private (double slope, double intercept, double rSquared) CalculateLinearRegression(List<(int x, TimeSpan y)> data)
+    private static (double slope, double intercept, double rSquared) CalculateLinearRegression(List<(int x, TimeSpan y)> data)
     {
         var n = data.Count;
         var sumX = data.Sum(d => d.x);

@@ -13,8 +13,11 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Adapter that wraps Roslyn CodeFixProvider to provide automatic fixes for diagnostic issues
 /// </summary>
-public class RoslynCodeFixAdapter
+public partial class RoslynCodeFixAdapter
 {
+    private static readonly CSharpCompilationOptions LibraryCompilationOptions =
+        CSharpCompilation.Create("FixAnalysisAssembly").Options.WithOutputKind(OutputKind.DynamicallyLinkedLibrary);
+
     private readonly CodeFixProvider _codeFixProvider;
     private readonly ILogger<RoslynCodeFixAdapter> _logger;
     private readonly string _fixProviderId;
@@ -71,12 +74,11 @@ public class RoslynCodeFixAdapter
     {
         try
         {
-            _logger.LogDebug("Getting fixes for issue {IssueId} with rule {RuleId}", issue.Id, issue.RuleId);
+            LogGettingFixes(_logger, issue.Id, issue.RuleId);
 
             if (!CanFix(issue.RuleId))
             {
-                _logger.LogWarning("Fix provider {ProviderId} cannot fix diagnostic {DiagnosticId}",
-                    Id, issue.RuleId);
+                LogCannotFix(_logger, Id, issue.RuleId);
                 return ImmutableArray<AnalyzerFix>.Empty;
             }
 
@@ -87,7 +89,7 @@ public class RoslynCodeFixAdapter
                 "FixAnalysisAssembly",
                 syntaxTrees: new[] { syntaxTree },
                 references: GetMetadataReferences(),
-                options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+                options: LibraryCompilationOptions);
 
             // Create a workspace and document
             var workspace = new AdhocWorkspace();
@@ -123,61 +125,72 @@ public class RoslynCodeFixAdapter
                 }
             }
 
-            _logger.LogDebug("Found {Count} fixes for issue {IssueId}", fixes.Count, issue.Id);
+            LogFixesFound(_logger, fixes.Count, issue.Id);
             return fixes.ToImmutableArray();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting fixes for issue {IssueId} with rule {RuleId}",
-                issue.Id, issue.RuleId);
+            LogGetFixesError(_logger, ex, issue.Id, issue.RuleId);
             return ImmutableArray<AnalyzerFix>.Empty;
         }
     }
 
     /// <summary>
-    /// Apply a fix and return the modified content
+    /// Ask the provider for fixes for <paramref name="diagnostic"/> in the current state of
+    /// <paramref name="document"/> and compute the solution produced by the first code action that
+    /// changes it. Nothing is written; the caller decides what to do with the changed solution.
     /// </summary>
-    public Task<FixApplicationResult> ApplyFixAsync(
-        AnalyzerFix fix,
-        string fileContent,
+    public async Task<CodeFixComputation> ComputeFixAsync(
+        Document document,
+        Diagnostic diagnostic,
         CancellationToken cancellationToken = default)
     {
-        var startTime = DateTime.UtcNow;
-        try
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(diagnostic);
+
+        if (!CanFix(diagnostic.Id))
         {
-            _logger.LogDebug("Applying fix {FixId} for rule {RuleId}", fix.Id, fix.RuleId);
-
-            // Apply the edits to the content
-
-            return Task.FromResult(new FixApplicationResult
-            {
-                SessionId = Guid.NewGuid().ToString(),
-                Success = true,
-                AppliedFixes = ImmutableArray.Create(new FixResult
-                {
-                    FixId = fix.Id,
-                    AnalyzerId = fix.AnalyzerId,
-                    Success = true,
-                    ModifiedFiles = fix.AffectedFiles,
-                    AppliedAt = DateTime.UtcNow
-                }),
-                ModifiedFiles = fix.AffectedFiles,
-                AppliedAt = DateTime.UtcNow,
-                Duration = DateTime.UtcNow - startTime
-            });
+            LogCannotFix(_logger, Id, diagnostic.Id);
+            return CodeFixComputation.Failure($"{Name} does not fix {diagnostic.Id}");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error applying fix {FixId} for rule {RuleId}", fix.Id, fix.RuleId);
 
-            return Task.FromResult(new FixApplicationResult
+        LogApplyingFix(_logger, Name, diagnostic.Id);
+
+        var actions = await GetCodeActionsFromContext(document, diagnostic, cancellationToken);
+        if (actions.IsEmpty)
+        {
+            return CodeFixComputation.Failure($"{Name} offered no code action for this diagnostic");
+        }
+
+        foreach (var action in Flatten(actions))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var operations = await action.GetOperationsAsync(cancellationToken);
+            var changedSolution = operations.OfType<ApplyChangesOperation>().FirstOrDefault()?.ChangedSolution;
+            if (changedSolution != null && changedSolution != document.Project.Solution)
             {
-                SessionId = Guid.NewGuid().ToString(),
-                Success = false,
-                ErrorMessage = ex.Message,
-                AppliedAt = DateTime.UtcNow,
-                Duration = DateTime.UtcNow - startTime
-            });
+                return new CodeFixComputation(changedSolution, action.Title, null);
+            }
+        }
+
+        return CodeFixComputation.Failure($"{Name} offered code actions but none of them changes the solution");
+    }
+
+    private static IEnumerable<CodeAction> Flatten(IEnumerable<CodeAction> actions)
+    {
+        foreach (var action in actions)
+        {
+            if (action.NestedActions.IsDefaultOrEmpty)
+            {
+                yield return action;
+                continue;
+            }
+
+            foreach (var nested in Flatten(action.NestedActions))
+            {
+                yield return nested;
+            }
         }
     }
 
@@ -270,12 +283,12 @@ public class RoslynCodeFixAdapter
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error converting code action {Title} to fix", codeAction.Title);
+            LogConvertCodeActionError(_logger, ex, codeAction.Title);
             return null;
         }
     }
 
-    private Diagnostic CreateDiagnosticFromIssue(AnalyzerIssue issue, SyntaxTree syntaxTree)
+    private static Diagnostic CreateDiagnosticFromIssue(AnalyzerIssue issue, SyntaxTree syntaxTree)
     {
         // Create a diagnostic descriptor
         var descriptor = new DiagnosticDescriptor(
@@ -301,64 +314,13 @@ public class RoslynCodeFixAdapter
 
         var startPosition = text.Lines[startLineIndex].Start + Math.Max(0, issue.ColumnNumber - 1);
         var endPosition = text.Lines[endLineIndex].Start + Math.Max(0, issue.EndColumnNumber - 1);
-        var span = TextSpan.FromBounds(startPosition, Math.Min(endPosition, text.Length));
+        startPosition = Math.Min(startPosition, text.Length);
+
+        // Issues without an end location (EndLineNumber 0) get an empty span at the start
+        var span = TextSpan.FromBounds(startPosition, Math.Clamp(endPosition, startPosition, text.Length));
         var location = Location.Create(syntaxTree, span);
 
         return Diagnostic.Create(descriptor, location);
-    }
-
-    private string ApplyTextEdits(string content, ImmutableArray<Models.TextEdit> edits)
-    {
-        // Sort edits in reverse order to maintain positions
-        var sortedEdits = edits
-            .OrderByDescending(e => e.StartLine)
-            .ThenByDescending(e => e.StartColumn)
-            .ToList();
-
-        var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None).ToList();
-
-        foreach (var edit in sortedEdits)
-        {
-            var startLineIndex = edit.StartLine;
-            var endLineIndex = edit.EndLine;
-
-            if (startLineIndex < 0 || startLineIndex >= lines.Count ||
-                endLineIndex < 0 || endLineIndex >= lines.Count)
-            {
-                _logger.LogWarning("Edit has invalid line range: {StartLine}-{EndLine}",
-                    edit.StartLine, edit.EndLine);
-                continue;
-            }
-
-            if (startLineIndex == endLineIndex)
-            {
-                // Single line edit
-                var line = lines[startLineIndex];
-                var startColumn = Math.Max(0, edit.StartColumn);
-                var endColumn = Math.Min(line.Length, edit.EndColumn);
-
-                var before = line.Substring(0, startColumn);
-                var after = line.Substring(endColumn);
-                lines[startLineIndex] = before + edit.NewText + after;
-            }
-            else
-            {
-                // Multi-line edit
-                var firstLine = lines[startLineIndex];
-                var lastLine = lines[endLineIndex];
-
-                var before = firstLine.Substring(0, Math.Max(0, edit.StartColumn));
-                var after = lastLine.Substring(Math.Min(lastLine.Length, edit.EndColumn));
-
-                // Remove all lines in between
-                lines.RemoveRange(startLineIndex, endLineIndex - startLineIndex + 1);
-
-                // Insert the new content
-                lines.Insert(startLineIndex, before + edit.NewText + after);
-            }
-        }
-
-        return string.Join(Environment.NewLine, lines);
     }
 
     private static DiagnosticSeverity MapSeverityToDiagnosticSeverity(IssueSeverity severity)
@@ -388,7 +350,7 @@ public class RoslynCodeFixAdapter
         };
     }
 
-    private IEnumerable<MetadataReference> GetMetadataReferences()
+    private List<MetadataReference> GetMetadataReferences()
     {
         var references = new List<MetadataReference>();
 
@@ -420,9 +382,42 @@ public class RoslynCodeFixAdapter
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error loading metadata references for code fix analysis");
+            LogMetadataReferencesError(_logger, ex);
         }
 
         return references;
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Getting fixes for issue {IssueId} with rule {RuleId}")]
+    private static partial void LogGettingFixes(ILogger logger, string issueId, string ruleId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Fix provider {ProviderId} cannot fix diagnostic {DiagnosticId}")]
+    private static partial void LogCannotFix(ILogger logger, string providerId, string diagnosticId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Found {Count} fixes for issue {IssueId}")]
+    private static partial void LogFixesFound(ILogger logger, int count, string issueId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting fixes for issue {IssueId} with rule {RuleId}")]
+    private static partial void LogGetFixesError(ILogger logger, Exception exception, string issueId, string ruleId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Computing fix from {Provider} for diagnostic {RuleId}")]
+    private static partial void LogApplyingFix(ILogger logger, string provider, string ruleId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error converting code action {Title} to fix")]
+    private static partial void LogConvertCodeActionError(ILogger logger, Exception exception, string title);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error loading metadata references for code fix analysis")]
+    private static partial void LogMetadataReferencesError(ILogger logger, Exception exception);
+}
+
+/// <summary>
+/// The outcome of asking a code fix provider to fix one diagnostic: the changed solution and the title
+/// of the code action that produced it, or the reason no change was produced.
+/// </summary>
+public sealed record CodeFixComputation(Solution? ChangedSolution, string? Title, string? Error)
+{
+    /// <summary>Whether a changed solution was produced</summary>
+    public bool Succeeded => ChangedSolution != null;
+
+    internal static CodeFixComputation Failure(string error) => new(null, null, error);
 }

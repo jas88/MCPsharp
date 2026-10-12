@@ -22,17 +22,17 @@ public class CallerResult
     /// <summary>
     /// Get direct callers only
     /// </summary>
-    public List<CallerInfo> DirectCallers => Callers.Where(c => c.CallType == CallType.Direct).ToList();
+    public IEnumerable<CallerInfo> DirectCallers => Callers.Where(c => c.CallType == CallType.Direct);
 
     /// <summary>
     /// Get indirect callers (through interfaces/base classes)
     /// </summary>
-    public List<CallerInfo> IndirectCallers => Callers.Where(c => c.CallType == CallType.Indirect).ToList();
+    public IEnumerable<CallerInfo> IndirectCallers => Callers.Where(c => c.CallType == CallType.Indirect);
 
     /// <summary>
     /// Get callers in the same file
     /// </summary>
-    public List<CallerInfo> LocalCallers => Callers.Where(c => c.File == TargetSignature.ContainingType).ToList();
+    public IEnumerable<CallerInfo> LocalCallers => Callers.Where(c => c.File == TargetSignature.ContainingType);
 }
 
 /// <summary>

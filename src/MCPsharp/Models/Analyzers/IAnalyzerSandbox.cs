@@ -61,8 +61,8 @@ public record SandboxConfiguration
     public TimeSpan MaxExecutionTime { get; init; } = TimeSpan.FromMinutes(5);
     public long MaxMemoryUsage { get; init; } = 512 * 1024 * 1024; // 512MB
     public int MaxFileAccess { get; init; } = 1000;
-    public bool AllowNetworkAccess { get; init; } = false;
-    public bool AllowProcessCreation { get; init; } = false;
+    public bool AllowNetworkAccess { get; init; }
+    public bool AllowProcessCreation { get; init; }
     public ImmutableArray<string> AllowedPaths { get; init; } = ImmutableArray<string>.Empty;
     public ImmutableArray<string> DeniedPaths { get; init; } = ImmutableArray<string>.Empty;
 }

@@ -21,13 +21,7 @@ public class SymbolQueryService
     /// </summary>
     public List<ISymbol> FindSymbolsByName(string name, string? kind = null)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-        {
-            return new List<ISymbol>();
-        }
-
-        var symbols = compilation.GetSymbolsWithName(n => n == name, SymbolFilter.TypeAndMember);
+        var symbols = _workspace.FindSourceSymbols(name, SymbolFilter.TypeAndMember);
         var results = new List<ISymbol>();
 
         foreach (var symbol in symbols)
@@ -53,16 +47,14 @@ public class SymbolQueryService
     /// <summary>
     /// Find symbols by name and optional kind filter
     /// </summary>
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<SymbolResult>> FindSymbolsAsync(string name, string? kind = null)
+    public Task<List<SymbolResult>> FindSymbolsAsync(string name, string? kind = null)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-        {
-            return new List<SymbolResult>();
-        }
+        return Task.FromResult(FindSymbols(name, kind));
+    }
 
-        var symbols = compilation.GetSymbolsWithName(n => n == name, SymbolFilter.TypeAndMember);
+    private List<SymbolResult> FindSymbols(string name, string? kind)
+    {
+        var symbols = _workspace.FindSourceSymbols(name, SymbolFilter.TypeAndMember);
         var results = new List<SymbolResult>();
 
         foreach (var symbol in symbols)
@@ -113,7 +105,7 @@ public class SymbolQueryService
             return null;
         }
 
-        var position = syntaxTree.GetText().Lines[line].Start + column;
+        var position = (await syntaxTree.GetTextAsync()).Lines[line].Start + column;
         var node = (await syntaxTree.GetRootAsync()).FindToken(position).Parent;
 
         if (node == null)
@@ -128,10 +120,10 @@ public class SymbolQueryService
             return null;
         }
 
-        return ConvertToSymbolInfo(symbol, document);
+        return ConvertToSymbolInfo(symbol);
     }
 
-    private Models.Roslyn.SymbolInfo ConvertToSymbolInfo(ISymbol symbol, Document document)
+    private static Models.Roslyn.SymbolInfo ConvertToSymbolInfo(ISymbol symbol)
     {
         var members = new List<MemberInfo>();
 
@@ -139,12 +131,12 @@ public class SymbolQueryService
         {
             foreach (var member in typeSymbol.GetMembers())
             {
-                if (member.Kind == Microsoft.CodeAnalysis.SymbolKind.Method && member is IMethodSymbol method)
+                if (member.Kind == Microsoft.CodeAnalysis.SymbolKind.Method &&
+                    member is IMethodSymbol method &&
+                    method.MethodKind != MethodKind.Ordinary &&
+                    method.MethodKind != MethodKind.Constructor)
                 {
-                    if (method.MethodKind != MethodKind.Ordinary && method.MethodKind != MethodKind.Constructor)
-                    {
-                        continue;
-                    }
+                    continue;
                 }
 
                 var memberLocation = member.Locations.FirstOrDefault();
@@ -153,10 +145,10 @@ public class SymbolQueryService
                 members.Add(new MemberInfo
                 {
                     Name = member.Name,
-                    Kind = member.Kind.ToString().ToLower(),
+                    Kind = member.Kind.ToString().ToLowerInvariant(),
                     Type = GetMemberType(member),
                     Line = memberLine,
-                    Accessibility = member.DeclaredAccessibility.ToString().ToLower()
+                    Accessibility = member.DeclaredAccessibility.ToString().ToLowerInvariant()
                 });
             }
         }
@@ -174,13 +166,12 @@ public class SymbolQueryService
         };
     }
 
-    private bool MatchesKind(ISymbol symbol, string kind)
+    private static bool MatchesKind(ISymbol symbol, string kind)
     {
-        var symbolKind = GetSymbolKindString(symbol).ToLower();
-        return symbolKind == kind.ToLower();
+        return string.Equals(GetSymbolKindString(symbol), kind, StringComparison.OrdinalIgnoreCase);
     }
 
-    private string GetSymbolKindString(ISymbol symbol)
+    private static string GetSymbolKindString(ISymbol symbol)
     {
         return symbol switch
         {
@@ -192,11 +183,11 @@ public class SymbolQueryService
             IMethodSymbol => "method",
             IFieldSymbol => "field",
             INamespaceSymbol => "namespace",
-            _ => symbol.Kind.ToString().ToLower()
+            _ => symbol.Kind.ToString().ToLowerInvariant()
         };
     }
 
-    private string GetMemberType(ISymbol member)
+    private static string GetMemberType(ISymbol member)
     {
         return member switch
         {
@@ -207,7 +198,7 @@ public class SymbolQueryService
         };
     }
 
-    private string? GetDocumentation(ISymbol symbol)
+    private static string? GetDocumentation(ISymbol symbol)
     {
         var xml = symbol.GetDocumentationCommentXml();
         if (string.IsNullOrWhiteSpace(xml))
@@ -216,8 +207,8 @@ public class SymbolQueryService
         }
 
         // Simple extraction of summary
-        var summaryStart = xml.IndexOf("<summary>");
-        var summaryEnd = xml.IndexOf("</summary>");
+        var summaryStart = xml.IndexOf("<summary>", StringComparison.Ordinal);
+        var summaryEnd = xml.IndexOf("</summary>", StringComparison.Ordinal);
         if (summaryStart >= 0 && summaryEnd > summaryStart)
         {
             return xml.Substring(summaryStart + 9, summaryEnd - summaryStart - 9).Trim();
@@ -226,7 +217,7 @@ public class SymbolQueryService
         return null;
     }
 
-    private List<string> GetBaseTypes(ISymbol symbol)
+    private static List<string> GetBaseTypes(ISymbol symbol)
     {
         if (symbol is not INamedTypeSymbol typeSymbol)
         {
@@ -248,17 +239,16 @@ public class SymbolQueryService
     /// </summary>
     public async Task<List<SymbolResult>> GetAllTypesAsync()
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-        {
-            return new List<SymbolResult>();
-        }
-
         var results = new List<SymbolResult>();
 
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+            {
+                continue;
+            }
+
             var root = await syntaxTree.GetRootAsync();
 
             var typeDeclarations = root.DescendantNodes()
@@ -293,7 +283,7 @@ public class SymbolQueryService
     /// <summary>
     /// Get documentation for a symbol
     /// </summary>
-    public Task<string?> GetSymbolDocumentationAsync(ISymbol symbol)
+    public static Task<string?> GetSymbolDocumentationAsync(ISymbol symbol)
     {
         return Task.FromResult(GetDocumentation(symbol));
     }
@@ -301,30 +291,29 @@ public class SymbolQueryService
     /// <summary>
     /// Get symbols in a specific namespace
     /// </summary>
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<SymbolResult>> GetSymbolsInNamespaceAsync(string namespaceName)
+    public Task<List<SymbolResult>> GetSymbolsInNamespaceAsync(string namespaceName)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-        {
-            return new List<SymbolResult>();
-        }
+        return Task.FromResult(GetSymbolsInNamespace(namespaceName));
+    }
 
+    private List<SymbolResult> GetSymbolsInNamespace(string namespaceName)
+    {
         var results = new List<SymbolResult>();
+        var seenLocations = new HashSet<(string, int, int)>();
 
-        // Find the namespace symbol
-        var namespaceSymbol = compilation.GetSymbolsWithName(
-            n => n == namespaceName.Split('.').Last(),
-            SymbolFilter.Namespace)
+        // A namespace can be declared in several projects; collect its members from each of them
+        var simpleName = namespaceName.Split('.')[^1];
+        var namespaceSymbols = _workspace.FindSourceSymbols(simpleName, SymbolFilter.Namespace)
             .OfType<INamespaceSymbol>()
-            .FirstOrDefault(ns => ns.ToDisplayString() == namespaceName);
+            .Where(ns => ns.ToDisplayString() == namespaceName);
 
-        if (namespaceSymbol != null)
+        foreach (var namespaceSymbol in namespaceSymbols)
         {
             foreach (var member in namespaceSymbol.GetMembers())
             {
                 var location = member.Locations.FirstOrDefault();
-                if (location != null && location.IsInSource)
+                if (location != null && location.IsInSource &&
+                    seenLocations.Add((location.GetLineSpan().Path, location.SourceSpan.Start, location.SourceSpan.Length)))
                 {
                     var lineSpan = location.GetLineSpan();
                     results.Add(new SymbolResult

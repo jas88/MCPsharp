@@ -7,288 +7,12 @@ using Microsoft.Extensions.Logging;
 namespace MCPsharp.Services;
 
 /// <summary>
-/// McpToolRegistry partial class for Roslyn Code Fix and Configuration tools
+/// McpToolRegistry partial class for the Roslyn analyzer configuration and report tools
 /// </summary>
 public partial class McpToolRegistry
 {
-    private RoslynCodeFixLoader? _codeFixLoader;
-    private readonly List<RoslynCodeFixAdapter> _loadedCodeFixProviders = new();
     private AnalyzerConfigurationManager? _analyzerConfigManager;
     private AnalysisReportGenerator? _reportGenerator;
-
-    /// <summary>
-    /// Execute apply_roslyn_fixes tool
-    /// </summary>
-    private async Task<ToolCallResult> ExecuteApplyRoslynFixes(JsonDocument arguments, CancellationToken ct)
-    {
-        if (_roslynAnalyzerService == null)
-        {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = "Roslyn Analyzer service is not available"
-            };
-        }
-
-        try
-        {
-            var root = arguments.RootElement;
-
-            // Get diagnostic IDs to fix
-            if (!root.TryGetProperty("diagnostic_ids", out var diagnosticIdsElement) ||
-                diagnosticIdsElement.ValueKind != JsonValueKind.Array)
-            {
-                return new ToolCallResult
-                {
-                    Success = false,
-                    Error = "Missing required parameter 'diagnostic_ids' (array of strings)"
-                };
-            }
-
-            var diagnosticIds = diagnosticIdsElement.EnumerateArray()
-                .Select(e => e.GetString())
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Cast<string>()
-                .ToList();
-
-            if (diagnosticIds.Count == 0)
-            {
-                return new ToolCallResult
-                {
-                    Success = false,
-                    Error = "No valid diagnostic IDs provided"
-                };
-            }
-
-            // Get target path
-            if (!root.TryGetProperty("target_path", out var targetPathElement))
-            {
-                return new ToolCallResult
-                {
-                    Success = false,
-                    Error = "Missing required parameter 'target_path'"
-                };
-            }
-
-            var targetPath = targetPathElement.GetString();
-            if (string.IsNullOrWhiteSpace(targetPath))
-            {
-                return new ToolCallResult
-                {
-                    Success = false,
-                    Error = "Parameter 'target_path' cannot be empty"
-                };
-            }
-
-            if (!File.Exists(targetPath))
-            {
-                return new ToolCallResult
-                {
-                    Success = false,
-                    Error = $"File not found: {targetPath}"
-                };
-            }
-
-            // Get preview mode (default true for safety)
-            var preview = true;
-            if (root.TryGetProperty("preview", out var previewElement))
-            {
-                preview = previewElement.GetBoolean();
-            }
-
-            // Initialize code fix loader if needed
-            if (_codeFixLoader == null && _loggerFactory != null)
-            {
-                var logger = _loggerFactory.CreateLogger<RoslynCodeFixLoader>();
-                _codeFixLoader = new RoslynCodeFixLoader(logger, _loggerFactory);
-            }
-
-            // Ensure we have code fix providers loaded
-            if (_loadedCodeFixProviders.Count == 0 && _codeFixLoader != null)
-            {
-                // Try to load from the same assemblies as analyzers
-                var analyzerAssemblies = _roslynAnalyzerService.GetLoadedAnalyzers()
-                    .Select(a => a.GetType().Assembly.Location)
-                    .Where(path => !string.IsNullOrWhiteSpace(path))
-                    .Distinct()
-                    .ToList();
-
-                foreach (var assembly in analyzerAssemblies)
-                {
-                    var providers = await _codeFixLoader.LoadCodeFixProvidersFromAssemblyAsync(assembly, ct);
-                    _loadedCodeFixProviders.AddRange(providers);
-                }
-            }
-
-            // Find applicable code fix providers
-            var applicableProviders = _loadedCodeFixProviders
-                .Where(p => diagnosticIds.Any(id => p.CanFix(id)))
-                .ToList();
-
-            if (applicableProviders.Count == 0)
-            {
-                return new ToolCallResult
-                {
-                    Success = false,
-                    Error = $"No code fix providers found for diagnostic IDs: {string.Join(", ", diagnosticIds)}"
-                };
-            }
-
-            // Read file content
-            var fileContent = await File.ReadAllTextAsync(targetPath, ct);
-
-            // Run analyzers to get the issues
-            var analysisResult = await _roslynAnalyzerService.RunAnalyzersAsync(targetPath, null, ct);
-            if (!analysisResult.Success)
-            {
-                return new ToolCallResult
-                {
-                    Success = false,
-                    Error = $"Failed to analyze file: {analysisResult.ErrorMessage}"
-                };
-            }
-
-            // Find issues matching the diagnostic IDs
-            var issues = analysisResult.Results
-                .SelectMany(r => r.Issues)
-                .Where(i => diagnosticIds.Contains(i.RuleId))
-                .ToList();
-
-            if (issues.Count == 0)
-            {
-                return new ToolCallResult
-                {
-                    Success = true,
-                    Result = new
-                    {
-                        message = "No issues found matching the specified diagnostic IDs",
-                        diagnosticIds = diagnosticIds,
-                        filePath = targetPath
-                    }
-                };
-            }
-
-            // Get fixes for each issue
-            var allFixes = new List<(AnalyzerIssue Issue, AnalyzerFix Fix, RoslynCodeFixAdapter Provider)>();
-            foreach (var issue in issues)
-            {
-                foreach (var provider in applicableProviders.Where(p => p.CanFix(issue.RuleId)))
-                {
-                    var fixes = await provider.GetFixesAsync(issue, fileContent, ct);
-                    foreach (AnalyzerFix fix in fixes)
-                    {
-                        allFixes.Add((Issue: issue, Fix: fix, Provider: provider));
-                    }
-                }
-            }
-
-            if (allFixes.Count == 0)
-            {
-                return new ToolCallResult
-                {
-                    Success = true,
-                    Result = new
-                    {
-                        message = "No fixes available for the found issues",
-                        issuesFound = issues.Count,
-                        filePath = targetPath
-                    }
-                };
-            }
-
-            if (preview)
-            {
-                // Return preview of fixes without applying
-                return new ToolCallResult
-                {
-                    Success = true,
-                    Result = new
-                    {
-                        preview = true,
-                        filePath = targetPath,
-                        issuesFound = issues.Count,
-                        fixesAvailable = allFixes.Count,
-                        fixes = allFixes.Select(f => new
-                        {
-                            issueId = f.Issue.Id,
-                            ruleId = f.Issue.RuleId,
-                            fixTitle = f.Fix.Title,
-                            fixDescription = f.Fix.Description,
-                            provider = f.Provider.Name,
-                            editsCount = f.Fix.Edits.Length,
-                            affectedFiles = f.Fix.AffectedFiles.ToArray()
-                        }).ToList()
-                    }
-                };
-            }
-            else
-            {
-                // Apply fixes
-                var appliedFixes = new List<object>();
-                var modifiedFiles = new HashSet<string>();
-
-                foreach (var (issue, fix, provider) in allFixes)
-                {
-                    var applyResult = await provider.ApplyFixAsync(fix, fileContent, ct);
-                    if (applyResult.Success)
-                    {
-                        appliedFixes.Add(new
-                        {
-                            issueId = issue.Id,
-                            ruleId = issue.RuleId,
-                            fixTitle = fix.Title,
-                            success = true
-                        });
-
-                        foreach (var file in applyResult.ModifiedFiles)
-                        {
-                            modifiedFiles.Add(file);
-                        }
-
-                        // Update file content for next fix
-                        if (applyResult.ModifiedFiles.Contains(targetPath))
-                        {
-                            fileContent = await File.ReadAllTextAsync(targetPath, ct);
-                        }
-                    }
-                    else
-                    {
-                        appliedFixes.Add(new
-                        {
-                            issueId = issue.Id,
-                            ruleId = issue.RuleId,
-                            fixTitle = fix.Title,
-                            success = false,
-                            error = applyResult.ErrorMessage
-                        });
-                    }
-                }
-
-                return new ToolCallResult
-                {
-                    Success = true,
-                    Result = new
-                    {
-                        preview = false,
-                        filePath = targetPath,
-                        issuesFound = issues.Count,
-                        fixesApplied = appliedFixes.Count(f => f.GetType().GetProperty("success")?.GetValue(f) as bool? == true),
-                        fixesFailed = appliedFixes.Count(f => f.GetType().GetProperty("success")?.GetValue(f) as bool? == false),
-                        modifiedFiles = modifiedFiles.ToList(),
-                        fixes = appliedFixes
-                    }
-                };
-            }
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = $"Failed to apply Roslyn fixes: {ex.Message}"
-            };
-        }
-    }
 
     /// <summary>
     /// Execute configure_analyzer tool
@@ -389,6 +113,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteConfigureAnalyzer));
             return new ToolCallResult
             {
                 Success = false,
@@ -400,8 +125,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// Execute get_analyzer_config tool
     /// </summary>
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<ToolCallResult> ExecuteGetAnalyzerConfig(JsonDocument arguments, CancellationToken ct)
+    private Task<ToolCallResult> ExecuteGetAnalyzerConfig()
     {
         try
         {
@@ -410,7 +134,7 @@ public partial class McpToolRegistry
 
             var config = _analyzerConfigManager.GetConfiguration();
 
-            return new ToolCallResult
+            return Task.FromResult(new ToolCallResult
             {
                 Success = true,
                 Result = new
@@ -433,22 +157,23 @@ public partial class McpToolRegistry
                         properties = kvp.Value.Properties
                     }).ToList()
                 }
-            };
+            });
         }
         catch (Exception ex)
         {
-            return new ToolCallResult
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetAnalyzerConfig));
+            return Task.FromResult(new ToolCallResult
             {
                 Success = false,
                 Error = $"Failed to get analyzer configuration: {ex.Message}"
-            };
+            });
         }
     }
 
     /// <summary>
     /// Execute reset_analyzer_config tool
     /// </summary>
-    private async Task<ToolCallResult> ExecuteResetAnalyzerConfig(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteResetAnalyzerConfig(CancellationToken ct)
     {
         try
         {
@@ -469,6 +194,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteResetAnalyzerConfig));
             return new ToolCallResult
             {
                 Success = false,
@@ -540,7 +266,7 @@ public partial class McpToolRegistry
             }
 
             // Get analysis results (either from recent run or run new analysis)
-            var results = analysisResult?.Results ?? System.Collections.Immutable.ImmutableArray<AnalysisResult>.Empty;
+            var results = _lastAnalysisResult?.Results ?? System.Collections.Immutable.ImmutableArray<AnalysisResult>.Empty;
 
             if (results.IsEmpty)
             {
@@ -554,6 +280,18 @@ public partial class McpToolRegistry
             // Generate report
             var reportResult = await _reportGenerator.GenerateReportAsync(results, format, outputPath, null, ct);
 
+            var statistics = reportResult.Statistics != null
+                ? new
+                {
+                    totalFiles = reportResult.Statistics.TotalFiles,
+                    totalIssues = reportResult.Statistics.TotalIssues,
+                    errors = reportResult.Statistics.ErrorCount,
+                    warnings = reportResult.Statistics.WarningCount,
+                    info = reportResult.Statistics.InfoCount,
+                    critical = reportResult.Statistics.CriticalCount
+                }
+                : null;
+
             return new ToolCallResult
             {
                 Success = reportResult.Success,
@@ -562,21 +300,14 @@ public partial class McpToolRegistry
                     filePath = reportResult.FilePath,
                     format = reportResult.Format.ToString(),
                     generatedAt = reportResult.GeneratedAt,
-                    statistics = reportResult.Statistics != null ? new
-                    {
-                        totalFiles = reportResult.Statistics.TotalFiles,
-                        totalIssues = reportResult.Statistics.TotalIssues,
-                        errors = reportResult.Statistics.ErrorCount,
-                        warnings = reportResult.Statistics.WarningCount,
-                        info = reportResult.Statistics.InfoCount,
-                        critical = reportResult.Statistics.CriticalCount
-                    } : null
+                    statistics = statistics
                 } : null,
                 Error = reportResult.ErrorMessage
             };
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateAnalysisReport));
             return new ToolCallResult
             {
                 Success = false,
@@ -585,8 +316,6 @@ public partial class McpToolRegistry
         }
     }
 
-    // Field to store analysis result for caching (currently not populated; TODO: implement result caching)
-    #pragma warning disable CS0649 // Field is never assigned - placeholder for future result caching implementation
-    private AnalyzerRunResult? analysisResult;
-    #pragma warning restore CS0649
+    // Most recent successful analyzer run, reused by generate_analysis_report
+    private AnalyzerRunResult? _lastAnalysisResult;
 }

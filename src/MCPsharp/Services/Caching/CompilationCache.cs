@@ -9,10 +9,10 @@ namespace MCPsharp.Services.Caching;
 public sealed class CompilationCache : IDisposable
 {
     private readonly ConcurrentDictionary<ProjectId, WeakReference<Compilation>> _cache = new();
-    private readonly ConcurrentDictionary<ProjectId, int> _projectVersions = new();
+    private readonly ConcurrentDictionary<ProjectId, VersionStamp> _projectVersions = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly object _disposeLock = new();
-    private bool _disposed = false;
+    private bool _disposed;
 
     /// <summary>
     /// Get or create a compilation for a project
@@ -26,9 +26,10 @@ public sealed class CompilationCache : IDisposable
     {
         ThrowIfDisposed();
 
+        var currentVersion = await GetProjectVersionAsync(project, ct);
         if (_cache.TryGetValue(project.Id, out var weakRef) &&
             weakRef.TryGetTarget(out var cached) &&
-            IsProjectVersionCurrent(project))
+            IsProjectVersionCurrent(project, currentVersion))
         {
             return cached;
         }
@@ -39,7 +40,7 @@ public sealed class CompilationCache : IDisposable
             // Double-check after acquiring lock
             if (_cache.TryGetValue(project.Id, out weakRef) &&
                 weakRef.TryGetTarget(out cached) &&
-                IsProjectVersionCurrent(project))
+                IsProjectVersionCurrent(project, currentVersion))
             {
                 return cached;
             }
@@ -48,7 +49,7 @@ public sealed class CompilationCache : IDisposable
             if (compilation != null)
             {
                 _cache[project.Id] = new WeakReference<Compilation>(compilation);
-                _projectVersions[project.Id] = GetProjectVersion(project);
+                _projectVersions[project.Id] = currentVersion;
             }
             return compilation;
         }
@@ -139,23 +140,15 @@ public sealed class CompilationCache : IDisposable
         return toRemove.Count;
     }
 
-    private bool IsProjectVersionCurrent(Project project)
-    {
-        if (!_projectVersions.TryGetValue(project.Id, out var cachedVersion))
-        {
-            return false;
-        }
+    private bool IsProjectVersionCurrent(Project project, VersionStamp currentVersion) =>
+        _projectVersions.TryGetValue(project.Id, out var cachedVersion) && cachedVersion == currentVersion;
 
-        var currentVersion = GetProjectVersion(project);
-        return cachedVersion == currentVersion;
-    }
-
-    private static int GetProjectVersion(Project project)
-    {
-        // Use project's version stamp if available
-        var version = project.Version;
-        return version.GetHashCode();
-    }
+    /// <summary>
+    /// Version covering the project's own documents and everything it depends on, so a change
+    /// in a referenced project also invalidates the dependent project's cached compilation.
+    /// </summary>
+    private static Task<VersionStamp> GetProjectVersionAsync(Project project, CancellationToken ct) =>
+        project.GetDependentVersionAsync(ct);
 
     private double CalculateHitRate()
     {
@@ -170,10 +163,7 @@ public sealed class CompilationCache : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(CompilationCache));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
     public void Dispose()

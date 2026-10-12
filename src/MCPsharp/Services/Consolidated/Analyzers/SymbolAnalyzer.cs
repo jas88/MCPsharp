@@ -8,7 +8,7 @@ namespace MCPsharp.Services.Consolidated.Analyzers;
 /// <summary>
 /// Analyzes symbol-level code elements including definitions, references, callers, and usage patterns.
 /// </summary>
-public class SymbolAnalyzer
+public partial class SymbolAnalyzer
 {
     private readonly SymbolQueryService? _symbolQuery;
     private readonly ReferenceFinderService? _referenceFinder;
@@ -60,7 +60,7 @@ public class SymbolAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting symbol definition for {Symbol}", symbolName);
+            LogErrorGettingSymbolDefinitionFor(_logger, ex, symbolName);
         }
 
         return null;
@@ -85,7 +85,7 @@ public class SymbolAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting symbol references for {Symbol}", symbolName);
+            LogErrorGettingSymbolReferencesFor(_logger, ex, symbolName);
         }
 
         return null;
@@ -125,8 +125,7 @@ public class SymbolAnalyzer
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Error processing caller for reference at {File}:{Line}",
-                        reference.FilePath, reference.Line);
+                    LogErrorProcessingCallerForReference(_logger, ex, reference.FilePath, reference.Line);
                 }
             }
 
@@ -134,7 +133,7 @@ public class SymbolAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting symbol callers for {Symbol}", symbolName);
+            LogErrorGettingSymbolCallersFor(_logger, ex, symbolName);
         }
 
         return null;
@@ -175,7 +174,7 @@ public class SymbolAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing symbol usage patterns for {Symbol}", symbolName);
+            LogErrorAnalyzingSymbolUsagePatterns(_logger, ex, symbolName);
         }
 
         return null;
@@ -267,7 +266,7 @@ public class SymbolAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error finding related symbols for {Symbol}", symbolName);
+            LogErrorFindingRelatedSymbolsFor(_logger, ex, symbolName);
         }
 
         return null;
@@ -302,9 +301,30 @@ public class SymbolAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating symbol metrics for {Symbol}", symbolName);
+            LogErrorCalculatingSymbolMetricsFor(_logger, ex, symbolName);
         }
 
         return null;
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting symbol definition for {Symbol}")]
+    private static partial void LogErrorGettingSymbolDefinitionFor(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting symbol references for {Symbol}")]
+    private static partial void LogErrorGettingSymbolReferencesFor(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error processing caller for reference at {File}:{Line}")]
+    private static partial void LogErrorProcessingCallerForReference(ILogger logger, Exception exception, string file, int line);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting symbol callers for {Symbol}")]
+    private static partial void LogErrorGettingSymbolCallersFor(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing symbol usage patterns for {Symbol}")]
+    private static partial void LogErrorAnalyzingSymbolUsagePatterns(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error finding related symbols for {Symbol}")]
+    private static partial void LogErrorFindingRelatedSymbolsFor(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error calculating symbol metrics for {Symbol}")]
+    private static partial void LogErrorCalculatingSymbolMetricsFor(ILogger logger, Exception exception, string symbol);
 }

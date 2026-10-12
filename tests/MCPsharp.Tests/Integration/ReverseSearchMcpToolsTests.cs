@@ -381,8 +381,8 @@ public class Consumer
         // Act
         var tools = _toolRegistry.GetTools();
         var reverseSearchTools = tools.Where(t =>
-            t.Name.StartsWith("find_") ||
-            t.Name.StartsWith("analyze_") ||
+            t.Name.StartsWith("find_", StringComparison.Ordinal) ||
+            t.Name.StartsWith("analyze_", StringComparison.Ordinal) ||
             t.Name == "find_circular_dependencies" ||
             t.Name == "find_unused_methods" ||
             t.Name == "find_recursive_calls").ToList();

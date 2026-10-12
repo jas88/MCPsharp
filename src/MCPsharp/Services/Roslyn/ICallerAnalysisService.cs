@@ -14,14 +14,14 @@ public interface ICallerAnalysisService
     Task<CallerResult?> FindCallersAsync(string methodName, string? containingType = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Find all callers of a method at a specific location
-    /// </summary>
-    Task<CallerResult?> FindCallersAtLocationAsync(string filePath, int line, int column, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Find all callers of a specific symbol
     /// </summary>
     Task<CallerResult?> FindCallersAsync(ISymbol symbol, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Find all callers of a method at a specific location
+    /// </summary>
+    Task<CallerResult?> FindCallersAtLocationAsync(string filePath, int line, int column, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Find all callers with specific method signature matching

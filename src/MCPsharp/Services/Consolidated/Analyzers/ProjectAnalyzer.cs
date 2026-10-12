@@ -7,7 +7,7 @@ namespace MCPsharp.Services.Consolidated.Analyzers;
 /// <summary>
 /// Analyzes project-level code elements including structure, dependencies, build configuration, and metrics.
 /// </summary>
-public class ProjectAnalyzer
+public partial class ProjectAnalyzer
 {
     private readonly FileAnalyzer _fileAnalyzer;
     private readonly ILogger<ProjectAnalyzer> _logger;
@@ -42,7 +42,7 @@ public class ProjectAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting project structure for {Project}", projectPath);
+            LogErrorGettingProjectStructureFor(_logger, ex, projectPath);
         }
 
         return Task.FromResult(new ProjectStructure { ProjectPath = projectPath, ProjectType = "Unknown" });
@@ -80,7 +80,7 @@ public class ProjectAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting project file inventory for {Project}", projectPath);
+            LogErrorGettingProjectFileInventory(_logger, ex, projectPath);
         }
 
         return new List<ProjectFile>();
@@ -97,17 +97,17 @@ public class ProjectAnalyzer
                 AssemblyReferences = new List<AssemblyReference>()
             };
 
-            if (File.Exists(projectPath) && Path.GetExtension(projectPath).ToLowerInvariant() == ".csproj")
+            if (File.Exists(projectPath) && string.Equals(Path.GetExtension(projectPath), ".csproj", StringComparison.OrdinalIgnoreCase))
             {
                 var content = await File.ReadAllTextAsync(projectPath, ct);
 
                 var packagePattern = @"<PackageReference\s+Include=""([^""]+)""";
-                var packageMatches = Regex.Matches(content, packagePattern);
+                var packageMatches = Regex.Matches(content, packagePattern, RegexOptions.None, TimeSpan.FromSeconds(1));
                 dependencies.PackageReferences.AddRange(packageMatches.Cast<Match>()
                     .Select(m => new PackageDependency { Name = m.Groups[1].Value, Version = "Unknown", IsDevelopmentDependency = false, UsedBy = new List<string>() }));
 
                 var projectRefPattern = @"<ProjectReference\s+Include=""([^""]+)""";
-                var projectRefMatches = Regex.Matches(content, projectRefPattern);
+                var projectRefMatches = Regex.Matches(content, projectRefPattern, RegexOptions.None, TimeSpan.FromSeconds(1));
                 dependencies.ProjectReferences.AddRange(projectRefMatches.Cast<Match>()
                     .Select(m => new ProjectReference { Name = Path.GetFileNameWithoutExtension(m.Groups[1].Value), ReferenceType = "Project", Path = m.Groups[1].Value }));
             }
@@ -116,7 +116,7 @@ public class ProjectAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing project dependencies for {Project}", projectPath);
+            LogErrorAnalyzingProjectDependenciesFor(_logger, ex, projectPath);
         }
 
         return null;
@@ -134,17 +134,17 @@ public class ProjectAnalyzer
                 BuildArtifacts = new List<string>()
             };
 
-            if (File.Exists(projectPath) && Path.GetExtension(projectPath).ToLowerInvariant() == ".csproj")
+            if (File.Exists(projectPath) && string.Equals(Path.GetExtension(projectPath), ".csproj", StringComparison.OrdinalIgnoreCase))
             {
                 var content = await File.ReadAllTextAsync(projectPath, ct);
 
                 var tfPattern = @"<TargetFramework>([^<]+)</TargetFramework>";
-                var tfMatch = Regex.Match(content, tfPattern);
+                var tfMatch = Regex.Match(content, tfPattern, RegexOptions.None, TimeSpan.FromSeconds(1));
                 if (tfMatch.Success)
                     buildInfo.BuildConfigurations.Add($"TargetFramework: {tfMatch.Groups[1].Value}");
 
                 var outputPathPattern = @"<OutputPath>([^<]+)</OutputPath>";
-                var outputPathMatch = Regex.Match(content, outputPathPattern);
+                var outputPathMatch = Regex.Match(content, outputPathPattern, RegexOptions.None, TimeSpan.FromSeconds(1));
                 if (outputPathMatch.Success)
                     buildInfo.BuildArtifacts.Add(outputPathMatch.Groups[1].Value);
 
@@ -164,7 +164,7 @@ public class ProjectAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing project build info for {Project}", projectPath);
+            LogErrorAnalyzingProjectBuildInfo(_logger, ex, projectPath);
         }
 
         return null;
@@ -197,9 +197,24 @@ public class ProjectAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating project metrics for {Project}", projectPath);
+            LogErrorCalculatingProjectMetricsFor(_logger, ex, projectPath);
         }
 
         return null;
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting project structure for {Project}")]
+    private static partial void LogErrorGettingProjectStructureFor(ILogger logger, Exception exception, string project);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting project file inventory for {Project}")]
+    private static partial void LogErrorGettingProjectFileInventory(ILogger logger, Exception exception, string project);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing project dependencies for {Project}")]
+    private static partial void LogErrorAnalyzingProjectDependenciesFor(ILogger logger, Exception exception, string project);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing project build info for {Project}")]
+    private static partial void LogErrorAnalyzingProjectBuildInfo(ILogger logger, Exception exception, string project);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error calculating project metrics for {Project}")]
+    private static partial void LogErrorCalculatingProjectMetricsFor(ILogger logger, Exception exception, string project);
 }

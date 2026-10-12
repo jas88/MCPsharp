@@ -1,7 +1,29 @@
+using System.Globalization;
 using System.Text;
 using MCPsharp.Models;
 
 namespace MCPsharp.Services;
+
+/// <summary>
+/// URIs of the built-in project resources.
+/// </summary>
+public static class ProjectResourceUris
+{
+    /// <summary>URI of the project overview resource.</summary>
+    public const string Overview = "project://overview";
+
+    /// <summary>URI of the project structure resource.</summary>
+    public const string Structure = "project://structure";
+
+    /// <summary>URI of the project dependencies resource.</summary>
+    public const string Dependencies = "project://dependencies";
+
+    /// <summary>URI of the project symbols resource.</summary>
+    public const string Symbols = "project://symbols";
+
+    /// <summary>URI of the project guidance resource.</summary>
+    public const string Guidance = "project://guidance";
+}
 
 /// <summary>
 /// Generates content for MCP resources.
@@ -9,16 +31,10 @@ namespace MCPsharp.Services;
 public sealed class ResourceContentGenerators
 {
     private readonly ProjectContextManager _projectContext;
-#pragma warning disable S4487 // Field reserved for future database statistics integration
-    private readonly Func<Database.ProjectDatabase?> _getDatabaseFunc;
-#pragma warning restore S4487
 
-    public ResourceContentGenerators(
-        ProjectContextManager projectContext,
-        Func<Database.ProjectDatabase?> getDatabaseFunc)
+    public ResourceContentGenerators(ProjectContextManager projectContext)
     {
         _projectContext = projectContext;
-        _getDatabaseFunc = getDatabaseFunc;
     }
 
     /// <summary>
@@ -40,13 +56,13 @@ public sealed class ResourceContentGenerators
         }
         else
         {
-            sb.AppendLine($"**Project:** {info.GetValueOrDefault("name", "Unknown")}");
-            sb.AppendLine($"**Root:** `{info.GetValueOrDefault("root_path", string.Empty)}`");
-            sb.AppendLine($"**Files:** {info.GetValueOrDefault("file_count", "0")}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Project:** {info.GetValueOrDefault("name", "Unknown")}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Root:** `{info.GetValueOrDefault("root_path", string.Empty)}`");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Files:** {info.GetValueOrDefault("file_count", "0")}");
 
             if (info.TryGetValue("opened_at", out var openedAt) && openedAt != null)
             {
-                sb.AppendLine($"**Opened:** {openedAt}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"**Opened:** {openedAt}");
             }
 
             sb.AppendLine();
@@ -65,7 +81,7 @@ public sealed class ResourceContentGenerators
 
         return new McpResourceContent
         {
-            Uri = "project://overview",
+            Uri = ProjectResourceUris.Overview,
             MimeType = "text/markdown",
             Text = sb.ToString()
         };
@@ -102,7 +118,7 @@ public sealed class ResourceContentGenerators
             foreach (var group in filesByExtension)
             {
                 var ext = string.IsNullOrEmpty(group.Key) ? "(no extension)" : group.Key;
-                sb.AppendLine($"| {ext} | {group.Count()} |");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"| {ext} | {group.Count()} |");
             }
 
             // Top-level directories
@@ -121,15 +137,15 @@ public sealed class ResourceContentGenerators
 
                 foreach (var dir in topDirs)
                 {
-                    var count = context.KnownFiles.Count(f => f.StartsWith(dir + Path.DirectorySeparatorChar) || f.StartsWith(dir + "/"));
-                    sb.AppendLine($"- `{dir}/` ({count} files)");
+                    var count = context.KnownFiles.Count(f => f.StartsWith(dir + Path.DirectorySeparatorChar, StringComparison.Ordinal) || f.StartsWith(dir + "/", StringComparison.Ordinal));
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"- `{dir}/` ({count} files)");
                 }
             }
         }
 
         return new McpResourceContent
         {
-            Uri = "project://structure",
+            Uri = ProjectResourceUris.Structure,
             MimeType = "text/markdown",
             Text = sb.ToString()
         };
@@ -157,7 +173,7 @@ public sealed class ResourceContentGenerators
                 .Where(f => f.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            sb.AppendLine($"## Projects ({projectFiles.Count})");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"## Projects ({projectFiles.Count})");
             sb.AppendLine();
 
             if (!string.IsNullOrEmpty(context.RootPath))
@@ -165,12 +181,12 @@ public sealed class ResourceContentGenerators
                 foreach (var proj in projectFiles.Take(20))
                 {
                     var relativePath = Path.GetRelativePath(context.RootPath, proj);
-                    sb.AppendLine($"- `{relativePath}`");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"- `{relativePath}`");
                 }
 
                 if (projectFiles.Count > 20)
                 {
-                    sb.AppendLine($"- ... and {projectFiles.Count - 20} more");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"- ... and {projectFiles.Count - 20} more");
                 }
 
                 // Find solution files
@@ -181,13 +197,13 @@ public sealed class ResourceContentGenerators
                 if (solutionFiles.Count > 0)
                 {
                     sb.AppendLine();
-                    sb.AppendLine($"## Solutions ({solutionFiles.Count})");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"## Solutions ({solutionFiles.Count})");
                     sb.AppendLine();
 
                     foreach (var sln in solutionFiles)
                     {
                         var relativePath = Path.GetRelativePath(context.RootPath, sln);
-                        sb.AppendLine($"- `{relativePath}`");
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"- `{relativePath}`");
                     }
                 }
             }
@@ -198,7 +214,7 @@ public sealed class ResourceContentGenerators
 
         return new McpResourceContent
         {
-            Uri = "project://dependencies",
+            Uri = ProjectResourceUris.Dependencies,
             MimeType = "text/markdown",
             Text = sb.ToString()
         };
@@ -224,7 +240,7 @@ public sealed class ResourceContentGenerators
             var csFiles = context.KnownFiles
                 .Count(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase));
 
-            sb.AppendLine($"**C# Source Files:** {csFiles}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**C# Source Files:** {csFiles}");
             sb.AppendLine();
             sb.AppendLine("## Finding Symbols");
             sb.AppendLine();
@@ -245,7 +261,7 @@ public sealed class ResourceContentGenerators
 
         return new McpResourceContent
         {
-            Uri = "project://symbols",
+            Uri = ProjectResourceUris.Symbols,
             MimeType = "text/markdown",
             Text = sb.ToString()
         };
@@ -254,7 +270,7 @@ public sealed class ResourceContentGenerators
     /// <summary>
     /// Generates the usage guidance resource content.
     /// </summary>
-    public McpResourceContent GenerateGuidance()
+    public static McpResourceContent GenerateGuidance()
     {
         var sb = new StringBuilder();
 
@@ -297,7 +313,7 @@ public sealed class ResourceContentGenerators
 
         return new McpResourceContent
         {
-            Uri = "project://guidance",
+            Uri = ProjectResourceUris.Guidance,
             MimeType = "text/markdown",
             Text = sb.ToString()
         };

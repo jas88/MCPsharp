@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services.Roslyn.SymbolSearch;
 
@@ -9,17 +10,17 @@ namespace MCPsharp.Services.Roslyn.SymbolSearch;
 /// These symbols are NOT in the compilation symbol table and require
 /// document-by-document semantic analysis to find.
 /// </summary>
-public class ScopeLocalStrategy : ISymbolSearchStrategy
+public partial class ScopeLocalStrategy : ISymbolSearchStrategy
 {
     private readonly RoslynWorkspace _workspace;
-    private readonly ILogger<ScopeLocalStrategy>? _logger;
+    private readonly ILogger<ScopeLocalStrategy> _logger;
 
     public string StrategyName => "ScopeLocal";
 
     public ScopeLocalStrategy(RoslynWorkspace workspace, ILogger<ScopeLocalStrategy>? logger = null)
     {
         _workspace = workspace;
-        _logger = logger;
+        _logger = logger ?? NullLogger<ScopeLocalStrategy>.Instance;
     }
 
     public bool IsApplicableFor(SymbolKind kind)
@@ -36,8 +37,7 @@ public class ScopeLocalStrategy : ISymbolSearchStrategy
         {
             // Must search all documents because locals/parameters are scope-local
             var documents = _workspace.GetAllDocuments().ToList();
-            _logger?.LogDebug("ScopeLocalStrategy searching {Count} documents for '{Name}'",
-                documents.Count, request.Name);
+            LogSearchingDocuments(_logger, documents.Count, request.Name);
 
             foreach (var document in documents)
             {
@@ -49,8 +49,7 @@ public class ScopeLocalStrategy : ISymbolSearchStrategy
 
                 if (semanticModel == null || syntaxRoot == null)
                 {
-                    _logger?.LogDebug("Skipping document {Name} - no semantic model or syntax root",
-                        document.Name);
+                    LogSkippingDocument(_logger, document.Name);
                     continue;
                 }
 
@@ -87,17 +86,27 @@ public class ScopeLocalStrategy : ISymbolSearchStrategy
             // Remove duplicates (same symbol might be found multiple times)
             results = results
                 .Distinct(SymbolEqualityComparer.Default)
-                .Cast<ISymbol>()
                 .ToList();
 
-            _logger?.LogDebug("ScopeLocalStrategy found {Count} candidates for '{Name}'",
-                results.Count, request.Name);
+            LogCandidatesFound(_logger, results.Count, request.Name);
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error in ScopeLocalStrategy for symbol '{Name}'", request.Name);
+            LogSearchError(_logger, ex, request.Name);
         }
 
         return results;
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "ScopeLocalStrategy searching {Count} documents for '{Name}'")]
+    private static partial void LogSearchingDocuments(ILogger logger, int count, string name);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Skipping document {Name} - no semantic model or syntax root")]
+    private static partial void LogSkippingDocument(ILogger logger, string name);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "ScopeLocalStrategy found {Count} candidates for '{Name}'")]
+    private static partial void LogCandidatesFound(ILogger logger, int count, string name);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error in ScopeLocalStrategy for symbol '{Name}'")]
+    private static partial void LogSearchError(ILogger logger, Exception exception, string name);
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using MCPsharp.Models.Consolidated;
 using MCPsharp.Services.Roslyn;
@@ -18,13 +19,12 @@ namespace MCPsharp.Services.Consolidated;
 /// Unified analysis service consolidating symbol, type, file, project, architecture, dependency, and quality analysis
 /// Phase 2: Consolidate 70 analysis tools into 15 unified analysis tools
 /// </summary>
-public class UnifiedAnalysisService
+public partial class UnifiedAnalysisService
 {
     private readonly RoslynWorkspace? _workspace;
     private readonly SymbolQueryService? _symbolQuery;
     private readonly ClassStructureService? _classStructure;
     private readonly ReferenceFinderService? _referenceFinder;
-    private readonly ProjectParserService? _projectParser;
     private readonly IArchitectureValidatorService? _architectureValidator;
     private readonly IDuplicateCodeDetectorService? _duplicateDetector;
     private readonly ILogger<UnifiedAnalysisService> _logger;
@@ -34,7 +34,6 @@ public class UnifiedAnalysisService
         SymbolQueryService? symbolQuery = null,
         ClassStructureService? classStructure = null,
         ReferenceFinderService? referenceFinder = null,
-        ProjectParserService? projectParser = null,
         IArchitectureValidatorService? architectureValidator = null,
         IDuplicateCodeDetectorService? duplicateDetector = null,
         ILogger<UnifiedAnalysisService>? logger = null)
@@ -43,7 +42,6 @@ public class UnifiedAnalysisService
         _symbolQuery = symbolQuery;
         _classStructure = classStructure;
         _referenceFinder = referenceFinder;
-        _projectParser = projectParser;
         _architectureValidator = architectureValidator;
         _duplicateDetector = duplicateDetector;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<UnifiedAnalysisService>.Instance;
@@ -80,37 +78,37 @@ public class UnifiedAnalysisService
             // Basic symbol information
             if (request.Scope == AnalysisScope.Definition || request.Scope == AnalysisScope.All)
             {
-                response.Definition = await GetSymbolDefinitionAsync(request.SymbolName, request.Context, ct);
+                response.Definition = await GetSymbolDefinitionAsync(request.SymbolName, request.Context);
             }
 
             // References
-            if (request.Options?.Include.HasFlag(IncludeFlags.Dependencies) == true || request.Scope == AnalysisScope.References || request.Scope == AnalysisScope.All)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Dependencies) == true || request.Scope == AnalysisScope.References || request.Scope == AnalysisScope.All)
             {
-                response.References = await GetSymbolReferencesAsync(request.SymbolName, request.Context, ct);
+                response.References = await GetSymbolReferencesAsync(request.SymbolName, request.Context);
             }
 
             // Callers
-            if (request.Options?.Include.HasFlag(IncludeFlags.Dependencies) == true && request.Scope == AnalysisScope.All)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Dependencies) == true && request.Scope == AnalysisScope.All)
             {
-                response.Callers = await GetSymbolCallersAsync(request.SymbolName, request.Context, ct);
+                response.Callers = await GetSymbolCallersAsync(request.SymbolName, request.Context);
             }
 
             // Usage patterns
             if (request.Options?.Detail >= DetailLevel.Detailed)
             {
-                response.UsagePatterns = await AnalyzeSymbolUsageAsync(request.SymbolName, request.Context, ct);
+                response.UsagePatterns = await AnalyzeSymbolUsageAsync(request.SymbolName, request.Context);
             }
 
             // Related symbols
-            if (request.Options?.Include.HasFlag(IncludeFlags.Suggestions) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Suggestions) == true)
             {
-                response.RelatedSymbols = await FindRelatedSymbolsAsync(request.SymbolName, request.Context, ct);
+                response.RelatedSymbols = await FindRelatedSymbolsAsync(request.SymbolName, request.Context);
             }
 
             // Metrics
-            if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Metrics) == true)
             {
-                response.Metrics = await CalculateSymbolMetricsAsync(request.SymbolName, request.Context, ct);
+                response.Metrics = await CalculateSymbolMetricsAsync(request.SymbolName, request.Context);
             }
 
             stopwatch.Stop();
@@ -123,7 +121,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing symbol {Symbol}", request.SymbolName);
+            LogErrorAnalyzingSymbol(_logger, ex, request.SymbolName);
 
             return new SymbolAnalysisResponse
             {
@@ -165,37 +163,37 @@ public class UnifiedAnalysisService
             // Basic type structure
             if (request.Scope == AnalysisScope.Definition || request.Scope == AnalysisScope.All)
             {
-                response.Structure = await GetTypeStructureAsync(request.TypeName, request.Context, ct);
+                response.Structure = await GetTypeStructureAsync(request.TypeName, request.Context);
             }
 
             // Inheritance hierarchy
             if (request.Options?.Detail >= DetailLevel.Standard)
             {
-                response.Inheritance = await GetTypeInheritanceAsync(request.TypeName, request.Context, ct);
+                response.Inheritance = await GetTypeInheritanceAsync(request.TypeName, request.Context);
             }
 
             // Usage analysis
             if (request.Scope == AnalysisScope.References || request.Scope == AnalysisScope.All)
             {
-                response.Usages = await GetTypeUsagesAsync(request.TypeName, request.Context, ct);
+                response.Usages = await GetTypeUsagesAsync(request.TypeName);
             }
 
             // Implementations
-            if (request.Options?.Include.HasFlag(IncludeFlags.Dependencies) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Dependencies) == true)
             {
-                response.Implementations = await GetTypeImplementationsAsync(request.TypeName, request.Context, ct);
+                response.Implementations = await GetTypeImplementationsAsync(request.TypeName, request.Context);
             }
 
             // Members analysis
             if (request.Options?.Detail >= DetailLevel.Detailed)
             {
-                response.Members = await AnalyzeTypeMembersAsync(request.TypeName, request.Context, ct);
+                response.Members = await AnalyzeTypeMembersAsync(request.TypeName, request.Context);
             }
 
             // Type metrics
-            if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Metrics) == true)
             {
-                response.Metrics = await CalculateTypeMetricsAsync(request.TypeName, request.Context, ct);
+                response.Metrics = await CalculateTypeMetricsAsync(request.TypeName, request.Context);
             }
 
             stopwatch.Stop();
@@ -208,7 +206,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing type {Type}", request.TypeName);
+            LogErrorAnalyzingType(_logger, ex, request.TypeName);
 
             return new TypeAnalysisResponse
             {
@@ -267,7 +265,7 @@ public class UnifiedAnalysisService
             }
 
             // Issues and suggestions
-            if (request.Options?.Include.HasFlag(IncludeFlags.Suggestions) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Suggestions) == true)
             {
                 response.Issues = await DetectFileIssuesAsync(request.FilePath, ct);
                 response.Suggestions = await GenerateFileSuggestionsAsync(request.FilePath, ct);
@@ -283,7 +281,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing file {File}", request.FilePath);
+            LogErrorAnalyzingFile(_logger, ex, request.FilePath);
 
             return new FileAnalysisResponse
             {
@@ -304,16 +302,6 @@ public class UnifiedAnalysisService
 
         try
         {
-            if (_projectParser == null)
-            {
-                return new ProjectAnalysisResponse
-                {
-                    ProjectPath = request.ProjectPath,
-                    Error = "Project analysis service not available",
-                    Metadata = new ResponseMetadata { Success = false, ProcessingTime = stopwatch.Elapsed }
-                };
-            }
-
             var response = new ProjectAnalysisResponse
             {
                 ProjectPath = request.ProjectPath,
@@ -322,12 +310,12 @@ public class UnifiedAnalysisService
             };
 
             // Basic project structure
-            response.Structure = await GetProjectStructureAsync(request.ProjectPath, ct);
+            response.Structure = GetProjectStructure(request.ProjectPath);
 
             // File inventory
             if (request.Options?.Detail >= DetailLevel.Standard)
             {
-                response.Files = await GetProjectFileInventoryAsync(request.ProjectPath, request.Options, ct);
+                response.Files = await GetProjectFileInventoryAsync(request.ProjectPath, ct);
             }
 
             // Dependencies
@@ -343,7 +331,7 @@ public class UnifiedAnalysisService
             }
 
             // Metrics
-            if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Metrics) == true)
             {
                 response.Metrics = await CalculateProjectMetricsAsync(request.ProjectPath, ct);
             }
@@ -358,7 +346,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing project {Project}", request.ProjectPath);
+            LogErrorAnalyzingProject(_logger, ex, request.ProjectPath);
 
             return new ProjectAnalysisResponse
             {
@@ -389,6 +377,16 @@ public class UnifiedAnalysisService
                 };
             }
 
+            if (string.IsNullOrWhiteSpace(request.ProjectPath))
+            {
+                return new ArchitectureAnalysisResponse
+                {
+                    Scope = request.Scope.ToString(),
+                    Error = ProjectPathRequiredError,
+                    Metadata = new ResponseMetadata { Success = false, ProcessingTime = stopwatch.Elapsed }
+                };
+            }
+
             var response = new ArchitectureAnalysisResponse
             {
                 Scope = request.Scope.ToString(),
@@ -396,52 +394,70 @@ public class UnifiedAnalysisService
                 Metadata = new ResponseMetadata { Success = true, ProcessingTime = stopwatch.Elapsed }
             };
 
-            // Load or use provided architecture definition
-            var scopeString = request.Scope.ToString();
-            var architectureDefinition = ConvertToArchitectureDefinition(request.Definition ?? await GetDefaultArchitectureDefinitionAsync(ct));
+            // The scope selects the sections: Definition validates the project against the architecture
+            // definition, References reports layer violations, Dependencies analyses layer dependencies.
+            var projectPath = request.ProjectPath;
+            var architectureDefinition = ConvertToArchitectureDefinition(request.Definition ?? GetDefaultArchitectureDefinition());
+            var includeValidation = request.Scope is AnalysisScope.Definition or AnalysisScope.All;
+            var includeViolations = request.Scope is AnalysisScope.References or AnalysisScope.All;
+            var includeDependencies = request.Scope is AnalysisScope.Dependencies or AnalysisScope.All;
+            var includeRecommendations = request.Options?.Include.HasFlag(IncludeOptions.Suggestions) == true;
 
-            // Validate architecture
-            response.Validation = ConvertToValidationResult(await _architectureValidator.ValidateArchitectureAsync(scopeString, architectureDefinition, ct));
-
-            // Detect violations
-            var layerViolations = await _architectureValidator.DetectLayerViolationsAsync(scopeString, architectureDefinition, ct);
-            response.Violations = layerViolations.Select(v => new ArchitectureViolation
+            List<LayerViolation>? layerViolations = null;
+            if (includeValidation)
             {
-                From = v.SourceLayer,
-                To = v.TargetLayer,
-                Rule = v.RuleViolated,
-                Location = new MCPsharp.Models.Consolidated.Location { FilePath = v.FilePath, Line = v.LineNumber, Column = v.ColumnNumber },
-                Description = v.Description
-            }).ToList();
+                var validation = await _architectureValidator.ValidateArchitectureAsync(projectPath, architectureDefinition, ct);
+                response.Validation = ConvertToValidationResult(validation);
+                layerViolations = validation.Violations;
+            }
 
-            // Analyze dependencies
-            var dependencyAnalysis = await _architectureValidator.AnalyzeDependenciesAsync(scopeString, architectureDefinition, ct);
-            response.DependencyAnalysis = new DependencyAnalysisResponse
+            if (includeViolations || includeRecommendations)
             {
-                Scope = scopeString,
-                Depth = 2,
-                Graph = ConvertToDependencyGraph(dependencyAnalysis),
-                Metadata = new ResponseMetadata { Success = true }
-            };
+                layerViolations ??= await _architectureValidator.DetectLayerViolationsAsync(projectPath, architectureDefinition, ct);
+            }
+
+            if (includeViolations)
+            {
+                response.Violations = layerViolations!.Select(v => new ArchitectureViolation
+                {
+                    From = v.SourceLayer,
+                    To = v.TargetLayer,
+                    Rule = v.RuleViolated,
+                    Location = new MCPsharp.Models.Consolidated.Location { FilePath = v.FilePath, Line = v.LineNumber, Column = v.ColumnNumber },
+                    Description = v.Description
+                }).ToList();
+            }
+
+            if (includeDependencies)
+            {
+                var dependencyAnalysis = await _architectureValidator.AnalyzeDependenciesAsync(projectPath, architectureDefinition, ct);
+                response.DependencyAnalysis = new DependencyAnalysisResponse
+                {
+                    Scope = request.Scope.ToString(),
+                    Depth = 2,
+                    Graph = ConvertToDependencyGraph(dependencyAnalysis),
+                    Metadata = new ResponseMetadata { Success = true }
+                };
+            }
 
             // Generate recommendations
-            if (request.Options?.Include.HasFlag(IncludeFlags.Suggestions) == true)
+            if (includeRecommendations)
             {
-                var recommendations = await _architectureValidator.GetRecommendationsAsync(layerViolations, ct);
+                var recommendations = await _architectureValidator.GetRecommendationsAsync(layerViolations!, ct);
                 response.Recommendations = recommendations.Select(r => new MCPsharp.Models.Consolidated.ArchitectureRecommendation
                 {
                     Type = r.Type,
                     Description = r.Description,
                     Target = r.Title, // Use Title instead of TargetType
-                    Priority = Convert.ToDouble(r.Priority == 0 ? 1.0 : r.Priority), // Convert to double if needed
+                    Priority = Convert.ToDouble(r.Priority == 0 ? 1.0 : r.Priority, CultureInfo.InvariantCulture), // Convert to double if needed
                     AffectedComponents = new List<string>() // No AffectedComponents property available
                 }).ToList();
             }
 
             // Architecture metrics
-            if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Metrics) == true)
             {
-                response.Metrics = await CalculateArchitectureMetricsAsync(scopeString, architectureDefinition, ct);
+                response.Metrics = CalculateArchitectureMetrics(projectPath, architectureDefinition);
             }
 
             stopwatch.Stop();
@@ -454,7 +470,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing architecture for {Scope}", request.Scope);
+            LogErrorAnalyzingArchitectureFor(_logger, ex, request.Scope);
 
             return new ArchitectureAnalysisResponse
             {
@@ -484,12 +500,12 @@ public class UnifiedAnalysisService
             };
 
             // Build dependency graph
-            response.Graph = await BuildDependencyGraphAsync(request.Scope.ToString(), request.Depth, ct);
+            response.Graph = await BuildDependencyGraphAsync(request.Scope.ToString());
 
             // Detect circular dependencies
             if (request.Options?.Detail >= DetailLevel.Standard)
             {
-                var circularDeps = await DetectCircularDependenciesAsync(request.Scope.ToString(), ct);
+                var circularDeps = await DetectCircularDependenciesAsync(request.Scope.ToString());
                 response.CircularDependencies = circularDeps.Select(cd => new ConsolidatedCircularDependency
                 {
                     Cycle = cd.Methods.Select(m => $"{m.ContainingType}.{m.Name}").ToList(),
@@ -499,21 +515,21 @@ public class UnifiedAnalysisService
             }
 
             // Impact analysis
-            if (request.Options?.Include.HasFlag(IncludeFlags.Dependencies) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Dependencies) == true)
             {
-                response.ImpactAnalysis = await AnalyzeDependencyImpactAsync(request.Scope.ToString(), ct);
+                response.ImpactAnalysis = await AnalyzeDependencyImpactAsync(request.Scope.ToString());
             }
 
             // Critical path analysis
             if (request.Options?.Detail >= DetailLevel.Detailed)
             {
-                response.CriticalPaths = await AnalyzeCriticalPathsAsync(request.Scope.ToString(), ct);
+                response.CriticalPaths = await AnalyzeCriticalPathsAsync(request.Scope.ToString());
             }
 
             // Dependency metrics
-            if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Metrics) == true)
             {
-                response.Metrics = await CalculateDependencyMetricsAsync(response.Graph, ct);
+                response.Metrics = CalculateDependencyMetrics(response.Graph);
             }
 
             stopwatch.Stop();
@@ -526,7 +542,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing dependencies for {Scope}", request.Scope);
+            LogErrorAnalyzingDependenciesFor(_logger, ex, request.Scope);
 
             return new DependencyAnalysisResponse
             {
@@ -547,6 +563,19 @@ public class UnifiedAnalysisService
 
         try
         {
+            // Quality metrics are computed over a file or directory: the focus file when given, else the project.
+            // The scope is a label only; the metrics list selects which analyses run.
+            var targetPath = string.IsNullOrWhiteSpace(request.FilePath) ? request.ProjectPath : request.FilePath;
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                return new QualityAnalysisResponse
+                {
+                    Scope = request.Scope.ToString(),
+                    Error = ProjectPathRequiredError,
+                    Metadata = new ResponseMetadata { ProcessingTime = stopwatch.Elapsed, Success = false }
+                };
+            }
+
             var response = new QualityAnalysisResponse
             {
                 Scope = request.Scope.ToString(),
@@ -555,64 +584,66 @@ public class UnifiedAnalysisService
             };
 
             // Duplicate code detection
-            if (request.Metrics.Contains(AnalysisQualityMetric.Duplicates) || request.Metrics.Contains(AnalysisQualityMetric.All))
+            // Duplicate detection loads a project, so it always runs on the project and is then narrowed to the focus file
+            if ((request.Metrics.Contains(AnalysisQualityMetric.Duplicates) || request.Metrics.Contains(AnalysisQualityMetric.All))
+                && _duplicateDetector != null && !string.IsNullOrWhiteSpace(request.ProjectPath))
             {
-                if (_duplicateDetector != null)
+                var duplicates = await _duplicateDetector.DetectDuplicatesAsync(request.ProjectPath, new DuplicateDetectionOptions(), ct);
+                var focusFile = string.IsNullOrWhiteSpace(request.FilePath) ? null : Path.GetFullPath(request.FilePath);
+                response.Duplicates = duplicates.DuplicateGroups
+                    .Where(d => focusFile == null || d.CodeBlocks.Any(b => string.Equals(Path.GetFullPath(b.FilePath), focusFile, PathContainment.Comparison)))
+                    .Select(d => new DuplicateGroup
                 {
-                    var duplicates = await _duplicateDetector.DetectDuplicatesAsync(request.Scope.ToString(), new DuplicateDetectionOptions(), ct);
-                    response.Duplicates = duplicates.DuplicateGroups.Select(d => new DuplicateGroup
+                    Type = d.DuplicationType.ToString(),
+                    Similarity = d.SimilarityScore,
+                    Files = d.CodeBlocks.Select(f => new DuplicateFile
                     {
-                        Type = d.DuplicationType.ToString(),
-                        Similarity = d.SimilarityScore,
-                        Files = d.CodeBlocks.Select(f => new DuplicateFile
+                        FilePath = f.FilePath,
+                        Locations = new List<MCPsharp.Models.Consolidated.Location>
                         {
-                            FilePath = f.FilePath,
-                            Locations = new List<MCPsharp.Models.Consolidated.Location>
-                            {
-                                new MCPsharp.Models.Consolidated.Location { FilePath = f.FilePath, Line = f.StartLine, Column = f.StartColumn }
-                            },
-                            Lines = f.EndLine - f.StartLine + 1,
-                            MatchPercentage = d.SimilarityScore * 100
-                        }).ToList(),
-                        Description = $"Found {d.CodeBlocks.Count} duplicate blocks with similarity {d.SimilarityScore:P1}"
-                    }).ToList();
-                }
+                            new MCPsharp.Models.Consolidated.Location { FilePath = f.FilePath, Line = f.StartLine, Column = f.StartColumn }
+                        },
+                        Lines = f.EndLine - f.StartLine + 1,
+                        MatchPercentage = d.SimilarityScore * 100
+                    }).ToList(),
+                    Description = $"Found {d.CodeBlocks.Count} duplicate blocks with similarity {d.SimilarityScore:P1}"
+                }).ToList();
             }
 
             // Complexity analysis
             if (request.Metrics.Contains(AnalysisQualityMetric.Complexity) || request.Metrics.Contains(AnalysisQualityMetric.All))
             {
-                response.Complexity = await AnalyzeComplexityAsync(request.Scope.ToString(), ct);
+                response.Complexity = await AnalyzeComplexityAsync(targetPath, ct);
             }
 
             // Maintainability analysis
             if (request.Metrics.Contains(AnalysisQualityMetric.Maintainability) || request.Metrics.Contains(AnalysisQualityMetric.All))
             {
-                response.Maintainability = await AnalyzeMaintainabilityAsync(request.Scope.ToString(), ct);
+                response.Maintainability = await AnalyzeMaintainabilityAsync(targetPath, ct);
             }
 
             // Test coverage
             if (request.Metrics.Contains(AnalysisQualityMetric.TestCoverage) || request.Metrics.Contains(AnalysisQualityMetric.All))
             {
-                response.TestCoverage = await AnalyzeTestCoverageAsync(request.Scope.ToString(), ct);
+                response.TestCoverage = AnalyzeTestCoverage(targetPath);
             }
 
             // Code smells
             if (request.Metrics.Contains(AnalysisQualityMetric.CodeSmells) || request.Metrics.Contains(AnalysisQualityMetric.All))
             {
-                response.CodeSmells = await DetectCodeSmellsAsync(request.Scope.ToString(), ct);
+                response.CodeSmells = await DetectCodeSmellsAsync(targetPath, ct);
             }
 
             // Quality score
             if (request.Options?.Detail >= DetailLevel.Standard)
             {
-                response.QualityScore = await CalculateQualityScoreAsync(response, ct);
+                response.QualityScore = CalculateQualityScore(response);
             }
 
             // Recommendations
-            if (request.Options?.Include.HasFlag(IncludeFlags.Suggestions) == true)
+            if (request.Options?.Include.HasFlag(IncludeOptions.Suggestions) == true)
             {
-                response.Recommendations = await GenerateQualityRecommendationsAsync(response, ct);
+                response.Recommendations = GenerateQualityRecommendations(response);
             }
 
             stopwatch.Stop();
@@ -625,7 +656,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing quality for {Scope}", request.Scope);
+            LogErrorAnalyzingQualityFor(_logger, ex, request.Scope);
 
             return new QualityAnalysisResponse
             {
@@ -637,6 +668,46 @@ public class UnifiedAnalysisService
     }
 
     #region Private Helper Methods
+
+    private const string ProjectPathRequiredError = "A project path is required for this analysis";
+
+    /// <summary>
+    /// C# files to analyse for a target that is either a single file or a directory searched recursively.
+    /// </summary>
+    private static List<string> EnumerateCSharpFiles(string targetPath)
+    {
+        if (File.Exists(targetPath))
+        {
+            return string.Equals(Path.GetExtension(targetPath), ".cs", StringComparison.OrdinalIgnoreCase)
+                ? new List<string> { targetPath }
+                : new List<string>();
+        }
+
+        return Directory.Exists(targetPath)
+            ? Directory.GetFiles(targetPath, "*.cs", SearchOption.AllDirectories).ToList()
+            : throw new DirectoryNotFoundException($"Analysis target not found: {targetPath}");
+    }
+
+    /// <summary>
+    /// Directory of a project given either as its directory or as a project/solution file.
+    /// </summary>
+    private static string? ResolveProjectDirectory(string projectPath) =>
+        Directory.Exists(projectPath) ? projectPath : Path.GetDirectoryName(projectPath);
+
+    /// <summary>
+    /// Project file for a project given either as a .csproj file or as a directory containing one.
+    /// </summary>
+    private static string? ResolveProjectFile(string projectPath)
+    {
+        if (File.Exists(projectPath))
+        {
+            return string.Equals(Path.GetExtension(projectPath), ".csproj", StringComparison.OrdinalIgnoreCase) ? projectPath : null;
+        }
+
+        return Directory.Exists(projectPath)
+            ? Directory.GetFiles(projectPath, "*.csproj", SearchOption.TopDirectoryOnly).Order(StringComparer.Ordinal).FirstOrDefault()
+            : null;
+    }
 
     private static int CountAnalysisResults(object analysisResult)
     {
@@ -653,7 +724,7 @@ public class UnifiedAnalysisService
         };
     }
 
-    private async Task<SymbolDefinition?> GetSymbolDefinitionAsync(string symbolName, string? context, CancellationToken ct)
+    private async Task<SymbolDefinition?> GetSymbolDefinitionAsync(string symbolName, string? context)
     {
         try
         {
@@ -685,13 +756,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting symbol definition for {Symbol}", symbolName);
+            LogErrorGettingSymbolDefinitionFor(_logger, ex, symbolName);
         }
 
         return null;
     }
 
-    private async Task<List<SymbolReference>?> GetSymbolReferencesAsync(string symbolName, string? context, CancellationToken ct)
+    private async Task<List<SymbolReference>?> GetSymbolReferencesAsync(string symbolName, string? context)
     {
         try
         {
@@ -712,20 +783,20 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting symbol references for {Symbol}", symbolName);
+            LogErrorGettingSymbolReferencesFor(_logger, ex, symbolName);
         }
 
         return null;
     }
 
-    private async Task<List<SymbolCaller>?> GetSymbolCallersAsync(string symbolName, string? context, CancellationToken ct)
+    private async Task<List<SymbolCaller>?> GetSymbolCallersAsync(string symbolName, string? context)
     {
         try
         {
             if (_symbolQuery == null || _workspace == null) return null;
 
             // Get all references to the symbol
-            var references = await GetSymbolReferencesAsync(symbolName, context, ct);
+            var references = await GetSymbolReferencesAsync(symbolName, context);
             if (references == null) return null;
 
             var callers = new List<SymbolCaller>();
@@ -754,8 +825,7 @@ public class UnifiedAnalysisService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Error processing caller for reference at {File}:{Line}",
-                        reference.FilePath, reference.Line);
+                    LogErrorProcessingCallerForReference(_logger, ex, reference.FilePath, reference.Line);
                 }
             }
 
@@ -763,20 +833,20 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting symbol callers for {Symbol}", symbolName);
+            LogErrorGettingSymbolCallersFor(_logger, ex, symbolName);
         }
 
         return null;
     }
 
-    private async Task<SymbolUsagePatterns?> AnalyzeSymbolUsageAsync(string symbolName, string? context, CancellationToken ct)
+    private async Task<SymbolUsagePatterns?> AnalyzeSymbolUsageAsync(string symbolName, string? context)
     {
         try
         {
             if (_symbolQuery == null || _workspace == null) return null;
 
-            var references = await GetSymbolReferencesAsync(symbolName, context, ct);
-            var callers = await GetSymbolCallersAsync(symbolName, context, ct);
+            var references = await GetSymbolReferencesAsync(symbolName, context);
+            var callers = await GetSymbolCallersAsync(symbolName, context);
 
             if (references == null || callers == null) return null;
 
@@ -804,13 +874,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing symbol usage patterns for {Symbol}", symbolName);
+            LogErrorAnalyzingSymbolUsagePatterns(_logger, ex, symbolName);
         }
 
         return null;
     }
 
-    private async Task<List<RelatedSymbol>?> FindRelatedSymbolsAsync(string symbolName, string? context, CancellationToken ct)
+    private async Task<List<RelatedSymbol>?> FindRelatedSymbolsAsync(string symbolName, string? context)
     {
         try
         {
@@ -819,7 +889,7 @@ public class UnifiedAnalysisService
             var relatedSymbols = new List<RelatedSymbol>();
 
             // Get the symbol definition to understand its context
-            var definition = await GetSymbolDefinitionAsync(symbolName, context, ct);
+            var definition = await GetSymbolDefinitionAsync(symbolName, context);
             if (definition == null) return null;
 
             // Find symbols in the same containing type (simplified - would need type symbol info)
@@ -898,22 +968,22 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error finding related symbols for {Symbol}", symbolName);
+            LogErrorFindingRelatedSymbolsFor(_logger, ex, symbolName);
         }
 
         return null;
     }
 
-    private async Task<SymbolMetrics?> CalculateSymbolMetricsAsync(string symbolName, string? context, CancellationToken ct)
+    private async Task<SymbolMetrics?> CalculateSymbolMetricsAsync(string symbolName, string? context)
     {
         try
         {
             if (_symbolQuery == null || _workspace == null) return null;
 
-            var definition = await GetSymbolDefinitionAsync(symbolName, context, ct);
+            var definition = await GetSymbolDefinitionAsync(symbolName, context);
             if (definition == null) return null;
 
-            var references = await GetSymbolReferencesAsync(symbolName, context, ct);
+            var references = await GetSymbolReferencesAsync(symbolName, context);
 
             // Basic metrics
             var usageCount = references?.Count ?? 0;
@@ -935,13 +1005,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating symbol metrics for {Symbol}", symbolName);
+            LogErrorCalculatingSymbolMetricsFor(_logger, ex, symbolName);
         }
 
         return null;
     }
 
-    private async Task<TypeStructure?> GetTypeStructureAsync(string typeName, string? context, CancellationToken ct)
+    private async Task<TypeStructure?> GetTypeStructureAsync(string typeName, string? context)
     {
         try
         {
@@ -963,13 +1033,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting type structure for {Type}", typeName);
+            LogErrorGettingTypeStructureFor(_logger, ex, typeName);
         }
 
         return null;
     }
 
-    private async Task<TypeInheritance?> GetTypeInheritanceAsync(string typeName, string? context, CancellationToken ct)
+    private async Task<TypeInheritance?> GetTypeInheritanceAsync(string typeName, string? context)
     {
         try
         {
@@ -987,7 +1057,7 @@ public class UnifiedAnalysisService
             };
 
             // Calculate inheritance depth (simplified)
-            if (structure.BaseTypes.Any())
+            if (structure.BaseTypes.Count > 0)
             {
                 inheritance.InheritanceDepth = 1;
                 // Could recursively calculate full depth here
@@ -1007,13 +1077,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting type inheritance for {Type}", typeName);
+            LogErrorGettingTypeInheritanceFor(_logger, ex, typeName);
         }
 
         return null;
     }
 
-    private async Task<List<TypeUsage>?> GetTypeUsagesAsync(string typeName, string? context, CancellationToken ct)
+    private async Task<List<TypeUsage>?> GetTypeUsagesAsync(string typeName)
     {
         try
         {
@@ -1037,13 +1107,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting type usages for {Type}", typeName);
+            LogErrorGettingTypeUsagesFor(_logger, ex, typeName);
         }
 
         return null;
     }
 
-    private async Task<List<TypeImplementation>?> GetTypeImplementationsAsync(string typeName, string? context, CancellationToken ct)
+    private async Task<List<TypeImplementation>?> GetTypeImplementationsAsync(string typeName, string? context)
     {
         try
         {
@@ -1078,13 +1148,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting type implementations for {Type}", typeName);
+            LogErrorGettingTypeImplementationsFor(_logger, ex, typeName);
         }
 
         return null;
     }
 
-    private async Task<TypeMemberAnalysis?> AnalyzeTypeMembersAsync(string typeName, string? context, CancellationToken ct)
+    private async Task<TypeMemberAnalysis?> AnalyzeTypeMembersAsync(string typeName, string? context)
     {
         try
         {
@@ -1155,7 +1225,7 @@ public class UnifiedAnalysisService
 
             var publicMembers = members.Count(m => m.Accessibility == "Public");
             var privateMembers = members.Count(m => m.Accessibility == "Private");
-            var staticMembers = members.Count(m => m.IsStatic == true);
+            var staticMembers = members.Count(m => m.IsStatic);
             var abstractMembers = members.Count(m => m.Accessibility == "Abstract" || m.Accessibility == "Protected");
 
             // Identify complex members (methods with many parameters or large types)
@@ -1176,13 +1246,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing type members for {Type}", typeName);
+            LogErrorAnalyzingTypeMembersFor(_logger, ex, typeName);
         }
 
         return null;
     }
 
-    private async Task<TypeMetrics?> CalculateTypeMetricsAsync(string typeName, string? context, CancellationToken ct)
+    private async Task<TypeMetrics?> CalculateTypeMetricsAsync(string typeName, string? context)
     {
         try
         {
@@ -1220,7 +1290,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating type metrics for {Type}", typeName);
+            LogErrorCalculatingTypeMetricsFor(_logger, ex, typeName);
         }
 
         return null;
@@ -1260,12 +1330,12 @@ public class UnifiedAnalysisService
             if (language == "C#")
             {
                 var namespaceMatches = System.Text.RegularExpressions.Regex.Matches(
-                    content, @"namespace\s+([^\s{;]+)");
+                    content, @"namespace\s+([^\s{;]+)", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
                 namespaces.AddRange(namespaceMatches.Cast<System.Text.RegularExpressions.Match>()
                     .Select(m => m.Groups[1].Value));
 
                 var typeMatches = System.Text.RegularExpressions.Regex.Matches(
-                    content, @"(class|interface|struct|enum|record)\s+([^\s<:,{]+)");
+                    content, @"(class|interface|struct|enum|record)\s+([^\s<:,{]+)", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
                 types.AddRange(typeMatches.Cast<System.Text.RegularExpressions.Match>()
                     .Select(m => m.Groups[2].Value));
             }
@@ -1283,7 +1353,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting file basic info for {File}", filePath);
+            LogErrorGettingFileBasicInfo(_logger, ex, filePath);
         }
 
         return null;
@@ -1306,13 +1376,13 @@ public class UnifiedAnalysisService
             {
                 // Parse using regex for basic structure
                 var namespaceMatches = System.Text.RegularExpressions.Regex.Matches(
-                    content, @"namespace\s+([^\s{]+)");
+                    content, @"namespace\s+([^\s{]+)", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
                 namespaces.AddRange(namespaceMatches.Cast<System.Text.RegularExpressions.Match>()
                     .Select(m => m.Groups[1].Value));
 
                 // Find type definitions
                 var typePattern = @"(class|interface|struct|enum|record)\s+([^\s<:,{]+)\s*(?::\s*([^{]+))?";
-                var typeMatches = System.Text.RegularExpressions.Regex.Matches(content, typePattern);
+                var typeMatches = System.Text.RegularExpressions.Regex.Matches(content, typePattern, System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
                 foreach (System.Text.RegularExpressions.Match match in typeMatches)
                 {
                     types.Add(new FileTypeDefinition
@@ -1331,7 +1401,7 @@ public class UnifiedAnalysisService
 
                 // Find using statements
                 var usingPattern = @"using\s+([^\s;]+)";
-                var usingMatches = System.Text.RegularExpressions.Regex.Matches(content, usingPattern);
+                var usingMatches = System.Text.RegularExpressions.Regex.Matches(content, usingPattern, System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
                 foreach (System.Text.RegularExpressions.Match match in usingMatches)
                 {
                     imports.Add(new FileImport
@@ -1359,7 +1429,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing file structure for {File}", filePath);
+            LogErrorAnalyzingFileStructureFor(_logger, ex, filePath);
         }
 
         return null;
@@ -1375,7 +1445,7 @@ public class UnifiedAnalysisService
 
             // Basic complexity analysis
             var methodPattern = @"(?:public|private|protected|internal)?\s*(?:static|async|virtual|override)?\s*[\w<>]+\s+(\w+)\s*\(";
-            var methodMatches = System.Text.RegularExpressions.Regex.Matches(content, methodPattern);
+            var methodMatches = System.Text.RegularExpressions.Regex.Matches(content, methodPattern, System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
 
             var methodComplexities = new List<MethodComplexity>();
             foreach (System.Text.RegularExpressions.Match match in methodMatches)
@@ -1414,7 +1484,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing file complexity for {File}", filePath);
+            LogErrorAnalyzingFileComplexityFor(_logger, ex, filePath);
         }
 
         return null;
@@ -1428,18 +1498,18 @@ public class UnifiedAnalysisService
             var dependencies = new List<string>();
             var externalDependencies = new List<string>();
 
-            if (Path.GetExtension(filePath).ToLowerInvariant() == ".cs")
+            if (string.Equals(Path.GetExtension(filePath), ".cs", StringComparison.OrdinalIgnoreCase))
             {
                 // Extract using statements
                 var usingPattern = @"using\s+([^\s;]+)";
-                var matches = System.Text.RegularExpressions.Regex.Matches(content, usingPattern);
+                var matches = System.Text.RegularExpressions.Regex.Matches(content, usingPattern, System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
                 dependencies.AddRange(matches.Cast<System.Text.RegularExpressions.Match>()
                     .Select(m => m.Groups[1].Value));
 
                 // External dependencies are those that start with known external libraries
                 externalDependencies = dependencies
-                    .Where(d => d.StartsWith("System.") || d.StartsWith("Microsoft.") ||
-                                d.Contains('.') && !d.StartsWith("Project"))
+                    .Where(d => d.StartsWith("System.", StringComparison.Ordinal) || d.StartsWith("Microsoft.", StringComparison.Ordinal) ||
+                                d.Contains('.') && !d.StartsWith("Project", StringComparison.Ordinal))
                     .ToList();
             }
 
@@ -1464,7 +1534,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing file dependencies for {File}", filePath);
+            LogErrorAnalyzingFileDependenciesFor(_logger, ex, filePath);
         }
 
         return null;
@@ -1500,7 +1570,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing file quality for {File}", filePath);
+            LogErrorAnalyzingFileQualityFor(_logger, ex, filePath);
         }
 
         return null;
@@ -1531,7 +1601,7 @@ public class UnifiedAnalysisService
                     });
                 }
 
-                // TODO comments
+                // Unresolved task-marker comments
                 if (line.Contains("TODO") || line.Contains("FIXME"))
                 {
                     issues.Add(new FileIssue
@@ -1543,7 +1613,7 @@ public class UnifiedAnalysisService
                         {
                             FilePath = filePath,
                             Line = i + 1,
-                            Column = line.IndexOf("TODO") >= 0 ? line.IndexOf("TODO") : line.IndexOf("FIXME")
+                            Column = line.Contains("TODO", StringComparison.Ordinal) ? line.IndexOf("TODO", StringComparison.Ordinal) : line.IndexOf("FIXME", StringComparison.Ordinal)
                         }
                     });
                 }
@@ -1553,7 +1623,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error detecting file issues for {File}", filePath);
+            LogErrorDetectingFileIssuesFor(_logger, ex, filePath);
         }
 
         return null;
@@ -1591,14 +1661,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating file suggestions for {File}", filePath);
+            LogErrorGeneratingFileSuggestionsFor(_logger, ex, filePath);
         }
 
         return null;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<ProjectStructure> GetProjectStructureAsync(string projectPath, CancellationToken ct)
+    private ProjectStructure GetProjectStructure(string projectPath)
     {
         try
         {
@@ -1611,7 +1680,8 @@ public class UnifiedAnalysisService
                 References = new List<ConsolidatedProjectReference>()
             };
 
-            if (Directory.Exists(Path.GetDirectoryName(projectPath)))
+            var projectDirectory = ResolveProjectDirectory(projectPath);
+            if (projectDirectory != null && Directory.Exists(projectDirectory))
             {
 
                 // Add basic configurations
@@ -1626,22 +1696,24 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting project structure for {Project}", projectPath);
+            LogErrorGettingProjectStructureFor(_logger, ex, projectPath);
         }
 
         return new ProjectStructure { ProjectPath = projectPath, ProjectType = "Unknown" };
     }
-    #pragma warning restore CS1998
 
-    private async Task<List<ProjectFile>> GetProjectFileInventoryAsync(string projectPath, ToolOptions? options, CancellationToken ct)
+    private async Task<List<ProjectFile>> GetProjectFileInventoryAsync(string projectPath, CancellationToken ct)
     {
         try
         {
             var files = new List<ProjectFile>();
 
-                      // Get all C# files in the project directory
-            var projectDir = Path.GetDirectoryName(projectPath);
-            var filePaths = projectDir != null ? Directory.GetFiles(projectDir, "*.cs", SearchOption.AllDirectories) : Array.Empty<string>();
+            // Get all C# files in the project directory (the path itself when it is a directory,
+            // otherwise the directory containing the project file)
+            var projectDir = ResolveProjectDirectory(projectPath);
+            var filePaths = projectDir != null && Directory.Exists(projectDir)
+                ? Directory.GetFiles(projectDir, "*.cs", SearchOption.AllDirectories)
+                : Array.Empty<string>();
 
             foreach (var filePath in filePaths)
             {
@@ -1666,7 +1738,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting project file inventory for {Project}", projectPath);
+            LogErrorGettingProjectFileInventory(_logger, ex, projectPath);
         }
 
         return new List<ProjectFile>();
@@ -1683,19 +1755,20 @@ public class UnifiedAnalysisService
                 AssemblyReferences = new List<AssemblyReference>()
             };
 
-            if (File.Exists(projectPath) && Path.GetExtension(projectPath).ToLowerInvariant() == ".csproj")
+            var projectFile = ResolveProjectFile(projectPath);
+            if (projectFile != null)
             {
-                var content = await File.ReadAllTextAsync(projectPath, ct);
+                var content = await File.ReadAllTextAsync(projectFile, ct);
 
                 // Extract NuGet package references
                 var packagePattern = @"<PackageReference\s+Include=""([^""]+)""";
-                var packageMatches = System.Text.RegularExpressions.Regex.Matches(content, packagePattern);
+                var packageMatches = System.Text.RegularExpressions.Regex.Matches(content, packagePattern, System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
                 dependencies.PackageReferences.AddRange(packageMatches.Cast<System.Text.RegularExpressions.Match>()
                     .Select(m => new PackageDependency { Name = m.Groups[1].Value, Version = "Unknown", IsDevelopmentDependency = false, UsedBy = new List<string>() }));
 
                 // Extract project references
                 var projectRefPattern = @"<ProjectReference\s+Include=""([^""]+)""";
-                var projectRefMatches = System.Text.RegularExpressions.Regex.Matches(content, projectRefPattern);
+                var projectRefMatches = System.Text.RegularExpressions.Regex.Matches(content, projectRefPattern, System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
                 dependencies.ProjectReferences.AddRange(projectRefMatches.Cast<System.Text.RegularExpressions.Match>()
                     .Select(m => new ConsolidatedProjectReference { Name = Path.GetFileNameWithoutExtension(m.Groups[1].Value), ReferenceType = "Project", Path = m.Groups[1].Value }));
             }
@@ -1704,7 +1777,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing project dependencies for {Project}", projectPath);
+            LogErrorAnalyzingProjectDependenciesFor(_logger, ex, projectPath);
         }
 
         return null;
@@ -1722,19 +1795,20 @@ public class UnifiedAnalysisService
                 BuildArtifacts = new List<string>()
             };
 
-            if (File.Exists(projectPath) && Path.GetExtension(projectPath).ToLowerInvariant() == ".csproj")
+            var projectFile = ResolveProjectFile(projectPath);
+            if (projectFile != null)
             {
-                var content = await File.ReadAllTextAsync(projectPath, ct);
+                var content = await File.ReadAllTextAsync(projectFile, ct);
 
                 // Extract target framework
                 var tfPattern = @"<TargetFramework>([^<]+)</TargetFramework>";
-                var tfMatch = System.Text.RegularExpressions.Regex.Match(content, tfPattern);
+                var tfMatch = System.Text.RegularExpressions.Regex.Match(content, tfPattern, System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
                 if (tfMatch.Success)
                     buildInfo.BuildConfigurations.Add($"TargetFramework: {tfMatch.Groups[1].Value}");
 
                 // Extract output path as build artifact
                 var outputPathPattern = @"<OutputPath>([^<]+)</OutputPath>";
-                var outputPathMatch = System.Text.RegularExpressions.Regex.Match(content, outputPathPattern);
+                var outputPathMatch = System.Text.RegularExpressions.Regex.Match(content, outputPathPattern, System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
                 if (outputPathMatch.Success)
                     buildInfo.BuildArtifacts.Add(outputPathMatch.Groups[1].Value);
 
@@ -1747,7 +1821,7 @@ public class UnifiedAnalysisService
                 {
                     Name = "Build",
                     Command = "dotnet build",
-                    Inputs = new List<string> { projectPath },
+                    Inputs = new List<string> { projectFile },
                     Outputs = new List<string>()
                 });
             }
@@ -1756,7 +1830,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing project build info for {Project}", projectPath);
+            LogErrorAnalyzingProjectBuildInfo(_logger, ex, projectPath);
         }
 
         return null;
@@ -1766,7 +1840,7 @@ public class UnifiedAnalysisService
     {
         try
         {
-            var files = await GetProjectFileInventoryAsync(projectPath, null, ct);
+            var files = await GetProjectFileInventoryAsync(projectPath, ct);
 
             var csharpFiles = files.Where(f => f.Language == "C#").ToList();
             var totalLines = csharpFiles.Sum(f => f.LineCount);
@@ -1789,14 +1863,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating project metrics for {Project}", projectPath);
+            LogErrorCalculatingProjectMetricsFor(_logger, ex, projectPath);
         }
 
         return null;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<MCPsharp.Models.Consolidated.ArchitectureDefinition> GetDefaultArchitectureDefinitionAsync(CancellationToken ct)
+    private MCPsharp.Models.Consolidated.ArchitectureDefinition GetDefaultArchitectureDefinition()
     {
         try
         {
@@ -1821,7 +1894,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting default architecture definition");
+            LogErrorGettingDefaultArchitectureDefinition(_logger, ex);
         }
 
         return new MCPsharp.Models.Consolidated.ArchitectureDefinition
@@ -1832,8 +1905,7 @@ public class UnifiedAnalysisService
             };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<ArchitectureMetrics?> CalculateArchitectureMetricsAsync(string scope, MCPsharp.Models.Architecture.ArchitectureDefinition definition, CancellationToken ct)
+    private ArchitectureMetrics? CalculateArchitectureMetrics(string scope, MCPsharp.Models.Architecture.ArchitectureDefinition definition)
     {
         try
         {
@@ -1850,13 +1922,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating architecture metrics for {Scope}", scope);
+            LogErrorCalculatingArchitectureMetricsFor(_logger, ex, scope);
         }
 
         return null;
     }
 
-    private async Task<DependencyGraph> BuildDependencyGraphAsync(string scope, int depth, CancellationToken ct)
+    private async Task<DependencyGraph> BuildDependencyGraphAsync(string scope)
     {
         try
         {
@@ -1871,12 +1943,12 @@ public class UnifiedAnalysisService
             {
                 var allTypes = await _symbolQuery.GetAllTypesAsync();
 
-                foreach (var type in allTypes.Take(50)) // Limit for performance
+                foreach (var typeName in allTypes.Take(50).Select(type => type.Name)) // Limit for performance
                 {
                     var node = new MCPsharp.Models.Consolidated.DependencyNode
                     {
-                        Id = type.Name,
-                        Name = type.Name,
+                        Id = typeName,
+                        Name = typeName,
                         Type = "Class"
                     };
                     graph.Nodes.Add(node);
@@ -1890,18 +1962,18 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error building dependency graph for {Scope}", scope);
+            LogErrorBuildingDependencyGraphFor(_logger, ex, scope);
         }
 
         return new DependencyGraph();
     }
 
-    private async Task<List<ConsolidatedCircularDependency>> DetectCircularDependenciesAsync(string scope, CancellationToken ct)
+    private async Task<List<ConsolidatedCircularDependency>> DetectCircularDependenciesAsync(string scope)
     {
         try
         {
             var circularDependencies = new List<ConsolidatedCircularDependency>();
-            var graph = await BuildDependencyGraphAsync(scope, 10, ct);
+            var graph = await BuildDependencyGraphAsync(scope);
 
             // Simple cycle detection (basic implementation)
             var visited = new HashSet<string>();
@@ -1924,17 +1996,17 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error detecting circular dependencies for {Scope}", scope);
+            LogErrorDetectingCircularDependenciesFor(_logger, ex, scope);
         }
 
         return new List<ConsolidatedCircularDependency>();
     }
 
-    private async Task<DependencyImpact?> AnalyzeDependencyImpactAsync(string scope, CancellationToken ct)
+    private async Task<DependencyImpact?> AnalyzeDependencyImpactAsync(string scope)
     {
         try
         {
-            var graph = await BuildDependencyGraphAsync(scope, 10, ct);
+            var graph = await BuildDependencyGraphAsync(scope);
 
             // Calculate impact metrics
             var edgeCount = graph.Edges.Count;
@@ -1954,18 +2026,18 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing dependency impact for {Scope}", scope);
+            LogErrorAnalyzingDependencyImpactFor(_logger, ex, scope);
         }
 
         return null;
     }
 
-    private async Task<List<CriticalPath>> AnalyzeCriticalPathsAsync(string scope, CancellationToken ct)
+    private async Task<List<CriticalPath>> AnalyzeCriticalPathsAsync(string scope)
     {
         try
         {
             var criticalPaths = new List<CriticalPath>();
-            var graph = await BuildDependencyGraphAsync(scope, 10, ct);
+            var graph = await BuildDependencyGraphAsync(scope);
 
             // Find nodes with most dependencies (simplified critical path analysis)
             var criticalNodes = graph.Nodes
@@ -2004,14 +2076,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing critical paths for {Scope}", scope);
+            LogErrorAnalyzingCriticalPathsFor(_logger, ex, scope);
         }
 
         return new List<CriticalPath>();
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<DependencyMetrics?> CalculateDependencyMetricsAsync(DependencyGraph graph, CancellationToken ct)
+    private DependencyMetrics? CalculateDependencyMetrics(DependencyGraph graph)
     {
         try
         {
@@ -2038,7 +2109,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating dependency metrics");
+            LogErrorCalculatingDependencyMetrics(_logger, ex);
         }
 
         return null;
@@ -2078,12 +2149,12 @@ public class UnifiedAnalysisService
 
     #endregion
 
-    private async Task<ComplexityAnalysis?> AnalyzeComplexityAsync(string scope, CancellationToken ct)
+    private async Task<ComplexityAnalysis?> AnalyzeComplexityAsync(string targetPath, CancellationToken ct)
     {
         try
         {
-            // Get all C# files in the scope
-            var files = Directory.GetFiles(scope, "*.cs", SearchOption.AllDirectories);
+            // Get all C# files in the target file or directory
+            var files = EnumerateCSharpFiles(targetPath);
             var totalComplexity = 0;
             var fileComplexities = new List<FileComplexity>();
 
@@ -2097,12 +2168,12 @@ public class UnifiedAnalysisService
                 }
             }
 
-            var averageComplexity = fileComplexities.Any() ? (double)totalComplexity / fileComplexities.Count : 0;
-            var maxComplexity = fileComplexities.Any() ? fileComplexities.Max(f => f.CyclomaticComplexity) : 0;
+            var averageComplexity = fileComplexities.Count > 0 ? (double)totalComplexity / fileComplexities.Count : 0;
+            var maxComplexity = fileComplexities.Count > 0 ? fileComplexities.Max(f => f.CyclomaticComplexity) : 0;
 
             return new ComplexityAnalysis
             {
-                Scope = scope,
+                Scope = targetPath,
                 TotalComplexity = totalComplexity,
                 AverageComplexity = averageComplexity,
                 MaxComplexity = maxComplexity,
@@ -2122,17 +2193,17 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing complexity for {Scope}", scope);
+            LogErrorAnalyzingComplexityFor(_logger, ex, targetPath);
         }
 
         return null;
     }
 
-    private async Task<MaintainabilityAnalysis?> AnalyzeMaintainabilityAsync(string scope, CancellationToken ct)
+    private async Task<MaintainabilityAnalysis?> AnalyzeMaintainabilityAsync(string targetPath, CancellationToken ct)
     {
         try
         {
-            var complexity = await AnalyzeComplexityAsync(scope, ct);
+            var complexity = await AnalyzeComplexityAsync(targetPath, ct);
             if (complexity == null) return null;
 
             // Calculate maintainability index (simplified version)
@@ -2140,67 +2211,78 @@ public class UnifiedAnalysisService
 
             return new MaintainabilityAnalysis
             {
-                Scope = scope,
+                Scope = targetPath,
                 MaintainabilityIndex = averageMaintainability,
                 TechnicalDebt = Math.Max(0, 100 - averageMaintainability), // Simplified
-                CodeQuality = averageMaintainability > 85 ? "Excellent" :
-                             averageMaintainability > 70 ? "Good" :
-                             averageMaintainability > 50 ? "Fair" : "Poor",
-                RefactoringPriority = averageMaintainability < 60 ? 1.0 :
-                                     averageMaintainability < 80 ? 0.5 : 0.1,
+                CodeQuality = averageMaintainability switch
+                {
+                    > 85 => "Excellent",
+                    > 70 => "Good",
+                    > 50 => "Fair",
+                    _ => "Poor"
+                },
+                RefactoringPriority = averageMaintainability switch
+                {
+                    < 60 => 1.0,
+                    < 80 => 0.5,
+                    _ => 0.1
+                },
                 AverageMaintainabilityIndex = averageMaintainability,
                 Issues = new List<MaintainabilityIssue>() // Empty list for now
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing maintainability for {Scope}", scope);
+            LogErrorAnalyzingMaintainabilityFor(_logger, ex, targetPath);
         }
 
         return null;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<TestCoverageAnalysis?> AnalyzeTestCoverageAsync(string scope, CancellationToken ct)
+    private TestCoverageAnalysis? AnalyzeTestCoverage(string targetPath)
     {
         try
         {
-            var allFiles = Directory.GetFiles(scope, "*.cs", SearchOption.AllDirectories);
+            var allFiles = EnumerateCSharpFiles(targetPath);
             var testFiles = allFiles.Where(f => Path.GetFileName(f).Contains("Test") ||
                                                Path.GetDirectoryName(f)?.Contains("Test") == true ||
                                                Path.GetDirectoryName(f)?.Contains("test") == true).ToList();
 
             var sourceFiles = allFiles.Except(testFiles).ToList();
-            var coveragePercentage = sourceFiles.Any() ? (double)testFiles.Count / sourceFiles.Count * 100 : 0;
+            var coveragePercentage = sourceFiles.Count > 0 ? (double)testFiles.Count / sourceFiles.Count * 100 : 0;
 
             return new TestCoverageAnalysis
             {
-                Scope = scope,
-                TotalFiles = allFiles.Length,
+                Scope = targetPath,
+                TotalFiles = allFiles.Count,
                 TestFiles = testFiles.Count,
                 SourceFiles = sourceFiles.Count,
                 CoveragePercentage = coveragePercentage,
-                CoverageLevel = coveragePercentage > 80 ? "Excellent" :
-                               coveragePercentage > 60 ? "Good" :
-                               coveragePercentage > 40 ? "Fair" : "Poor",
+                CoverageLevel = coveragePercentage switch
+                {
+                    > 80 => "Excellent",
+                    > 60 => "Good",
+                    > 40 => "Fair",
+                    _ => "Poor"
+                },
                 OverallCoverage = coveragePercentage,
                 Reports = new List<CoverageReport>() // Empty list for now
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing test coverage for {Scope}", scope);
+            LogErrorAnalyzingTestCoverageFor(_logger, ex, targetPath);
         }
 
         return null;
     }
 
-    private async Task<List<CodeSmell>> DetectCodeSmellsAsync(string scope, CancellationToken ct)
+    private async Task<List<CodeSmell>> DetectCodeSmellsAsync(string targetPath, CancellationToken ct)
     {
         try
         {
             var codeSmells = new List<CodeSmell>();
-            var files = Directory.GetFiles(scope, "*.cs", SearchOption.AllDirectories);
+            var files = EnumerateCSharpFiles(targetPath);
 
             foreach (var file in files.Take(10)) // Limit for performance
             {
@@ -2261,14 +2343,13 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error detecting code smells for {Scope}", scope);
+            LogErrorDetectingCodeSmellsFor(_logger, ex, targetPath);
         }
 
         return new List<CodeSmell>();
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<QualityScore?> CalculateQualityScoreAsync(QualityAnalysisResponse analysis, CancellationToken ct)
+    private QualityScore? CalculateQualityScore(QualityAnalysisResponse analysis)
     {
         try
         {
@@ -2302,22 +2383,25 @@ public class UnifiedAnalysisService
                     ["TestCoverage"] = analysis.TestCoverage?.CoveragePercentage ?? 0,
                     ["CodeSmells"] = Math.Max(0, 100 - (analysis.CodeSmells?.Count ?? 0) * 5)
                 },
-                Grade = score >= 90 ? "A" :
-                        score >= 80 ? "B" :
-                        score >= 70 ? "C" :
-                        score >= 60 ? "D" : "F"
+                Grade = score switch
+                {
+                    >= 90 => "A",
+                    >= 80 => "B",
+                    >= 70 => "C",
+                    >= 60 => "D",
+                    _ => "F"
+                }
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating quality score");
+            LogErrorCalculatingQualityScore(_logger, ex);
         }
 
         return null;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<QualityRecommendation>> GenerateQualityRecommendationsAsync(QualityAnalysisResponse analysis, CancellationToken ct)
+    private List<QualityRecommendation> GenerateQualityRecommendations(QualityAnalysisResponse analysis)
     {
         try
         {
@@ -2382,7 +2466,7 @@ public class UnifiedAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating quality recommendations");
+            LogErrorGeneratingQualityRecommendations(_logger, ex);
         }
 
         return new List<QualityRecommendation>();
@@ -2500,7 +2584,7 @@ public class UnifiedAnalysisService
         var decisionKeywords = new[] { "if", "else", "while", "for", "foreach", "switch", "case", "&&", "||", "?:" };
         foreach (var keyword in decisionKeywords)
         {
-            complexity += System.Text.RegularExpressions.Regex.Matches(methodContent, $@"\b{keyword}\b").Count;
+            complexity += System.Text.RegularExpressions.Regex.Count(methodContent, $@"\b{keyword}\b", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
         }
 
         return complexity;
@@ -2622,17 +2706,140 @@ public class UnifiedAnalysisService
         return members;
     }
 
-    private static MCPsharp.Services.Roslyn.CircularDependency ConvertToCircularDependency(ConsolidatedCircularDependency consolidated)
-    {
-        return new MCPsharp.Services.Roslyn.CircularDependency
-        {
-            Methods = new List<MCPsharp.Models.Roslyn.MethodSignature>(), // Empty list for conversion
-            CycleLength = consolidated.Length,
-            Steps = new List<MCPsharp.Models.Roslyn.CallChainStep>(), // Skip complex conversion for now
-            Confidence = MCPsharp.Models.Roslyn.ConfidenceLevel.Medium,
-            FilesInvolved = consolidated.Locations.Select(l => l.FilePath).Distinct().ToList()
-        };
-    }
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing symbol {Symbol}")]
+    private static partial void LogErrorAnalyzingSymbol(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing type {Type}")]
+    private static partial void LogErrorAnalyzingType(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file {File}")]
+    private static partial void LogErrorAnalyzingFile(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing project {Project}")]
+    private static partial void LogErrorAnalyzingProject(ILogger logger, Exception exception, string project);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing architecture for {Scope}")]
+    private static partial void LogErrorAnalyzingArchitectureFor(ILogger logger, Exception exception, AnalysisScope scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing dependencies for {Scope}")]
+    private static partial void LogErrorAnalyzingDependenciesFor(ILogger logger, Exception exception, AnalysisScope scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing quality for {Scope}")]
+    private static partial void LogErrorAnalyzingQualityFor(ILogger logger, Exception exception, AnalysisScope scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting symbol definition for {Symbol}")]
+    private static partial void LogErrorGettingSymbolDefinitionFor(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting symbol references for {Symbol}")]
+    private static partial void LogErrorGettingSymbolReferencesFor(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error processing caller for reference at {File}:{Line}")]
+    private static partial void LogErrorProcessingCallerForReference(ILogger logger, Exception exception, string file, int line);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting symbol callers for {Symbol}")]
+    private static partial void LogErrorGettingSymbolCallersFor(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing symbol usage patterns for {Symbol}")]
+    private static partial void LogErrorAnalyzingSymbolUsagePatterns(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error finding related symbols for {Symbol}")]
+    private static partial void LogErrorFindingRelatedSymbolsFor(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error calculating symbol metrics for {Symbol}")]
+    private static partial void LogErrorCalculatingSymbolMetricsFor(ILogger logger, Exception exception, string symbol);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting type structure for {Type}")]
+    private static partial void LogErrorGettingTypeStructureFor(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting type inheritance for {Type}")]
+    private static partial void LogErrorGettingTypeInheritanceFor(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting type usages for {Type}")]
+    private static partial void LogErrorGettingTypeUsagesFor(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting type implementations for {Type}")]
+    private static partial void LogErrorGettingTypeImplementationsFor(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing type members for {Type}")]
+    private static partial void LogErrorAnalyzingTypeMembersFor(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error calculating type metrics for {Type}")]
+    private static partial void LogErrorCalculatingTypeMetricsFor(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting file basic info for {File}")]
+    private static partial void LogErrorGettingFileBasicInfo(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file structure for {File}")]
+    private static partial void LogErrorAnalyzingFileStructureFor(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file complexity for {File}")]
+    private static partial void LogErrorAnalyzingFileComplexityFor(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file dependencies for {File}")]
+    private static partial void LogErrorAnalyzingFileDependenciesFor(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file quality for {File}")]
+    private static partial void LogErrorAnalyzingFileQualityFor(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error detecting file issues for {File}")]
+    private static partial void LogErrorDetectingFileIssuesFor(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error generating file suggestions for {File}")]
+    private static partial void LogErrorGeneratingFileSuggestionsFor(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting project structure for {Project}")]
+    private static partial void LogErrorGettingProjectStructureFor(ILogger logger, Exception exception, string project);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting project file inventory for {Project}")]
+    private static partial void LogErrorGettingProjectFileInventory(ILogger logger, Exception exception, string project);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing project dependencies for {Project}")]
+    private static partial void LogErrorAnalyzingProjectDependenciesFor(ILogger logger, Exception exception, string project);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing project build info for {Project}")]
+    private static partial void LogErrorAnalyzingProjectBuildInfo(ILogger logger, Exception exception, string project);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error calculating project metrics for {Project}")]
+    private static partial void LogErrorCalculatingProjectMetricsFor(ILogger logger, Exception exception, string project);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting default architecture definition")]
+    private static partial void LogErrorGettingDefaultArchitectureDefinition(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error calculating architecture metrics for {Scope}")]
+    private static partial void LogErrorCalculatingArchitectureMetricsFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error building dependency graph for {Scope}")]
+    private static partial void LogErrorBuildingDependencyGraphFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error detecting circular dependencies for {Scope}")]
+    private static partial void LogErrorDetectingCircularDependenciesFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing dependency impact for {Scope}")]
+    private static partial void LogErrorAnalyzingDependencyImpactFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing critical paths for {Scope}")]
+    private static partial void LogErrorAnalyzingCriticalPathsFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error calculating dependency metrics")]
+    private static partial void LogErrorCalculatingDependencyMetrics(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing complexity for {Scope}")]
+    private static partial void LogErrorAnalyzingComplexityFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing maintainability for {Scope}")]
+    private static partial void LogErrorAnalyzingMaintainabilityFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing test coverage for {Scope}")]
+    private static partial void LogErrorAnalyzingTestCoverageFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error detecting code smells for {Scope}")]
+    private static partial void LogErrorDetectingCodeSmellsFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error calculating quality score")]
+    private static partial void LogErrorCalculatingQualityScore(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error generating quality recommendations")]
+    private static partial void LogErrorGeneratingQualityRecommendations(ILogger logger, Exception exception);
 
     #endregion
 }

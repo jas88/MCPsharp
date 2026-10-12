@@ -90,8 +90,7 @@ public class ProjectContextManager
             return false;
         }
 
-        var fullPath = Path.GetFullPath(path);
-        return fullPath.StartsWith(_currentContext.RootPath, StringComparison.OrdinalIgnoreCase);
+        return PathContainment.IsWithin(_currentContext.RootPath, path);
     }
 
     /// <summary>

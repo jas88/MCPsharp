@@ -1,7 +1,12 @@
+using System;
 using MCPsharp.Services.Roslyn;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using NUnit.Framework;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Runtime.Loader;
 using System.Threading.Tasks;
 
 namespace MCPsharp.Tests.Services.Roslyn;
@@ -39,7 +44,8 @@ public class RoslynWorkspaceInitializationTests
         // Previously this was 179 errors due to missing NuGet references
         Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}. " +
-            $"This indicates MSBuildWorkspace is loading references correctly.");
+            $"This indicates MSBuildWorkspace is loading references correctly." +
+            await DescribeAsync(workspace));
 
         // Verify semantic operations are available or close to being available
         Assert.That(health.CanDoSyntaxOperations, Is.True, "Should be able to do syntax operations");
@@ -62,7 +68,8 @@ public class RoslynWorkspaceInitializationTests
         await workspace.InitializeAsync(projectPath);
 
         // Act
-        var compilation = workspace.GetCompilation();
+        var compilations = workspace.GetCompilations();
+        var compilation = compilations.Count > 0 ? compilations[0] : null;
 
         // Assert
         Assert.That(compilation, Is.Not.Null);
@@ -105,7 +112,8 @@ public class RoslynWorkspaceInitializationTests
         // The key fix: error count should be low, not 15k
         Assert.That(health.ErrorCount < 50, Is.True,
             $"Error count should be low (< 50), but got {health.ErrorCount}. " +
-            $"Regression test: Previously passing .sln file caused fallback to AdhocWorkspace with 15k errors.");
+            $"Regression test: Previously passing .sln file caused fallback to AdhocWorkspace with 15k errors." +
+            await DescribeAsync(workspace));
 
         workspace.Dispose();
     }
@@ -133,9 +141,73 @@ public class RoslynWorkspaceInitializationTests
         Assert.That(health.LoadedProjects > 0, Is.True, "At least one project should be loaded");
         Assert.That(health.TotalFiles > 0, Is.True, "Should have source files");
         Assert.That(health.ErrorCount < 50, Is.True,
-            $"Error count should be low (< 50), but got {health.ErrorCount}");
+            $"Error count should be low (< 50), but got {health.ErrorCount}." +
+            await DescribeAsync(workspace));
 
         workspace.Dispose();
+    }
+
+    /// <summary>
+    /// Explain a high error count: sample errors, analyzer load failures and the generators each project references.
+    /// </summary>
+    private static async Task<string> DescribeAsync(RoslynWorkspace workspace)
+    {
+        var health = workspace.GetHealth();
+        var projects = workspace.GetProjects();
+        var analyzers = projects.Select(p =>
+            $"{p.Name} ({(p.ParseOptions as CSharpParseOptions)?.LanguageVersion}): " +
+            string.Join(", ", p.AnalyzerReferences.Select(r => r.FullPath).Where(n => n != null && n.Contains("Generator", StringComparison.OrdinalIgnoreCase))));
+
+        // Show the generated logging source's namespaces and classes, to compare them with the declarations
+        var generatedSample = string.Empty;
+        var main = projects.FirstOrDefault(p => p.Name == "MCPsharp");
+        if (main != null)
+        {
+            var generated = (await main.GetSourceGeneratedDocumentsAsync())
+                .FirstOrDefault(d => d.Name.Contains("LoggerMessage", StringComparison.OrdinalIgnoreCase));
+            if (generated != null)
+            {
+                var lines = (await generated.GetTextAsync()).Lines.Select(l => l.ToString())
+                    .Where(l => l.Contains("namespace", StringComparison.Ordinal) || l.Contains("partial class", StringComparison.Ordinal))
+                    .Take(20);
+                generatedSample = $"{generated.FilePath}\n{string.Join("\n", lines)}";
+            }
+        }
+
+        // Which copies of the compiler and the logging generator are loaded, and from which files
+        // (the generator package ships roslyn3.11/4.0/4.4 builds with the same assembly identity)
+        var csharpAssemblies = AssemblyLoadContext.All
+            .SelectMany(alc => alc.Assemblies.Select(a => (alc, a)))
+            .Where(x => x.a.GetName().Name is "Microsoft.CodeAnalysis.CSharp" or "Microsoft.Extensions.Logging.Generators")
+            .Select(x => $"{x.alc.Name ?? x.alc.GetType().Name}: {x.a.GetName().Name} {x.a.GetName().Version} {x.a.Location} sha256={HashPrefix(x.a.Location)}");
+
+        // Does Program.cs really have a file-scoped namespace in the workspace's syntax tree?
+        var treeShape = string.Empty;
+        var programDoc = main?.Documents.FirstOrDefault(d => d.Name == "Program.cs");
+        if (programDoc != null)
+        {
+            var root = await programDoc.GetSyntaxRootAsync();
+            var classDecl = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+            treeShape = $"Program.cs kind={programDoc.SourceCodeKind} class parent={classDecl?.Parent?.GetType().FullName} " +
+                $"isFileScoped={classDecl?.Parent is FileScopedNamespaceDeclarationSyntax}";
+        }
+
+        return $"\nSample errors:\n{string.Join("\n", health.ErrorSamples)}" +
+            $"\nCompiler and logging generator assemblies loaded:\n{string.Join("\n", csharpAssemblies)}" +
+            $"\nSyntax: {treeShape}" +
+            $"\nAnalyzer load failures:\n{string.Join("\n", health.AnalyzerLoadFailures)}" +
+            $"\nGenerator references:\n{string.Join("\n", analyzers)}" +
+            $"\nGenerated logging source:\n{generatedSample}";
+    }
+
+    private static string HashPrefix(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+        {
+            return "n/a";
+        }
+
+        return Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)))[..10];
     }
 
     private static string GetProjectPath()

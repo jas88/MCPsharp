@@ -32,12 +32,12 @@ public class MutableFeatureComponents
             Controller = Controller,
             Service = Service,
             Repository = Repository,
-            Models = Models.Any() ? Models : null,
-            Migrations = Migrations.Any() ? Migrations : null,
-            Config = Config.Any() ? Config : null,
-            Tests = Tests.Any() ? Tests : null,
+            Models = Models.Count > 0 ? Models : null,
+            Migrations = Migrations.Count > 0 ? Migrations : null,
+            Config = Config.Count > 0 ? Config : null,
+            Tests = Tests.Count > 0 ? Tests : null,
             Documentation = Documentation,
-            Workflows = Workflows.Any() ? Workflows : null
+            Workflows = Workflows.Count > 0 ? Workflows : null
         };
     }
 }
@@ -46,13 +46,15 @@ public class MutableFeatureComponents
 /// Implementation of FeatureTracerService for Phase 2
 /// Traces features across multiple files and builds dependency graphs
 /// </summary>
-public class FeatureTracerService : IFeatureTracerService
+public partial class FeatureTracerService : IFeatureTracerService
 {
     private readonly ILogger<FeatureTracerService> _logger;
     private readonly FileOperationsService _fileOps;
     private readonly SymbolQueryService _symbolQuery;
     private readonly AdvancedReferenceFinderService _referenceFinder;
     private readonly string _rootPath;
+
+    private static readonly char[] WordSeparators = ['-', '_', ' '];
 
     public FeatureTracerService(
         ILogger<FeatureTracerService> logger,
@@ -66,11 +68,7 @@ public class FeatureTracerService : IFeatureTracerService
         _symbolQuery = symbolQuery ?? throw new ArgumentNullException(nameof(symbolQuery));
         _referenceFinder = referenceFinder ?? throw new ArgumentNullException(nameof(referenceFinder));
 
-        // Extract root path from file operations service
-        // FileOperationsService constructor stores the absolute path
-        var projectPathField = typeof(FileOperationsService).GetField("_rootPath",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        _rootPath = projectPathField?.GetValue(_fileOps) as string ?? "";
+        _rootPath = _fileOps.RootPath;
     }
 
     /// <summary>
@@ -83,36 +81,26 @@ public class FeatureTracerService : IFeatureTracerService
             throw new ArgumentException("Feature name cannot be null or empty", nameof(featureName));
         }
 
-        _logger.LogInformation("Tracing feature: {FeatureName}", featureName);
+        LogTracingFeature(_logger, featureName);
 
-        try
+        var components = new MutableFeatureComponents();
+        var dataFlow = new List<string>();
+
+        // Normalize feature name for searching
+        var normalizedFeature = NormalizeFeatureName(featureName);
+
+        // Search for related files using various heuristics
+        await SearchForFeatureFilesAsync(normalizedFeature, components, dataFlow);
+
+        var componentCount = GetComponentCount(components);
+        LogFeatureTraceCompleted(_logger, featureName, componentCount);
+
+        return new FeatureMap
         {
-            var components = new MutableFeatureComponents();
-            var dataFlow = new List<string>();
-
-            // Normalize feature name for searching
-            var normalizedFeature = NormalizeFeatureName(featureName);
-
-            // Search for related files using various heuristics
-            await SearchForFeatureFilesAsync(normalizedFeature, components, dataFlow);
-
-            // Build dependency graph for found components
-
-            _logger.LogInformation("Feature trace completed for {FeatureName}: found {ComponentCount} components",
-                featureName, GetComponentCount(components));
-
-            return new FeatureMap
-            {
-                FeatureName = featureName,
-                Components = components.ToImmutable(),
-                DataFlow = dataFlow.Any() ? dataFlow : null
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error tracing feature {FeatureName}", featureName);
-            throw;
-        }
+            FeatureName = featureName,
+            Components = components.ToImmutable(),
+            DataFlow = dataFlow.Count > 0 ? dataFlow : null
+        };
     }
 
     /// <summary>
@@ -125,57 +113,48 @@ public class FeatureTracerService : IFeatureTracerService
             throw new ArgumentException("Entry point cannot be null or empty", nameof(entryPoint));
         }
 
-        _logger.LogInformation("Discovering feature components from entry point: {EntryPoint}", entryPoint);
+        LogDiscoveringFeatureComponents(_logger, entryPoint);
 
-        try
+        var components = new MutableFeatureComponents();
+        var dataFlow = new List<string>();
+
+        // Parse entry point (format: "FilePath::SymbolName" or just "SymbolName")
+        var (filePath, symbolName) = ParseEntryPoint(entryPoint);
+
+        if (string.IsNullOrEmpty(symbolName))
         {
-            var components = new MutableFeatureComponents();
-            var dataFlow = new List<string>();
-
-            // Parse entry point (format: "FilePath::SymbolName" or just "SymbolName")
-            var (filePath, symbolName) = ParseEntryPoint(entryPoint);
-
-            if (string.IsNullOrEmpty(symbolName))
-            {
-                throw new ArgumentException($"Invalid entry point format: {entryPoint}");
-            }
-
-            // Find the symbol in the workspace
-            var symbols = await _symbolQuery.FindSymbolsAsync(symbolName);
-            if (!symbols.Any())
-            {
-                throw new ArgumentException($"Symbol '{symbolName}' not found in workspace");
-            }
-
-            var primarySymbol = symbols.First();
-
-            // Determine feature name from symbol or file path
-            var featureName = ExtractFeatureNameFromSymbol(primarySymbol, filePath);
-
-            // Trace dependencies from the entry point
-            await TraceDependenciesFromEntryPointAsync(primarySymbol, components, dataFlow);
-
-            // Search for related test files
-            await FindRelatedTestFilesAsync(components, featureName);
-
-            // Search for related configuration files
-            await FindRelatedConfigFilesAsync(components, featureName);
-
-            _logger.LogInformation("Feature discovery completed for {FeatureName} from entry point {EntryPoint}",
-                featureName, entryPoint);
-
-            return new FeatureMap
-            {
-                FeatureName = featureName,
-                Components = components.ToImmutable(),
-                DataFlow = dataFlow.Any() ? dataFlow : null
-            };
+            throw new ArgumentException($"Invalid entry point format: {entryPoint}", nameof(entryPoint));
         }
-        catch (Exception ex)
+
+        // Find the symbol in the workspace
+        var symbols = await _symbolQuery.FindSymbolsAsync(symbolName);
+        if (symbols.Count == 0)
         {
-            _logger.LogError(ex, "Error discovering feature components from entry point {EntryPoint}", entryPoint);
-            throw;
+            throw new ArgumentException($"Symbol '{symbolName}' not found in workspace", nameof(entryPoint));
         }
+
+        var primarySymbol = symbols[0];
+
+        // Determine feature name from symbol or file path
+        var featureName = ExtractFeatureNameFromSymbol(primarySymbol, filePath);
+
+        // Trace dependencies from the entry point
+        await TraceDependenciesFromEntryPointAsync(primarySymbol, components, dataFlow);
+
+        // Search for related test files
+        FindRelatedTestFiles(components, featureName);
+
+        // Search for related configuration files
+        await FindRelatedConfigFilesAsync(components, featureName);
+
+        LogFeatureDiscoveryCompleted(_logger, featureName, entryPoint);
+
+        return new FeatureMap
+        {
+            FeatureName = featureName,
+            Components = components.ToImmutable(),
+            DataFlow = dataFlow.Count > 0 ? dataFlow : null
+        };
     }
 
     #region Helper Methods
@@ -193,18 +172,15 @@ public class FeatureTracerService : IFeatureTracerService
             try
             {
                 var files = _fileOps.ListFiles(pattern);
-                foreach (var file in files.Files)
+                foreach (var file in files.Files.Where(f => !foundFiles.Contains(f.Path)))
                 {
-                    if (!foundFiles.Contains(file.Path))
-                    {
-                        foundFiles.Add(file.Path);
-                        await CategorizeFeatureFileAsync(file, components, normalizedFeature, dataFlow);
-                    }
+                    foundFiles.Add(file.Path);
+                    await CategorizeFeatureFileAsync(file, components, normalizedFeature, dataFlow);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error searching pattern {Pattern}", pattern);
+                LogErrorSearchingPattern(_logger, ex, pattern);
             }
         }
 
@@ -266,7 +242,7 @@ public class FeatureTracerService : IFeatureTracerService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error categorizing file {FilePath}", relativePath);
+            LogErrorCategorizingFile(_logger, ex, relativePath);
         }
     }
 
@@ -330,7 +306,7 @@ public class FeatureTracerService : IFeatureTracerService
     /// <summary>
     /// Analyze C# content for feature-related patterns
     /// </summary>
-    private void AnalyzeCSharpContentForFeature(string content, string filePath, MutableFeatureComponents components, string normalizedFeature)
+    private static void AnalyzeCSharpContentForFeature(string content, string filePath, MutableFeatureComponents components, string normalizedFeature)
     {
         var lines = content.Split('\n');
         var className = ExtractClassName(content);
@@ -344,16 +320,13 @@ public class FeatureTracerService : IFeatureTracerService
         }
 
         // Look for feature comments
-        foreach (var line in lines)
-        {
-            if (line.Contains($"// Feature: {normalizedFeature}") ||
+        if (lines.Any(line =>
+                line.Contains($"// Feature: {normalizedFeature}") ||
                 line.Contains($"// Feature: {normalizedFeature.Replace("-", "")}") ||
                 line.Contains($"/* Feature: {normalizedFeature}") ||
-                line.Contains($"/* Feature: {normalizedFeature.Replace("-", "")}"))
-            {
-                CategorizeByClassName(className, filePath, components);
-                break;
-            }
+                line.Contains($"/* Feature: {normalizedFeature.Replace("-", "")}")))
+        {
+            CategorizeByClassName(className, filePath, components);
         }
     }
 
@@ -371,9 +344,8 @@ public class FeatureTracerService : IFeatureTracerService
             {
                 var symbols = await _symbolQuery.FindSymbolsAsync(term);
 
-                foreach (var symbol in symbols)
+                foreach (var location in symbols.Select(symbol => symbol.File))
                 {
-                    var location = symbol.File;
                     if (string.IsNullOrEmpty(location)) continue;
 
                     var fileInfo = new Models.FileInfo
@@ -388,7 +360,7 @@ public class FeatureTracerService : IFeatureTracerService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error searching for feature symbols");
+            LogErrorSearchingFeatureSymbols(_logger, ex);
         }
     }
 
@@ -442,7 +414,7 @@ public class FeatureTracerService : IFeatureTracerService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error analyzing call chain for {SymbolName}", symbolName);
+            LogErrorAnalyzingCallChain(_logger, ex, symbolName);
         }
 
         // Find type usages
@@ -456,7 +428,7 @@ public class FeatureTracerService : IFeatureTracerService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error analyzing type usages for {SymbolName}", symbolName);
+            LogErrorAnalyzingTypeUsages(_logger, ex, symbolName);
         }
     }
 
@@ -480,11 +452,11 @@ public class FeatureTracerService : IFeatureTracerService
                 }
             }
 
-            _logger.LogDebug("Processed {PathCount} call chains for feature discovery", callChain.Paths.Count);
+            LogProcessedCallChains(_logger, callChain.Paths.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error processing call chain results");
+            LogErrorProcessingCallChain(_logger, ex);
         }
     }
 
@@ -515,7 +487,7 @@ public class FeatureTracerService : IFeatureTracerService
                     }
                     else if (usage.UsageKind == TypeUsageKind.BaseClass || usage.UsageKind == TypeUsageKind.InterfaceImplementation)
                     {
-                        if (fileName.EndsWith("Controller"))
+                        if (fileName.EndsWith("Controller", StringComparison.Ordinal))
                         {
                             components.Controller = $"{relativePath}::{fileName}";
                         }
@@ -523,11 +495,11 @@ public class FeatureTracerService : IFeatureTracerService
                     else if (usage.UsageKind == TypeUsageKind.Parameter)
                     {
                         // This is likely a service or repository dependency
-                        if (fileName.EndsWith("Service"))
+                        if (fileName.EndsWith("Service", StringComparison.Ordinal))
                         {
                             components.Service = $"{relativePath}::{fileName}";
                         }
-                        else if (fileName.EndsWith("Repository"))
+                        else if (fileName.EndsWith("Repository", StringComparison.Ordinal))
                         {
                             components.Repository = $"{relativePath}::{fileName}";
                         }
@@ -535,19 +507,18 @@ public class FeatureTracerService : IFeatureTracerService
                 }
             }
 
-            _logger.LogDebug("Processed {UsageCount} type usages for feature discovery", typeUsages.Usages.Count);
+            LogProcessedTypeUsages(_logger, typeUsages.Usages.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error processing type usage results");
+            LogErrorProcessingTypeUsages(_logger, ex);
         }
     }
 
     /// <summary>
     /// Find related test files for components
     /// </summary>
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task FindRelatedTestFilesAsync(MutableFeatureComponents components, string featureName)
+    private void FindRelatedTestFiles(MutableFeatureComponents components, string featureName)
     {
         var testPatterns = new[]
         {
@@ -567,11 +538,11 @@ public class FeatureTracerService : IFeatureTracerService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error searching for test files with pattern {Pattern}", pattern);
+                LogErrorSearchingTestFiles(_logger, ex, pattern);
             }
         }
 
-        if (foundTests.Any())
+        if (foundTests.Count > 0)
         {
             components.Tests = foundTests.Distinct().ToList();
         }
@@ -602,14 +573,14 @@ public class FeatureTracerService : IFeatureTracerService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error searching for config files with pattern {Pattern}", pattern);
+                LogErrorSearchingConfigFiles(_logger, ex, pattern);
             }
         }
 
         // Check appsettings files for feature-specific configuration
         await CheckAppSettingsForFeatureAsync(components, featureName);
 
-        if (foundConfigs.Any())
+        if (foundConfigs.Count > 0)
         {
             components.Config = foundConfigs.Distinct().ToList();
         }
@@ -624,41 +595,22 @@ public class FeatureTracerService : IFeatureTracerService
         {
             var appSettingsFiles = _fileOps.ListFiles("**/appsettings*.json");
 
-            foreach (var file in appSettingsFiles.Files)
+            foreach (var relativePath in appSettingsFiles.Files.Select(file => file.RelativePath))
             {
-                var content = await _fileOps.ReadFileAsync(file.RelativePath);
-                if (content.Success && content.Content != null)
+                var content = await _fileOps.ReadFileAsync(relativePath);
+
+                // Simple check for feature name in configuration
+                if (content.Success && content.Content != null &&
+                    content.Content.Contains(featureName, StringComparison.OrdinalIgnoreCase))
                 {
-                    // Simple check for feature name in configuration
-                    if (content.Content.Contains(featureName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        components.Config.Add(file.RelativePath);
-                    }
+                    components.Config.Add(relativePath);
                 }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error checking appsettings files for feature configuration");
+            LogErrorCheckingAppSettings(_logger, ex);
         }
-    }
-
-    /// <summary>
-    /// Build dependency graph for found components
-    /// </summary>
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<DependencyGraph> BuildDependencyGraphAsync(MutableFeatureComponents components)
-    {
-        var dependencies = new Dictionary<string, IReadOnlyList<string>>();
-        var layers = new List<string> { "Models", "Data", "Services", "Controllers" };
-
-        // This would need to be implemented based on the actual dependency analysis
-        // For now, we'll return a basic structure
-        return new DependencyGraph
-        {
-            Dependencies = dependencies,
-            Layers = layers
-        };
     }
 
     #endregion
@@ -680,7 +632,7 @@ public class FeatureTracerService : IFeatureTracerService
     {
         if (string.IsNullOrEmpty(input)) return input;
 
-        var words = input.Split(new[] { '-', '_', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        var words = input.Split(WordSeparators, StringSplitOptions.RemoveEmptyEntries);
         return string.Concat(words.Select(word =>
             char.ToUpperInvariant(word[0]) + word.Substring(1).ToLowerInvariant()));
     }
@@ -692,7 +644,7 @@ public class FeatureTracerService : IFeatureTracerService
     {
         if (entryPoint.Contains("::"))
         {
-            var parts = entryPoint.Split(new[] { "::" }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = entryPoint.Split("::", StringSplitOptions.RemoveEmptyEntries);
             return parts.Length == 2 ? (parts[0], parts[1]) : (null, entryPoint);
         }
 
@@ -706,11 +658,11 @@ public class FeatureTracerService : IFeatureTracerService
     {
         // Try to extract from symbol name first
         var symbolName = symbol.Name;
-        if (symbolName.EndsWith("Controller"))
+        if (symbolName.EndsWith("Controller", StringComparison.Ordinal))
         {
             return symbolName.Replace("Controller", "").ToLowerInvariant();
         }
-        if (symbolName.EndsWith("Service"))
+        if (symbolName.EndsWith("Service", StringComparison.Ordinal))
         {
             return symbolName.Replace("Service", "").ToLowerInvariant();
         }
@@ -730,24 +682,24 @@ public class FeatureTracerService : IFeatureTracerService
     /// </summary>
     private static string ExtractClassName(string content)
     {
-        var match = Regex.Match(content, @"class\s+(\w+)", RegexOptions.IgnoreCase);
+        var match = ClassNameRegex().Match(content);
         return match.Success ? match.Groups[1].Value : "";
     }
 
     /// <summary>
     /// Categorize component by class name
     /// </summary>
-    private void CategorizeByClassName(string className, string filePath, MutableFeatureComponents components)
+    private static void CategorizeByClassName(string className, string filePath, MutableFeatureComponents components)
     {
-        if (className.EndsWith("Controller"))
+        if (className.EndsWith("Controller", StringComparison.Ordinal))
         {
             components.Controller = $"{filePath}::{className}";
         }
-        else if (className.EndsWith("Service"))
+        else if (className.EndsWith("Service", StringComparison.Ordinal))
         {
             components.Service = $"{filePath}::{className}";
         }
-        else if (className.EndsWith("Repository"))
+        else if (className.EndsWith("Repository", StringComparison.Ordinal))
         {
             components.Repository = $"{filePath}::{className}";
         }
@@ -760,19 +712,19 @@ public class FeatureTracerService : IFeatureTracerService
     /// <summary>
     /// Categorize component by symbol name
     /// </summary>
-    private void CategorizeBySymbolName(string symbolName, string filePath, MutableFeatureComponents components, List<string> dataFlow)
+    private static void CategorizeBySymbolName(string symbolName, string filePath, MutableFeatureComponents components, List<string> dataFlow)
     {
-        if (symbolName.EndsWith("Controller"))
+        if (symbolName.EndsWith("Controller", StringComparison.Ordinal))
         {
             components.Controller = $"{filePath}::{symbolName}";
             if (!dataFlow.Contains("Controller")) dataFlow.Add("Controller");
         }
-        else if (symbolName.EndsWith("Service"))
+        else if (symbolName.EndsWith("Service", StringComparison.Ordinal))
         {
             components.Service = $"{filePath}::{symbolName}";
             if (!dataFlow.Contains("Service")) dataFlow.Add("Service");
         }
-        else if (symbolName.EndsWith("Repository"))
+        else if (symbolName.EndsWith("Repository", StringComparison.Ordinal))
         {
             components.Repository = $"{filePath}::{symbolName}";
             if (!dataFlow.Contains("Repository")) dataFlow.Add("Repository");
@@ -797,6 +749,61 @@ public class FeatureTracerService : IFeatureTracerService
 
         return count;
     }
+
+    #endregion
+
+    [GeneratedRegex(@"class\s+(\w+)", RegexOptions.IgnoreCase, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ClassNameRegex();
+
+    #region Logging
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Tracing feature: {FeatureName}")]
+    private static partial void LogTracingFeature(ILogger logger, string featureName);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Feature trace completed for {FeatureName}: found {ComponentCount} components")]
+    private static partial void LogFeatureTraceCompleted(ILogger logger, string featureName, int componentCount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Discovering feature components from entry point: {EntryPoint}")]
+    private static partial void LogDiscoveringFeatureComponents(ILogger logger, string entryPoint);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Feature discovery completed for {FeatureName} from entry point {EntryPoint}")]
+    private static partial void LogFeatureDiscoveryCompleted(ILogger logger, string featureName, string entryPoint);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error searching pattern {Pattern}")]
+    private static partial void LogErrorSearchingPattern(ILogger logger, Exception exception, string pattern);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error categorizing file {FilePath}")]
+    private static partial void LogErrorCategorizingFile(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error searching for feature symbols")]
+    private static partial void LogErrorSearchingFeatureSymbols(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error analyzing call chain for {SymbolName}")]
+    private static partial void LogErrorAnalyzingCallChain(ILogger logger, Exception exception, string symbolName);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error analyzing type usages for {SymbolName}")]
+    private static partial void LogErrorAnalyzingTypeUsages(ILogger logger, Exception exception, string symbolName);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Processed {PathCount} call chains for feature discovery")]
+    private static partial void LogProcessedCallChains(ILogger logger, int pathCount);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error processing call chain results")]
+    private static partial void LogErrorProcessingCallChain(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Processed {UsageCount} type usages for feature discovery")]
+    private static partial void LogProcessedTypeUsages(ILogger logger, int usageCount);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error processing type usage results")]
+    private static partial void LogErrorProcessingTypeUsages(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error searching for test files with pattern {Pattern}")]
+    private static partial void LogErrorSearchingTestFiles(ILogger logger, Exception exception, string pattern);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error searching for config files with pattern {Pattern}")]
+    private static partial void LogErrorSearchingConfigFiles(ILogger logger, Exception exception, string pattern);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error checking appsettings files for feature configuration")]
+    private static partial void LogErrorCheckingAppSettings(ILogger logger, Exception exception);
 
     #endregion
 }

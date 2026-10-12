@@ -31,7 +31,7 @@ public partial class McpToolRegistry
             if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
                 // Parse architecture definition from JSON
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
+                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             }
 
             var result = await _architectureValidator.ValidateArchitectureAsync(projectPath, definition, ct);
@@ -55,6 +55,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateArchitecture));
             return new ToolCallResult
             {
                 Success = false,
@@ -84,7 +85,7 @@ public partial class McpToolRegistry
 
             if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
+                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             }
 
             var violations = await _architectureValidator.DetectLayerViolationsAsync(projectPath, definition, ct);
@@ -104,60 +105,11 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectLayerViolations));
             return new ToolCallResult
             {
                 Success = false,
                 Error = $"Error detecting layer violations: {ex.Message}"
-            };
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteAnalyzeDependencies(JsonDocument arguments, CancellationToken ct)
-    {
-        await EnsureWorkspaceInitializedAsync();
-
-        if (_architectureValidator == null)
-        {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = "Architecture validation service is not available"
-            };
-        }
-
-        try
-        {
-            var projectPath = GetProjectPathFromArguments(arguments);
-            var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
-            MCPsharp.Models.Architecture.ArchitectureDefinition? definition = null;
-
-            if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
-            {
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
-            }
-
-            var analysis = await _architectureValidator.AnalyzeDependenciesAsync(projectPath, definition, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["nodes"] = analysis.Nodes,
-                    ["edges"] = analysis.Edges,
-                    ["circularDependencies"] = analysis.CircularDependencies,
-                    ["layerDependencies"] = analysis.LayerDependencies,
-                    ["dependencyMetrics"] = analysis.DependencyMetrics,
-                    ["analysisDuration"] = analysis.AnalysisDuration.TotalMilliseconds
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = $"Error analyzing dependencies: {ex.Message}"
             };
         }
     }
@@ -183,7 +135,7 @@ public partial class McpToolRegistry
 
             if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
+                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             }
 
             var report = await _architectureValidator.GetArchitectureReportAsync(projectPath, definition, ct);
@@ -205,6 +157,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetArchitectureReport));
             return new ToolCallResult
             {
                 Success = false,
@@ -229,7 +182,7 @@ public partial class McpToolRegistry
         try
         {
             var definitionElement = arguments.RootElement.GetProperty("definition");
-            var definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.GetRawText());
+            var definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.GetRawText(), ToolArgumentJsonOptions);
 
             if (definition == null)
             {
@@ -253,6 +206,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDefineCustomArchitecture));
             return new ToolCallResult
             {
                 Success = false,
@@ -282,7 +236,7 @@ public partial class McpToolRegistry
 
             if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
+                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             }
 
             var circularDependencies = await _architectureValidator.AnalyzeCircularDependenciesAsync(projectPath, definition, ct);
@@ -301,6 +255,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeCircularDependencies));
             return new ToolCallResult
             {
                 Success = false,
@@ -330,7 +285,7 @@ public partial class McpToolRegistry
 
             if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
             {
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText());
+                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
             }
 
             var diagram = await _architectureValidator.GenerateArchitectureDiagramAsync(projectPath, definition, ct);
@@ -346,6 +301,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateArchitectureDiagram));
             return new ToolCallResult
             {
                 Success = false,
@@ -370,7 +326,7 @@ public partial class McpToolRegistry
         try
         {
             var violationsElement = arguments.RootElement.GetProperty("violations");
-            var violations = JsonSerializer.Deserialize<List<LayerViolation>>(violationsElement.GetRawText());
+            var violations = JsonSerializer.Deserialize<List<LayerViolation>>(violationsElement.GetRawText(), ToolArgumentJsonOptions);
 
             if (violations == null)
             {
@@ -398,6 +354,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetArchitectureRecommendations));
             return new ToolCallResult
             {
                 Success = false,
@@ -423,7 +380,7 @@ public partial class McpToolRegistry
         {
             var typeName = arguments.RootElement.GetProperty("typeName").GetString();
             var definitionElement = arguments.RootElement.GetProperty("definition");
-            var definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.GetRawText());
+            var definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.GetRawText(), ToolArgumentJsonOptions);
 
             if (string.IsNullOrEmpty(typeName) || definition == null)
             {
@@ -452,6 +409,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCheckTypeCompliance));
             return new ToolCallResult
             {
                 Success = false,
@@ -460,7 +418,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetPredefinedArchitectures(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetPredefinedArchitectures(CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -489,6 +447,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetPredefinedArchitectures));
             return new ToolCallResult
             {
                 Success = false,

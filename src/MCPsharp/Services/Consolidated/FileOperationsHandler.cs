@@ -9,8 +9,14 @@ namespace MCPsharp.Services.Consolidated;
 /// MCP handler for consolidated file operations tools
 /// Phase 1: Implements 4 universal file operation tools replacing 8 original tools
 /// </summary>
-public class FileOperationsHandler
+public partial class FileOperationsHandler
 {
+    private static readonly JsonSerializerOptions IndentedCamelCaseOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     private readonly UniversalFileOperations _fileOps;
     private readonly ILogger<FileOperationsHandler> _logger;
 
@@ -42,15 +48,11 @@ public class FileOperationsHandler
                 metadata = response.Metadata
             };
 
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return JsonSerializer.Serialize(result, IndentedCamelCaseOptions);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling file_info request");
+            LogErrorHandlingFileInfoRequest(_logger, ex);
 
             var errorResponse = new
             {
@@ -63,11 +65,7 @@ public class FileOperationsHandler
                 }
             };
 
-            return JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return JsonSerializer.Serialize(errorResponse, IndentedCamelCaseOptions);
         }
     }
 
@@ -90,15 +88,11 @@ public class FileOperationsHandler
                 metadata = response.Metadata
             };
 
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return JsonSerializer.Serialize(result, IndentedCamelCaseOptions);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling file_content request");
+            LogErrorHandlingFileContentRequest(_logger, ex);
 
             var errorResponse = new
             {
@@ -111,11 +105,7 @@ public class FileOperationsHandler
                 }
             };
 
-            return JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return JsonSerializer.Serialize(errorResponse, IndentedCamelCaseOptions);
         }
     }
 
@@ -138,15 +128,11 @@ public class FileOperationsHandler
                 metadata = response.Metadata
             };
 
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return JsonSerializer.Serialize(result, IndentedCamelCaseOptions);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling file_operation request");
+            LogErrorHandlingFileOperationRequest(_logger, ex);
 
             var errorResponse = new
             {
@@ -159,11 +145,7 @@ public class FileOperationsHandler
                 }
             };
 
-            return JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return JsonSerializer.Serialize(errorResponse, IndentedCamelCaseOptions);
         }
     }
 
@@ -186,15 +168,11 @@ public class FileOperationsHandler
                 metadata = response.Metadata
             };
 
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return JsonSerializer.Serialize(result, IndentedCamelCaseOptions);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling file_batch request");
+            LogErrorHandlingFileBatchRequest(_logger, ex);
 
             var errorResponse = new
             {
@@ -207,11 +185,7 @@ public class FileOperationsHandler
                 }
             };
 
-            return JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return JsonSerializer.Serialize(errorResponse, IndentedCamelCaseOptions);
         }
     }
 
@@ -374,10 +348,10 @@ public class FileOperationsHandler
         // Parse include flags
         if (element.TryGetProperty("include", out var includeElement) && includeElement.ValueKind == JsonValueKind.Array)
         {
-            var includeFlags = IncludeFlags.Default;
+            var includeFlags = IncludeOptions.None;
             foreach (var flagElement in includeElement.EnumerateArray())
             {
-                if (Enum.TryParse<IncludeFlags>(flagElement.GetString(), true, out var flag))
+                if (Enum.TryParse<IncludeOptions>(flagElement.GetString(), true, out var flag))
                 {
                     includeFlags |= flag;
                 }
@@ -594,7 +568,7 @@ public class FileOperationsHandler
         return new SortSpecification
         {
             Field = element.GetProperty("field").GetString() ?? "name",
-            Ascending = element.TryGetProperty("ascending", out var ascElement) ? ascElement.GetBoolean() : true
+            Ascending = !element.TryGetProperty("ascending", out var ascElement) || ascElement.GetBoolean()
         };
     }
 
@@ -646,6 +620,18 @@ public class FileOperationsHandler
 
         return transformations;
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error handling file_info request")]
+    private static partial void LogErrorHandlingFileInfoRequest(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error handling file_content request")]
+    private static partial void LogErrorHandlingFileContentRequest(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error handling file_operation request")]
+    private static partial void LogErrorHandlingFileOperationRequest(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error handling file_batch request")]
+    private static partial void LogErrorHandlingFileBatchRequest(ILogger logger, Exception exception);
 
     #endregion
 }

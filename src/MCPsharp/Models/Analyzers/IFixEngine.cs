@@ -101,10 +101,10 @@ public record FixApplicationOptions
 {
     public bool CreateBackup { get; init; } = true;
     public bool ResolveConflicts { get; init; } = true;
-    public bool PreviewOnly { get; init; } = false;
+    public bool PreviewOnly { get; init; }
     public ConflictResolutionStrategy ConflictStrategy { get; init; } = ConflictResolutionStrategy.PreferNewer;
     public bool ValidateAfterApply { get; init; } = true;
-    public bool StopOnFirstError { get; init; } = false;
+    public bool StopOnFirstError { get; init; }
     public int MaxParallelFixes { get; init; } = Environment.ProcessorCount;
     public string? BackupDirectory { get; init; }
     public ImmutableArray<string> ExcludeFiles { get; init; } = ImmutableArray<string>.Empty;

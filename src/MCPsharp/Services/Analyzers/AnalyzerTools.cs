@@ -165,12 +165,7 @@ public static class AnalyzerTools
         }
         catch (Exception ex)
         {
-            var errorResult = new ToolCallResult
-            {
-                Success = false,
-                Error = ex.Message
-            };
-            return Task.FromResult(errorResult);
+            return Task.FromResult(CreateErrorResult(ex));
         }
     }
 
@@ -254,11 +249,7 @@ public static class AnalyzerTools
         }
         catch (Exception ex)
         {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = ex.Message
-            };
+            return CreateErrorResult(ex);
         }
     }
 
@@ -309,11 +300,7 @@ public static class AnalyzerTools
         }
         catch (Exception ex)
         {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = ex.Message
-            };
+            return CreateErrorResult(ex);
         }
     }
 
@@ -387,11 +374,7 @@ public static class AnalyzerTools
         }
         catch (Exception ex)
         {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = ex.Message
-            };
+            return CreateErrorResult(ex);
         }
     }
 
@@ -437,11 +420,7 @@ public static class AnalyzerTools
         }
         catch (Exception ex)
         {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = ex.Message
-            };
+            return CreateErrorResult(ex);
         }
     }
 
@@ -469,11 +448,7 @@ public static class AnalyzerTools
         }
         catch (Exception ex)
         {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = ex.Message
-            };
+            return CreateErrorResult(ex);
         }
     }
 
@@ -514,11 +489,7 @@ public static class AnalyzerTools
         }
         catch (Exception ex)
         {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = ex.Message
-            };
+            return CreateErrorResult(ex);
         }
     }
 
@@ -562,11 +533,7 @@ public static class AnalyzerTools
         }
         catch (Exception ex)
         {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = ex.Message
-            };
+            return CreateErrorResult(ex);
         }
     }
 
@@ -604,11 +571,7 @@ public static class AnalyzerTools
         }
         catch (Exception ex)
         {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = ex.Message
-            };
+            return CreateErrorResult(ex);
         }
     }
 
@@ -654,11 +617,19 @@ public static class AnalyzerTools
         }
         catch (Exception ex)
         {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = ex.Message
-            };
+            return CreateErrorResult(ex);
         }
+    }
+
+    /// <summary>
+    /// Builds a failed tool result from an exception raised while executing an analyzer tool.
+    /// </summary>
+    private static ToolCallResult CreateErrorResult(Exception exception)
+    {
+        return new ToolCallResult
+        {
+            Success = false,
+            Error = exception.Message
+        };
     }
 }

@@ -23,7 +23,7 @@ public class BulkEditOptions
     /// <summary>
     /// Whether to run in preview mode (don't apply changes)
     /// </summary>
-    public bool PreviewMode { get; init; } = false;
+    public bool PreviewMode { get; init; }
 
     /// <summary>
     /// Whether to validate changes before applying
@@ -38,12 +38,12 @@ public class BulkEditOptions
     /// <summary>
     /// Whether to include hidden files
     /// </summary>
-    public bool IncludeHiddenFiles { get; init; } = false;
+    public bool IncludeHiddenFiles { get; init; }
 
     /// <summary>
     /// Whether to stop on first error
     /// </summary>
-    public bool StopOnFirstError { get; init; } = false;
+    public bool StopOnFirstError { get; init; }
 
     /// <summary>
     /// Timeout for individual file operations (in seconds)
@@ -60,7 +60,7 @@ public class BulkEditOptions
     /// <summary>
     /// Whether to preserve file timestamps
     /// </summary>
-    public bool PreserveTimestamps { get; init; } = false;
+    public bool PreserveTimestamps { get; init; }
 
     /// <summary>
     /// Custom progress reporter callback
@@ -86,7 +86,7 @@ public class ConditionalEditOptions
     /// <summary>
     /// Whether to negate the condition (apply edits when condition is NOT met)
     /// </summary>
-    public bool Negate { get; init; } = false;
+    public bool Negate { get; init; }
 
     /// <summary>
     /// Whether to create backups before editing
@@ -101,7 +101,7 @@ public class ConditionalEditOptions
     /// <summary>
     /// Whether to run in preview mode (don't apply changes)
     /// </summary>
-    public bool PreviewMode { get; init; } = false;
+    public bool PreviewMode { get; init; }
 
     /// <summary>
     /// Files to exclude from the operation
@@ -142,7 +142,7 @@ public class RefactorOptions
     /// <summary>
     /// Whether to run in preview mode (don't apply changes)
     /// </summary>
-    public bool PreviewMode { get; init; } = false;
+    public bool PreviewMode { get; init; }
 
     /// <summary>
     /// Whether to validate changes before applying
@@ -152,7 +152,7 @@ public class RefactorOptions
     /// <summary>
     /// Whether to preserve file timestamps
     /// </summary>
-    public bool PreserveTimestamps { get; init; } = false;
+    public bool PreserveTimestamps { get; init; }
 
     /// <summary>
     /// Additional parameters for the refactoring operation
@@ -178,7 +178,7 @@ public class MultiFileEditOptions
     /// <summary>
     /// Whether to run in preview mode (don't apply changes)
     /// </summary>
-    public bool PreviewMode { get; init; } = false;
+    public bool PreviewMode { get; init; }
 
     /// <summary>
     /// Whether to validate dependencies before applying changes
@@ -188,7 +188,7 @@ public class MultiFileEditOptions
     /// <summary>
     /// Whether to stop on first error
     /// </summary>
-    public bool StopOnFirstError { get; init; } = false;
+    public bool StopOnFirstError { get; init; }
 
     /// <summary>
     /// Maximum number of retry attempts for failed operations

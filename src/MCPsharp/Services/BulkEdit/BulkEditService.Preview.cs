@@ -8,7 +8,7 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Preview and preview-related functionality for bulk edit operations
 /// </summary>
-public partial class BulkEditService
+public sealed partial class BulkEditService
 {
     /// <inheritdoc />
     public async Task<PreviewResult> PreviewBulkChangesAsync(
@@ -18,7 +18,7 @@ public partial class BulkEditService
         var previewId = Guid.NewGuid().ToString();
         var generatedAt = DateTime.UtcNow;
 
-        _logger?.LogInformation("Generating preview {PreviewId} for bulk edit operation", previewId);
+        LogGeneratingPreview(BulkEditLog, previewId);
 
         try
         {
@@ -143,7 +143,7 @@ public partial class BulkEditService
             {
                 Success = true,
                 FilePreviews = filePreviews,
-                Summary = summary?.ToString() ?? string.Empty,
+                Summary = FormatPreviewSummary(summary),
                 Impact = impact,
                 PreviewId = previewId,
                 GeneratedAt = generatedAt
@@ -151,7 +151,7 @@ public partial class BulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to generate preview {PreviewId}", previewId);
+            LogPreviewFailed(BulkEditLog, ex, previewId);
             return new PreviewResult
             {
                 Success = false,
@@ -203,7 +203,7 @@ public partial class BulkEditService
                 case BulkEditOperationType.BulkReplace:
                     if (!string.IsNullOrEmpty(request.RegexPattern))
                     {
-                        var regex = new Regex(request.RegexPattern, request.Options.RegexOptions);
+                        var regex = new Regex(request.RegexPattern, request.Options.RegexOptions, BulkEditRegexTimeout);
                         var matches = regex.Matches(content);
                         foreach (Match match in matches)
                         {
@@ -224,7 +224,7 @@ public partial class BulkEditService
                 case BulkEditOperationType.ConditionalEdit:
                     if (request.Condition != null)
                     {
-                        var conditionMet = await CheckCondition(content, request.Condition, filePath);
+                        var conditionMet = CheckCondition(content, request.Condition, filePath);
                         if (conditionMet && request.MultiFileEdits != null)
                         {
                             // Add changes from the operation
@@ -242,7 +242,7 @@ public partial class BulkEditService
             }
 
             // Generate diff preview
-            var diffPreview = plannedChanges.Count > 0 ? GenerateDiff(content, plannedChanges) : null;
+            var diffPreview = plannedChanges.Count > 0 ? GenerateDiff(plannedChanges) : null;
 
             // Determine risk level
             var riskLevel = ChangeRiskLevel.Low;
@@ -259,20 +259,7 @@ public partial class BulkEditService
             var fileInfo = new System.IO.FileInfo(filePath);
             var affectedLines = plannedChanges.Select(c => c.StartLine).Distinct().ToList();
 
-            // Check if file is writable by trying to determine file attributes
-            bool isWritable = true;
-            try
-            {
-                var attributes = fileInfo.Attributes;
-                if ((attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
-                {
-                    isWritable = false;
-                }
-            }
-            catch
-            {
-                isWritable = false;
-            }
+            var isWritable = IsFileWritable(fileInfo);
 
             return new FilePreviewResult
             {
@@ -293,22 +280,10 @@ public partial class BulkEditService
         }
         catch (Exception ex)
         {
+            LogFilePreviewFailed(BulkEditLog, ex, filePath);
             var fileInfo = new System.IO.FileInfo(filePath);
 
-            // Check if file is writable by trying to determine file attributes
-            bool isWritable = true;
-            try
-            {
-                var attributes = fileInfo.Attributes;
-                if ((attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
-                {
-                    isWritable = false;
-                }
-            }
-            catch
-            {
-                isWritable = false;
-            }
+            var isWritable = IsFileWritable(fileInfo);
 
             return new FilePreviewResult
             {
@@ -326,6 +301,26 @@ public partial class BulkEditService
                 WouldChange = false,
                 SkipReason = $"Failed to generate preview: {ex.Message}"
             };
+        }
+    }
+
+    /// <summary>
+    /// Determine whether a file is writable based on its read-only attribute.
+    /// Files whose attributes cannot be read are reported as not writable.
+    /// </summary>
+    private static bool IsFileWritable(System.IO.FileInfo fileInfo)
+    {
+        try
+        {
+            return (fileInfo.Attributes & FileAttributes.ReadOnly) != FileAttributes.ReadOnly;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 }

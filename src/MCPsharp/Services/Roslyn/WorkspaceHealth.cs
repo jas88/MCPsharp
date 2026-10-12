@@ -46,6 +46,17 @@ public class WorkspaceHealth
     public int WarningCount { get; set; }
     
     /// <summary>
+    /// Compilation errors with distinct IDs ("Assembly: ID message at location"), to explain a non-zero <see cref="ErrorCount"/>.
+    /// </summary>
+    public IReadOnlyList<string> ErrorSamples { get; set; } = [];
+
+    /// <summary>
+    /// Analyzers and source generators that could not be loaded. A generator that fails to load
+    /// typically shows up as errors such as CS0759 for source-generated partial methods.
+    /// </summary>
+    public IReadOnlyList<string> AnalyzerLoadFailures { get; set; } = [];
+
+    /// <summary>
     /// Per-file health status.
     /// </summary>
     public Dictionary<string, FileHealth> FileStatus { get; set; } = new();

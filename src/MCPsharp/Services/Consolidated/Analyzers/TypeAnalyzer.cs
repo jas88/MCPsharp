@@ -8,7 +8,7 @@ namespace MCPsharp.Services.Consolidated.Analyzers;
 /// <summary>
 /// Analyzes type-level code elements including structure, inheritance, implementations, and members.
 /// </summary>
-public class TypeAnalyzer
+public partial class TypeAnalyzer
 {
     private readonly ClassStructureService? _classStructure;
     private readonly SymbolQueryService? _symbolQuery;
@@ -52,7 +52,7 @@ public class TypeAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting type structure for {Type}", typeName);
+            LogErrorGettingTypeStructureFor(_logger, ex, typeName);
         }
 
         return null;
@@ -75,7 +75,7 @@ public class TypeAnalyzer
                 InheritanceDepth = 0
             };
 
-            if (structure.BaseTypes.Any())
+            if (structure.BaseTypes.Count > 0)
             {
                 inheritance.InheritanceDepth = 1;
             }
@@ -93,7 +93,7 @@ public class TypeAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting type inheritance for {Type}", typeName);
+            LogErrorGettingTypeInheritanceFor(_logger, ex, typeName);
         }
 
         return null;
@@ -122,7 +122,7 @@ public class TypeAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting type usages for {Type}", typeName);
+            LogErrorGettingTypeUsagesFor(_logger, ex, typeName);
         }
 
         return null;
@@ -160,7 +160,7 @@ public class TypeAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting type implementations for {Type}", typeName);
+            LogErrorGettingTypeImplementationsFor(_logger, ex, typeName);
         }
 
         return null;
@@ -236,7 +236,7 @@ public class TypeAnalyzer
 
             var publicMembers = members.Count(m => m.Accessibility == "Public");
             var privateMembers = members.Count(m => m.Accessibility == "Private");
-            var staticMembers = members.Count(m => m.IsStatic == true);
+            var staticMembers = members.Count(m => m.IsStatic);
             var abstractMembers = members.Count(m => m.Accessibility == "Protected" || m.Accessibility == "Internal");
 
             var complexMembers = members
@@ -256,7 +256,7 @@ public class TypeAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing type members for {Type}", typeName);
+            LogErrorAnalyzingTypeMembersFor(_logger, ex, typeName);
         }
 
         return null;
@@ -297,7 +297,7 @@ public class TypeAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating type metrics for {Type}", typeName);
+            LogErrorCalculatingTypeMetricsFor(_logger, ex, typeName);
         }
 
         return null;
@@ -336,4 +336,22 @@ public class TypeAnalyzer
 
         return members;
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting type structure for {Type}")]
+    private static partial void LogErrorGettingTypeStructureFor(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting type inheritance for {Type}")]
+    private static partial void LogErrorGettingTypeInheritanceFor(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting type usages for {Type}")]
+    private static partial void LogErrorGettingTypeUsagesFor(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting type implementations for {Type}")]
+    private static partial void LogErrorGettingTypeImplementationsFor(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing type members for {Type}")]
+    private static partial void LogErrorAnalyzingTypeMembersFor(ILogger logger, Exception exception, string type);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error calculating type metrics for {Type}")]
+    private static partial void LogErrorCalculatingTypeMetricsFor(ILogger logger, Exception exception, string type);
 }

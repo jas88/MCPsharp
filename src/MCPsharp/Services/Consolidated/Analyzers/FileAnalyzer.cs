@@ -7,7 +7,7 @@ namespace MCPsharp.Services.Consolidated.Analyzers;
 /// <summary>
 /// Analyzes file-level code elements including structure, complexity, dependencies, and quality.
 /// </summary>
-public class FileAnalyzer
+public partial class FileAnalyzer
 {
     private readonly ILogger<FileAnalyzer> _logger;
 
@@ -47,10 +47,10 @@ public class FileAnalyzer
 
             if (language == "C#")
             {
-                var namespaceMatches = Regex.Matches(content, @"namespace\s+([^\s{;]+)");
+                var namespaceMatches = Regex.Matches(content, @"namespace\s+([^\s{;]+)", RegexOptions.None, TimeSpan.FromSeconds(1));
                 namespaces.AddRange(namespaceMatches.Cast<Match>().Select(m => m.Groups[1].Value));
 
-                var typeMatches = Regex.Matches(content, @"(class|interface|struct|enum|record)\s+([^\s<:,{]+)");
+                var typeMatches = Regex.Matches(content, @"(class|interface|struct|enum|record)\s+([^\s<:,{]+)", RegexOptions.None, TimeSpan.FromSeconds(1));
                 types.AddRange(typeMatches.Cast<Match>().Select(m => m.Groups[2].Value));
             }
 
@@ -67,7 +67,7 @@ public class FileAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting file basic info for {File}", filePath);
+            LogErrorGettingFileBasicInfo(_logger, ex, filePath);
         }
 
         return null;
@@ -88,11 +88,11 @@ public class FileAnalyzer
 
             if (basicInfo.Language == "C#")
             {
-                var namespaceMatches = Regex.Matches(content, @"namespace\s+([^\s{]+)");
+                var namespaceMatches = Regex.Matches(content, @"namespace\s+([^\s{]+)", RegexOptions.None, TimeSpan.FromSeconds(1));
                 namespaces.AddRange(namespaceMatches.Cast<Match>().Select(m => m.Groups[1].Value));
 
                 var typePattern = @"(class|interface|struct|enum|record)\s+([^\s<:,{]+)\s*(?::\s*([^{]+))?";
-                var typeMatches = Regex.Matches(content, typePattern);
+                var typeMatches = Regex.Matches(content, typePattern, RegexOptions.None, TimeSpan.FromSeconds(1));
                 foreach (Match match in typeMatches)
                 {
                     types.Add(new FileTypeDefinition
@@ -110,7 +110,7 @@ public class FileAnalyzer
                 }
 
                 var usingPattern = @"using\s+([^\s;]+)";
-                var usingMatches = Regex.Matches(content, usingPattern);
+                var usingMatches = Regex.Matches(content, usingPattern, RegexOptions.None, TimeSpan.FromSeconds(1));
                 foreach (Match match in usingMatches)
                 {
                     imports.Add(new FileImport
@@ -138,7 +138,7 @@ public class FileAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing file structure for {File}", filePath);
+            LogErrorAnalyzingFileStructureFor(_logger, ex, filePath);
         }
 
         return null;
@@ -153,7 +153,7 @@ public class FileAnalyzer
             var linesOfCode = lines.Length;
 
             var methodPattern = @"(?:public|private|protected|internal)?\s*(?:static|async|virtual|override)?\s*[\w<>]+\s+(\w+)\s*\(";
-            var methodMatches = Regex.Matches(content, methodPattern);
+            var methodMatches = Regex.Matches(content, methodPattern, RegexOptions.None, TimeSpan.FromSeconds(1));
 
             var methodComplexities = new List<MethodComplexity>();
             foreach (Match match in methodMatches)
@@ -191,7 +191,7 @@ public class FileAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing file complexity for {File}", filePath);
+            LogErrorAnalyzingFileComplexityFor(_logger, ex, filePath);
         }
 
         return null;
@@ -205,15 +205,15 @@ public class FileAnalyzer
             var dependencies = new List<string>();
             var externalDependencies = new List<string>();
 
-            if (Path.GetExtension(filePath).ToLowerInvariant() == ".cs")
+            if (string.Equals(Path.GetExtension(filePath), ".cs", StringComparison.OrdinalIgnoreCase))
             {
                 var usingPattern = @"using\s+([^\s;]+)";
-                var matches = Regex.Matches(content, usingPattern);
+                var matches = Regex.Matches(content, usingPattern, RegexOptions.None, TimeSpan.FromSeconds(1));
                 dependencies.AddRange(matches.Cast<Match>().Select(m => m.Groups[1].Value));
 
                 externalDependencies = dependencies
-                    .Where(d => d.StartsWith("System.") || d.StartsWith("Microsoft.") ||
-                                d.Contains('.') && !d.StartsWith("Project"))
+                    .Where(d => d.StartsWith("System.", StringComparison.Ordinal) || d.StartsWith("Microsoft.", StringComparison.Ordinal) ||
+                                d.Contains('.') && !d.StartsWith("Project", StringComparison.Ordinal))
                     .ToList();
             }
 
@@ -238,7 +238,7 @@ public class FileAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing file dependencies for {File}", filePath);
+            LogErrorAnalyzingFileDependenciesFor(_logger, ex, filePath);
         }
 
         return null;
@@ -273,7 +273,7 @@ public class FileAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing file quality for {File}", filePath);
+            LogErrorAnalyzingFileQualityFor(_logger, ex, filePath);
         }
 
         return null;
@@ -315,7 +315,7 @@ public class FileAnalyzer
                         {
                             FilePath = filePath,
                             Line = i + 1,
-                            Column = line.IndexOf("TODO") >= 0 ? line.IndexOf("TODO") : line.IndexOf("FIXME")
+                            Column = line.Contains("TODO", StringComparison.Ordinal) ? line.IndexOf("TODO", StringComparison.Ordinal) : line.IndexOf("FIXME", StringComparison.Ordinal)
                         }
                     });
                 }
@@ -325,7 +325,7 @@ public class FileAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error detecting file issues for {File}", filePath);
+            LogErrorDetectingFileIssuesFor(_logger, ex, filePath);
         }
 
         return null;
@@ -363,7 +363,7 @@ public class FileAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating file suggestions for {File}", filePath);
+            LogErrorGeneratingFileSuggestionsFor(_logger, ex, filePath);
         }
 
         return null;
@@ -409,16 +409,37 @@ public class FileAnalyzer
         var wordKeywords = new[] { "if", "else", "while", "for", "foreach", "switch", "case" };
         foreach (var keyword in wordKeywords)
         {
-            complexity += Regex.Matches(methodContent, $@"\b{keyword}\b").Count;
+            complexity += Regex.Count(methodContent, $@"\b{keyword}\b", RegexOptions.None, TimeSpan.FromSeconds(1));
         }
 
         // Operator-based keywords (no word boundary)
         var operatorKeywords = new[] { "&&", @"\|\|", @"\?:" };
         foreach (var keyword in operatorKeywords)
         {
-            complexity += Regex.Matches(methodContent, keyword).Count;
+            complexity += Regex.Count(methodContent, keyword, RegexOptions.None, TimeSpan.FromSeconds(1));
         }
 
         return complexity;
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting file basic info for {File}")]
+    private static partial void LogErrorGettingFileBasicInfo(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file structure for {File}")]
+    private static partial void LogErrorAnalyzingFileStructureFor(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file complexity for {File}")]
+    private static partial void LogErrorAnalyzingFileComplexityFor(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file dependencies for {File}")]
+    private static partial void LogErrorAnalyzingFileDependenciesFor(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing file quality for {File}")]
+    private static partial void LogErrorAnalyzingFileQualityFor(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error detecting file issues for {File}")]
+    private static partial void LogErrorDetectingFileIssuesFor(ILogger logger, Exception exception, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error generating file suggestions for {File}")]
+    private static partial void LogErrorGeneratingFileSuggestionsFor(ILogger logger, Exception exception, string file);
 }

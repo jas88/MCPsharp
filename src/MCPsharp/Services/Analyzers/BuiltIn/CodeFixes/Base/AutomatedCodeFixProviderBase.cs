@@ -11,7 +11,7 @@ namespace MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Base;
 /// Abstract base class for automated code fix providers
 /// Provides common functionality for batch processing and progress reporting
 /// </summary>
-public abstract class AutomatedCodeFixProviderBase : IAutomatedCodeFixProvider
+public abstract partial class AutomatedCodeFixProviderBase : IAutomatedCodeFixProvider
 {
     protected ILogger Logger { get; }
 
@@ -46,8 +46,7 @@ public abstract class AutomatedCodeFixProviderBase : IAutomatedCodeFixProvider
 
         try
         {
-            Logger.LogInformation("Starting batch fix operation for {ProviderName} on {DocumentCount} documents",
-                Name, documents.Length);
+            LogBatchStarting(Logger, Name, documents.Length);
 
             for (int i = 0; i < documents.Length; i++)
             {
@@ -73,12 +72,11 @@ public abstract class AutomatedCodeFixProviderBase : IAutomatedCodeFixProvider
                     totalDiagnostics += docResult.DiagnosticsFound;
                     totalFixed += docResult.DiagnosticsFixed;
 
-                    Logger.LogDebug("Processed {FilePath}: {Fixed}/{Found} diagnostics fixed",
-                        filePath, docResult.DiagnosticsFixed, docResult.DiagnosticsFound);
+                    LogDocumentProcessed(Logger, filePath, docResult.DiagnosticsFixed, docResult.DiagnosticsFound);
                 }
                 catch (Exception ex)
                 {
-                    Logger.LogError(ex, "Error processing document: {FilePath}", filePath);
+                    LogDocumentProcessingError(Logger, ex, filePath);
                     results.Add(new DocumentFixResult
                     {
                         FilePath = filePath,
@@ -97,8 +95,7 @@ public abstract class AutomatedCodeFixProviderBase : IAutomatedCodeFixProvider
 
             var duration = DateTime.UtcNow - startTime;
 
-            Logger.LogInformation("Batch fix operation completed: {Fixed}/{Total} diagnostics fixed in {Duration}ms",
-                totalFixed, totalDiagnostics, duration.TotalMilliseconds);
+            LogBatchCompleted(Logger, totalFixed, totalDiagnostics, duration.TotalMilliseconds);
 
             return new BatchFixResult
             {
@@ -112,7 +109,7 @@ public abstract class AutomatedCodeFixProviderBase : IAutomatedCodeFixProvider
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Batch fix operation failed for {ProviderName}", Name);
+            LogBatchFailed(Logger, ex, Name);
 
             return new BatchFixResult
             {
@@ -154,7 +151,11 @@ public abstract class AutomatedCodeFixProviderBase : IAutomatedCodeFixProvider
 
             var compilationWithAnalyzers = compilation.WithAnalyzers(
                 ImmutableArray.Create(analyzer),
-                options: null);
+                new CompilationWithAnalyzersOptions(
+                    options: new AnalyzerOptions(ImmutableArray<AdditionalText>.Empty),
+                    onAnalyzerException: null,
+                    concurrentAnalysis: true,
+                    logAnalyzerExecutionTime: true));
 
             var allDiagnostics = await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync(cancellationToken);
 
@@ -166,7 +167,7 @@ public abstract class AutomatedCodeFixProviderBase : IAutomatedCodeFixProvider
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error getting diagnostics for document: {FilePath}", document.FilePath);
+            LogGetDiagnosticsError(Logger, ex, document.FilePath);
             return ImmutableArray<Diagnostic>.Empty;
         }
     }
@@ -174,7 +175,7 @@ public abstract class AutomatedCodeFixProviderBase : IAutomatedCodeFixProvider
     /// <summary>
     /// Helper method to apply a code action and return the modified document
     /// </summary>
-    protected async Task<Document> ApplyCodeActionAsync(
+    protected static async Task<Document> ApplyCodeActionAsync(
         Document document,
         CodeAction codeAction,
         CancellationToken cancellationToken)
@@ -197,4 +198,40 @@ public abstract class AutomatedCodeFixProviderBase : IAutomatedCodeFixProvider
 
         return document;
     }
+
+    /// <summary>
+    /// Logs (at trace level) that a fix was applied for the given diagnostic
+    /// </summary>
+    protected void LogAppliedFix(Diagnostic diagnostic)
+    {
+        if (Logger.IsEnabled(LogLevel.Trace))
+        {
+            var lineSpan = diagnostic.Location.GetLineSpan();
+            LogAppliedFixAt(Logger, lineSpan);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Trace, Message = "Applied fix for diagnostic at {Location}")]
+    private static partial void LogAppliedFixAt(ILogger logger, FileLinePositionSpan location);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error fixing document: {FilePath}")]
+    protected static partial void LogFixDocumentError(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting batch fix operation for {ProviderName} on {DocumentCount} documents")]
+    private static partial void LogBatchStarting(ILogger logger, string providerName, int documentCount);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Processed {FilePath}: {Fixed}/{Found} diagnostics fixed")]
+    private static partial void LogDocumentProcessed(ILogger logger, string filePath, int @fixed, int found);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error processing document: {FilePath}")]
+    private static partial void LogDocumentProcessingError(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Batch fix operation completed: {Fixed}/{Total} diagnostics fixed in {Duration}ms")]
+    private static partial void LogBatchCompleted(ILogger logger, int @fixed, int total, double duration);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Batch fix operation failed for {ProviderName}")]
+    private static partial void LogBatchFailed(ILogger logger, Exception exception, string providerName);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting diagnostics for document: {FilePath}")]
+    private static partial void LogGetDiagnosticsError(ILogger logger, Exception exception, string? filePath);
 }

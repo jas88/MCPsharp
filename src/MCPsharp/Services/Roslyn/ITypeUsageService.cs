@@ -14,14 +14,14 @@ public interface ITypeUsageService
     Task<TypeUsageResult?> FindTypeUsagesAsync(string typeName, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Find all usages of a type at a specific location
-    /// </summary>
-    Task<TypeUsageResult?> FindTypeUsagesAtLocationAsync(string filePath, int line, int column, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Find all usages of a specific type symbol
     /// </summary>
     Task<TypeUsageResult?> FindTypeUsagesAsync(INamedTypeSymbol typeSymbol, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Find all usages of a type at a specific location
+    /// </summary>
+    Task<TypeUsageResult?> FindTypeUsagesAtLocationAsync(string filePath, int line, int column, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Find all usages of a type by its full name

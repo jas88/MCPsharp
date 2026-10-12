@@ -10,7 +10,7 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Implementation of analyzer registry for discovery and management
 /// </summary>
-public class AnalyzerRegistry : IAnalyzerRegistry
+public partial class AnalyzerRegistry : IAnalyzerRegistry
 {
     private readonly ILogger<AnalyzerRegistry> _logger;
     private readonly Dictionary<string, IAnalyzer> _analyzers;
@@ -33,7 +33,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
         {
             if (string.IsNullOrEmpty(analyzer.Id))
             {
-                _logger.LogWarning("Attempted to register analyzer with empty ID");
+                LogEmptyAnalyzerId(_logger);
                 return false;
             }
 
@@ -41,7 +41,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
             {
                 if (_analyzers.ContainsKey(analyzer.Id))
                 {
-                    _logger.LogWarning("Analyzer {AnalyzerId} is already registered", analyzer.Id);
+                    LogAlreadyRegistered(_logger, analyzer.Id);
                     return false;
                 }
 
@@ -65,14 +65,14 @@ public class AnalyzerRegistry : IAnalyzerRegistry
 
             await analyzer.InitializeAsync(cancellationToken);
 
-            _logger.LogInformation("Registered analyzer: {AnalyzerId} v{Version}", analyzer.Id, analyzer.Version);
+            LogRegistered(_logger, analyzer.Id, analyzer.Version);
             AnalyzerRegistered?.Invoke(this, new AnalyzerRegisteredEventArgs(analyzer.Id, _analyzerInfos[analyzer.Id]));
 
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error registering analyzer: {AnalyzerId}", analyzer.Id);
+            LogErrorRegistering(_logger, ex, analyzer.Id);
             return false;
         }
     }
@@ -83,14 +83,12 @@ public class AnalyzerRegistry : IAnalyzerRegistry
         {
             lock (_lock)
             {
-                if (!_analyzers.ContainsKey(analyzerId))
+                if (!_analyzers.Remove(analyzerId, out var analyzer))
                 {
-                    _logger.LogWarning("Analyzer {AnalyzerId} is not registered", analyzerId);
+                    LogNotRegistered(_logger, analyzerId);
                     return Task.FromResult(false);
                 }
 
-                var analyzer = _analyzers[analyzerId];
-                _analyzers.Remove(analyzerId);
                 _analyzerInfos.Remove(analyzerId);
 
                 // Dispose analyzer asynchronously
@@ -102,19 +100,19 @@ public class AnalyzerRegistry : IAnalyzerRegistry
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error disposing analyzer: {AnalyzerId}", analyzerId);
+                        LogErrorDisposing(_logger, ex, analyzerId);
                     }
                 }, cancellationToken);
             }
 
-            _logger.LogInformation("Unregistered analyzer: {AnalyzerId}", analyzerId);
+            LogUnregistered(_logger, analyzerId);
             AnalyzerUnregistered?.Invoke(this, new AnalyzerUnregisteredEventArgs(analyzerId));
 
             return Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error unregistering analyzer: {AnalyzerId}", analyzerId);
+            LogErrorUnregistering(_logger, ex, analyzerId);
             return Task.FromResult(false);
         }
     }
@@ -151,16 +149,16 @@ public class AnalyzerRegistry : IAnalyzerRegistry
         }
     }
 
-    public async Task<ImmutableArray<AnalyzerInfo>> DiscoverAnalyzersAsync(string directoryPath, CancellationToken cancellationToken = default)
+    public Task<ImmutableArray<AnalyzerInfo>> DiscoverAnalyzersAsync(string directoryPath, CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Discovering analyzers in directory: {DirectoryPath}", directoryPath);
+            LogDiscovering(_logger, directoryPath);
 
             if (!Directory.Exists(directoryPath))
             {
-                _logger.LogWarning("Directory does not exist: {DirectoryPath}", directoryPath);
-                return ImmutableArray<AnalyzerInfo>.Empty;
+                LogDirectoryDoesNotExist(_logger, directoryPath);
+                return Task.FromResult(ImmutableArray<AnalyzerInfo>.Empty);
             }
 
             var discoveredAnalyzers = new List<AnalyzerInfo>();
@@ -169,22 +167,22 @@ public class AnalyzerRegistry : IAnalyzerRegistry
             {
                 try
                 {
-                    var analyzerInfos = await LoadAnalyzersFromAssemblyAsync(dllFile, cancellationToken);
+                    var analyzerInfos = LoadAnalyzersFromAssembly(dllFile);
                     discoveredAnalyzers.AddRange(analyzerInfos);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error loading analyzers from assembly: {AssemblyPath}", dllFile);
+                    LogErrorLoadingAssembly(_logger, ex, dllFile);
                 }
             }
 
-            _logger.LogInformation("Discovered {Count} analyzers in {DirectoryPath}", discoveredAnalyzers.Count, directoryPath);
-            return discoveredAnalyzers.ToImmutableArray();
+            LogDiscovered(_logger, discoveredAnalyzers.Count, directoryPath);
+            return Task.FromResult(discoveredAnalyzers.ToImmutableArray());
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error discovering analyzers in directory: {DirectoryPath}", directoryPath);
-            return ImmutableArray<AnalyzerInfo>.Empty;
+            LogErrorDiscovering(_logger, ex, directoryPath);
+            return Task.FromResult(ImmutableArray<AnalyzerInfo>.Empty);
         }
     }
 
@@ -256,7 +254,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
                 .Where(t => t.IsClass && !t.IsAbstract && typeof(IAnalyzer).IsAssignableFrom(t))
                 .ToList();
 
-            if (!analyzerTypes.Any())
+            if (analyzerTypes.Count == 0)
             {
                 return Task.FromResult(new CompatibilityResult
                 {
@@ -274,11 +272,12 @@ public class AnalyzerRegistry : IAnalyzerRegistry
                 }
                 catch (Exception ex)
                 {
+                    LogReferencedAssemblyLoadFailed(_logger, ex, referencedAssembly.Name);
                     missingDependencies.Add($"{referencedAssembly.Name}: {ex.Message}");
                 }
             }
 
-            var isCompatible = assemblyVersion >= requiredVersion && !missingDependencies.Any();
+            var isCompatible = assemblyVersion >= requiredVersion && missingDependencies.Count == 0;
 
             var result = new CompatibilityResult
             {
@@ -295,7 +294,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating assembly compatibility: {AssemblyPath}", assemblyPath);
+            LogErrorValidatingCompatibility(_logger, ex, assemblyPath);
             return Task.FromResult(new CompatibilityResult
             {
                 IsCompatible = false,
@@ -322,7 +321,7 @@ public class AnalyzerRegistry : IAnalyzerRegistry
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting dependencies for analyzer: {AnalyzerId}", analyzerId);
+            LogErrorGettingDependencies(_logger, ex, analyzerId);
             return Task.FromResult(ImmutableArray<AnalyzerDependency>.Empty);
         }
     }
@@ -333,25 +332,17 @@ public class AnalyzerRegistry : IAnalyzerRegistry
         {
             var dependencies = await GetDependenciesAsync(analyzerId, cancellationToken);
 
-            foreach (var dependency in dependencies.Where(d => !d.IsOptional))
-            {
-                // Check if dependency is available
-                if (!await IsDependencyAvailableAsync(dependency))
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            // Check that every required dependency is available
+            return dependencies.Where(d => !d.IsOptional).All(IsDependencyAvailable);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking dependencies for analyzer: {AnalyzerId}", analyzerId);
+            LogErrorCheckingDependencies(_logger, ex, analyzerId);
             return false;
         }
     }
 
-    private Task<List<AnalyzerInfo>> LoadAnalyzersFromAssemblyAsync(string assemblyPath, CancellationToken cancellationToken)
+    private List<AnalyzerInfo> LoadAnalyzersFromAssembly(string assemblyPath)
     {
         var analyzerInfos = new List<AnalyzerInfo>();
 
@@ -390,24 +381,82 @@ public class AnalyzerRegistry : IAnalyzerRegistry
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error instantiating analyzer type: {AnalyzerType}", analyzerType.Name);
+                LogErrorInstantiating(_logger, ex, analyzerType.Name);
             }
         }
 
-        return Task.FromResult(analyzerInfos);
+        return analyzerInfos;
     }
 
-    private Task<bool> IsDependencyAvailableAsync(AnalyzerDependency dependency)
+    private bool IsDependencyAvailable(AnalyzerDependency dependency)
     {
         try
         {
             // Simple check - try to load the assembly
             Assembly.Load(dependency.Name);
-            return Task.FromResult(true);
+            return true;
         }
-        catch
+        catch (Exception ex)
         {
-            return Task.FromResult(false);
+            LogDependencyUnavailable(_logger, ex, dependency.Name);
+            return false;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Attempted to register analyzer with empty ID")]
+    private static partial void LogEmptyAnalyzerId(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Analyzer {AnalyzerId} is already registered")]
+    private static partial void LogAlreadyRegistered(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Registered analyzer: {AnalyzerId} v{Version}")]
+    private static partial void LogRegistered(ILogger logger, string analyzerId, Version version);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error registering analyzer: {AnalyzerId}")]
+    private static partial void LogErrorRegistering(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Analyzer {AnalyzerId} is not registered")]
+    private static partial void LogNotRegistered(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error disposing analyzer: {AnalyzerId}")]
+    private static partial void LogErrorDisposing(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Unregistered analyzer: {AnalyzerId}")]
+    private static partial void LogUnregistered(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error unregistering analyzer: {AnalyzerId}")]
+    private static partial void LogErrorUnregistering(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Discovering analyzers in directory: {DirectoryPath}")]
+    private static partial void LogDiscovering(ILogger logger, string directoryPath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Directory does not exist: {DirectoryPath}")]
+    private static partial void LogDirectoryDoesNotExist(ILogger logger, string directoryPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzers from assembly: {AssemblyPath}")]
+    private static partial void LogErrorLoadingAssembly(ILogger logger, Exception exception, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Discovered {Count} analyzers in {DirectoryPath}")]
+    private static partial void LogDiscovered(ILogger logger, int count, string directoryPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error discovering analyzers in directory: {DirectoryPath}")]
+    private static partial void LogErrorDiscovering(ILogger logger, Exception exception, string directoryPath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Referenced assembly {AssemblyName} could not be loaded")]
+    private static partial void LogReferencedAssemblyLoadFailed(ILogger logger, Exception exception, string? assemblyName);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error validating assembly compatibility: {AssemblyPath}")]
+    private static partial void LogErrorValidatingCompatibility(ILogger logger, Exception exception, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting dependencies for analyzer: {AnalyzerId}")]
+    private static partial void LogErrorGettingDependencies(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error checking dependencies for analyzer: {AnalyzerId}")]
+    private static partial void LogErrorCheckingDependencies(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error instantiating analyzer type: {AnalyzerType}")]
+    private static partial void LogErrorInstantiating(ILogger logger, Exception exception, string analyzerType);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Dependency {DependencyName} is not available")]
+    private static partial void LogDependencyUnavailable(ILogger logger, Exception exception, string dependencyName);
 }

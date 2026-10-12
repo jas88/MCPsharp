@@ -33,14 +33,14 @@ public class McpToolRegistryTests
     }
 
     [Test]
-    public void GetTools_ReturnsAllThirtySevenTools()
+    public void GetTools_WithoutOptionalServices_ReturnsTheFortyCoreTools()
     {
         // Act
         var tools = _registry.GetTools();
 
         // Assert
         Assert.That(tools, Is.Not.Null);
-        Assert.That(tools.Count, Is.EqualTo(37));
+        Assert.That(tools.Count, Is.EqualTo(40));
 
         var toolNames = tools.Select(t => t.Name).ToList();
 
@@ -92,6 +92,11 @@ public class McpToolRegistryTests
 
         // Refactoring tools (1)
         Assert.That(toolNames, Does.Contain("extract_method"));
+
+        // Analyzer configuration tools (3), which need no optional service
+        Assert.That(toolNames, Does.Contain("configure_analyzer"));
+        Assert.That(toolNames, Does.Contain("get_analyzer_config"));
+        Assert.That(toolNames, Does.Contain("reset_analyzer_config"));
     }
 
     [Test]

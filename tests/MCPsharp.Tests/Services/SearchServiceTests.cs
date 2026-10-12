@@ -92,7 +92,7 @@ public class SearchServiceTests
         // Assert
         Assert.That(result.Success, Is.True);
         Assert.That(result.TotalMatches, Is.EqualTo(2));
-        Assert.That(result.Matches, Has.All.Matches<SearchMatch>(m => m.LineNumber == 1));
+        Assert.That(result.Matches, Has.All.Matches<SearchMatch>(m => m is not null && m.LineNumber == 1));
     }
 
     [Test]
@@ -314,7 +314,7 @@ public class SearchServiceTests
         // Assert
         Assert.That(result.Success, Is.True);
         // Should only find match in .cs file, not .dll
-        Assert.That(result.Matches, Has.All.Matches<SearchMatch>(m => m.FilePath.EndsWith(".cs")));
+        Assert.That(result.Matches, Has.All.Matches<SearchMatch>(m => m is not null && m.FilePath.EndsWith(".cs", StringComparison.Ordinal)));
     }
 
     [Test]
@@ -337,7 +337,7 @@ public class SearchServiceTests
         // Assert
         Assert.That(result.Success, Is.True);
         // Should not find matches in bin directory
-        Assert.That(result.Matches, Has.All.Matches<SearchMatch>(m => !m.FilePath.Contains("bin")));
+        Assert.That(result.Matches, Has.All.Matches<SearchMatch>(m => m is not null && !m.FilePath.Contains("bin")));
     }
 
     [Test]
@@ -399,7 +399,7 @@ public class SearchServiceTests
         };
 
         // Act & Assert - use CatchAsync to accept both OperationCanceledException and TaskCanceledException
-        Assert.CatchAsync<OperationCanceledException>(
+        await Assert.CatchAsync<OperationCanceledException>(
             async () => await _searchService.SearchTextAsync(request, cts.Token));
     }
 

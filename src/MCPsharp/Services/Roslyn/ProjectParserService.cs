@@ -1,4 +1,6 @@
 using System.Xml.Linq;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models.Roslyn;
 
 namespace MCPsharp.Services.Roslyn;
@@ -6,8 +8,20 @@ namespace MCPsharp.Services.Roslyn;
 /// <summary>
 /// Service for parsing .csproj files and project information
 /// </summary>
-public class ProjectParserService
+public partial class ProjectParserService
 {
+    private readonly ILogger<ProjectParserService> _logger;
+
+    public ProjectParserService()
+        : this(NullLogger<ProjectParserService>.Instance)
+    {
+    }
+
+    public ProjectParserService(ILogger<ProjectParserService> logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
     /// <summary>
     /// Parse a .csproj file and return project information
     /// </summary>
@@ -40,8 +54,8 @@ public class ProjectParserService
             // Find all .cs files
             var sourceFiles = Directory.Exists(projectDir)
                 ? Directory.EnumerateFiles(projectDir, "*.cs", SearchOption.AllDirectories)
-                    .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/") &&
-                               !f.Contains("\\obj\\") && !f.Contains("\\bin\\"))
+                    .Where(f => !f.Contains("/obj/", StringComparison.Ordinal) && !f.Contains("/bin/", StringComparison.Ordinal) &&
+                               !f.Contains("\\obj\\", StringComparison.Ordinal) && !f.Contains("\\bin\\", StringComparison.Ordinal))
                     .Select(f => Path.GetRelativePath(projectDir, f))
                     .ToList()
                 : new List<string>();
@@ -62,9 +76,13 @@ public class ProjectParserService
                 FileCount = sourceFiles.Count
             };
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            LogParseFailed(_logger, ex, projectPath);
             return null;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to parse project file {ProjectPath}")]
+    private static partial void LogParseFailed(ILogger logger, Exception exception, string projectPath);
 }

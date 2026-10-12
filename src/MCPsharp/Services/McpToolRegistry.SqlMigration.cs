@@ -55,6 +55,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeMigrations));
             return new ToolCallResult { Success = false, Error = $"Error analyzing migrations: {ex.Message}" };
         }
     }
@@ -103,6 +104,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectBreakingChanges));
             return new ToolCallResult { Success = false, Error = $"Error detecting breaking changes: {ex.Message}" };
         }
     }
@@ -143,6 +145,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetMigrationHistory));
             return new ToolCallResult { Success = false, Error = $"Error getting migration history: {ex.Message}" };
         }
     }
@@ -182,6 +185,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetMigrationDependencies));
             return new ToolCallResult { Success = false, Error = $"Error getting migration dependencies: {ex.Message}" };
         }
     }
@@ -226,6 +230,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateMigrationReport));
             return new ToolCallResult { Success = false, Error = $"Error generating migration report: {ex.Message}" };
         }
     }
@@ -266,6 +271,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateMigrations));
             return new ToolCallResult { Success = false, Error = $"Error validating migrations: {ex.Message}" };
         }
     }

@@ -57,6 +57,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeLargeFiles));
             return new ToolCallResult { Success = false, Error = $"Error analyzing large files: {ex.Message}" };
         }
     }
@@ -116,6 +117,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteOptimizeLargeClass));
             return new ToolCallResult { Success = false, Error = $"Error optimizing large class: {ex.Message}" };
         }
     }
@@ -177,6 +179,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteOptimizeLargeMethod));
             return new ToolCallResult { Success = false, Error = $"Error optimizing large method: {ex.Message}" };
         }
     }
@@ -227,6 +230,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetComplexityMetrics));
             return new ToolCallResult { Success = false, Error = $"Error getting complexity metrics: {ex.Message}" };
         }
     }
@@ -276,6 +280,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateOptimizationPlan));
             return new ToolCallResult { Success = false, Error = $"Error generating optimization plan: {ex.Message}" };
         }
     }
@@ -322,6 +327,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectGodClasses));
             return new ToolCallResult { Success = false, Error = $"Error detecting god classes: {ex.Message}" };
         }
     }
@@ -368,6 +374,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectGodMethods));
             return new ToolCallResult { Success = false, Error = $"Error detecting god methods: {ex.Message}" };
         }
     }
@@ -419,6 +426,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeCodeSmells));
             return new ToolCallResult { Success = false, Error = $"Error analyzing code smells: {ex.Message}" };
         }
     }
@@ -470,6 +478,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetOptimizationRecommendations));
             return new ToolCallResult { Success = false, Error = $"Error getting optimization recommendations: {ex.Message}" };
         }
     }

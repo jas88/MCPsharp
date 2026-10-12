@@ -6,7 +6,7 @@ namespace MCPsharp.Services.Phase3.SqlMigration;
 /// <summary>
 /// Tracks schema evolution across migrations
 /// </summary>
-internal class SchemaEvolutionTracker
+internal sealed partial class SchemaEvolutionTracker
 {
     private readonly ILogger<SchemaEvolutionTracker> _logger;
 
@@ -17,7 +17,7 @@ internal class SchemaEvolutionTracker
 
     public SchemaEvolution TrackSchemaEvolution(List<MigrationInfo> migrations)
     {
-        _logger.LogInformation("Tracking schema evolution for {MigrationCount} migrations", migrations.Count);
+        LogTrackingSchemaEvolution(_logger, migrations.Count);
 
         var evolution = new SchemaEvolution();
         var snapshots = new List<SchemaSnapshot>();
@@ -51,12 +51,12 @@ internal class SchemaEvolutionTracker
 
         evolution.Snapshots = snapshots;
         evolution.Changes = changes;
-        evolution.Metrics = CalculateEvolutionMetrics(snapshots, changes);
+        evolution.Metrics = CalculateEvolutionMetrics(snapshots);
 
         return evolution;
     }
 
-    public void BuildSchemaChanges(MigrationAnalysisResult result)
+    public static void BuildSchemaChanges(MigrationAnalysisResult result)
     {
         var schemaChanges = new Dictionary<string, List<SchemaChange>>();
 
@@ -84,7 +84,7 @@ internal class SchemaEvolutionTracker
         result.SchemaChanges = schemaChanges;
     }
 
-    private Dictionary<string, TableDefinition> ApplyMigrationOperations(Dictionary<string, TableDefinition> currentSchema, MigrationInfo migration)
+    private static Dictionary<string, TableDefinition> ApplyMigrationOperations(Dictionary<string, TableDefinition> currentSchema, MigrationInfo migration)
     {
         var newSchema = new Dictionary<string, TableDefinition>(currentSchema);
 
@@ -121,7 +121,7 @@ internal class SchemaEvolutionTracker
         return newSchema;
     }
 
-    private TableDefinition CloneTableDefinition(TableDefinition table)
+    private static TableDefinition CloneTableDefinition(TableDefinition table)
     {
         return new TableDefinition
         {
@@ -145,7 +145,7 @@ internal class SchemaEvolutionTracker
         };
     }
 
-    private List<SchemaChange> CalculateSchemaChanges(Dictionary<string, TableDefinition> oldSchema, Dictionary<string, TableDefinition> newSchema, MigrationInfo migration)
+    private static List<SchemaChange> CalculateSchemaChanges(Dictionary<string, TableDefinition> oldSchema, Dictionary<string, TableDefinition> newSchema, MigrationInfo migration)
     {
         var changes = new List<SchemaChange>();
 
@@ -194,7 +194,7 @@ internal class SchemaEvolutionTracker
         return changes;
     }
 
-    private List<SchemaChange> CalculateTableChanges(TableDefinition oldTable, TableDefinition newTable, MigrationInfo migration)
+    private static List<SchemaChange> CalculateTableChanges(TableDefinition oldTable, TableDefinition newTable, MigrationInfo migration)
     {
         var changes = new List<SchemaChange>();
 
@@ -235,29 +235,26 @@ internal class SchemaEvolutionTracker
                     ChangedAt = migration.CreatedAt
                 });
             }
-            else if (oldColumn != null && newColumn != null)
+            else if (oldColumn != null && newColumn != null && !AreColumnsEqual(oldColumn, newColumn))
             {
                 // Column was altered
-                if (!AreColumnsEqual(oldColumn, newColumn))
+                changes.Add(new SchemaChange
                 {
-                    changes.Add(new SchemaChange
-                    {
-                        ChangeType = "Alter",
-                        ObjectType = "Column",
-                        ObjectName = columnName,
-                        OldDefinition = new Dictionary<string, object>(),
-                        NewDefinition = new Dictionary<string, object>(),
-                        MigrationName = migration.Name,
-                        ChangedAt = migration.CreatedAt
-                    });
-                }
+                    ChangeType = "Alter",
+                    ObjectType = "Column",
+                    ObjectName = columnName,
+                    OldDefinition = new Dictionary<string, object>(),
+                    NewDefinition = new Dictionary<string, object>(),
+                    MigrationName = migration.Name,
+                    ChangedAt = migration.CreatedAt
+                });
             }
         }
 
         return changes;
     }
 
-    private bool AreColumnsEqual(ColumnDefinition col1, ColumnDefinition col2)
+    private static bool AreColumnsEqual(ColumnDefinition col1, ColumnDefinition col2)
     {
         return col1.DataType == col2.DataType &&
                col1.IsNullable == col2.IsNullable &&
@@ -267,15 +264,15 @@ internal class SchemaEvolutionTracker
                col1.DefaultValue == col2.DefaultValue;
     }
 
-    private Dictionary<string, EvolutionMetric> CalculateEvolutionMetrics(List<SchemaSnapshot> snapshots, List<SchemaChange> changes)
+    private static Dictionary<string, EvolutionMetric> CalculateEvolutionMetrics(List<SchemaSnapshot> snapshots)
     {
         var metrics = new Dictionary<string, EvolutionMetric>();
 
         if (snapshots.Count < 2)
             return metrics;
 
-        var initialSnapshot = snapshots.First();
-        var finalSnapshot = snapshots.Last();
+        var initialSnapshot = snapshots[0];
+        var finalSnapshot = snapshots[^1];
 
         // Table count evolution
         metrics["TableCount"] = new EvolutionMetric
@@ -283,10 +280,9 @@ internal class SchemaEvolutionTracker
             MetricName = "Table Count",
             InitialValue = initialSnapshot.Tables.Count,
             FinalValue = finalSnapshot.Tables.Count,
-            ChangePercentage = finalSnapshot.Tables.Count > 0 ?
+            ChangePercentage = initialSnapshot.Tables.Count > 0 ?
                 ((double)(finalSnapshot.Tables.Count - initialSnapshot.Tables.Count) / initialSnapshot.Tables.Count) * 100 : 0,
-            Trend = finalSnapshot.Tables.Count > initialSnapshot.Tables.Count ? "Increasing" :
-                    finalSnapshot.Tables.Count < initialSnapshot.Tables.Count ? "Decreasing" : "Stable"
+            Trend = DescribeTrend(initialSnapshot.Tables.Count, finalSnapshot.Tables.Count)
         };
 
         // Column count evolution
@@ -300,14 +296,20 @@ internal class SchemaEvolutionTracker
             FinalValue = finalColumnCount,
             ChangePercentage = initialColumnCount > 0 ?
                 ((double)(finalColumnCount - initialColumnCount) / initialColumnCount) * 100 : 0,
-            Trend = finalColumnCount > initialColumnCount ? "Increasing" :
-                    finalColumnCount < initialColumnCount ? "Decreasing" : "Stable"
+            Trend = DescribeTrend(initialColumnCount, finalColumnCount)
         };
 
         return metrics;
     }
 
-    private string GetChangeType(string operationType)
+    private static string DescribeTrend(int initialValue, int finalValue)
+    {
+        if (finalValue > initialValue) return "Increasing";
+        if (finalValue < initialValue) return "Decreasing";
+        return "Stable";
+    }
+
+    private static string GetChangeType(string operationType)
     {
         return operationType.ToLowerInvariant() switch
         {
@@ -318,7 +320,7 @@ internal class SchemaEvolutionTracker
         };
     }
 
-    private string GetObjectType(string operationType)
+    private static string GetObjectType(string operationType)
     {
         return operationType.ToLowerInvariant() switch
         {
@@ -330,4 +332,7 @@ internal class SchemaEvolutionTracker
             _ => "Unknown"
         };
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Tracking schema evolution for {MigrationCount} migrations")]
+    private static partial void LogTrackingSchemaEvolution(ILogger logger, int migrationCount);
 }

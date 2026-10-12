@@ -21,8 +21,10 @@ public interface IAnalyzerConfigurationService
     Task<bool> DeleteConfigurationAsync(string analyzerId, string? projectPath = null, CancellationToken cancellationToken = default);
 }
 
-public class AnalyzerConfigurationService : IAnalyzerConfigurationService
+public partial class AnalyzerConfigurationService : IAnalyzerConfigurationService
 {
+    private static readonly JsonSerializerOptions IndentedJsonOptions = new() { WriteIndented = true };
+
     private readonly ILogger<AnalyzerConfigurationService> _logger;
     private readonly Dictionary<string, AnalyzerConfiguration> _configCache;
     private readonly object _lock = new();
@@ -51,7 +53,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
     {
         try
         {
-            _logger.LogInformation("Loading configuration for analyzer: {AnalyzerId}", analyzerId);
+            LogLoadingConfiguration(_logger, analyzerId);
 
             // Check cache first
             var cacheKey = GetCacheKey(analyzerId, projectPath);
@@ -67,8 +69,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
             var configPath = GetConfigurationPath(analyzerId, projectPath);
             if (!File.Exists(configPath))
             {
-                _logger.LogInformation("No configuration file found for analyzer {AnalyzerId} at {ConfigPath}",
-                    analyzerId, configPath);
+                LogNoConfigurationFile(_logger, analyzerId, configPath);
                 return null;
             }
 
@@ -87,7 +88,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
             }
             else
             {
-                _logger.LogWarning("Unknown configuration file format: {ConfigPath}", configPath);
+                LogUnknownConfigurationFormat(_logger, configPath);
                 return null;
             }
 
@@ -99,14 +100,14 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
                     _configCache[cacheKey] = configuration;
                 }
 
-                _logger.LogInformation("Loaded configuration for analyzer: {AnalyzerId}", analyzerId);
+                LogLoadedConfiguration(_logger, analyzerId);
             }
 
             return configuration;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading configuration for analyzer: {AnalyzerId}", analyzerId);
+            LogErrorLoadingConfiguration(_logger, ex, analyzerId);
             return null;
         }
     }
@@ -119,7 +120,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
     {
         try
         {
-            _logger.LogInformation("Saving configuration for analyzer: {AnalyzerId}", analyzerId);
+            LogSavingConfiguration(_logger, analyzerId);
 
             var configPath = GetConfigurationPath(analyzerId, projectPath);
             var configDirectory = Path.GetDirectoryName(configPath);
@@ -139,10 +140,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
             }
             else
             {
-                configContent = JsonSerializer.Serialize(configuration, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+                configContent = JsonSerializer.Serialize(configuration, IndentedJsonOptions);
             }
 
             await File.WriteAllTextAsync(configPath, configContent, cancellationToken);
@@ -154,12 +152,12 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
                 _configCache[cacheKey] = configuration;
             }
 
-            _logger.LogInformation("Saved configuration for analyzer: {AnalyzerId}", analyzerId);
+            LogSavedConfiguration(_logger, analyzerId);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error saving configuration for analyzer: {AnalyzerId}", analyzerId);
+            LogErrorSavingConfiguration(_logger, ex, analyzerId);
             return false;
         }
     }
@@ -173,8 +171,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
     {
         try
         {
-            _logger.LogInformation("Updating rule configuration for analyzer {AnalyzerId}, rule {RuleId}",
-                analyzerId, ruleId);
+            LogUpdatingRuleConfiguration(_logger, analyzerId, ruleId);
 
             // Load existing configuration or create new one
             var configuration = await LoadConfigurationAsync(analyzerId, projectPath, cancellationToken)
@@ -193,8 +190,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating rule configuration for analyzer {AnalyzerId}, rule {RuleId}",
-                analyzerId, ruleId);
+            LogErrorUpdatingRuleConfiguration(_logger, ex, analyzerId, ruleId);
             return false;
         }
     }
@@ -217,8 +213,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting rule configuration for analyzer {AnalyzerId}, rule {RuleId}",
-                analyzerId, ruleId);
+            LogErrorGettingRuleConfiguration(_logger, ex, analyzerId, ruleId);
             return null;
         }
     }
@@ -231,8 +226,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
     {
         try
         {
-            _logger.LogInformation("Setting analyzer {AnalyzerId} enabled state to: {Enabled}",
-                analyzerId, enabled);
+            LogSettingEnabledState(_logger, analyzerId, enabled);
 
             // Load existing configuration or create new one
             var configuration = await LoadConfigurationAsync(analyzerId, projectPath, cancellationToken)
@@ -244,7 +238,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error setting analyzer enabled state for: {AnalyzerId}", analyzerId);
+            LogErrorSettingEnabledState(_logger, ex, analyzerId);
             return false;
         }
     }
@@ -283,7 +277,7 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Error loading configuration file: {ConfigFile}", configFile);
+                    LogErrorLoadingConfigurationFile(_logger, ex, configFile);
                 }
             }
 
@@ -291,20 +285,19 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting all configurations");
+            LogErrorGettingAllConfigurations(_logger, ex);
             return ImmutableDictionary<string, AnalyzerConfiguration>.Empty;
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<bool> DeleteConfigurationAsync(
+    public Task<bool> DeleteConfigurationAsync(
         string analyzerId,
         string? projectPath = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Deleting configuration for analyzer: {AnalyzerId}", analyzerId);
+            LogDeletingConfiguration(_logger, analyzerId);
 
             var configPath = GetConfigurationPath(analyzerId, projectPath);
             if (File.Exists(configPath))
@@ -319,17 +312,17 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
                 _configCache.Remove(cacheKey);
             }
 
-            _logger.LogInformation("Deleted configuration for analyzer: {AnalyzerId}", analyzerId);
-            return true;
+            LogDeletedConfiguration(_logger, analyzerId);
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting configuration for analyzer: {AnalyzerId}", analyzerId);
-            return false;
+            LogErrorDeletingConfiguration(_logger, ex, analyzerId);
+            return Task.FromResult(false);
         }
     }
 
-    private string GetConfigurationPath(string analyzerId, string? projectPath)
+    private static string GetConfigurationPath(string analyzerId, string? projectPath)
     {
         var configDirectory = GetConfigurationDirectory(projectPath);
         return Path.Combine(configDirectory, $"analyzer_{analyzerId}.json");
@@ -353,4 +346,58 @@ public class AnalyzerConfigurationService : IAnalyzerConfigurationService
             ? analyzerId
             : $"{projectPath}::{analyzerId}";
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loading configuration for analyzer: {AnalyzerId}")]
+    private static partial void LogLoadingConfiguration(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "No configuration file found for analyzer {AnalyzerId} at {ConfigPath}")]
+    private static partial void LogNoConfigurationFile(ILogger logger, string analyzerId, string configPath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Unknown configuration file format: {ConfigPath}")]
+    private static partial void LogUnknownConfigurationFormat(ILogger logger, string configPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded configuration for analyzer: {AnalyzerId}")]
+    private static partial void LogLoadedConfiguration(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading configuration for analyzer: {AnalyzerId}")]
+    private static partial void LogErrorLoadingConfiguration(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Saving configuration for analyzer: {AnalyzerId}")]
+    private static partial void LogSavingConfiguration(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Saved configuration for analyzer: {AnalyzerId}")]
+    private static partial void LogSavedConfiguration(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error saving configuration for analyzer: {AnalyzerId}")]
+    private static partial void LogErrorSavingConfiguration(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Updating rule configuration for analyzer {AnalyzerId}, rule {RuleId}")]
+    private static partial void LogUpdatingRuleConfiguration(ILogger logger, string analyzerId, string ruleId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error updating rule configuration for analyzer {AnalyzerId}, rule {RuleId}")]
+    private static partial void LogErrorUpdatingRuleConfiguration(ILogger logger, Exception exception, string analyzerId, string ruleId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting rule configuration for analyzer {AnalyzerId}, rule {RuleId}")]
+    private static partial void LogErrorGettingRuleConfiguration(ILogger logger, Exception exception, string analyzerId, string ruleId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Setting analyzer {AnalyzerId} enabled state to: {Enabled}")]
+    private static partial void LogSettingEnabledState(ILogger logger, string analyzerId, bool enabled);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error setting analyzer enabled state for: {AnalyzerId}")]
+    private static partial void LogErrorSettingEnabledState(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error loading configuration file: {ConfigFile}")]
+    private static partial void LogErrorLoadingConfigurationFile(ILogger logger, Exception exception, string configFile);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting all configurations")]
+    private static partial void LogErrorGettingAllConfigurations(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Deleting configuration for analyzer: {AnalyzerId}")]
+    private static partial void LogDeletingConfiguration(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Deleted configuration for analyzer: {AnalyzerId}")]
+    private static partial void LogDeletedConfiguration(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error deleting configuration for analyzer: {AnalyzerId}")]
+    private static partial void LogErrorDeletingConfiguration(ILogger logger, Exception exception, string analyzerId);
 }

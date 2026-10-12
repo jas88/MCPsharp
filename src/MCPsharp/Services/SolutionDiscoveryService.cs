@@ -1,17 +1,18 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services;
 
 /// <summary>
 /// Discovers all solutions and projects in a workspace directory.
 /// </summary>
-public sealed class SolutionDiscoveryService
+public sealed partial class SolutionDiscoveryService
 {
-    private readonly ILogger<SolutionDiscoveryService>? _logger;
+    private readonly ILogger<SolutionDiscoveryService> _logger;
 
     public SolutionDiscoveryService(ILogger<SolutionDiscoveryService>? logger = null)
     {
-        _logger = logger;
+        _logger = logger ?? NullLogger<SolutionDiscoveryService>.Instance;
     }
 
     /// <summary>
@@ -38,7 +39,7 @@ public sealed class SolutionDiscoveryService
 
         rootPath = Path.GetFullPath(rootPath);
 
-        _logger?.LogInformation("Discovering solutions in: {Path}", rootPath);
+        LogDiscoveringSolutionsIn(_logger, rootPath);
 
         // Find all solution files
         var solutions = await Task.Run(() =>
@@ -48,7 +49,7 @@ public sealed class SolutionDiscoveryService
                 .ToList(),
             cancellationToken).ConfigureAwait(false);
 
-        _logger?.LogDebug("Found {Count} solution files", solutions.Count);
+        LogFoundSolutionFiles(_logger, solutions.Count);
 
         // Find all project files
         var allProjects = await Task.Run(() =>
@@ -56,7 +57,7 @@ public sealed class SolutionDiscoveryService
                 .ToHashSet(StringComparer.OrdinalIgnoreCase),
             cancellationToken).ConfigureAwait(false);
 
-        _logger?.LogDebug("Found {Count} project files", allProjects.Count);
+        LogFoundProjectFiles(_logger, allProjects.Count);
 
         // Parse each solution to find its projects
         var projectsBySolution = new Dictionary<string, IReadOnlyList<string>>();
@@ -83,11 +84,7 @@ public sealed class SolutionDiscoveryService
             .OrderBy(p => p)
             .ToList();
 
-        _logger?.LogInformation(
-            "Discovery complete: {Solutions} solutions, {InSolution} projects in solutions, {Standalone} standalone projects",
-            solutions.Count,
-            projectsInSolutions.Count,
-            standaloneProjects.Count);
+        LogDiscoveryCompleteSolutionsProjectsIn(_logger, solutions.Count, projectsInSolutions.Count, standaloneProjects.Count);
 
         return new DiscoveryResult
         {
@@ -137,13 +134,13 @@ public sealed class SolutionDiscoveryService
                 }
                 else
                 {
-                    _logger?.LogDebug("Project not found: {Path}", fullPath);
+                    LogProjectNotFound(_logger, fullPath);
                 }
             }
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "Failed to parse solution: {Path}", solutionPath);
+            LogFailedToParseSolution(_logger, ex, solutionPath);
         }
 
         return projects;
@@ -152,7 +149,7 @@ public sealed class SolutionDiscoveryService
     /// <summary>
     /// Gets a unified list of all projects (from solutions + standalone), deduplicated.
     /// </summary>
-    public IReadOnlyList<string> GetUnifiedProjectList(DiscoveryResult discovery)
+    public static IReadOnlyList<string> GetUnifiedProjectList(DiscoveryResult discovery)
     {
         var allProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -175,7 +172,7 @@ public sealed class SolutionDiscoveryService
     /// <summary>
     /// Suggests which solution(s) to load based on heuristics.
     /// </summary>
-    public IReadOnlyList<string> SuggestSolutionsToLoad(DiscoveryResult discovery)
+    public static IReadOnlyList<string> SuggestSolutionsToLoad(DiscoveryResult discovery)
     {
         if (discovery.Solutions.Count == 0)
         {
@@ -285,9 +282,30 @@ public sealed class SolutionDiscoveryService
         }
         catch (Exception ex)
         {
-            _logger?.LogDebug(ex, "Failed to parse project references: {Path}", projectPath);
+            LogFailedToParseProjectReferences(_logger, ex, projectPath);
         }
 
         return references;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Discovering solutions in: {Path}")]
+    private static partial void LogDiscoveringSolutionsIn(ILogger logger, string path);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Found {Count} solution files")]
+    private static partial void LogFoundSolutionFiles(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Found {Count} project files")]
+    private static partial void LogFoundProjectFiles(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Discovery complete: {Solutions} solutions, {InSolution} projects in solutions, {Standalone} standalone projects")]
+    private static partial void LogDiscoveryCompleteSolutionsProjectsIn(ILogger logger, int solutions, int inSolution, int standalone);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Project not found: {Path}")]
+    private static partial void LogProjectNotFound(ILogger logger, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to parse solution: {Path}")]
+    private static partial void LogFailedToParseSolution(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Failed to parse project references: {Path}")]
+    private static partial void LogFailedToParseProjectReferences(ILogger logger, Exception exception, string path);
 }

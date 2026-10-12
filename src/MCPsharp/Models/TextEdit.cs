@@ -88,5 +88,5 @@ public class FileEditRequest
     /// <summary>
     /// Cancellation token
     /// </summary>
-    public CancellationToken CancellationToken { get; init; } = default;
+    public CancellationToken CancellationToken { get; init; }
 }

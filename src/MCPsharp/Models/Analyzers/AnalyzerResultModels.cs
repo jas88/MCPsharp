@@ -118,12 +118,12 @@ public record AnalyzerOptions
     /// <summary>
     /// Whether to enable security analysis
     /// </summary>
-    public bool EnableSecurityAnalysis { get; init; } = false;
+    public bool EnableSecurityAnalysis { get; init; }
 
     /// <summary>
     /// Whether to enable style analysis
     /// </summary>
-    public bool EnableStyleAnalysis { get; init; } = false;
+    public bool EnableStyleAnalysis { get; init; }
 
     /// <summary>
     /// Minimum severity level to report

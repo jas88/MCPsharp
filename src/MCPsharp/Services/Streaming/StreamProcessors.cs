@@ -26,25 +26,43 @@ public interface IStreamProcessor
 /// <summary>
 /// Line-based stream processor for text files
 /// </summary>
-public class LineStreamProcessor : IStreamProcessor
+public partial class LineStreamProcessor : IStreamProcessor
 {
+    private static readonly string[] LineSeparators = { "\r\n", "\n", "\r" };
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+    private readonly ILogger<LineStreamProcessor> _logger;
 
     public StreamProcessorType ProcessorType => StreamProcessorType.LineProcessor;
 
     public LineStreamProcessor(ILogger<LineStreamProcessor>? logger = null)
     {
+        _logger = logger ?? NullLogger<LineStreamProcessor>.Instance;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Invalid line processor options")]
+    private static partial void LogInvalidOptions(ILogger logger, Exception exception);
+
+    public Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    {
+        try
+        {
+            return Task.FromResult(ProcessChunk(chunk, options));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<StreamChunk>(ex);
+        }
+    }
+
+    private static StreamChunk ProcessChunk(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
         var lines = ExtractLines(chunk, config.Encoding ?? Encoding.UTF8);
         var processedLines = new List<string>();
 
-        foreach (var line in lines)
+        for (var i = 0; i < lines.Count; i++)
         {
-            var processedLine = ProcessLine(line, config, lines.IndexOf(line) + 1);
+            var processedLine = ProcessLine(lines[i], config, i + 1);
             if (!string.IsNullOrEmpty(processedLine))
             {
                 processedLines.Add(processedLine);
@@ -68,21 +86,21 @@ public class LineStreamProcessor : IStreamProcessor
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
+    public Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try
         {
             ParseConfig(options);
-            return true;
+            return Task.FromResult(true);
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            LogInvalidOptions(_logger, ex);
+            return Task.FromResult(false);
         }
     }
 
-    private LineProcessorConfig ParseConfig(Dictionary<string, object> options)
+    private static LineProcessorConfig ParseConfig(Dictionary<string, object> options)
     {
         var config = new LineProcessorConfig();
 
@@ -119,13 +137,13 @@ public class LineStreamProcessor : IStreamProcessor
         return config;
     }
 
-    private List<string> ExtractLines(StreamChunk chunk, Encoding encoding)
+    private static List<string> ExtractLines(StreamChunk chunk, Encoding encoding)
     {
         var text = encoding.GetString(chunk.Data);
-        var lines = text.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None).ToList();
+        var lines = text.Split(LineSeparators, StringSplitOptions.None).ToList();
 
         // Handle the case where the last line might be incomplete
-        if (!chunk.IsLastChunk && lines.Count > 0 && !text.EndsWith(Environment.NewLine))
+        if (!chunk.IsLastChunk && lines.Count > 0 && !text.EndsWith(Environment.NewLine, StringComparison.Ordinal))
         {
             // Keep the last line as it might be continued in the next chunk
             return lines;
@@ -134,7 +152,7 @@ public class LineStreamProcessor : IStreamProcessor
         return lines;
     }
 
-    private string? ProcessLine(string line, LineProcessorConfig config, long lineNumber = 0)
+    private static string? ProcessLine(string line, LineProcessorConfig config, long lineNumber = 0)
     {
 
         // Trim whitespace if configured
@@ -150,18 +168,15 @@ public class LineStreamProcessor : IStreamProcessor
         }
 
         // Apply line filter
-        if (!string.IsNullOrEmpty(config.LineFilter))
+        if (!string.IsNullOrEmpty(config.LineFilter) && !Regex.IsMatch(line, config.LineFilter, RegexOptions.None, RegexTimeout))
         {
-            if (!Regex.IsMatch(line, config.LineFilter))
-            {
-                return null;
-            }
+            return null;
         }
 
         // Apply line replacement
         if (!string.IsNullOrEmpty(config.LineReplacement))
         {
-            line = Regex.Replace(line, config.LineFilter ?? ".*", config.LineReplacement);
+            line = Regex.Replace(line, config.LineFilter ?? ".*", config.LineReplacement, RegexOptions.None, RegexTimeout);
         }
 
         // Field processing
@@ -199,28 +214,43 @@ public class LineStreamProcessor : IStreamProcessor
         return line;
     }
 
-    private string ComputeChecksum(byte[] data)
+    private static string ComputeChecksum(byte[] data)
     {
-        using var sha256 = SHA256.Create();
-        var hash = sha256.ComputeHash(data);
-        return Convert.ToHexString(hash).ToLowerInvariant();
+        return Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
     }
 }
 
 /// <summary>
 /// Regex-based stream processor
 /// </summary>
-public class RegexStreamProcessor : IStreamProcessor
+public partial class RegexStreamProcessor : IStreamProcessor
 {
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(5);
+    private readonly ILogger<RegexStreamProcessor> _logger;
 
     public StreamProcessorType ProcessorType => StreamProcessorType.RegexProcessor;
 
     public RegexStreamProcessor(ILogger<RegexStreamProcessor>? logger = null)
     {
+        _logger = logger ?? NullLogger<RegexStreamProcessor>.Instance;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Invalid regex processor options")]
+    private static partial void LogInvalidOptions(ILogger logger, Exception exception);
+
+    public Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    {
+        try
+        {
+            return Task.FromResult(ProcessChunk(chunk, options));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<StreamChunk>(ex);
+        }
+    }
+
+    private static StreamChunk ProcessChunk(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
         var text = Encoding.UTF8.GetString(chunk.Data);
@@ -232,7 +262,7 @@ public class RegexStreamProcessor : IStreamProcessor
             if (config.Multiline) regexOptions |= RegexOptions.Multiline;
             if (config.IgnoreCase) regexOptions |= RegexOptions.IgnoreCase;
 
-            var regex = new Regex(config.Pattern, regexOptions);
+            var regex = new Regex(config.Pattern, regexOptions, RegexTimeout);
 
             if (!string.IsNullOrEmpty(config.Replacement))
             {
@@ -272,21 +302,21 @@ public class RegexStreamProcessor : IStreamProcessor
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
+    public Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try
         {
             ParseConfig(options);
-            return true;
+            return Task.FromResult(true);
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            LogInvalidOptions(_logger, ex);
+            return Task.FromResult(false);
         }
     }
 
-    private RegexProcessorConfig ParseConfig(Dictionary<string, object> options)
+    private static RegexProcessorConfig ParseConfig(Dictionary<string, object> options)
     {
         var config = new RegexProcessorConfig();
 
@@ -314,28 +344,42 @@ public class RegexStreamProcessor : IStreamProcessor
         return config;
     }
 
-    private string ComputeChecksum(byte[] data)
+    private static string ComputeChecksum(byte[] data)
     {
-        using var sha256 = SHA256.Create();
-        var hash = sha256.ComputeHash(data);
-        return Convert.ToHexString(hash).ToLowerInvariant();
+        return Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
     }
 }
 
 /// <summary>
 /// CSV stream processor
 /// </summary>
-public class CsvStreamProcessor : IStreamProcessor
+public partial class CsvStreamProcessor : IStreamProcessor
 {
+    private readonly ILogger<CsvStreamProcessor> _logger;
 
     public StreamProcessorType ProcessorType => StreamProcessorType.CsvProcessor;
 
     public CsvStreamProcessor(ILogger<CsvStreamProcessor>? logger = null)
     {
+        _logger = logger ?? NullLogger<CsvStreamProcessor>.Instance;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Invalid csv processor options")]
+    private static partial void LogInvalidOptions(ILogger logger, Exception exception);
+
+    public Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    {
+        try
+        {
+            return Task.FromResult(ProcessChunk(chunk, options));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<StreamChunk>(ex);
+        }
+    }
+
+    private static StreamChunk ProcessChunk(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
         var text = Encoding.UTF8.GetString(chunk.Data);
@@ -402,21 +446,21 @@ public class CsvStreamProcessor : IStreamProcessor
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
+    public Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try
         {
             ParseConfig(options);
-            return true;
+            return Task.FromResult(true);
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            LogInvalidOptions(_logger, ex);
+            return Task.FromResult(false);
         }
     }
 
-    private CsvProcessorConfig ParseConfig(Dictionary<string, object> options)
+    private static CsvProcessorConfig ParseConfig(Dictionary<string, object> options)
     {
         var config = new CsvProcessorConfig();
 
@@ -444,7 +488,7 @@ public class CsvStreamProcessor : IStreamProcessor
         return config;
     }
 
-    private string[] ParseCsvLine(string line, CsvProcessorConfig config)
+    private static string[] ParseCsvLine(string line, CsvProcessorConfig config)
     {
         // Simple CSV parsing - in practice, you might want to use a more robust CSV library
         var result = new List<string>();
@@ -488,28 +532,42 @@ public class CsvStreamProcessor : IStreamProcessor
         return result.ToArray();
     }
 
-    private string ComputeChecksum(byte[] data)
+    private static string ComputeChecksum(byte[] data)
     {
-        using var sha256 = SHA256.Create();
-        var hash = sha256.ComputeHash(data);
-        return Convert.ToHexString(hash).ToLowerInvariant();
+        return Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
     }
 }
 
 /// <summary>
 /// Binary stream processor
 /// </summary>
-public class BinaryStreamProcessor : IStreamProcessor
+public partial class BinaryStreamProcessor : IStreamProcessor
 {
+    private readonly ILogger<BinaryStreamProcessor> _logger;
 
     public StreamProcessorType ProcessorType => StreamProcessorType.BinaryProcessor;
 
     public BinaryStreamProcessor(ILogger<BinaryStreamProcessor>? logger = null)
     {
+        _logger = logger ?? NullLogger<BinaryStreamProcessor>.Instance;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Invalid binary processor options")]
+    private static partial void LogInvalidOptions(ILogger logger, Exception exception);
+
+    public Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    {
+        try
+        {
+            return Task.FromResult(ProcessChunk(chunk, options));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<StreamChunk>(ex);
+        }
+    }
+
+    private static StreamChunk ProcessChunk(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
         var data = new List<byte>(chunk.Data);
@@ -546,21 +604,21 @@ public class BinaryStreamProcessor : IStreamProcessor
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
+    public Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try
         {
             ParseConfig(options);
-            return true;
+            return Task.FromResult(true);
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            LogInvalidOptions(_logger, ex);
+            return Task.FromResult(false);
         }
     }
 
-    private BinaryProcessorConfig ParseConfig(Dictionary<string, object> options)
+    private static BinaryProcessorConfig ParseConfig(Dictionary<string, object> options)
     {
         var config = new BinaryProcessorConfig();
 
@@ -573,8 +631,8 @@ public class BinaryStreamProcessor : IStreamProcessor
         if (options.TryGetValue("CalculateChecksums", out var checksum) && checksum is bool cs)
             config.CalculateChecksums = cs;
 
-        if (options.TryGetValue("ChecksumAlgorithm", out var algorithm) && algorithm is string algoStr)
-            config.ChecksumAlgorithm = algoStr;
+        if (options.TryGetValue("ChecksumAlgorithm", out var algorithm))
+            config.ChecksumAlgorithm = NormalizeChecksumAlgorithm(algorithm);
 
         if (options.TryGetValue("PreserveTimestamps", out var timestamps) && timestamps is bool pt)
             config.PreserveTimestamps = pt;
@@ -585,7 +643,7 @@ public class BinaryStreamProcessor : IStreamProcessor
         return config;
     }
 
-    private List<byte> ApplySearchReplace(byte[] data, byte[] searchPattern, byte[] replacementPattern)
+    private static List<byte> ApplySearchReplace(byte[] data, byte[] searchPattern, byte[] replacementPattern)
     {
         var result = new List<byte>();
         var i = 0;
@@ -624,18 +682,30 @@ public class BinaryStreamProcessor : IStreamProcessor
         return result;
     }
 
-    private string ComputeChecksum(byte[] data, string algorithm)
+    private static string NormalizeChecksumAlgorithm(object? algorithm)
     {
-        using var hashAlgorithm = algorithm.ToUpperInvariant() switch
+        return algorithm is string name
+            ? name.ToUpperInvariant() switch
+            {
+                "SHA256" or "SHA-256" => "SHA256",
+                "SHA512" or "SHA-512" => "SHA512",
+                _ => throw new ArgumentException(
+                    $"Unsupported checksum algorithm '{name}'. Supported algorithms: SHA256, SHA512.",
+                    nameof(algorithm))
+            }
+            : throw new ArgumentException(
+                "ChecksumAlgorithm must be a string naming a supported algorithm (SHA256, SHA512).",
+                nameof(algorithm));
+    }
+
+    private static string ComputeChecksum(byte[] data, string algorithm)
+    {
+        var hash = NormalizeChecksumAlgorithm(algorithm) switch
         {
-            "SHA256" or "SHA-256" => SHA256.Create(),
-            "SHA512" or "SHA-512" => SHA512.Create(),
-            "SHA1" or "SHA-1" => SHA1.Create(),
-            "MD5" => MD5.Create(),
-            _ => (System.Security.Cryptography.HashAlgorithm)SHA256.Create()
+            "SHA512" => SHA512.HashData(data),
+            _ => SHA256.HashData(data)
         };
 
-        var hash = hashAlgorithm.ComputeHash(data);
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

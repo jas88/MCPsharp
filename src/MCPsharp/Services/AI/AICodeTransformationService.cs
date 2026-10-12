@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
 using MCPsharp.Services.Roslyn;
+using System.Globalization;
 using System.Text.Json;
 
 namespace MCPsharp.Services.AI;
@@ -11,7 +12,7 @@ namespace MCPsharp.Services.AI;
 /// AI-powered code transformation service that uses Roslyn AST to ensure
 /// all modifications leave the codebase in a valid, compilable state.
 /// </summary>
-public class AICodeTransformationService
+public partial class AICodeTransformationService
 {
     private readonly IAIProvider _aiProvider;
     private readonly RoslynWorkspace _workspace;
@@ -37,13 +38,13 @@ public class AICodeTransformationService
         int? lineNumber = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("AI suggesting fix for {FilePath}: {Description}", filePath, description);
+        LogSuggestingFix(_logger, filePath, description);
 
         // Read current file content
         var currentCode = await File.ReadAllTextAsync(filePath, cancellationToken);
 
         // Parse to syntax tree
-        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode);
+        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode, cancellationToken: cancellationToken);
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         // Build AI prompt with context
@@ -82,10 +83,10 @@ public class AICodeTransformationService
         string refactoringGoal,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("AI refactoring {FilePath}: {Goal}", filePath, refactoringGoal);
+        LogRefactoring(_logger, filePath, refactoringGoal);
 
         var currentCode = await File.ReadAllTextAsync(filePath, cancellationToken);
-        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode);
+        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode, cancellationToken: cancellationToken);
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         var prompt = BuildRefactorPrompt(currentCode, refactoringGoal);
@@ -117,10 +118,10 @@ public class AICodeTransformationService
         string featureDescription,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("AI implementing feature in {FilePath}: {Feature}", filePath, featureDescription);
+        LogImplementingFeature(_logger, filePath, featureDescription);
 
         var currentCode = await File.ReadAllTextAsync(filePath, cancellationToken);
-        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode);
+        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode, cancellationToken: cancellationToken);
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         var prompt = BuildImplementationPrompt(currentCode, featureDescription);
@@ -283,23 +284,7 @@ IMPORTANT:
     {
         try
         {
-            // Remove markdown code blocks if present
-            var cleanJson = aiResponse.Trim();
-            if (cleanJson.StartsWith("```json"))
-            {
-                cleanJson = cleanJson.Substring(7);
-            }
-            if (cleanJson.StartsWith("```"))
-            {
-                cleanJson = cleanJson.Substring(3);
-            }
-            if (cleanJson.EndsWith("```"))
-            {
-                cleanJson = cleanJson.Substring(0, cleanJson.Length - 3);
-            }
-            cleanJson = cleanJson.Trim();
-
-            var doc = JsonDocument.Parse(cleanJson);
+            using var doc = JsonDocument.Parse(StripMarkdownFences(aiResponse));
             var root = doc.RootElement;
 
             var changes = new List<CodeChange>();
@@ -323,7 +308,7 @@ IMPORTANT:
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to parse AI code response: {Response}", aiResponse);
+            LogParseResponseFailed(_logger, ex, aiResponse);
             return new List<CodeChange>();
         }
     }
@@ -335,27 +320,41 @@ IMPORTANT:
     {
         try
         {
-            var cleanJson = aiResponse.Trim();
-            if (cleanJson.StartsWith("```json"))
-                cleanJson = cleanJson.Substring(7);
-            if (cleanJson.StartsWith("```"))
-                cleanJson = cleanJson.Substring(3);
-            if (cleanJson.EndsWith("```"))
-                cleanJson = cleanJson.Substring(0, cleanJson.Length - 3);
-            cleanJson = cleanJson.Trim();
-
-            var doc = JsonDocument.Parse(cleanJson);
-            if (doc.RootElement.TryGetProperty("explanation", out var explanation))
+            using var doc = JsonDocument.Parse(StripMarkdownFences(aiResponse));
+            if (doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("explanation", out var explanation)
+                && explanation.ValueKind is JsonValueKind.String or JsonValueKind.Null)
             {
                 return explanation.GetString() ?? "No explanation provided";
             }
         }
-        catch
+        catch (JsonException)
         {
-            // Fall through to default
+            // Response was not valid JSON; fall through to the default explanation.
         }
 
         return "AI transformation applied";
+    }
+
+    /// <summary>
+    /// Remove markdown code fences (```json ... ```) surrounding an AI JSON response.
+    /// </summary>
+    private static string StripMarkdownFences(string aiResponse)
+    {
+        var cleanJson = aiResponse.Trim();
+        if (cleanJson.StartsWith("```json", StringComparison.Ordinal))
+        {
+            cleanJson = cleanJson[7..];
+        }
+        if (cleanJson.StartsWith("```", StringComparison.Ordinal))
+        {
+            cleanJson = cleanJson[3..];
+        }
+        if (cleanJson.EndsWith("```", StringComparison.Ordinal))
+        {
+            cleanJson = cleanJson[..^3];
+        }
+        return cleanJson.Trim();
     }
 
     /// <summary>
@@ -457,33 +456,103 @@ IMPORTANT:
         try
         {
             // Parse to syntax tree
-            var syntaxTree = CSharpSyntaxTree.ParseText(code, path: filePath);
+            var syntaxTree = CSharpSyntaxTree.ParseText(code, path: filePath, cancellationToken: cancellationToken);
 
             // Check for syntax errors
             var diagnostics = syntaxTree.GetDiagnostics(cancellationToken);
             var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
 
-            if (errors.Any())
+            if (errors.Count > 0)
             {
-                _logger.LogWarning("Transformed code has {ErrorCount} syntax errors", errors.Count);
+                LogSyntaxErrors(_logger, errors.Count);
                 foreach (var error in errors.Take(5))
                 {
-                    _logger.LogWarning("  {Error}", error.GetMessage());
+                    LogDiagnostic(_logger, error.GetMessage(CultureInfo.InvariantCulture));
                 }
                 return false;
             }
 
-            // Try to compile with workspace
-            // TODO: Get compilation from workspace and check semantic errors
-
-            return true;
+            // Check semantic errors against the workspace compilation when the file is part of it
+            return await ValidateSemanticsAsync(syntaxTree, filePath, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to validate transformed code");
+            LogValidationFailed(_logger, ex);
             return false;
         }
     }
+
+    /// <summary>
+    /// Replace the file's syntax tree in the workspace compilation and reject the transformation
+    /// if it introduces semantic errors that the original file did not have.
+    /// Returns true when the file is not part of a loaded workspace (syntax validation only).
+    /// </summary>
+    private async Task<bool> ValidateSemanticsAsync(
+        SyntaxTree newTree,
+        string filePath,
+        CancellationToken cancellationToken)
+    {
+        var document = _workspace.GetDocument(filePath);
+        if (document == null)
+        {
+            return true;
+        }
+
+        // Validate against the compilation of the project that owns the file
+        var oldTree = await document.GetSyntaxTreeAsync(cancellationToken);
+        var compilation = oldTree == null ? null : _workspace.GetCompilationForTree(oldTree);
+        if (oldTree == null || compilation == null)
+        {
+            return true;
+        }
+
+        var reparsedTree = newTree.WithRootAndOptions(await newTree.GetRootAsync(cancellationToken), oldTree.Options);
+        var newCompilation = compilation.ReplaceSyntaxTree(oldTree, reparsedTree);
+
+        var originalErrorCount = CountErrors(compilation.GetSemanticModel(oldTree).GetDiagnostics(cancellationToken: cancellationToken));
+        var newErrors = newCompilation.GetSemanticModel(reparsedTree).GetDiagnostics(cancellationToken: cancellationToken)
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+
+        if (newErrors.Count <= originalErrorCount)
+        {
+            return true;
+        }
+
+        LogSemanticErrors(_logger, newErrors.Count, originalErrorCount);
+        foreach (var error in newErrors.Take(5))
+        {
+            LogDiagnostic(_logger, error.GetMessage(CultureInfo.InvariantCulture));
+        }
+        return false;
+    }
+
+    private static int CountErrors(IEnumerable<Diagnostic> diagnostics) =>
+        diagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "AI suggesting fix for {FilePath}: {Description}")]
+    private static partial void LogSuggestingFix(ILogger logger, string filePath, string description);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "AI refactoring {FilePath}: {Goal}")]
+    private static partial void LogRefactoring(ILogger logger, string filePath, string goal);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "AI implementing feature in {FilePath}: {Feature}")]
+    private static partial void LogImplementingFeature(ILogger logger, string filePath, string feature);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to parse AI code response: {Response}")]
+    private static partial void LogParseResponseFailed(ILogger logger, Exception exception, string response);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Transformed code has {ErrorCount} syntax errors")]
+    private static partial void LogSyntaxErrors(ILogger logger, int errorCount);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Transformed code has {ErrorCount} semantic errors (original had {OriginalErrorCount})")]
+    private static partial void LogSemanticErrors(ILogger logger, int errorCount, int originalErrorCount);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "  {Error}")]
+    private static partial void LogDiagnostic(ILogger logger, string error);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to validate transformed code")]
+    private static partial void LogValidationFailed(ILogger logger, Exception exception);
 }
 
 /// <summary>

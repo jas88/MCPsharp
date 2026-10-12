@@ -6,7 +6,7 @@ namespace MCPsharp.Services.Phase3.SqlMigration;
 /// <summary>
 /// Detects the database provider used in a project
 /// </summary>
-internal class DatabaseProviderDetector
+internal sealed partial class DatabaseProviderDetector
 {
     private readonly ILogger<DatabaseProviderDetector> _logger;
     private readonly Dictionary<DatabaseProvider, List<string>> _migrationPatterns;
@@ -24,9 +24,15 @@ internal class DatabaseProviderDetector
         };
     }
 
+    private DatabaseProvider? MatchProvider(string content) =>
+        _migrationPatterns
+            .Where(kvp => kvp.Value.Any(pattern => content.Contains(pattern, StringComparison.OrdinalIgnoreCase)))
+            .Select(kvp => (DatabaseProvider?)kvp.Key)
+            .FirstOrDefault();
+
     public async Task<DatabaseProvider> DetectDatabaseProviderAsync(string projectPath, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Detecting database provider for project: {ProjectPath}", projectPath);
+        LogDetectingProvider(_logger, projectPath);
 
         try
         {
@@ -37,13 +43,10 @@ internal class DatabaseProviderDetector
             {
                 var content = await File.ReadAllTextAsync(csprojFile, cancellationToken);
 
-                foreach (var kvp in _migrationPatterns)
+                if (MatchProvider(content) is { } provider)
                 {
-                    if (kvp.Value.Any(pattern => content.Contains(pattern, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        _logger.LogDebug("Detected database provider: {Provider}", kvp.Key);
-                        return kvp.Key;
-                    }
+                    LogDetectedProvider(_logger, provider);
+                    return provider;
                 }
             }
 
@@ -55,22 +58,31 @@ internal class DatabaseProviderDetector
             {
                 var content = await File.ReadAllTextAsync(csFile, cancellationToken);
 
-                foreach (var kvp in _migrationPatterns)
+                if (MatchProvider(content) is { } provider)
                 {
-                    if (kvp.Value.Any(pattern => content.Contains(pattern, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        _logger.LogDebug("Detected database provider: {Provider}", kvp.Key);
-                        return kvp.Key;
-                    }
+                    LogDetectedProvider(_logger, provider);
+                    return provider;
                 }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to detect database provider for project: {ProjectPath}", projectPath);
+            LogProviderDetectionFailed(_logger, ex, projectPath);
         }
 
-        _logger.LogDebug("Could not detect database provider, defaulting to Unknown");
+        LogProviderUnknown(_logger);
         return DatabaseProvider.Unknown;
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Detecting database provider for project: {ProjectPath}")]
+    private static partial void LogDetectingProvider(ILogger logger, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Detected database provider: {Provider}")]
+    private static partial void LogDetectedProvider(ILogger logger, DatabaseProvider provider);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to detect database provider for project: {ProjectPath}")]
+    private static partial void LogProviderDetectionFailed(ILogger logger, Exception exception, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Could not detect database provider, defaulting to Unknown")]
+    private static partial void LogProviderUnknown(ILogger logger);
 }

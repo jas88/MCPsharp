@@ -41,6 +41,23 @@ public class FileOperationsServiceTests
     }
 
     [Test]
+    public void RootPath_ShouldReturnNormalizedAbsolutePath()
+    {
+        // Arrange
+        var subDir = Path.Combine(_testRoot, "sub");
+        Directory.CreateDirectory(subDir);
+        var nonNormalizedPath = Path.Combine(subDir, "..", "sub");
+
+        // Act
+        var service = new FileOperationsService(nonNormalizedPath);
+
+        // Assert
+        Assert.That(_service.RootPath, Is.EqualTo(Path.GetFullPath(_testRoot)));
+        Assert.That(service.RootPath, Is.EqualTo(Path.GetFullPath(subDir)));
+        Assert.That(Path.IsPathRooted(service.RootPath), Is.True);
+    }
+
+    [Test]
     public void ListFiles_ShouldReturnAllFiles_WhenNoPatternSpecified()
     {
         // Arrange
@@ -71,7 +88,7 @@ public class FileOperationsServiceTests
         // Assert
         Assert.That(result.TotalFiles, Is.EqualTo(2));
         Assert.That(result.Files, Has.Count.EqualTo(2));
-        Assert.That(result.Files, Has.All.Matches<FileInfo>(f => f.RelativePath.EndsWith(".cs")));
+        Assert.That(result.Files, Has.All.Matches<FileInfo>(f => f is not null && f.RelativePath.EndsWith(".cs", StringComparison.Ordinal)));
         Assert.That(result.Pattern, Is.EqualTo("**/*.cs"));
     }
 
@@ -88,7 +105,7 @@ public class FileOperationsServiceTests
 
         // Assert
         Assert.That(result.Files, Has.Count.EqualTo(1));
-        Assert.That(result.Files, Has.All.Matches<FileInfo>(f => !f.IsHidden));
+        Assert.That(result.Files, Has.All.Matches<FileInfo>(f => f is not null && !f.IsHidden));
     }
 
     [Test]

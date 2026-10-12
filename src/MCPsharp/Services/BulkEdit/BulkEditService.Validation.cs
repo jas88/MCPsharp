@@ -8,7 +8,7 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Validation and impact analysis methods for bulk edit operations
 /// </summary>
-public partial class BulkEditService
+public sealed partial class BulkEditService
 {
     /// <inheritdoc />
     public async Task<ValidationResult> ValidateBulkEditAsync(
@@ -38,6 +38,7 @@ public partial class BulkEditService
                 }
                 catch (Exception ex)
                 {
+                    LogInvalidFilePattern(BulkEditLog, ex, pattern);
                     issues.Add(new ValidationIssue
                     {
                         Type = ValidationIssueType.InvalidPath,
@@ -53,10 +54,11 @@ public partial class BulkEditService
             {
                 try
                 {
-                    _ = new Regex(request.RegexPattern, request.Options.RegexOptions);
+                    _ = new Regex(request.RegexPattern, request.Options.RegexOptions, BulkEditRegexTimeout);
                 }
-                catch (Exception ex)
+                catch (ArgumentException ex)
                 {
+                    LogInvalidRegexPattern(BulkEditLog, ex, request.RegexPattern);
                     issues.Add(new ValidationIssue
                     {
                         Type = ValidationIssueType.RegexError,
@@ -142,10 +144,7 @@ public partial class BulkEditService
             {
                 IsValid = !issues.Any(i => i.IsBlocking),
                 Issues = issues,
-                OverallSeverity = issues.Any(i => i.Severity == ValidationSeverity.Critical) ? ValidationSeverity.Critical :
-                                   issues.Any(i => i.Severity == ValidationSeverity.Error) ? ValidationSeverity.Error :
-                                   issues.Any(i => i.Severity == ValidationSeverity.Warning) ? ValidationSeverity.Warning :
-                                   issues.Any() ? ValidationSeverity.Info : ValidationSeverity.None,
+                OverallSeverity = DetermineOverallSeverity(issues),
                 Summary = issues.Count > 0
                     ? $"Found {issues.Count(i => i.Severity >= ValidationSeverity.Error)} errors and {issues.Count(i => i.Severity == ValidationSeverity.Warning)} warnings"
                     : "Validation passed successfully"
@@ -153,6 +152,7 @@ public partial class BulkEditService
         }
         catch (Exception ex)
         {
+            LogBulkEditValidationFailed(BulkEditLog, ex);
             return new ValidationResult
             {
                 IsValid = false,
@@ -320,15 +320,15 @@ public partial class BulkEditService
                 {
                     Score = Math.Min(100, complexityScore),
                     Level = complexityLevel,
-                    Factors = complexityFactors.Any() ? complexityFactors : new[] { "Standard complexity" },
+                    Factors = complexityFactors.Count > 0 ? complexityFactors : new[] { "Standard complexity" },
                     EstimatedTime = estimatedTime
                 },
-                Recommendations = recommendations.Any() ? recommendations : new[] { "Operation appears safe to proceed" }
+                Recommendations = recommendations.Count > 0 ? recommendations : new[] { "Operation appears safe to proceed" }
             };
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to estimate impact");
+            LogEstimateImpactFailed(BulkEditLog, ex);
             return new ImpactEstimate
             {
                 OverallRisk = ChangeRiskLevel.High,
@@ -372,15 +372,10 @@ public partial class BulkEditService
             var inaccessibleFiles = new List<string>();
 
             // First, check which original files (not glob patterns) don't exist
-            foreach (var originalFile in files)
-            {
-                // Only check literal paths, not glob patterns (which contain wildcards)
-                if (!originalFile.Contains("*") && !originalFile.Contains("?") &&
-                    !File.Exists(originalFile) && !Directory.Exists(originalFile))
-                {
-                    inaccessibleFiles.Add(originalFile);
-                }
-            }
+            // Only check literal paths, not glob patterns (which contain wildcards)
+            inaccessibleFiles.AddRange(files.Where(originalFile =>
+                !originalFile.Contains('*') && !originalFile.Contains('?') &&
+                !File.Exists(originalFile) && !Directory.Exists(originalFile)));
 
             foreach (var filePath in resolvedFiles)
             {
@@ -407,15 +402,15 @@ public partial class BulkEditService
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogWarning(ex, "Failed to analyze file {FilePath}", filePath);
+                    LogAnalyzeFileFailed(BulkEditLog, ex, filePath);
                     inaccessibleFiles.Add(filePath);
                 }
             }
 
             var totalSize = fileSizes.Sum();
-            var averageSize = fileSizes.Any() ? fileSizes.Average() : 0;
-            var largestSize = fileSizes.Any() ? fileSizes.Max() : 0;
-            var smallestSize = fileSizes.Any() ? fileSizes.Min() : 0;
+            var averageSize = fileSizes.Count > 0 ? fileSizes.Average() : 0;
+            var largestSize = fileSizes.Count > 0 ? fileSizes.Max() : 0;
+            var smallestSize = fileSizes.Count > 0 ? fileSizes.Min() : 0;
             var totalLines = lineCounts.Sum();
 
             // Estimate processing time
@@ -442,7 +437,7 @@ public partial class BulkEditService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to get file statistics");
+            LogFileStatisticsFailed(BulkEditLog, ex);
             return new FileStatistics
             {
                 TotalFiles = 0,
@@ -458,5 +453,30 @@ public partial class BulkEditService
                 RecommendedBatchSize = 10
             };
         }
+    }
+
+    /// <summary>
+    /// Highest severity among the validation issues (None when there are no issues).
+    /// </summary>
+    private static ValidationSeverity DetermineOverallSeverity(List<ValidationIssue> issues)
+    {
+        if (issues.Count == 0)
+        {
+            return ValidationSeverity.None;
+        }
+
+        if (issues.Exists(i => i.Severity == ValidationSeverity.Critical))
+        {
+            return ValidationSeverity.Critical;
+        }
+
+        if (issues.Exists(i => i.Severity == ValidationSeverity.Error))
+        {
+            return ValidationSeverity.Error;
+        }
+
+        return issues.Exists(i => i.Severity == ValidationSeverity.Warning)
+            ? ValidationSeverity.Warning
+            : ValidationSeverity.Info;
     }
 }

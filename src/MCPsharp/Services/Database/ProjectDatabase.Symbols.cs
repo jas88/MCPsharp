@@ -1,3 +1,4 @@
+using System.Globalization;
 using MCPsharp.Models.Database;
 using Microsoft.Data.Sqlite;
 
@@ -31,7 +32,7 @@ public sealed partial class ProjectDatabase
         cmd.Parameters.AddWithValue("$signature", symbol.Signature ?? (object)DBNull.Value);
 
         var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return Convert.ToInt64(result);
+        return Convert.ToInt64(result, CultureInfo.InvariantCulture);
     }
 
     /// <summary>

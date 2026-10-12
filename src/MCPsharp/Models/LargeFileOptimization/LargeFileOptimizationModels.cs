@@ -32,6 +32,16 @@ public class LargeFileInfo
     public required List<CodeSmell> CodeSmells { get; init; } = new();
     public required double OptimizationPriority { get; init; }
     public required List<string> ImmediateActions { get; init; } = new();
+
+    /// <summary>
+    /// Classes in the file with a god-class severity above <c>None</c>
+    /// </summary>
+    public int GodClassCount { get; init; }
+
+    /// <summary>
+    /// Methods in the file with a god-method severity above <c>None</c>
+    /// </summary>
+    public int GodMethodCount { get; init; }
 }
 
 /// <summary>
@@ -118,6 +128,10 @@ public class MethodOptimizationResult
     public required string MethodName { get; init; }
     public required string ClassName { get; init; }
     public required string FilePath { get; init; }
+    /// <summary>1-based first line of the method declaration (0 when unknown).</summary>
+    public int StartLine { get; init; }
+    /// <summary>1-based last line of the method declaration (0 when unknown).</summary>
+    public int EndLine { get; init; }
     public required MethodMetrics CurrentMetrics { get; init; }
     public required List<MethodRefactoringStrategy> RefactoringStrategies { get; init; } = new();
     public required List<CodeExample> BeforeAfterExamples { get; init; } = new();

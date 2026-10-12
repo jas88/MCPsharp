@@ -7,17 +7,18 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services.Indexing;
 
 /// <summary>
 /// Extracts symbols from Roslyn compilations and stores them in the cache database.
 /// </summary>
-public sealed class SymbolIndexerService
+public sealed partial class SymbolIndexerService
 {
     private readonly ProjectDatabase _database;
     private readonly RoslynWorkspace _workspace;
-    private readonly ILogger<SymbolIndexerService>? _logger;
+    private readonly ILogger<SymbolIndexerService> _logger;
 
     private int _indexedFiles;
     private int _totalFiles;
@@ -35,7 +36,7 @@ public sealed class SymbolIndexerService
     {
         _database = database;
         _workspace = workspace;
-        _logger = logger;
+        _logger = logger ?? NullLogger<SymbolIndexerService>.Instance;
     }
 
     /// <summary>
@@ -45,13 +46,12 @@ public sealed class SymbolIndexerService
     {
         if (!_workspace.IsInitialized)
         {
-            _logger?.LogWarning("Workspace not initialized, cannot index");
+            LogWorkspaceNotInitializedCannotIndex(_logger);
             return;
         }
 
-        var solution = _workspace.Solution;
-        var documents = solution.Projects
-            .SelectMany(p => p.Documents)
+        // One document per file across all projects (multi-targeted projects are not indexed twice)
+        var documents = _workspace.GetAllDocuments()
             .Where(d => d.FilePath?.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) == true)
             .ToList();
 
@@ -59,7 +59,7 @@ public sealed class SymbolIndexerService
         _indexedFiles = 0;
         _symbolCount = 0;
 
-        _logger?.LogInformation("Starting indexing of {Count} documents", _totalFiles);
+        LogStartingIndexingOfDocuments(_logger, _totalFiles);
 
         foreach (var document in documents)
         {
@@ -68,7 +68,7 @@ public sealed class SymbolIndexerService
             Interlocked.Increment(ref _indexedFiles);
         }
 
-        _logger?.LogInformation("Indexing complete: {Files} files, {Symbols} symbols", _indexedFiles, _symbolCount);
+        LogIndexingCompleteFilesSymbols(_logger, _indexedFiles, _symbolCount);
     }
 
     /// <summary>
@@ -112,11 +112,11 @@ public sealed class SymbolIndexerService
                 Interlocked.Add(ref _symbolCount, symbols.Count);
             }
 
-            _logger?.LogDebug("Indexed {Path}: {Count} symbols", relativePath, symbols.Count);
+            LogIndexedSymbols(_logger, relativePath, symbols.Count);
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "Failed to index document: {Path}", document.FilePath);
+            LogFailedToIndexDocument(_logger, ex, document.FilePath);
         }
     }
 
@@ -147,7 +147,7 @@ public sealed class SymbolIndexerService
             }).ConfigureAwait(false);
     }
 
-    private List<DbSymbol> ExtractSymbols(SyntaxNode root, SemanticModel semanticModel, long fileId)
+    private static List<DbSymbol> ExtractSymbols(SyntaxNode root, SemanticModel semanticModel, long fileId)
     {
         var symbols = new List<DbSymbol>();
 
@@ -276,11 +276,26 @@ public sealed class SymbolIndexerService
             ? Path.GetDirectoryName(solution.FilePath)
             : null;
 
-        if (solutionDir != null && filePath.StartsWith(solutionDir, StringComparison.OrdinalIgnoreCase))
+        if (solutionDir != null && PathContainment.IsWithin(solutionDir, filePath))
         {
             return Path.GetRelativePath(solutionDir, filePath);
         }
 
         return filePath;
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Workspace not initialized, cannot index")]
+    private static partial void LogWorkspaceNotInitializedCannotIndex(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting indexing of {Count} documents")]
+    private static partial void LogStartingIndexingOfDocuments(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Indexing complete: {Files} files, {Symbols} symbols")]
+    private static partial void LogIndexingCompleteFilesSymbols(ILogger logger, int files, int symbols);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Indexed {Path}: {Count} symbols")]
+    private static partial void LogIndexedSymbols(ILogger logger, string path, int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to index document: {Path}")]
+    private static partial void LogFailedToIndexDocument(ILogger logger, Exception exception, string path);
 }

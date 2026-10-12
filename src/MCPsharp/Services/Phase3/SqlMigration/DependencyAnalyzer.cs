@@ -6,7 +6,7 @@ namespace MCPsharp.Services.Phase3.SqlMigration;
 /// <summary>
 /// Analyzes migration dependencies and relationships
 /// </summary>
-internal class DependencyAnalyzer
+internal sealed partial class DependencyAnalyzer
 {
     private readonly ILogger<DependencyAnalyzer> _logger;
 
@@ -15,8 +15,7 @@ internal class DependencyAnalyzer
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task AnalyzeDependenciesAsync(List<MigrationInfo> migrations, CancellationToken cancellationToken = default)
+    public static void AnalyzeDependencies(List<MigrationInfo> migrations)
     {
         // Build dependency graph based on migration timestamps and operations
         for (int i = 1; i < migrations.Count; i++)
@@ -32,7 +31,7 @@ internal class DependencyAnalyzer
 
     public MigrationDependency GetMigrationDependencies(string migrationName, List<MigrationInfo> migrations)
     {
-        _logger.LogInformation("Getting dependencies for migration: {MigrationName}", migrationName);
+        LogGettingDependencies(_logger, migrationName);
 
         var dependency = new MigrationDependency
         {
@@ -46,7 +45,7 @@ internal class DependencyAnalyzer
             var targetMigration = migrations.FirstOrDefault(m => m.Name == migrationName);
             if (targetMigration == null)
             {
-                _logger.LogWarning("Migration not found: {MigrationName}", migrationName);
+                LogMigrationNotFound(_logger, migrationName);
                 return dependency;
             }
 
@@ -63,38 +62,35 @@ internal class DependencyAnalyzer
                 .Select(m => m.Name)
                 .ToList();
 
-            dependency.Type = dependency.DependsOn.Any() ? DependencyType.Explicit : DependencyType.Implicit;
+            dependency.Type = dependency.DependsOn.Count != 0 ? DependencyType.Explicit : DependencyType.Implicit;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get dependencies for migration: {MigrationName}", migrationName);
+            LogDependenciesFailed(_logger, ex, migrationName);
         }
 
         return dependency;
     }
 
-    private void AnalyzeImplicitDependencies(MigrationInfo targetMigration, List<MigrationInfo> allMigrations, MigrationDependency dependency)
+    private static void AnalyzeImplicitDependencies(MigrationInfo targetMigration, List<MigrationInfo> allMigrations, MigrationDependency dependency)
     {
         // Analyze implicit dependencies based on table/column references
-        foreach (var operation in targetMigration.Operations)
+        foreach (var operation in targetMigration.Operations.Where(o => !string.IsNullOrEmpty(o.TableName)))
         {
-            if (!string.IsNullOrEmpty(operation.TableName))
-            {
-                // Find previous migrations that reference this table
-                var referencingMigrations = allMigrations
-                    .Where(m => m.CreatedAt < targetMigration.CreatedAt)
-                    .Where(m => m.Operations.Any(o => o.TableName == operation.TableName))
-                    .Select(m => m.Name)
-                    .ToList();
+            // Find previous migrations that reference this table
+            var referencingMigrations = allMigrations
+                .Where(m => m.CreatedAt < targetMigration.CreatedAt)
+                .Where(m => m.Operations.Any(o => o.TableName == operation.TableName))
+                .Select(m => m.Name)
+                .ToList();
 
-                dependency.DependsOn.AddRange(referencingMigrations);
-            }
+            dependency.DependsOn.AddRange(referencingMigrations);
         }
 
         dependency.DependsOn = dependency.DependsOn.Distinct().ToList();
     }
 
-    private bool HasImplicitDependencyOn(MigrationInfo migration, MigrationInfo targetMigration)
+    private static bool HasImplicitDependencyOn(MigrationInfo migration, MigrationInfo targetMigration)
     {
         // Check if migration implicitly depends on target migration
         return migration.Operations.Any(o =>
@@ -102,7 +98,7 @@ internal class DependencyAnalyzer
             targetMigration.Operations.Any(to => to.TableName == o.TableName));
     }
 
-    private List<string> FindImplicitDependencies(MigrationInfo currentMigration, MigrationInfo previousMigration)
+    private static List<string> FindImplicitDependencies(MigrationInfo currentMigration, MigrationInfo previousMigration)
     {
         var dependencies = new List<string>();
 
@@ -126,4 +122,13 @@ internal class DependencyAnalyzer
 
         return dependencies;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Getting dependencies for migration: {MigrationName}")]
+    private static partial void LogGettingDependencies(ILogger logger, string migrationName);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Migration not found: {MigrationName}")]
+    private static partial void LogMigrationNotFound(ILogger logger, string migrationName);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to get dependencies for migration: {MigrationName}")]
+    private static partial void LogDependenciesFailed(ILogger logger, Exception exception, string migrationName);
 }

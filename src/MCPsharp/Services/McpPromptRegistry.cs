@@ -1,16 +1,17 @@
 using System.Collections.Concurrent;
 using MCPsharp.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services;
 
 /// <summary>
 /// Manages MCP prompts that provide usage guidance templates.
 /// </summary>
-public sealed class McpPromptRegistry
+public sealed partial class McpPromptRegistry
 {
     private readonly ConcurrentDictionary<string, RegisteredPrompt> _prompts = new();
-    private readonly ILogger<McpPromptRegistry>? _logger;
+    private readonly ILogger<McpPromptRegistry> _logger;
 
     private sealed class RegisteredPrompt
     {
@@ -20,7 +21,7 @@ public sealed class McpPromptRegistry
 
     public McpPromptRegistry(ILogger<McpPromptRegistry>? logger = null)
     {
-        _logger = logger;
+        _logger = logger ?? NullLogger<McpPromptRegistry>.Instance;
         RegisterBuiltInPrompts();
     }
 
@@ -159,7 +160,7 @@ Debugging tools:
         };
 
         _prompts[prompt.Name] = registered;
-        _logger?.LogDebug("Registered prompt: {Name}", prompt.Name);
+        LogRegisteredPrompt(_logger, prompt.Name);
     }
 
     /// <summary>
@@ -201,4 +202,7 @@ Debugging tools:
     /// Gets the count of registered prompts.
     /// </summary>
     public int Count => _prompts.Count;
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Registered prompt: {Name}")]
+    private static partial void LogRegisteredPrompt(ILogger logger, string name);
 }

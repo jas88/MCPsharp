@@ -21,7 +21,7 @@ public class StreamProcessRequest
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(1);
     public TimeSpan ProcessingTimeout { get; set; } = TimeSpan.FromMinutes(30);
     public bool CreateCheckpoint { get; set; } = true;
-    public bool EnableCompression { get; set; } = false;
+    public bool EnableCompression { get; set; }
     public string? CheckpointDirectory { get; set; }
     public long MaxFileSize { get; set; } = 100 * 1024 * 1024; // 100MB default
 }
@@ -161,7 +161,7 @@ public class ChunkProcessor
     public Dictionary<string, object> Options { get; set; } = new();
     public Func<StreamChunk, Task<StreamChunk>>? ProcessAsync { get; set; }
     public Func<StreamChunk, bool>? ShouldProcessChunk { get; set; }
-    public bool EnableParallelProcessing { get; set; } = false;
+    public bool EnableParallelProcessing { get; set; }
     public int MaxDegreeOfParallelism { get; set; } = Environment.ProcessorCount;
 }
 
@@ -192,11 +192,11 @@ public class BulkTransformRequest
     public Dictionary<string, object> ProcessorOptions { get; set; } = new();
     public long ChunkSize { get; set; } = 64 * 1024;
     public bool EnableParallelProcessing { get; set; } = true;
-    public bool EnableCompression { get; set; } = false;
+    public bool EnableCompression { get; set; }
     public int MaxDegreeOfParallelism { get; set; } = Environment.ProcessorCount;
     public bool PreserveDirectoryStructure { get; set; } = true;
     public string? FilePattern { get; set; }
-    public bool Recursive { get; set; } = false;
+    public bool Recursive { get; set; }
 }
 
 /// <summary>
@@ -206,10 +206,10 @@ public class LineProcessorConfig
 {
     public string? LineFilter { get; set; }
     public string? LineReplacement { get; set; }
-    public bool IncludeLineNumbers { get; set; } = false;
+    public bool IncludeLineNumbers { get; set; }
     public string? LinePrefix { get; set; }
     public string? LineSuffix { get; set; }
-    public bool RemoveEmptyLines { get; set; } = false;
+    public bool RemoveEmptyLines { get; set; }
     public string? FieldSeparator { get; set; }
     public List<int> SelectedFields { get; set; } = new();
     public bool TrimWhitespace { get; set; } = true;
@@ -224,10 +224,10 @@ public class RegexProcessorConfig
     public string Pattern { get; set; } = string.Empty;
     public string? Replacement { get; set; }
     public System.Text.RegularExpressions.RegexOptions Options { get; set; } = System.Text.RegularExpressions.RegexOptions.None;
-    public bool Multiline { get; set; } = false;
-    public bool IgnoreCase { get; set; } = false;
-    public bool MatchWholeLine { get; set; } = false;
-    public int MaxMatches { get; set; } = 0; // 0 = unlimited
+    public bool Multiline { get; set; }
+    public bool IgnoreCase { get; set; }
+    public bool MatchWholeLine { get; set; }
+    public int MaxMatches { get; set; } // 0 = unlimited
 }
 
 /// <summary>

@@ -11,7 +11,7 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Implementation of security manager for analyzer validation and access control
 /// </summary>
-public class SecurityManager : ISecurityManager
+public partial class SecurityManager : ISecurityManager
 {
     private readonly ILogger<SecurityManager> _logger;
     private readonly string _basePath;
@@ -33,7 +33,7 @@ public class SecurityManager : ISecurityManager
     {
         try
         {
-            _logger.LogInformation("Validating assembly: {AssemblyPath}", assemblyPath);
+            LogValidatingAssembly(_logger, assemblyPath);
 
             if (!File.Exists(assemblyPath))
             {
@@ -49,19 +49,20 @@ public class SecurityManager : ISecurityManager
             var maliciousPatterns = await ScanForMaliciousPatternsAsync(assemblyPath, cancellationToken);
 
             // Check signature
-            var signatureResult = await CheckSignatureAsync(assemblyPath, cancellationToken);
+            var signatureResult = CheckSignature(assemblyPath);
             var isSigned = signatureResult.IsValid;
-            var isTrusted = isSigned && IsSignerTrustedAsync(signatureResult.Signer, cancellationToken).GetAwaiter().GetResult();
+            var isTrusted = isSigned && IsSignerTrusted(signatureResult.Signer);
+            var hasMaliciousPatterns = maliciousPatterns.Count > 0;
 
             var result = new SecurityValidationResult
             {
-                IsValid = !maliciousPatterns.Any() && isTrusted,
+                IsValid = !hasMaliciousPatterns && isTrusted,
                 IsSigned = isSigned,
                 IsTrusted = isTrusted,
-                HasMaliciousPatterns = maliciousPatterns.Any(),
+                HasMaliciousPatterns = hasMaliciousPatterns,
                 Signer = signatureResult.Signer,
                 Checksum = checksum,
-                Warnings = maliciousPatterns.Any() ? ImmutableArray.Create("Potential malicious patterns detected") : ImmutableArray<string>.Empty,
+                Warnings = hasMaliciousPatterns ? ImmutableArray.Create("Potential malicious patterns detected") : ImmutableArray<string>.Empty,
                 ValidatedAt = DateTime.UtcNow
             };
 
@@ -85,7 +86,7 @@ public class SecurityManager : ISecurityManager
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating assembly: {AssemblyPath}", assemblyPath);
+            LogValidateAssemblyError(_logger, ex, assemblyPath);
 
             _ = LogSecurityEventAsync(new SecurityEvent
             {
@@ -147,7 +148,7 @@ public class SecurityManager : ISecurityManager
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking operation permission for analyzer: {AnalyzerId}, operation: {Operation}", analyzerId, operation);
+            LogOperationPermissionError(_logger, ex, analyzerId, operation);
             return Task.FromResult(false);
         }
     }
@@ -167,8 +168,8 @@ public class SecurityManager : ISecurityManager
                 }
             }
 
-            _logger.LogInformation(
-                "Security Event: {EventType} - Analyzer: {AnalyzerId}, Operation: {Operation}, Success: {Success}, Details: {Details}",
+            LogSecurityEvent(
+                _logger,
                 securityEvent.EventType,
                 securityEvent.AnalyzerId,
                 securityEvent.Operation,
@@ -177,7 +178,7 @@ public class SecurityManager : ISecurityManager
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error logging security event");
+            LogSecurityEventError(_logger, ex);
         }
 
         return Task.CompletedTask;
@@ -222,25 +223,23 @@ public class SecurityManager : ISecurityManager
             if (!_permissions.TryGetValue(analyzerId, out var permissions))
             {
                 // Default: allow access to workspace directory
-                return Path.GetFullPath(path).StartsWith(Path.GetFullPath(_basePath), StringComparison.OrdinalIgnoreCase);
+                return PathContainment.IsWithin(_basePath, path);
             }
 
             var fullPath = Path.GetFullPath(path);
 
             // Check denied paths first
-            foreach (var deniedPath in permissions.DeniedPaths)
+            if (permissions.DeniedPaths.Any(deniedPath =>
+                    PathContainment.IsWithin(deniedPath, fullPath)))
             {
-                if (fullPath.StartsWith(Path.GetFullPath(deniedPath), StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
+                return false;
             }
 
             // Check allowed paths
             if (permissions.AllowedPaths.Any())
             {
                 return permissions.AllowedPaths.Any(allowedPath =>
-                    fullPath.StartsWith(Path.GetFullPath(allowedPath), StringComparison.OrdinalIgnoreCase));
+                    PathContainment.IsWithin(allowedPath, fullPath));
             }
 
             // Default: allow if not explicitly denied
@@ -248,7 +247,7 @@ public class SecurityManager : ISecurityManager
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking path permission for analyzer: {AnalyzerId}, path: {Path}", analyzerId, path);
+            LogPathPermissionError(_logger, ex, analyzerId, path);
             return false;
         }
     }
@@ -261,7 +260,7 @@ public class SecurityManager : ISecurityManager
     public Task AddTrustedCertificateAsync(X509Certificate2 certificate)
     {
         _trustedCertificates.Add(certificate);
-        _logger.LogInformation("Added trusted certificate: {Thumbprint}", certificate.Thumbprint);
+        LogTrustedCertificateAdded(_logger, certificate.Thumbprint);
 
         return Task.CompletedTask;
     }
@@ -272,7 +271,7 @@ public class SecurityManager : ISecurityManager
         if (cert != null)
         {
             _trustedCertificates.Remove(cert);
-            _logger.LogInformation("Removed trusted certificate: {Thumbprint}", thumbprint);
+            LogTrustedCertificateRemoved(_logger, thumbprint);
         }
 
         return Task.CompletedTask;
@@ -289,39 +288,35 @@ public class SecurityManager : ISecurityManager
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error computing checksum for file: {FilePath}", filePath);
+            LogChecksumError(_logger, ex, filePath);
             return null;
         }
     }
 
-    private Task<(bool IsValid, string? Signer)> CheckSignatureAsync(string assemblyPath, CancellationToken cancellationToken = default)
+    private (bool IsValid, string? Signer) CheckSignature(string assemblyPath)
     {
-        string? signer = null;
         try
         {
             var certificate = X509CertificateLoader.LoadCertificateFromFile(assemblyPath);
             if (certificate != null)
             {
-                signer = certificate.Subject;
-                return Task.FromResult<(bool, string?)>((true, signer));
+                return (true, certificate.Subject);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Assembly is not signed: {AssemblyPath}", assemblyPath);
+            LogAssemblyNotSigned(_logger, ex, assemblyPath);
         }
-        return Task.FromResult<(bool, string?)>((false, signer));
+        return (false, null);
     }
 
-    private Task<bool> IsSignerTrustedAsync(string? signer, CancellationToken cancellationToken = default)
+    private bool IsSignerTrusted(string? signer)
     {
         if (string.IsNullOrEmpty(signer))
-            return Task.FromResult(false);
+            return false;
 
-        var result = _trustedCertificates.Any(cert =>
+        return _trustedCertificates.Any(cert =>
             cert.Subject.Contains(signer, StringComparison.OrdinalIgnoreCase));
-
-        return Task.FromResult(result);
     }
 
     private async Task<List<string>> ScanForMaliciousPatternsAsync(string assemblyPath, CancellationToken cancellationToken = default)
@@ -346,19 +341,48 @@ public class SecurityManager : ISecurityManager
                 "InvokeMember"
             };
 
-            foreach (var pattern in suspiciousPatterns)
-            {
-                if (content.Contains(pattern, StringComparison.OrdinalIgnoreCase))
-                {
-                    patterns.Add($"Suspicious pattern detected: {pattern}");
-                }
-            }
+            patterns.AddRange(suspiciousPatterns
+                .Where(pattern => content.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                .Select(pattern => $"Suspicious pattern detected: {pattern}"));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error scanning for malicious patterns: {AssemblyPath}", assemblyPath);
+            LogMaliciousPatternScanError(_logger, ex, assemblyPath);
         }
 
         return patterns;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Validating assembly: {AssemblyPath}")]
+    private static partial void LogValidatingAssembly(ILogger logger, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error validating assembly: {AssemblyPath}")]
+    private static partial void LogValidateAssemblyError(ILogger logger, Exception exception, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error checking operation permission for analyzer: {AnalyzerId}, operation: {Operation}")]
+    private static partial void LogOperationPermissionError(ILogger logger, Exception exception, string analyzerId, string operation);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Security Event: {EventType} - Analyzer: {AnalyzerId}, Operation: {Operation}, Success: {Success}, Details: {Details}")]
+    private static partial void LogSecurityEvent(ILogger logger, SecurityEventType eventType, string analyzerId, string operation, bool success, string? details);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error logging security event")]
+    private static partial void LogSecurityEventError(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error checking path permission for analyzer: {AnalyzerId}, path: {Path}")]
+    private static partial void LogPathPermissionError(ILogger logger, Exception exception, string analyzerId, string path);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Added trusted certificate: {Thumbprint}")]
+    private static partial void LogTrustedCertificateAdded(ILogger logger, string thumbprint);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Removed trusted certificate: {Thumbprint}")]
+    private static partial void LogTrustedCertificateRemoved(ILogger logger, string thumbprint);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error computing checksum for file: {FilePath}")]
+    private static partial void LogChecksumError(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Assembly is not signed: {AssemblyPath}")]
+    private static partial void LogAssemblyNotSigned(ILogger logger, Exception exception, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error scanning for malicious patterns: {AssemblyPath}")]
+    private static partial void LogMaliciousPatternScanError(ILogger logger, Exception exception, string assemblyPath);
 }

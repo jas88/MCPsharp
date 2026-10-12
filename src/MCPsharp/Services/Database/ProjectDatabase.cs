@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services.Database;
 
@@ -11,7 +13,7 @@ namespace MCPsharp.Services.Database;
 /// </summary>
 public sealed partial class ProjectDatabase : IAsyncDisposable
 {
-    private readonly ILogger<ProjectDatabase>? _logger;
+    private readonly ILogger<ProjectDatabase> _logger;
     private SqliteConnection? _connection;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private bool _disposed;
@@ -21,7 +23,7 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
 
     public ProjectDatabase(ILogger<ProjectDatabase>? logger = null)
     {
-        _logger = logger;
+        _logger = logger ?? NullLogger<ProjectDatabase>.Instance;
     }
 
     /// <summary>
@@ -54,7 +56,7 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
 
             await InitializeSchemaAsync(cancellationToken).ConfigureAwait(false);
 
-            _logger?.LogInformation("Opened project database: {Path}", DatabasePath);
+            LogOpenedProjectDatabase(_logger, DatabasePath);
         }
         finally
         {
@@ -89,7 +91,7 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
 
             await InitializeSchemaAsync(cancellationToken).ConfigureAwait(false);
 
-            _logger?.LogDebug("Opened in-memory database");
+            LogOpenedInMemoryDatabase(_logger);
         }
         finally
         {
@@ -120,7 +122,7 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
             await _connection.CloseAsync().ConfigureAwait(false);
             await _connection.DisposeAsync().ConfigureAwait(false);
             _connection = null;
-            _logger?.LogDebug("Closed database connection");
+            LogClosedDatabaseConnection(_logger);
         }
     }
 
@@ -155,8 +157,7 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
             await SetSchemaVersionAsync(ProjectDatabaseSchema.CurrentSchemaVersion, cancellationToken)
                 .ConfigureAwait(false);
 
-            _logger?.LogInformation("Initialized database schema to version {Version}",
-                ProjectDatabaseSchema.CurrentSchemaVersion);
+            LogInitializedDatabaseSchemaToVersion(_logger, ProjectDatabaseSchema.CurrentSchemaVersion);
         }
     }
 
@@ -177,7 +178,7 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
             await using var cmd = _connection.CreateCommand();
             cmd.CommandText = "SELECT MAX(version) FROM schema_version";
             var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            return result == DBNull.Value || result == null ? 0 : Convert.ToInt32(result);
+            return result == DBNull.Value || result == null ? 0 : Convert.ToInt32(result, CultureInfo.InvariantCulture);
         }
         catch (SqliteException)
         {
@@ -256,7 +257,7 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
         try
         {
             var conn = GetConnection();
-            await using var transaction = conn.BeginTransaction();
+            await using var transaction = (SqliteTransaction)await conn.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 await action(conn, transaction).ConfigureAwait(false);
@@ -282,4 +283,16 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
         await CloseAsync().ConfigureAwait(false);
         _lock.Dispose();
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Opened project database: {Path}")]
+    private static partial void LogOpenedProjectDatabase(ILogger logger, string path);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Opened in-memory database")]
+    private static partial void LogOpenedInMemoryDatabase(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Closed database connection")]
+    private static partial void LogClosedDatabaseConnection(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Initialized database schema to version {Version}")]
+    private static partial void LogInitializedDatabaseSchemaToVersion(ILogger logger, int version);
 }

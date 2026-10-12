@@ -18,6 +18,9 @@ namespace MCPsharp.Tests.Services.Analyzers;
 [Category("Analyzers")]
 public class AnalyzerHostTests : FileServiceTestBase
 {
+    private static readonly string[] CSharpLanguages = ["C#"];
+    private static readonly string[] CSharpFileTypes = [".cs"];
+
     private ISecurityManager _mockSecurityManager = null!;
     private IAnalyzerRegistry _mockAnalyzerRegistry = null!;
     private IAnalyzerSandbox _mockSandbox = null!;
@@ -591,7 +594,7 @@ public class AnalyzerHostTests : FileServiceTestBase
     }
 
     [Test]
-    public void Cancellation_ShouldRespectCancellationToken()
+    public async Task Cancellation_ShouldRespectCancellationToken()
     {
         // Arrange
         var analyzerId = "slow-analyzer";
@@ -606,7 +609,7 @@ public class AnalyzerHostTests : FileServiceTestBase
         // Act & Assert - Test RunAnalyzerAsync
         cts.Cancel();
 
-        Assert.ThrowsAsync<OperationCanceledException>(
+        await Assert.ThrowsAsync<OperationCanceledException>(
             async () => await _analyzerHost.RunAnalyzerAsync(analyzerId, targetPath, cancellationToken: cts.Token));
     }
 
@@ -662,7 +665,7 @@ public class AnalyzerHostTests : FileServiceTestBase
         base.TearDown();
     }
 
-    private IAnalyzer CreateMockAnalyzer(string id, string name, string version)
+    private static IAnalyzer CreateMockAnalyzer(string id, string name, string version)
     {
         var analyzer = Substitute.For<IAnalyzer>();
         analyzer.Id.Returns(id);
@@ -676,8 +679,8 @@ public class AnalyzerHostTests : FileServiceTestBase
         analyzer.CanAnalyze(Arg.Any<string>()).Returns(true); // Default to true for mock analyzer
         analyzer.GetCapabilities().Returns(new AnalyzerCapabilities
         {
-            SupportedLanguages = new[] { "C#" },
-            SupportedFileTypes = new[] { ".cs" }
+            SupportedLanguages = CSharpLanguages,
+            SupportedFileTypes = CSharpFileTypes
         });
         analyzer.GetRules().Returns(ImmutableArray<AnalyzerRule>.Empty);
         analyzer.GetFixes(Arg.Any<string>()).Returns(ImmutableArray<AnalyzerFix>.Empty);

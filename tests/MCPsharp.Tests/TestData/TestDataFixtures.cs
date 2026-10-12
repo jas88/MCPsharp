@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using MCPsharp.Models;
 using MCPsharp.Models.BulkEdit;
@@ -112,10 +113,10 @@ public static class TestDataFixtures
         EnableCompression = false
     };
 
-    /// <summary>
-    /// Sample validation request for testing
-    /// TODO: Implement ValidationRequest class or replace with appropriate validation model
-    /// </summary>
+    // <summary>
+    // Sample validation request for testing
+    // TODO: Implement ValidationRequest class or replace with appropriate validation model
+    // </summary>
     // public static ValidationRequest SampleValidationRequest => new()
     // {
     //     OperationType = ValidationOperationType.Compilation,
@@ -258,20 +259,20 @@ var result = service.ProcessData(""test"");
             json.AppendLine("{");
             json.AppendLine("  \"metadata\": {");
             json.AppendLine("    \"version\": \"1.0\",");
-            json.AppendLine($"    \"objectCount\": {objectCount},");
-            json.AppendLine($"    \"generatedAt\": \"{DateTime.UtcNow:O}\"");
+            json.AppendLine(CultureInfo.InvariantCulture, $"    \"objectCount\": {objectCount},");
+            json.AppendLine(CultureInfo.InvariantCulture, $"    \"generatedAt\": \"{DateTime.UtcNow:O}\"");
             json.AppendLine("  },");
             json.AppendLine("  \"items\": [");
 
             for (int i = 0; i < objectCount; i++)
             {
                 json.AppendLine("    {");
-                json.AppendLine($"      \"id\": {i},");
-                json.AppendLine($"      \"name\": \"Item {i}\",");
-                json.AppendLine($"      \"value\": {i * 1.5:F2},");
-                json.AppendLine($"      \"active\": {(i % 2 == 0)},");
-                json.AppendLine($"      \"description\": \"Description for item {i}\",");
-                json.AppendLine($"      \"tags\": [\"tag{i % 10}\", \"category{i % 5}\"]");
+                json.AppendLine(CultureInfo.InvariantCulture, $"      \"id\": {i},");
+                json.AppendLine(CultureInfo.InvariantCulture, $"      \"name\": \"Item {i}\",");
+                json.AppendLine(CultureInfo.InvariantCulture, $"      \"value\": {i * 1.5:F2},");
+                json.AppendLine(CultureInfo.InvariantCulture, $"      \"active\": {(i % 2 == 0)},");
+                json.AppendLine(CultureInfo.InvariantCulture, $"      \"description\": \"Description for item {i}\",");
+                json.AppendLine(CultureInfo.InvariantCulture, $"      \"tags\": [\"tag{i % 10}\", \"category{i % 5}\"]");
                 json.Append("    }");
 
                 if (i < objectCount - 1)
@@ -324,7 +325,7 @@ HTML entities: &nbsp; &mdash; &ndash; &lsquo; &rsquo;
         /// <summary>
         /// File with encoding challenges
         /// </summary>
-        public static string EncodingFile = "UTF-8 test: café résumé naïve\n" +
+        public const string EncodingFile = "UTF-8 test: café résumé naïve\n" +
                                          "UTF-16 test: 中文 العربية русский\n" +
                                          "Mixed encoding: Test 🚀 with emojis and accénted charácters";
 
@@ -338,7 +339,7 @@ HTML entities: &nbsp; &mdash; &ndash; &lsquo; &rsquo;
 
             for (int i = 0; i < 100000; i++) // 100k lines
             {
-                content.AppendLine($"Line {i:D6}: {PerformanceTestData.GenerateRandomWords(random, random.Next(3, 20))}");
+                content.AppendLine(CultureInfo.InvariantCulture, $"Line {i:D6}: {PerformanceTestData.GenerateRandomWords(random, random.Next(3, 20))}");
             }
 
             return content.ToString();

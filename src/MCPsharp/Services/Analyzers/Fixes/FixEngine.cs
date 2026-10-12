@@ -12,7 +12,7 @@ namespace MCPsharp.Services.Analyzers.Fixes;
 /// <summary>
 /// Implementation of fix engine for applying analyzer fixes with preview, conflict resolution, and rollback
 /// </summary>
-public class FixEngine : IFixEngine
+public partial class FixEngine : IFixEngine
 {
     private readonly ILogger<FixEngine> _logger;
     private readonly FileOperationsService _fileOperations;
@@ -38,32 +38,28 @@ public class FixEngine : IFixEngine
     {
         try
         {
-            _logger.LogInformation("Previewing {FixCount} fixes for {IssueCount} issues", fixes.Length, issues.Length);
+            LogPreviewingFixes(_logger, fixes.Length, issues.Length);
 
             var previews = new List<FixPreview>();
-            var conflicts = new List<FixConflict>();
             var fileContents = new Dictionary<string, string>();
 
             // Load file contents
-            foreach (var issue in issues)
+            foreach (var filePath in issues.Select(i => i.FilePath).Distinct(StringComparer.Ordinal))
             {
-                if (!fileContents.ContainsKey(issue.FilePath))
+                try
                 {
-                    try
+                    var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+                    fileContents[filePath] = content;
+                }
+                catch (Exception ex)
+                {
+                    LogErrorReadingFileForPreview(_logger, ex, filePath);
+                    return new FixPreviewResult
                     {
-                        var content = await File.ReadAllTextAsync(issue.FilePath, cancellationToken);
-                        fileContents[issue.FilePath] = content;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error reading file for preview: {FilePath}", issue.FilePath);
-                        return new FixPreviewResult
-                        {
-                            Success = false,
-                            ErrorMessage = $"Error reading file: {issue.FilePath}",
-                            Warnings = ImmutableArray.Create($"Could not read {issue.FilePath} for preview")
-                        };
-                    }
+                        Success = false,
+                        ErrorMessage = $"Error reading file: {filePath}",
+                        Warnings = ImmutableArray.Create($"Could not read {filePath} for preview")
+                    };
                 }
             }
 
@@ -72,22 +68,17 @@ public class FixEngine : IFixEngine
             {
                 try
                 {
-                    var preview = await GeneratePreviewAsync(fix, issues, fileContents, cancellationToken);
+                    var preview = GeneratePreview(fix, issues, fileContents);
                     previews.Add(preview);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error generating preview for fix: {FixId}", fix.Id);
+                    LogErrorGeneratingPreview(_logger, ex, fix.Id);
                 }
             }
 
             // Detect conflicts
-            var conflictEnumerable = await DetectFixConflictsAsync(previews, cancellationToken);
-            conflicts = new List<FixConflict>();
-            await foreach (var conflict in conflictEnumerable.WithCancellation(cancellationToken))
-            {
-                conflicts.Add(conflict);
-            }
+            var conflicts = DetectFixConflicts(previews, cancellationToken);
 
             return new FixPreviewResult
             {
@@ -99,7 +90,7 @@ public class FixEngine : IFixEngine
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error previewing fixes");
+            LogErrorPreviewingFixes(_logger, ex);
             return new FixPreviewResult
             {
                 Success = false,
@@ -120,7 +111,7 @@ public class FixEngine : IFixEngine
 
         try
         {
-            _logger.LogInformation("Applying {FixCount} fixes in session {SessionId}", fixes.Length, sessionId);
+            LogApplyingFixes(_logger, fixes.Length, sessionId);
 
             // Generate preview first
             var previewResult = await PreviewFixesAsync(issues, fixes, cancellationToken);
@@ -138,7 +129,7 @@ public class FixEngine : IFixEngine
 
             // Detect and resolve conflicts
             var conflicts = previewResult.Conflicts;
-            if (options.ResolveConflicts && conflicts.Any())
+            if (options.ResolveConflicts && !conflicts.IsEmpty)
             {
                 var resolutionResult = await ResolveConflictsAsync(conflicts, options.ConflictStrategy, cancellationToken);
                 if (!resolutionResult.Success)
@@ -172,7 +163,7 @@ public class FixEngine : IFixEngine
             {
                 try
                 {
-                    var result = await ApplySingleFixAsync(fix, issues, options, cancellationToken);
+                    var result = await ApplySingleFixAsync(fix, cancellationToken);
                     appliedFixes.Add(result);
 
                     if (result.Success)
@@ -190,7 +181,7 @@ public class FixEngine : IFixEngine
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error applying fix: {FixId}", fix.Id);
+                    LogErrorApplyingFix(_logger, ex, fix.Id);
                     failedFiles.Add(fix.Edits.FirstOrDefault()?.FilePath ?? "Unknown");
                     warnings.Add($"Failed to apply fix {fix.Id}: {ex.Message}");
 
@@ -222,7 +213,7 @@ public class FixEngine : IFixEngine
                 AnalyzerId = fixes.FirstOrDefault()?.AnalyzerId ?? "Unknown",
                 StartTime = startTime,
                 EndTime = DateTime.UtcNow,
-                Success = !failedFiles.Any(),
+                Success = failedFiles.Count == 0,
                 ModifiedFiles = modifiedFiles.ToImmutableArray(),
                 AppliedFixes = appliedFixes.ToImmutableArray(),
                 Metadata = ImmutableDictionary<string, object>.Empty
@@ -236,7 +227,7 @@ public class FixEngine : IFixEngine
             return new FixApplicationResult
             {
                 SessionId = sessionId,
-                Success = !failedFiles.Any(),
+                Success = failedFiles.Count == 0,
                 AppliedFixes = appliedFixes.ToImmutableArray(),
                 ModifiedFiles = modifiedFiles.ToImmutableArray(),
                 ResolvedConflicts = conflicts,
@@ -248,7 +239,7 @@ public class FixEngine : IFixEngine
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error applying fixes in session {SessionId}", sessionId);
+            LogErrorApplyingFixesInSession(_logger, ex, sessionId);
             return new FixApplicationResult
             {
                 SessionId = sessionId,
@@ -260,7 +251,7 @@ public class FixEngine : IFixEngine
         }
     }
 
-    public async Task<ConflictDetectionResult> DetectConflictsAsync(ImmutableArray<AnalyzerFix> fixes, CancellationToken cancellationToken = default)
+    public Task<ConflictDetectionResult> DetectConflictsAsync(ImmutableArray<AnalyzerFix> fixes, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -273,32 +264,38 @@ public class FixEngine : IFixEngine
 
             foreach (var (filePath, fileFixes) in fixesByFile)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 // Convert AnalyzerFix objects to FixPreview objects
                 var fixPreviews = fileFixes.Select(ConvertToFixPreview).ToList();
-                var fileConflicts = await DetectFileConflictsAsync(filePath, fixPreviews, cancellationToken);
+                var fileConflicts = DetectFileConflicts(filePath, fixPreviews);
                 conflicts.AddRange(fileConflicts);
             }
 
-            return new ConflictDetectionResult
+            return Task.FromResult(new ConflictDetectionResult
             {
                 Success = true,
                 Conflicts = conflicts.ToImmutableArray(),
                 DetectedAt = DateTime.UtcNow
-            };
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            return Task.FromCanceled<ConflictDetectionResult>(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error detecting conflicts");
-            return new ConflictDetectionResult
+            LogErrorDetectingConflicts(_logger, ex);
+            return Task.FromResult(new ConflictDetectionResult
             {
                 Success = false,
                 ErrorMessage = ex.Message,
                 DetectedAt = DateTime.UtcNow
-            };
+            });
         }
     }
 
-    public async Task<ConflictResolutionResult> ResolveConflictsAsync(
+    public Task<ConflictResolutionResult> ResolveConflictsAsync(
         ImmutableArray<FixConflict> conflicts,
         ConflictResolutionStrategy strategy,
         CancellationToken cancellationToken = default)
@@ -310,9 +307,10 @@ public class FixEngine : IFixEngine
 
             foreach (var conflict in conflicts)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
-                    var resolution = await ResolveSingleConflictAsync(conflict, strategy, cancellationToken);
+                    var resolution = ResolveSingleConflict(conflict, strategy);
                     if (resolution != null)
                     {
                         resolutions.Add(resolution);
@@ -324,33 +322,41 @@ public class FixEngine : IFixEngine
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error resolving conflict: {ConflictId}", conflict.Id);
+                    LogErrorResolvingConflict(_logger, ex, conflict.Id);
                     unresolvedConflicts.Add(conflict);
                 }
             }
 
-            return new ConflictResolutionResult
+            return Task.FromResult(new ConflictResolutionResult
             {
-                Success = !unresolvedConflicts.Any(),
+                Success = unresolvedConflicts.Count == 0,
                 Resolutions = resolutions.ToImmutableArray(),
                 UnresolvedConflicts = unresolvedConflicts.ToImmutableArray(),
                 ResolvedAt = DateTime.UtcNow
-            };
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            return Task.FromCanceled<ConflictResolutionResult>(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error resolving conflicts");
-            return new ConflictResolutionResult
+            LogErrorResolvingConflicts(_logger, ex);
+            return Task.FromResult(new ConflictResolutionResult
             {
                 Success = false,
                 ErrorMessage = ex.Message,
                 ResolvedAt = DateTime.UtcNow
-            };
+            });
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<Models.Analyzers.RollbackResult> RollbackFixesAsync(string sessionId, CancellationToken cancellationToken = default)
+    public Task<Models.Analyzers.RollbackResult> RollbackFixesAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(RollbackFixes(sessionId));
+    }
+
+    private Models.Analyzers.RollbackResult RollbackFixes(string sessionId)
     {
         try
         {
@@ -365,7 +371,7 @@ public class FixEngine : IFixEngine
                 };
             }
 
-            _logger.LogInformation("Rolling back fixes for session {SessionId}", sessionId);
+            LogRollingBackFixes(_logger, sessionId);
 
             var successfulRollbacks = 0;
             var failedRollbacks = 0;
@@ -410,7 +416,7 @@ public class FixEngine : IFixEngine
                     catch (Exception ex)
                     {
                         failedRollbacks++;
-                        _logger.LogError(ex, "Error restoring file: {FilePath}", originalPath);
+                        LogErrorRestoringFile(_logger, ex, originalPath);
                         errors.Add(new MCPsharp.Models.BulkEdit.RollbackError
                         {
                             FilePath = originalPath,
@@ -428,7 +434,7 @@ public class FixEngine : IFixEngine
 
             return new Models.Analyzers.RollbackResult
             {
-                Success = !errors.Any(),
+                Success = errors.Count == 0,
                 SessionId = sessionId,
                 TotalFiles = successfulRollbacks + failedRollbacks,
                 SuccessfulRollbacks = successfulRollbacks,
@@ -442,7 +448,7 @@ public class FixEngine : IFixEngine
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error rolling back session {SessionId}", sessionId);
+            LogErrorRollingBackSession(_logger, ex, sessionId);
             return new Models.Analyzers.RollbackResult
             {
                 Success = false,
@@ -465,7 +471,6 @@ public class FixEngine : IFixEngine
             };
         }
     }
-    #pragma warning restore CS1998
 
     public async Task<Models.Analyzers.ValidationResult> ValidateFixesAsync(string sessionId, CancellationToken cancellationToken = default)
     {
@@ -494,7 +499,7 @@ public class FixEngine : IFixEngine
                     // Basic syntax validation (for C# files)
                     if (Path.GetExtension(filePath).Equals(".cs", StringComparison.OrdinalIgnoreCase))
                     {
-                        var syntaxErrors = await ValidateCSharpSyntaxAsync(content);
+                        var syntaxErrors = ValidateCSharpSyntax(content);
                         errors.AddRange(syntaxErrors);
                     }
 
@@ -511,6 +516,7 @@ public class FixEngine : IFixEngine
                 }
                 catch (Exception ex)
                 {
+                    LogErrorReadingFileForValidation(_logger, ex, filePath);
                     errors.Add(new ValidationError
                     {
                         FilePath = filePath,
@@ -532,7 +538,7 @@ public class FixEngine : IFixEngine
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating fixes for session {SessionId}", sessionId);
+            LogErrorValidatingFixes(_logger, ex, sessionId);
             return new Models.Analyzers.ValidationResult
             {
                 IsValid = false,
@@ -543,18 +549,15 @@ public class FixEngine : IFixEngine
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<ImmutableArray<FixSession>> GetFixHistoryAsync(int maxSessions = 50, CancellationToken cancellationToken = default)
+    public Task<ImmutableArray<FixSession>> GetFixHistoryAsync(int maxSessions = 50, CancellationToken cancellationToken = default)
     {
-        return _sessions.Values
+        return Task.FromResult(_sessions.Values
             .OrderByDescending(s => s.StartTime)
             .Take(maxSessions)
-            .ToImmutableArray();
+            .ToImmutableArray());
     }
-    #pragma warning restore CS1998
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<FixStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
+    public Task<FixStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
     {
         var sessions = _sessions.Values.ToList();
         var now = DateTime.UtcNow;
@@ -562,7 +565,7 @@ public class FixEngine : IFixEngine
 
         var recentSessions = sessions.Where(s => s.StartTime >= periodStart).ToList();
 
-        return new FixStatistics
+        return Task.FromResult(new FixStatistics
         {
             TotalSessions = sessions.Count,
             SuccessfulSessions = sessions.Count(s => s.Success),
@@ -587,16 +590,13 @@ public class FixEngine : IFixEngine
                 .ToImmutableArray(),
             PeriodStart = periodStart,
             PeriodEnd = now
-        };
+        });
     }
-    #pragma warning restore CS1998
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<FixPreview> GeneratePreviewAsync(
+    private static FixPreview GeneratePreview(
         AnalyzerFix fix,
         ImmutableArray<AnalyzerIssue> issues,
-        Dictionary<string, string> fileContents,
-        CancellationToken cancellationToken)
+        Dictionary<string, string> fileContents)
     {
         var issue = issues.FirstOrDefault(i => fix.RuleId == i.RuleId);
         var filePath = fix.Edits.FirstOrDefault()?.FilePath ?? issue?.FilePath ?? string.Empty;
@@ -626,9 +626,8 @@ public class FixEngine : IFixEngine
             Confidence = fix.Confidence
         };
     }
-    #pragma warning restore CS1998
 
-    private async Task<IAsyncEnumerable<FixConflict>> DetectFixConflictsAsync(
+    private static List<FixConflict> DetectFixConflicts(
         List<FixPreview> previews,
         CancellationToken cancellationToken)
     {
@@ -639,18 +638,17 @@ public class FixEngine : IFixEngine
 
         foreach (var fileGroup in previewsByFile)
         {
-            var fileConflicts = await DetectFileConflictsAsync(fileGroup.Key, fileGroup.ToList(), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var fileConflicts = DetectFileConflicts(fileGroup.Key, fileGroup.ToList());
             conflicts.AddRange(fileConflicts);
         }
 
-        return CreateAsyncEnumerable(conflicts);
+        return conflicts;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<FixConflict>> DetectFileConflictsAsync(
+    private static List<FixConflict> DetectFileConflicts(
         string filePath,
-        List<FixPreview> previews,
-        CancellationToken cancellationToken)
+        List<FixPreview> previews)
     {
         var conflicts = new List<FixConflict>();
 
@@ -680,7 +678,6 @@ public class FixEngine : IFixEngine
 
         return conflicts;
     }
-    #pragma warning restore CS1998
 
     private static bool EditsOverlap(TextEdit edit1, TextEdit edit2)
     {
@@ -693,11 +690,9 @@ public class FixEngine : IFixEngine
                  end2.Item1 < pos1.Item1 || (end2.Item1 == pos1.Item1 && end2.Item2 < pos1.Item2));
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<ConflictResolution?> ResolveSingleConflictAsync(
+    private static ConflictResolution? ResolveSingleConflict(
         FixConflict conflict,
-        ConflictResolutionStrategy strategy,
-        CancellationToken cancellationToken)
+        ConflictResolutionStrategy strategy)
     {
         return strategy switch
         {
@@ -724,7 +719,6 @@ public class FixEngine : IFixEngine
             _ => null
         };
     }
-    #pragma warning restore CS1998
 
     private async Task<Dictionary<string, string>> CreateBackupsAsync(
         IEnumerable<string> filePaths,
@@ -747,7 +741,7 @@ public class FixEngine : IFixEngine
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating backup for file: {FilePath}", filePath);
+                LogErrorCreatingBackup(_logger, ex, filePath);
             }
         }
 
@@ -756,8 +750,6 @@ public class FixEngine : IFixEngine
 
     private async Task<FixResult> ApplySingleFixAsync(
         AnalyzerFix fix,
-        ImmutableArray<AnalyzerIssue> issues,
-        FixApplicationOptions options,
         CancellationToken cancellationToken)
     {
         var modifiedFiles = new List<string>();
@@ -795,6 +787,7 @@ public class FixEngine : IFixEngine
             }
             catch (Exception ex)
             {
+                LogErrorApplyingEdit(_logger, ex, fix.Id, edit.FilePath);
                 return new FixResult
                 {
                     Success = false,
@@ -829,13 +822,14 @@ public class FixEngine : IFixEngine
         if (startLine == endLine)
         {
             var line = lines[startLine];
-            lines[startLine] = line.Substring(0, edit.StartColumn) +
-                              edit.NewText +
-                              line.Substring(Math.Min(edit.EndColumn, line.Length));
+            lines[startLine] = string.Concat(
+                line.AsSpan(0, edit.StartColumn),
+                edit.NewText,
+                line.AsSpan(Math.Min(edit.EndColumn, line.Length)));
         }
         else
         {
-            lines[startLine] = lines[startLine].Substring(0, edit.StartColumn) + edit.NewText;
+            lines[startLine] = string.Concat(lines[startLine].AsSpan(0, edit.StartColumn), edit.NewText);
             var newLines = new List<string>(lines.Take(startLine + 1));
             if (endLine + 1 < lines.Length)
             {
@@ -848,8 +842,7 @@ public class FixEngine : IFixEngine
         return string.Join('\n', lines);
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<ValidationError>> ValidateCSharpSyntaxAsync(string content)
+    private static List<ValidationError> ValidateCSharpSyntax(string content)
     {
         var errors = new List<ValidationError>();
 
@@ -878,7 +871,6 @@ public class FixEngine : IFixEngine
 
         return errors;
     }
-    #pragma warning restore CS1998
 
     /// <summary>
     /// Converts an AnalyzerFix to a FixPreview
@@ -896,18 +888,6 @@ public class FixEngine : IFixEngine
             Description = fix.Description,
             Confidence = fix.Confidence
         };
-    }
-
-    /// <summary>
-    /// Creates an IAsyncEnumerable from a List
-    /// </summary>
-    private static async IAsyncEnumerable<T> CreateAsyncEnumerable<T>(IEnumerable<T> items)
-    {
-        foreach (var item in items)
-        {
-            await Task.Yield();
-            yield return item;
-        }
     }
 
     /// <summary>
@@ -939,4 +919,55 @@ public class FixEngine : IFixEngine
             Timestamp = source.Timestamp
         };
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Previewing {FixCount} fixes for {IssueCount} issues")]
+    private static partial void LogPreviewingFixes(ILogger logger, int fixCount, int issueCount);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error reading file for preview: {FilePath}")]
+    private static partial void LogErrorReadingFileForPreview(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error generating preview for fix: {FixId}")]
+    private static partial void LogErrorGeneratingPreview(ILogger logger, Exception exception, string fixId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error previewing fixes")]
+    private static partial void LogErrorPreviewingFixes(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Applying {FixCount} fixes in session {SessionId}")]
+    private static partial void LogApplyingFixes(ILogger logger, int fixCount, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error applying fix: {FixId}")]
+    private static partial void LogErrorApplyingFix(ILogger logger, Exception exception, string fixId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error applying fixes in session {SessionId}")]
+    private static partial void LogErrorApplyingFixesInSession(ILogger logger, Exception exception, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error detecting conflicts")]
+    private static partial void LogErrorDetectingConflicts(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error resolving conflict: {ConflictId}")]
+    private static partial void LogErrorResolvingConflict(ILogger logger, Exception exception, string conflictId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error resolving conflicts")]
+    private static partial void LogErrorResolvingConflicts(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Rolling back fixes for session {SessionId}")]
+    private static partial void LogRollingBackFixes(ILogger logger, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error restoring file: {FilePath}")]
+    private static partial void LogErrorRestoringFile(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error rolling back session {SessionId}")]
+    private static partial void LogErrorRollingBackSession(ILogger logger, Exception exception, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Error reading file for validation: {FilePath}")]
+    private static partial void LogErrorReadingFileForValidation(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error validating fixes for session {SessionId}")]
+    private static partial void LogErrorValidatingFixes(ILogger logger, Exception exception, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error creating backup for file: {FilePath}")]
+    private static partial void LogErrorCreatingBackup(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error applying edit for fix {FixId} to file {FilePath}")]
+    private static partial void LogErrorApplyingEdit(ILogger logger, Exception exception, string fixId, string? filePath);
 }

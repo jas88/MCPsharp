@@ -70,7 +70,7 @@ public class SqlMigrationAnalyzerServiceTests
         var nonExistentFile = Path.Combine(Path.GetTempPath(), "nonexistent.cs");
 
         // Act & Assert
-        Assert.ThrowsAsync<FileNotFoundException>(async () =>
+        await Assert.ThrowsAsync<FileNotFoundException>(async () =>
             await _service.ParseMigrationFileAsync(nonExistentFile));
     }
 
@@ -217,7 +217,7 @@ public class SqlMigrationAnalyzerServiceTests
         Assert.That(result, Is.Empty);
     }
 
-    private string CreateTempProjectDirectory()
+    private static string CreateTempProjectDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
@@ -235,7 +235,7 @@ public class SqlMigrationAnalyzerServiceTests
         return tempDir;
     }
 
-    private string CreateSampleMigrationFile(string tempDir, string migrationName)
+    private static string CreateSampleMigrationFile(string tempDir, string migrationName)
     {
         var migrationsDir = Path.Combine(tempDir, "Migrations");
         Directory.CreateDirectory(migrationsDir);
@@ -292,7 +292,7 @@ namespace TestProject.Migrations
         Assert.That(result.Name, Is.EqualTo("CreateTestTable"));
         Assert.That(result.FilePath, Is.EqualTo(migrationPath));
         Assert.That(result.Operations, Is.Not.Empty);
-        Assert.That(result.Operations, Has.Some.Matches<dynamic>(o => o.Type.Equals("CreateTable", StringComparison.OrdinalIgnoreCase)));
+        Assert.That(result.Operations, Has.Some.Matches<dynamic>(o => o is not null && o.Type.Equals("CreateTable", StringComparison.OrdinalIgnoreCase)));
 
         // Cleanup
         Directory.Delete(tempDir, true);
@@ -313,11 +313,31 @@ namespace TestProject.Migrations
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Summary.TotalMigrations, Is.EqualTo(2));
         Assert.That(result.Migrations, Has.Count.EqualTo(2));
-        Assert.That(result.Migrations, Has.Some.Matches<dynamic>(m => m.Name == "CreateTestTable"));
-        Assert.That(result.Migrations, Has.Some.Matches<dynamic>(m => m.Name == "AddColumnToTestTable"));
+        Assert.That(result.Migrations, Has.Some.Matches<dynamic>(m => m is not null && m.Name == "CreateTestTable"));
+        Assert.That(result.Migrations, Has.Some.Matches<dynamic>(m => m is not null && m.Name == "AddColumnToTestTable"));
 
         // Cleanup
         Directory.Delete(tempDir, true);
+    }
+
+    [Test]
+    public void DescribeConnectionTarget_ShouldOmitCredentials()
+    {
+        var description = SqlMigrationAnalyzerService.DescribeConnectionTarget(
+            "Server=db.example.org;Database=Orders;User Id=admin;Password=hunter2;");
+
+        Assert.That(description, Does.Contain("db.example.org"));
+        Assert.That(description, Does.Contain("Orders"));
+        Assert.That(description, Does.Not.Contain("hunter2"));
+        Assert.That(description, Does.Not.Contain("admin"));
+    }
+
+    [Test]
+    public void DescribeConnectionTarget_ShouldNotEchoUnparseableInput()
+    {
+        var description = SqlMigrationAnalyzerService.DescribeConnectionTarget("Password='unterminated");
+
+        Assert.That(description, Does.Not.Contain("unterminated"));
     }
 
     [OneTimeTearDown]

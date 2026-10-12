@@ -240,7 +240,7 @@ public class DerivedService : IService
             Name = "GetData",
             ReturnType = "string",
             Parameters = new List<ParameterInfo>(),
-            ContainingType = "MCPsharp.Tests.TestFixtures.ServiceImpl",
+            ContainingType = "MCPsharp.Tests.TestFixtures.ServiceImplementation",
             Accessibility = "public"
         };
 
@@ -250,7 +250,7 @@ public class DerivedService : IService
             Name = "GetData",
             ReturnType = "string",
             Parameters = new List<ParameterInfo>(),
-            ContainingType = "MCPsharp.Tests.TestFixtures.ServiceImpl",
+            ContainingType = "MCPsharp.Tests.TestFixtures.ServiceImplementation",
             Accessibility = "public"
         });
 

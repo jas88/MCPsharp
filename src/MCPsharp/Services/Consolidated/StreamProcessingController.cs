@@ -12,7 +12,7 @@ namespace MCPsharp.Services.Consolidated;
 /// Stream Processing Controller consolidating all stream processing operations
 /// Phase 4: Consolidate 40 stream processing tools into 6 unified tools
 /// </summary>
-public class StreamProcessingController
+public partial class StreamProcessingController
 {
     private readonly IProgressTracker? _progressTracker;
     private readonly ILogger<StreamProcessingController> _logger;
@@ -55,7 +55,7 @@ public class StreamProcessingController
             };
 
             // Validate request
-            var validation = await ValidateStreamRequestAsync(request, ct);
+            var validation = ValidateStreamRequest(request);
             if (!validation.IsValid)
             {
                 response.Error = validation.ErrorMessage;
@@ -76,6 +76,8 @@ public class StreamProcessingController
             {
                 _activeStreams[operationId] = context;
             }
+
+            context.AddLog($"Stream processing started with processor '{request.ProcessorType}' ({request.InputType})");
 
             try
             {
@@ -98,6 +100,7 @@ public class StreamProcessingController
                     response.Error = $"Processor type '{request.ProcessorType}' not available";
                     response.Success = false;
                     context.Status = StreamStatus.Failed;
+                    context.AddLog(response.Error);
                     return response;
                 }
 
@@ -107,7 +110,7 @@ public class StreamProcessingController
                     StreamInputType.File => await ProcessFileStreamAsync(request, processor, context, ct),
                     StreamInputType.Directory => await ProcessDirectoryStreamAsync(request, processor, context, ct),
                     StreamInputType.MultipleFiles => await ProcessMultipleFilesStreamAsync(request, processor, context, ct),
-                    StreamInputType.Stream => await ProcessDataStreamAsync(request, processor, context, ct),
+                    StreamInputType.Stream => ProcessDataStream(),
                     _ => throw new ArgumentException($"Unsupported input type: {request.InputType}")
                 };
 
@@ -124,6 +127,7 @@ public class StreamProcessingController
 
                 response.Success = response.Summary.FailedFiles == 0;
                 context.Status = response.Success ? StreamStatus.Completed : StreamStatus.Failed;
+                context.AddLog($"Stream processing finished: {response.Summary.SuccessfulFiles}/{response.Summary.TotalFiles} files succeeded");
 
                 // Complete progress tracking
                 if (_progressTracker != null && context.ProgressId != null)
@@ -146,12 +150,13 @@ public class StreamProcessingController
                 response.Error = ex.Message;
                 response.Success = false;
                 context.Status = StreamStatus.Failed;
-                _logger.LogError(ex, "Error processing stream {OperationId}", operationId);
+                context.AddLog($"Stream processing failed: {ex.Message}");
+                LogErrorProcessingStream(_logger, ex, operationId);
             }
             finally
             {
                 // Cleanup resources
-                await CleanupStreamContextAsync(context, ct);
+                CleanupStreamContext(context);
             }
 
             stopwatch.Stop();
@@ -167,7 +172,7 @@ public class StreamProcessingController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Fatal error in stream processing {OperationId}", operationId);
+            LogFatalErrorInStreamProcessing(_logger, ex, operationId);
 
             return new StreamProcessResponse
             {
@@ -181,15 +186,16 @@ public class StreamProcessingController
         }
         finally
         {
-            // Schedule cleanup
+            // Schedule cleanup. Deliberately not tied to the request token:
+            // cancelling the request must not skip removal of the tracked stream.
             _ = Task.Run(async () =>
             {
-                await Task.Delay(TimeSpan.FromMinutes(10));
+                await Task.Delay(TimeSpan.FromMinutes(10), CancellationToken.None);
                 lock (_streamsLock)
                 {
                     _activeStreams.Remove(operationId);
                 }
-            }, ct);
+            }, CancellationToken.None);
         }
     }
 
@@ -259,14 +265,14 @@ public class StreamProcessingController
                         EstimatedTimeRemaining = progress.EstimatedTimeRemaining,
                         Message = message,
                         ProcessingRate = CalculateProcessingRate(context),
-                        MemoryUsage = GetMemoryUsage(context),
-                        CpuUsage = GetCpuUsage(context)
+                        MemoryUsage = GetMemoryUsage(),
+                        CpuUsage = GetCpuUsage()
                     };
                 }
             }
 
             // Get detailed metrics
-            metrics = await GetStreamMetricsAsync(context, request.IncludeDetails, ct);
+            metrics = GetStreamMetrics(context);
 
             // Get recent logs
             if (request.IncludeLogs)
@@ -277,7 +283,7 @@ public class StreamProcessingController
             // Get performance data
             if (request.IncludePerformance)
             {
-                performance = await GetStreamPerformanceAsync(context, ct);
+                performance = GetStreamPerformance(context);
             }
 
             stopwatch.Stop();
@@ -303,7 +309,7 @@ public class StreamProcessingController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error monitoring stream {OperationId}", operationId);
+            LogErrorMonitoringStream(_logger, ex, operationId);
 
             return new StreamMonitorResponse
             {
@@ -321,7 +327,12 @@ public class StreamProcessingController
     /// stream_management - Manage stream operations
     /// Consolidates: Management tools
     /// </summary>
-    public async Task<StreamManagementResponse> ManageStreamAsync(StreamManagementRequest request, CancellationToken ct = default)
+    public Task<StreamManagementResponse> ManageStreamAsync(StreamManagementRequest request, CancellationToken ct = default)
+    {
+        return Task.FromResult(ManageStream(request));
+    }
+
+    private StreamManagementResponse ManageStream(StreamManagementRequest request)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
@@ -340,7 +351,7 @@ public class StreamProcessingController
             switch (request.Action)
             {
                 case StreamManagementAction.List:
-                    activeStreams = await ListActiveStreamsAsync(ct);
+                    activeStreams = ListActiveStreams();
                     break;
 
                 case StreamManagementAction.Cancel:
@@ -350,7 +361,7 @@ public class StreamProcessingController
                     }
                     else
                     {
-                        cancelResult = await CancelStreamAsync(request.Target, ct);
+                        cancelResult = CancelStream();
                     }
                     break;
 
@@ -361,7 +372,7 @@ public class StreamProcessingController
                     }
                     else
                     {
-                        pauseResult = await PauseStreamAsync(request.Target, ct);
+                        pauseResult = PauseStream();
                     }
                     break;
 
@@ -372,16 +383,16 @@ public class StreamProcessingController
                     }
                     else
                     {
-                        resumeResult = await ResumeStreamAsync(request.Target, ct);
+                        resumeResult = ResumeStream();
                     }
                     break;
 
                 case StreamManagementAction.Cleanup:
-                    cleanupResult = await CleanupStreamsAsync(request.MaxAge, ct);
+                    cleanupResult = CleanupStreams(request.MaxAge);
                     break;
 
                 case StreamManagementAction.RegisterProcessor:
-                    registerResult = await RegisterProcessorAsync(request.ProcessorDefinition!, ct);
+                    registerResult = RegisterProcessor(request.ProcessorDefinition!);
                     break;
 
                 case StreamManagementAction.UnregisterProcessor:
@@ -391,7 +402,7 @@ public class StreamProcessingController
                     }
                     else
                     {
-                        unregisterResult = await UnregisterProcessorAsync(request.Target, ct);
+                        unregisterResult = UnregisterProcessor(request.Target);
                     }
                     break;
 
@@ -424,7 +435,7 @@ public class StreamProcessingController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error managing stream operations");
+            LogErrorManagingStreamOperations(_logger, ex);
 
             return new StreamManagementResponse
             {
@@ -451,8 +462,7 @@ public class StreamProcessingController
         _processors["transform"] = new TransformStreamProcessor();
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<StreamValidationResult> ValidateStreamRequestAsync(ConsolidatedStream.StreamProcessRequest request, CancellationToken ct)
+    private StreamValidationResult ValidateStreamRequest(ConsolidatedStream.StreamProcessRequest request)
     {
         // Validate input
         if (request.InputPath == null && request.InputStream == null)
@@ -502,7 +512,7 @@ public class StreamProcessingController
                     break;
 
                 case StreamInputType.MultipleFiles:
-                    if (request.Files?.Any() != true)
+                    if (request.Files is not { Count: > 0 })
                     {
                         return new StreamValidationResult
                         {
@@ -516,7 +526,6 @@ public class StreamProcessingController
 
         return new StreamValidationResult { IsValid = true };
     }
-    #pragma warning restore CS1998
 
     private async Task<IStreamProcessor?> GetProcessorAsync(string processorType, ProcessorOptions? options, CancellationToken ct)
     {
@@ -585,6 +594,8 @@ public class StreamProcessingController
         }
         catch (Exception ex)
         {
+            LogStreamProcessingFailed(_logger, ex, context.Id);
+            context.AddLog($"Failed to process '{request.InputPath}': {ex.Message}");
             result.Success = false;
             result.Error = ex.Message;
         }
@@ -610,7 +621,7 @@ public class StreamProcessingController
             {
                 InputType = StreamInputType.File,
                 InputPath = file,
-                OutputPath = GetOutputPath(request.OutputPath, file, request.InputPath),
+                OutputPath = GetOutputPath(request.OutputPath, file),
                 ProcessorType = request.ProcessorType,
                 ProcessorOptions = request.ProcessorOptions,
                 ChunkSize = request.ChunkSize,
@@ -682,19 +693,13 @@ public class StreamProcessingController
         return results;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<StreamProcessResult>> ProcessDataStreamAsync(
-        ConsolidatedStream.StreamProcessRequest request,
-        IStreamProcessor processor,
-        StreamOperationContext context,
-        CancellationToken ct)
+    private static List<StreamProcessResult> ProcessDataStream()
     {
         // Implementation for processing data streams
         return new List<StreamProcessResult>();
     }
-    #pragma warning restore CS1998
 
-    private static string GetOutputPath(string? outputPath, string inputFile, string? inputRoot = null)
+    private static string GetOutputPath(string? outputPath, string inputFile)
     {
         if (string.IsNullOrEmpty(outputPath))
             return string.Empty;
@@ -709,8 +714,7 @@ public class StreamProcessingController
     }
 
   
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<StreamMetrics> GetStreamMetricsAsync(StreamOperationContext context, bool includeDetails, CancellationToken ct)
+    private static StreamMetrics GetStreamMetrics(StreamOperationContext context)
     {
         // Implementation for gathering stream metrics
         return new StreamMetrics
@@ -725,7 +729,6 @@ public class StreamProcessingController
             IOWaitTime = context.IOWaitTime
         };
     }
-    #pragma warning restore CS1998
 
     private static double CalculateProcessingRate(StreamOperationContext context)
     {
@@ -735,20 +738,26 @@ public class StreamProcessingController
         return context.BytesProcessed / context.ElapsedTime.TotalSeconds;
     }
 
-    private static long GetMemoryUsage(StreamOperationContext context)
+    private static long GetMemoryUsage()
     {
         // Implementation for getting memory usage
         return GC.GetTotalMemory(false);
     }
 
-    private static double GetCpuUsage(StreamOperationContext context)
+    private static double GetCpuUsage()
     {
-        // Implementation for getting CPU usage
-        return 0.0; // Placeholder
+        // Average CPU utilisation of this process since it started, as a percentage of all cores
+        using var process = System.Diagnostics.Process.GetCurrentProcess();
+        var wallClock = DateTime.UtcNow - process.StartTime.ToUniversalTime();
+        if (wallClock <= TimeSpan.Zero)
+        {
+            return 0.0;
+        }
+
+        return process.TotalProcessorTime.TotalMilliseconds / (wallClock.TotalMilliseconds * Environment.ProcessorCount) * 100.0;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<StreamPerformanceData> GetStreamPerformanceAsync(StreamOperationContext context, CancellationToken ct)
+    private static StreamPerformanceData GetStreamPerformance(StreamOperationContext context)
     {
         // Implementation for performance data
         return new StreamPerformanceData
@@ -757,8 +766,8 @@ public class StreamProcessingController
             PeakThroughput = context.AverageProcessingRate * 1.5, // Estimate peak as 1.5x average
             AverageLatency = TimeSpan.FromMilliseconds(100), // Placeholder
             PeakLatency = TimeSpan.FromMilliseconds(200), // Placeholder
-            CpuUtilization = GetCpuUsage(context),
-            MemoryUsage = GetMemoryUsage(context),
+            CpuUtilization = GetCpuUsage(),
+            MemoryUsage = GetMemoryUsage(),
             ThreadUtilization = 1, // Placeholder
             DiskReadOps = 0, // Placeholder
             DiskWriteOps = 0, // Placeholder
@@ -766,16 +775,13 @@ public class StreamProcessingController
             DiskWriteBytes = context.BytesWritten
         };
     }
-    #pragma warning restore CS1998
 
     private static List<string> GetRecentStreamLogs(StreamOperationContext context, int maxEntries)
     {
-        // Implementation for getting recent logs
-        return new List<string>();
+        return context.GetRecentLogs(maxEntries);
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<ActiveStreamInfo>> ListActiveStreamsAsync(CancellationToken ct)
+    private List<ActiveStreamInfo> ListActiveStreams()
     {
         List<ActiveStreamInfo> streams;
 
@@ -796,10 +802,8 @@ public class StreamProcessingController
 
         return streams;
     }
-    #pragma warning restore CS1998
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<StreamCancelResult> CancelStreamAsync(string operationId, CancellationToken ct)
+    private static StreamCancelResult CancelStream()
     {
         // Implementation for canceling streams
         return new StreamCancelResult
@@ -808,10 +812,8 @@ public class StreamProcessingController
             Message = "Stream operation cancelled"
         };
     }
-    #pragma warning restore CS1998
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<StreamPauseResult> PauseStreamAsync(string operationId, CancellationToken ct)
+    private static StreamPauseResult PauseStream()
     {
         // Implementation for pausing streams
         return new StreamPauseResult
@@ -820,10 +822,8 @@ public class StreamProcessingController
             Message = "Stream operation paused"
         };
     }
-    #pragma warning restore CS1998
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<StreamResumeResult> ResumeStreamAsync(string operationId, CancellationToken ct)
+    private static StreamResumeResult ResumeStream()
     {
         // Implementation for resuming streams
         return new StreamResumeResult
@@ -832,10 +832,8 @@ public class StreamProcessingController
             Message = "Stream operation resumed"
         };
     }
-    #pragma warning restore CS1998
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<StreamCleanupResult> CleanupStreamsAsync(TimeSpan? maxAge, CancellationToken ct)
+    private StreamCleanupResult CleanupStreams(TimeSpan? maxAge)
     {
         var cleanedCount = 0;
         var cutoff = DateTime.UtcNow - (maxAge ?? TimeSpan.FromHours(1));
@@ -861,10 +859,8 @@ public class StreamProcessingController
             Message = $"Cleaned up {cleanedCount} stream operations"
         };
     }
-    #pragma warning restore CS1998
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<StreamRegisterResult> RegisterProcessorAsync(StreamProcessorDefinition definition, CancellationToken ct)
+    private static StreamRegisterResult RegisterProcessor(StreamProcessorDefinition definition)
     {
         // Implementation for registering custom processors
         return new StreamRegisterResult
@@ -873,10 +869,8 @@ public class StreamProcessingController
             Message = $"Processor {definition.Name} registered successfully"
         };
     }
-    #pragma warning restore CS1998
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<StreamUnregisterResult> UnregisterProcessorAsync(string processorName, CancellationToken ct)
+    private StreamUnregisterResult UnregisterProcessor(string processorName)
     {
         var success = _processors.Remove(processorName);
 
@@ -886,15 +880,27 @@ public class StreamProcessingController
             Message = success ? $"Processor {processorName} unregistered" : $"Processor {processorName} not found"
         };
     }
-    #pragma warning restore CS1998
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task CleanupStreamContextAsync(StreamOperationContext context, CancellationToken ct)
+    private static void CleanupStreamContext(StreamOperationContext context)
     {
         // Cleanup temporary files, close streams, etc.
         context.Status = context.Status == StreamStatus.Running ? StreamStatus.Completed : context.Status;
     }
-    #pragma warning restore CS1998
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Stream processing failed for operation {OperationId}")]
+    private static partial void LogStreamProcessingFailed(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error processing stream {OperationId}")]
+    private static partial void LogErrorProcessingStream(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Fatal error in stream processing {OperationId}")]
+    private static partial void LogFatalErrorInStreamProcessing(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error monitoring stream {OperationId}")]
+    private static partial void LogErrorMonitoringStream(ILogger logger, Exception exception, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error managing stream operations")]
+    private static partial void LogErrorManagingStreamOperations(ILogger logger, Exception exception);
 
     #endregion
 }
@@ -904,7 +910,7 @@ public class StreamProcessingController
 /// <summary>
 /// Stream operation context
 /// </summary>
-internal class StreamOperationContext
+internal sealed class StreamOperationContext
 {
     public required string Id { get; init; }
     public required StreamOperationType Type { get; init; }
@@ -925,12 +931,36 @@ internal class StreamOperationContext
     public long PeakMemoryUsage { get; set; }
     public double ProcessorUtilization { get; set; }
     public TimeSpan IOWaitTime { get; set; }
+
+    private const int MaxRetainedLogEntries = 200;
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _logEntries = new();
+
+    /// <summary>
+    /// Records a timestamped log entry for this operation, retaining only the most recent entries
+    /// </summary>
+    public void AddLog(string message)
+    {
+        _logEntries.Enqueue($"{DateTime.UtcNow:O} {message}");
+        while (_logEntries.Count > MaxRetainedLogEntries && _logEntries.TryDequeue(out _))
+        {
+            // Trim oldest entries
+        }
+    }
+
+    /// <summary>
+    /// Returns up to <paramref name="maxEntries"/> of the most recent log entries, oldest first
+    /// </summary>
+    public List<string> GetRecentLogs(int maxEntries)
+    {
+        var snapshot = _logEntries.ToArray();
+        return snapshot.Skip(Math.Max(0, snapshot.Length - maxEntries)).ToList();
+    }
 }
 
 /// <summary>
 /// Stream validation result
 /// </summary>
-internal class StreamValidationResult
+internal sealed class StreamValidationResult
 {
     public required bool IsValid { get; init; }
     public string? ErrorMessage { get; init; }

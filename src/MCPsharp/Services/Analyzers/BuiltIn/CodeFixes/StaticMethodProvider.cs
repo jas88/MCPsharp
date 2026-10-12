@@ -11,7 +11,7 @@ namespace MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
 /// <summary>
 /// Automated code fix provider for making private methods static when they don't use instance members
 /// </summary>
-public class StaticMethodProvider : AutomatedCodeFixProviderBase
+public partial class StaticMethodProvider : AutomatedCodeFixProviderBase
 {
     public override string Id => "StaticMethod";
     public override string Name => "Static Method Converter";
@@ -58,8 +58,7 @@ public class StaticMethodProvider : AutomatedCodeFixProviderBase
                 };
             }
 
-            Logger.LogDebug("Found {Count} methods that can be made static in {FilePath}",
-                diagnostics.Length, filePath);
+            LogIssuesFound(Logger, diagnostics.Length, filePath);
 
             var currentDocument = document;
             var fixedCount = 0;
@@ -83,15 +82,14 @@ public class StaticMethodProvider : AutomatedCodeFixProviderBase
 
                 await _fixer.RegisterCodeFixesAsync(context);
 
-                if (actions.Any())
+                if (actions.Count > 0)
                 {
                     // Apply the first code action
-                    var codeAction = actions.First();
+                    var codeAction = actions[0];
                     currentDocument = await ApplyCodeActionAsync(currentDocument, codeAction, cancellationToken);
                     fixedCount++;
 
-                    Logger.LogTrace("Applied fix for diagnostic at {Location}",
-                        diagnostic.Location.GetLineSpan());
+                    LogAppliedFix(diagnostic);
                 }
             }
 
@@ -117,7 +115,7 @@ public class StaticMethodProvider : AutomatedCodeFixProviderBase
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error fixing document: {FilePath}", filePath);
+            LogFixDocumentError(Logger, ex, filePath);
 
             return new DocumentFixResult
             {
@@ -129,4 +127,7 @@ public class StaticMethodProvider : AutomatedCodeFixProviderBase
             };
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Found {Count} methods that can be made static in {FilePath}")]
+    private static partial void LogIssuesFound(ILogger logger, int count, string filePath);
 }

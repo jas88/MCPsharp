@@ -166,17 +166,17 @@ public class ProjectContextManagerTests
     }
 
     [Test]
-    public void IsValidPath_ShouldUseCaseInsensitiveComparison()
+    public void IsValidPath_ShouldFollowPlatformCaseSensitivity()
     {
         // Arrange
         _manager.OpenProject(_testRoot);
-        var upperCasePath = Path.Combine(_testRoot.ToUpper(), "file.txt");
+        var upperCasePath = Path.Combine(_testRoot.ToUpperInvariant(), "file.txt");
 
         // Act
         var isValid = _manager.IsValidPath(upperCasePath);
 
-        // Assert (should work on case-insensitive file systems like Windows/macOS)
-        Assert.That(isValid, Is.True);
+        // Assert: case-insensitive on Windows/macOS, case-sensitive elsewhere
+        Assert.That(isValid, Is.EqualTo(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()));
     }
 
     [Test]

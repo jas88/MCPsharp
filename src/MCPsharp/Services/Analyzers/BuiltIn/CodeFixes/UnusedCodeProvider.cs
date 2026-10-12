@@ -12,7 +12,7 @@ namespace MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
 /// Automated code fix provider for unused code
 /// Removes unused local variables and private fields
 /// </summary>
-public class UnusedCodeProvider : AutomatedCodeFixProviderBase
+public partial class UnusedCodeProvider : AutomatedCodeFixProviderBase
 {
     public override string Id => "UnusedCode";
     public override string Name => "Unused Code Remover";
@@ -61,8 +61,7 @@ public class UnusedCodeProvider : AutomatedCodeFixProviderBase
                 };
             }
 
-            Logger.LogDebug("Found {Count} unused code issues in {FilePath}",
-                diagnostics.Length, filePath);
+            LogIssuesFound(Logger, diagnostics.Length, filePath);
 
             var currentDocument = document;
             var fixedCount = 0;
@@ -86,15 +85,14 @@ public class UnusedCodeProvider : AutomatedCodeFixProviderBase
 
                 await _fixer.RegisterCodeFixesAsync(context);
 
-                if (actions.Any())
+                if (actions.Count > 0)
                 {
                     // Apply the first code action
-                    var codeAction = actions.First();
+                    var codeAction = actions[0];
                     currentDocument = await ApplyCodeActionAsync(currentDocument, codeAction, cancellationToken);
                     fixedCount++;
 
-                    Logger.LogTrace("Applied fix for diagnostic at {Location}",
-                        diagnostic.Location.GetLineSpan());
+                    LogAppliedFix(diagnostic);
                 }
             }
 
@@ -120,7 +118,7 @@ public class UnusedCodeProvider : AutomatedCodeFixProviderBase
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error fixing document: {FilePath}", filePath);
+            LogFixDocumentError(Logger, ex, filePath);
 
             return new DocumentFixResult
             {
@@ -132,4 +130,7 @@ public class UnusedCodeProvider : AutomatedCodeFixProviderBase
             };
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Found {Count} unused code issues in {FilePath}")]
+    private static partial void LogIssuesFound(ILogger logger, int count, string filePath);
 }

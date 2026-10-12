@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Models;
 using MCPsharp.Services.Roslyn;
 
@@ -10,11 +11,11 @@ namespace MCPsharp.Services;
 /// <summary>
 /// Service for file operations within a project context
 /// </summary>
-public class FileOperationsService
+public partial class FileOperationsService
 {
     private readonly string _rootPath;
     private readonly RoslynWorkspace? _workspace;
-    private readonly ILogger<FileOperationsService>? _logger;
+    private readonly ILogger<FileOperationsService> _logger;
 
     public FileOperationsService(string rootPath, RoslynWorkspace? workspace = null, ILogger<FileOperationsService>? logger = null)
     {
@@ -25,8 +26,13 @@ public class FileOperationsService
 
         _rootPath = Path.GetFullPath(rootPath);
         _workspace = workspace;
-        _logger = logger;
+        _logger = logger ?? NullLogger<FileOperationsService>.Instance;
     }
+
+    /// <summary>
+    /// Gets the absolute, normalized root directory that all file operations are confined to.
+    /// </summary>
+    public string RootPath => _rootPath;
 
     /// <summary>
     /// List files in the project, optionally filtered by glob pattern
@@ -45,9 +51,9 @@ public class FileOperationsService
 
             var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(_rootPath)));
 
-            foreach (var file in result.Files)
+            foreach (var matchedPath in result.Files.Select(file => file.Path))
             {
-                var fullPath = Path.Combine(_rootPath, file.Path);
+                var fullPath = Path.Combine(_rootPath, matchedPath);
                 var fileInfo = new System.IO.FileInfo(fullPath);
 
                 if (!includeHidden && IsHidden(fileInfo))
@@ -56,7 +62,7 @@ public class FileOperationsService
                 files.Add(new Models.FileInfo
                 {
                     Path = fullPath,
-                    RelativePath = file.Path,
+                    RelativePath = matchedPath,
                     Size = fileInfo.Length,
                     LastModified = fileInfo.LastWriteTimeUtc,
                     IsHidden = IsHidden(fileInfo)
@@ -140,6 +146,7 @@ public class FileOperationsService
         }
         catch (Exception ex)
         {
+            LogFileOperationFailed(_logger, ex, "read", relativePath);
             return new FileReadResult
             {
                 Success = false,
@@ -196,7 +203,7 @@ public class FileOperationsService
                 catch (Exception workspaceEx)
                 {
                     // Log workspace update error but don't fail the file operation
-                    _logger?.LogWarning("Failed to update Roslyn workspace for {RelativePath}: {ErrorMessage}", relativePath, workspaceEx.Message);
+                    LogFailedToUpdateRoslynWorkspace(_logger, workspaceEx, relativePath, workspaceEx.Message);
                 }
             }
 
@@ -212,6 +219,7 @@ public class FileOperationsService
         }
         catch (Exception ex)
         {
+            LogFileOperationFailed(_logger, ex, "write", relativePath);
             return new FileWriteResult
             {
                 Success = false,
@@ -277,7 +285,7 @@ public class FileOperationsService
                 catch (Exception workspaceEx)
                 {
                     // Log workspace update error but don't fail the file operation
-                    _logger?.LogWarning("Failed to update Roslyn workspace for {RelativePath}: {ErrorMessage}", relativePath, workspaceEx.Message);
+                    LogFailedToUpdateRoslynWorkspace(_logger, workspaceEx, relativePath, workspaceEx.Message);
                 }
             }
 
@@ -291,10 +299,11 @@ public class FileOperationsService
         }
         catch (Exception ex)
         {
+            LogFileOperationFailed(_logger, ex, "edit", relativePath);
+
             // Provide more detailed error message for validation errors
-            var errorMessage = ex.Message;
-            
-            if (ex is ArgumentOutOfRangeException || ex is ArgumentException)
+            string errorMessage;
+            if (ex is ArgumentException)
             {
                 // Add context for validation errors
                 errorMessage = $"Invalid edit position: {ex.Message} " +
@@ -318,17 +327,17 @@ public class FileOperationsService
     /// <summary>
     /// Validate that edit positions are within bounds
     /// </summary>
-    private void ValidateEditPosition(List<string> lines, TextEdit edit)
+    private static void ValidateEditPosition(List<string> lines, TextEdit edit)
     {
         var (startLine, startColumn, endLine, endColumn) = GetEditBounds(edit);
         
         // Validate line indices
         if (startLine < 0 || startLine >= lines.Count)
-            throw new ArgumentOutOfRangeException(nameof(startLine), 
+            throw new ArgumentOutOfRangeException(nameof(edit), 
                 $"StartLine {startLine} is out of range. File has {lines.Count} lines (0-{lines.Count - 1}).");
                 
         if (endLine < 0 || endLine >= lines.Count)
-            throw new ArgumentOutOfRangeException(nameof(endLine), 
+            throw new ArgumentOutOfRangeException(nameof(edit), 
                 $"EndLine {endLine} is out of range. File has {lines.Count} lines (0-{lines.Count - 1}).");
         
         // Get line lengths for validation
@@ -337,13 +346,13 @@ public class FileOperationsService
         
         // Validate column indices
         if (startColumn < 0 || startColumn > startLineLength)
-            throw new ArgumentOutOfRangeException(nameof(startColumn),
+            throw new ArgumentOutOfRangeException(nameof(edit),
                 $"StartColumn {startColumn} is out of range for line {startLine}. " +
                 $"Line {startLine} has {startLineLength} characters. Valid positions: 0-{startLineLength - 1} for replacements, 0-{startLineLength} for insertions. " +
                 $"Remember: MCPsharp uses 0-based indexing where column 0 is before the first character.");
 
         if (endColumn < 0 || endColumn > endLineLength)
-            throw new ArgumentOutOfRangeException(nameof(endColumn),
+            throw new ArgumentOutOfRangeException(nameof(edit),
                 $"EndColumn {endColumn} is out of range for line {endLine}. " +
                 $"Line {endLine} has {endLineLength} characters. Valid positions: 0-{endLineLength - 1} for replacements, 0-{endLineLength} for insertions. " +
                 $"Remember: MCPsharp uses 0-based indexing where column 0 is before the first character.");
@@ -368,7 +377,7 @@ public class FileOperationsService
         };
     }
 
-    private void ApplyEdit(List<string> lines, TextEdit edit)
+    private static void ApplyEdit(List<string> lines, TextEdit edit)
     {
         // Validate edit position before applying
         ValidateEditPosition(lines, edit);
@@ -492,12 +501,7 @@ public class FileOperationsService
         return Path.GetFullPath(Path.Combine(_rootPath, relativePath));
     }
 
-    private bool ValidatePath(string fullPath)
-    {
-        // Ensure path is within project root
-        var normalizedPath = Path.GetFullPath(fullPath);
-        return normalizedPath.StartsWith(_rootPath, StringComparison.OrdinalIgnoreCase);
-    }
+    private bool ValidatePath(string fullPath) => PathContainment.IsWithin(_rootPath, fullPath);
 
     private static Encoding DetectEncoding(string path)
     {
@@ -512,4 +516,10 @@ public class FileOperationsService
         return fileInfo.Attributes.HasFlag(FileAttributes.Hidden) ||
                fileInfo.Name.StartsWith('.');
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to update Roslyn workspace for {RelativePath}: {ErrorMessage}")]
+    private static partial void LogFailedToUpdateRoslynWorkspace(ILogger logger, Exception exception, string relativePath, string errorMessage);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to {Operation} file: {RelativePath}")]
+    private static partial void LogFileOperationFailed(ILogger logger, Exception exception, string operation, string relativePath);
 }

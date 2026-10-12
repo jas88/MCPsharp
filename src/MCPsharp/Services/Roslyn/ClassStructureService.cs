@@ -17,35 +17,30 @@ public class ClassStructureService
     }
 
     /// <summary>
+    /// Find a source-declared class by name in any project of the solution.
+    /// When <paramref name="filePath"/> is given, only a class declared in that file is accepted.
+    /// </summary>
+    public INamedTypeSymbol? FindClassSymbol(string className, string? filePath = null)
+    {
+        var candidates = _workspace.FindSourceSymbols(className, SymbolFilter.Type)
+            .OfType<INamedTypeSymbol>()
+            .Where(t => t.TypeKind == TypeKind.Class);
+
+        return filePath == null
+            ? candidates.FirstOrDefault()
+            : candidates.FirstOrDefault(t => t.Locations.Any(l =>
+                l.IsInSource && l.GetLineSpan().Path.Equals(filePath, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
     /// Get complete structure of a class
     /// </summary>
     public async Task<ClassStructure?> GetClassStructureAsync(string className, string? filePath = null)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-        {
-            return null;
-        }
-
-        // Find the class symbol
-        var classSymbol = compilation.GetSymbolsWithName(className, SymbolFilter.Type)
-            .OfType<INamedTypeSymbol>()
-            .Where(t => t.TypeKind == TypeKind.Class)
-            .FirstOrDefault();
-
+        var classSymbol = FindClassSymbol(className, filePath);
         if (classSymbol == null)
         {
             return null;
-        }
-
-        // If filePath specified, filter by file
-        if (filePath != null)
-        {
-            var location = classSymbol.Locations.FirstOrDefault();
-            if (location == null || !location.GetLineSpan().Path.Equals(filePath, StringComparison.OrdinalIgnoreCase))
-            {
-                return null;
-            }
         }
 
         // Get properties
@@ -57,7 +52,7 @@ public class ClassStructureService
             {
                 Name = prop.Name,
                 Type = prop.Type.ToDisplayString(),
-                Accessibility = prop.DeclaredAccessibility.ToString().ToLower(),
+                Accessibility = prop.DeclaredAccessibility.ToString().ToLowerInvariant(),
                 HasGetter = prop.GetMethod != null,
                 HasSetter = prop.SetMethod != null,
                 Line = location?.GetLineSpan().StartLinePosition.Line ?? 0
@@ -79,7 +74,7 @@ public class ClassStructureService
             {
                 Name = method.Name,
                 ReturnType = method.ReturnType.ToDisplayString(),
-                Accessibility = method.DeclaredAccessibility.ToString().ToLower(),
+                Accessibility = method.DeclaredAccessibility.ToString().ToLowerInvariant(),
                 IsOverride = method.IsOverride,
                 IsVirtual = method.IsVirtual,
                 IsAbstract = method.IsAbstract,
@@ -102,7 +97,7 @@ public class ClassStructureService
             {
                 Name = field.Name,
                 Type = field.Type.ToDisplayString(),
-                Accessibility = field.DeclaredAccessibility.ToString().ToLower(),
+                Accessibility = field.DeclaredAccessibility.ToString().ToLowerInvariant(),
                 IsReadOnly = field.IsReadOnly,
                 IsConst = field.IsConst,
                 IsStatic = field.IsStatic,
@@ -133,7 +128,7 @@ public class ClassStructureService
             Name = classSymbol.Name,
             Namespace = classSymbol.ContainingNamespace?.ToDisplayString() ?? "",
             Kind = "class",
-            Accessibility = classSymbol.DeclaredAccessibility.ToString().ToLower(),
+            Accessibility = classSymbol.DeclaredAccessibility.ToString().ToLowerInvariant(),
             IsAbstract = classSymbol.IsAbstract,
             IsSealed = classSymbol.IsSealed,
             IsStatic = classSymbol.IsStatic,

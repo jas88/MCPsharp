@@ -12,7 +12,7 @@ public sealed class SemanticModelCache : IDisposable
     private readonly ConcurrentDictionary<DocumentId, int> _documentVersions = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly object _disposeLock = new();
-    private bool _disposed = false;
+    private bool _disposed;
 
     /// <summary>
     /// Get or create a semantic model for a document
@@ -170,10 +170,7 @@ public sealed class SemanticModelCache : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(SemanticModelCache));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
     public void Dispose()

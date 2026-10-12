@@ -10,7 +10,7 @@ namespace MCPsharp.Tests.Services;
 /// </summary>
 public class McpResourceRegistryTests
 {
-    private McpResourceRegistry CreateRegistry() => new McpResourceRegistry();
+    private static McpResourceRegistry CreateRegistry() => new McpResourceRegistry();
 
     // ===== Resource Registration Tests =====
 
@@ -399,7 +399,7 @@ public class McpResourceRegistryTests
         var registry = CreateRegistry();
 
         // Act & Assert
-        var exception = Assert.ThrowsAsync<KeyNotFoundException>(
+        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(
             async () => await registry.ReadResourceAsync("unknown://uri"));
 
         Assert.That(exception!.Message, Does.Contain("Resource not found"));
@@ -655,7 +655,7 @@ public class McpResourceRegistryTests
             new InvalidOperationException("Content provider failed")));
 
         // Act & Assert
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await registry.ReadResourceAsync("test://error"));
 
         Assert.That(exception!.Message, Is.EqualTo("Content provider failed"));

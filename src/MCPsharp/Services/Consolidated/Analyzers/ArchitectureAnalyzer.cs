@@ -17,7 +17,7 @@ namespace MCPsharp.Services.Consolidated.Analyzers;
 /// <summary>
 /// Analyzes architecture-level code organization and layer compliance.
 /// </summary>
-public class ArchitectureAnalyzer
+public partial class ArchitectureAnalyzer
 {
     private readonly IArchitectureValidatorService? _architectureValidator;
     private readonly ILogger<ArchitectureAnalyzer> _logger;
@@ -30,8 +30,12 @@ public class ArchitectureAnalyzer
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ArchitectureAnalyzer>.Instance;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<ConsolidatedArchitectureDefinition> GetDefaultArchitectureDefinitionAsync(CancellationToken ct)
+    public Task<ConsolidatedArchitectureDefinition> GetDefaultArchitectureDefinitionAsync(CancellationToken ct)
+    {
+        return Task.FromResult(GetDefaultArchitectureDefinition());
+    }
+
+    private ConsolidatedArchitectureDefinition GetDefaultArchitectureDefinition()
     {
         try
         {
@@ -55,7 +59,7 @@ public class ArchitectureAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting default architecture definition");
+            LogErrorGettingDefaultArchitectureDefinition(_logger, ex);
         }
 
         return new ConsolidatedArchitectureDefinition
@@ -82,7 +86,7 @@ public class ArchitectureAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating architecture for {Scope}", scope);
+            LogErrorValidatingArchitectureFor(_logger, ex, scope);
         }
 
         return null;
@@ -111,7 +115,7 @@ public class ArchitectureAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error detecting layer violations for {Scope}", scope);
+            LogErrorDetectingLayerViolationsFor(_logger, ex, scope);
         }
 
         return new List<ArchitectureViolation>();
@@ -133,7 +137,7 @@ public class ArchitectureAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing architecture dependencies for {Scope}", scope);
+            LogErrorAnalyzingArchitectureDependenciesFor(_logger, ex, scope);
         }
 
         return null;
@@ -163,7 +167,7 @@ public class ArchitectureAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting architecture recommendations");
+            LogErrorGettingArchitectureRecommendations(_logger, ex);
         }
 
         return new List<ArchitectureRecommendation>();
@@ -188,7 +192,7 @@ public class ArchitectureAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating architecture metrics for {Scope}", scope);
+            LogErrorCalculatingArchitectureMetricsFor(_logger, ex, scope);
             return Task.FromResult<ArchitectureMetrics?>(null);
         }
     }
@@ -265,4 +269,22 @@ public class ArchitectureAnalyzer
             }).ToList()
         };
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting default architecture definition")]
+    private static partial void LogErrorGettingDefaultArchitectureDefinition(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error validating architecture for {Scope}")]
+    private static partial void LogErrorValidatingArchitectureFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error detecting layer violations for {Scope}")]
+    private static partial void LogErrorDetectingLayerViolationsFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error analyzing architecture dependencies for {Scope}")]
+    private static partial void LogErrorAnalyzingArchitectureDependenciesFor(ILogger logger, Exception exception, string scope);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting architecture recommendations")]
+    private static partial void LogErrorGettingArchitectureRecommendations(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error calculating architecture metrics for {Scope}")]
+    private static partial void LogErrorCalculatingArchitectureMetricsFor(ILogger logger, Exception exception, string scope);
 }

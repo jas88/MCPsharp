@@ -13,6 +13,6 @@ public class FeatureTracerServiceTests
     {
         // This is a placeholder to allow the project to compile
         // Phase 2 agents will implement actual tests
-        Assert.That(true, Is.True);
+        Assert.Pass("Placeholder test");
     }
 }

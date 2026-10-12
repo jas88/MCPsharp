@@ -10,19 +10,19 @@ using System.Text.RegularExpressions;
 using MCPsharp.Services.Roslyn;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Models;
+using MCPsharp.Services.Phase3.DuplicateDetection;
 
 namespace MCPsharp.Services.Phase3;
 
 /// <summary>
 /// Service for detecting duplicate code blocks and providing refactoring suggestions
 /// </summary>
-public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
+public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
 {
     private readonly RoslynWorkspace _workspace;
     private readonly ILogger<DuplicateCodeDetectorService> _logger;
 
-    // Cache for compiled results
-    private readonly ConcurrentDictionary<string, Compilation> _compilationCache = new();
+    // Cache for extracted code blocks
     private readonly ConcurrentDictionary<string, List<CodeBlock>> _codeBlockCache = new();
 
     public DuplicateCodeDetectorService(
@@ -44,42 +44,42 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         var startTime = DateTime.UtcNow;
         options ??= new DuplicateDetectionOptions();
 
-        _logger.LogInformation("Starting duplicate code detection for project: {ProjectPath}", projectPath);
+        LogStartingDuplicateDetection(_logger, projectPath);
 
         try
         {
             // Initialize workspace if needed
-            await EnsureWorkspaceInitialized(projectPath, cancellationToken);
+            await EnsureWorkspaceInitialized(projectPath);
 
             // Extract code blocks from all files
             var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
 
             // Find duplicates using different strategies
-            var exactDuplicates = await FindExactDuplicatesInternalAsync(allCodeBlocks, options, cancellationToken);
-            var nearDuplicates = await FindNearDuplicatesInternalAsync(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
+            var exactDuplicates = FindExactDuplicatesInternal(allCodeBlocks, options);
+            var nearDuplicates = FindNearDuplicatesInternal(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
 
             // Combine and group duplicates
             var allDuplicateGroups = new List<DuplicateGroup>();
             allDuplicateGroups.AddRange(exactDuplicates);
             allDuplicateGroups.AddRange(nearDuplicates);
+            RegisterGroups(allDuplicateGroups);
 
             // Calculate metrics
-            var metrics = await CalculateDuplicationMetricsAsync(allDuplicateGroups, allCodeBlocks, cancellationToken);
+            var metrics = CalculateDuplicationMetrics(allDuplicateGroups, allCodeBlocks);
 
             // Generate refactoring suggestions
             var refactoringOptions = new RefactoringOptions
             {
                 MaxSuggestions = 20
             };
-            var refactoringSuggestions = await GenerateRefactoringSuggestionsAsync(allDuplicateGroups, refactoringOptions, cancellationToken);
+            var refactoringSuggestions = GenerateRefactoringSuggestions(allDuplicateGroups, refactoringOptions, cancellationToken);
 
             // Get hotspots
-            var hotspots = await AnalyzeHotspotsAsync(allDuplicateGroups, allCodeBlocks, cancellationToken);
+            var hotspots = AnalyzeHotspots(allDuplicateGroups, allCodeBlocks);
 
             var duration = DateTime.UtcNow - startTime;
 
-            _logger.LogInformation("Duplicate detection completed in {Duration}ms. Found {GroupCount} duplicate groups affecting {FileCount} files.",
-                duration.TotalMilliseconds, allDuplicateGroups.Count, metrics.FilesWithDuplicates);
+            LogDuplicateDetectionCompleted(_logger, duration.TotalMilliseconds, allDuplicateGroups.Count, metrics.FilesWithDuplicates);
 
             return new DuplicateDetectionResult
             {
@@ -95,7 +95,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during duplicate code detection");
+            LogDuplicateDetectionError(_logger, ex);
             return new DuplicateDetectionResult
             {
                 DuplicateGroups = new List<DuplicateGroup>(),
@@ -131,10 +131,12 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         CancellationToken cancellationToken = default)
     {
         options ??= new DuplicateDetectionOptions();
-        await EnsureWorkspaceInitialized(projectPath, cancellationToken);
+        await EnsureWorkspaceInitialized(projectPath);
 
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
-        return await FindExactDuplicatesInternalAsync(allCodeBlocks, options, cancellationToken);
+        var groups = FindExactDuplicatesInternal(allCodeBlocks, options);
+        RegisterGroups(groups);
+        return groups;
     }
 
     public async Task<IReadOnlyList<DuplicateGroup>> FindNearDuplicatesAsync(
@@ -144,14 +146,13 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         CancellationToken cancellationToken = default)
     {
         options ??= new DuplicateDetectionOptions();
-        if (options.SimilarityThreshold != similarityThreshold)
-        {
-            options = options with { SimilarityThreshold = similarityThreshold };
-        }
-        await EnsureWorkspaceInitialized(projectPath, cancellationToken);
+        options = options with { SimilarityThreshold = similarityThreshold };
+        await EnsureWorkspaceInitialized(projectPath);
 
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
-        return await FindNearDuplicatesInternalAsync(allCodeBlocks, similarityThreshold, options, cancellationToken);
+        var groups = FindNearDuplicatesInternal(allCodeBlocks, similarityThreshold, options, cancellationToken);
+        RegisterGroups(groups);
+        return groups;
     }
 
     public async Task<DuplicationMetrics> AnalyzeDuplicationMetricsAsync(
@@ -160,17 +161,17 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         CancellationToken cancellationToken = default)
     {
         options ??= new DuplicateDetectionOptions();
-        await EnsureWorkspaceInitialized(projectPath, cancellationToken);
+        await EnsureWorkspaceInitialized(projectPath);
 
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
-        var exactDuplicates = await FindExactDuplicatesInternalAsync(allCodeBlocks, options, cancellationToken);
-        var nearDuplicates = await FindNearDuplicatesInternalAsync(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
+        var exactDuplicates = FindExactDuplicatesInternal(allCodeBlocks, options);
+        var nearDuplicates = FindNearDuplicatesInternal(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
 
         var allGroups = new List<DuplicateGroup>();
         allGroups.AddRange(exactDuplicates);
         allGroups.AddRange(nearDuplicates);
 
-        return await CalculateDuplicationMetricsAsync(allGroups, allCodeBlocks, cancellationToken);
+        return CalculateDuplicationMetrics(allGroups, allCodeBlocks);
     }
 
     public async Task<IReadOnlyList<RefactoringSuggestion>> GetRefactoringSuggestionsAsync(
@@ -179,10 +180,12 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         RefactoringOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(duplicates);
         options ??= new RefactoringOptions();
-        await EnsureWorkspaceInitialized(projectPath, cancellationToken);
+        await EnsureWorkspaceInitialized(projectPath);
 
-        return await GenerateRefactoringSuggestionsAsync(duplicates.ToList(), options, cancellationToken);
+        RegisterGroups(duplicates);
+        return GenerateRefactoringSuggestions(duplicates.ToList(), options, cancellationToken);
     }
 
     public async Task<DuplicateDetectionResult> DetectDuplicatesInFilesAsync(
@@ -193,7 +196,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         var startTime = DateTime.UtcNow;
         options ??= new DuplicateDetectionOptions();
 
-        _logger.LogInformation("Starting duplicate detection for {FileCount} specific files", filePaths.Count);
+        LogStartingFileDuplicateDetection(_logger, filePaths.Count);
 
         try
         {
@@ -206,14 +209,15 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             }
 
             // Find duplicates
-            var exactDuplicates = await FindExactDuplicatesInternalAsync(allCodeBlocks, options, cancellationToken);
-            var nearDuplicates = await FindNearDuplicatesInternalAsync(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
+            var exactDuplicates = FindExactDuplicatesInternal(allCodeBlocks, options);
+            var nearDuplicates = FindNearDuplicatesInternal(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
 
             var allDuplicateGroups = new List<DuplicateGroup>();
             allDuplicateGroups.AddRange(exactDuplicates);
             allDuplicateGroups.AddRange(nearDuplicates);
+            RegisterGroups(allDuplicateGroups);
 
-            var metrics = await CalculateDuplicationMetricsAsync(allDuplicateGroups, allCodeBlocks, cancellationToken);
+            var metrics = CalculateDuplicationMetrics(allDuplicateGroups, allCodeBlocks);
 
             return new DuplicateDetectionResult
             {
@@ -225,50 +229,52 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                 Success = true
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Error during duplicate detection in specific files");
-            throw;
+            LogFileDuplicateDetectionError(_logger, ex);
+            throw new InvalidOperationException($"Duplicate detection in specific files failed: {ex.Message}", ex);
         }
     }
 
-    public async Task<CodeSimilarityResult> CompareCodeBlocksAsync(
+    public Task<CodeSimilarityResult> CompareCodeBlocksAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
         CodeComparisonOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        options ??= new CodeComparisonOptions();
+        try
+        {
+            return Task.FromResult(CompareCodeBlocks(codeBlock1, codeBlock2, options ?? new CodeComparisonOptions()));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<CodeSimilarityResult>(ex);
+        }
+    }
 
-        // Calculate different similarity scores
-        var structuralSimilarity = await CalculateStructuralSimilarityAsync(codeBlock1, codeBlock2, cancellationToken);
-        var tokenSimilarity = await CalculateTokenSimilarityAsync(codeBlock1, codeBlock2, options, cancellationToken);
-        var semanticSimilarity = await CalculateSemanticSimilarityAsync(codeBlock1, codeBlock2, cancellationToken);
+    private static CodeSimilarityResult CompareCodeBlocks(CodeBlock codeBlock1, CodeBlock codeBlock2, CodeComparisonOptions options)
+    {
+        // Structural (AST), token-category and normalised-token (semantic) similarity, weighted
+        var similarity = ComputeSimilarity(
+            codeBlock1, codeBlock2, options.StructuralWeight, options.TokenWeight, options.IgnoreIdentifiers, 0.0);
 
-        // Calculate overall similarity
-        var overallSimilarity = (structuralSimilarity * options.StructuralWeight) +
-                                (tokenSimilarity * options.TokenWeight);
+        var differences = FindCodeDifferences(codeBlock1, codeBlock2, similarity.Alignment);
+        var commonPatterns = FindCommonPatterns(codeBlock1, codeBlock2);
 
-        // Find differences
-        var differences = await FindCodeDifferencesAsync(codeBlock1, codeBlock2, options, cancellationToken);
-
-        // Find common patterns
-        var commonPatterns = await FindCommonPatternsAsync(codeBlock1, codeBlock2, cancellationToken);
-
-        // Determine if they are duplicates and what type
-        var isDuplicate = overallSimilarity >= 0.8; // Default threshold
-        var duplicateType = await DetermineDuplicateTypeAsync(codeBlock1, codeBlock2, overallSimilarity, cancellationToken);
+        var isDuplicate = similarity.Overall >= DefaultDuplicateThreshold;
+        var duplicateType = DeterminePairDuplicateType(codeBlock1, codeBlock2);
 
         return new CodeSimilarityResult
         {
-            OverallSimilarity = overallSimilarity,
-            StructuralSimilarity = structuralSimilarity,
-            TokenSimilarity = tokenSimilarity,
-            SemanticSimilarity = semanticSimilarity,
+            OverallSimilarity = similarity.Overall,
+            StructuralSimilarity = similarity.Structural,
+            TokenSimilarity = similarity.Token,
+            SemanticSimilarity = similarity.Semantic,
             Differences = differences,
             CommonPatterns = commonPatterns,
             IsDuplicate = isDuplicate,
-            DuplicateType = duplicateType
+            DuplicateType = duplicateType,
+            CloneType = DeterminePairCloneType(codeBlock1, codeBlock2, isDuplicate)
         };
     }
 
@@ -278,12 +284,12 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         CancellationToken cancellationToken = default)
     {
         options ??= new DuplicateDetectionOptions();
-        await EnsureWorkspaceInitialized(projectPath, cancellationToken);
+        await EnsureWorkspaceInitialized(projectPath);
 
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
         var duplicates = await DetectDuplicatesAsync(projectPath, options, cancellationToken);
 
-        return await AnalyzeHotspotsAsync(duplicates.DuplicateGroups.ToList(), allCodeBlocks, cancellationToken);
+        return AnalyzeHotspots(duplicates.DuplicateGroups.ToList(), allCodeBlocks);
     }
 
     public async Task<RefactoringValidationResult> ValidateRefactoringAsync(
@@ -291,26 +297,28 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         RefactoringSuggestion suggestion,
         CancellationToken cancellationToken = default)
     {
-        await EnsureWorkspaceInitialized(projectPath, cancellationToken);
+        ArgumentNullException.ThrowIfNull(suggestion);
+        await EnsureWorkspaceInitialized(projectPath);
 
         var issues = new List<ValidationIssue>();
         var dependencyImpacts = new List<DependencyImpact>();
         var riskLevel = RefactoringRisk.Low;
 
-        // Validate that the refactoring won't break dependencies
+        // Validate extraction safety (data/control flow) and caller impact for each referenced group
         foreach (var groupId in suggestion.DuplicateGroupIds)
         {
-            // Basic dependency validation - future enhancement for detailed analysis
-            // TODO: Implement comprehensive dependency validation logic using Roslyn call analysis
-            // This would involve checking if any external code depends on the duplicated code
-            // For now, we perform a basic check
-            await ValidateBasicDependenciesAsync(groupId, dependencyImpacts, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var groupRisk = ValidateGroupDependencies(groupId, suggestion, issues, dependencyImpacts, cancellationToken);
+            if (groupRisk > riskLevel)
+            {
+                riskLevel = groupRisk;
+            }
         }
 
         // Check for breaking changes
         if (suggestion.IsBreakingChange)
         {
-            riskLevel = RefactoringRisk.High;
+            riskLevel = riskLevel > RefactoringRisk.High ? riskLevel : RefactoringRisk.High;
             issues.Add(new ValidationIssue
             {
                 Type = ValidationIssueType.CompilationError,
@@ -329,7 +337,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
 
         return new RefactoringValidationResult
         {
-            IsValid = issues.All(i => i.Severity != ValidationSeverity.Critical),
+            IsValid = !issues.Exists(i => i.IsBlocking || i.Severity == ValidationSeverity.Critical),
             Issues = issues,
             DependencyImpacts = dependencyImpacts,
             OverallRisk = riskLevel,
@@ -339,16 +347,25 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
 
     #region Private Implementation Methods
 
-    private async Task EnsureWorkspaceInitialized(string projectPath, CancellationToken cancellationToken)
+    /// <summary>
+    /// Load <paramref name="projectPath"/> into the shared workspace unless it already holds that project:
+    /// reloading a real solution is expensive and discards state other tools rely on.
+    /// </summary>
+    private async Task EnsureWorkspaceInitialized(string projectPath)
     {
+        if (_workspace.IsLoadedFrom(projectPath))
+        {
+            return;
+        }
+
         try
         {
             await _workspace.InitializeAsync(projectPath);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Failed to initialize Roslyn workspace for path: {ProjectPath}", projectPath);
-            throw;
+            LogWorkspaceInitializationFailed(_logger, ex, projectPath);
+            throw new InvalidOperationException($"Failed to initialize Roslyn workspace for path '{projectPath}': {ex.Message}", ex);
         }
     }
 
@@ -365,16 +382,14 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         }
 
         var allCodeBlocks = new List<CodeBlock>();
-        var compilation = _workspace.GetCompilation();
-
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
         {
-            _logger.LogWarning("No compilation available for workspace");
+            LogNoCompilation(_logger);
             return allCodeBlocks;
         }
 
         // Process each syntax tree
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
             if (cancellationToken.IsCancellationRequested)
                 break;
@@ -390,7 +405,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to extract code blocks from file: {FilePath}", filePath);
+                LogCodeBlockExtractionFailed(_logger, ex, filePath);
             }
         }
 
@@ -403,52 +418,56 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         DuplicateDetectionOptions options,
         CancellationToken cancellationToken)
     {
-        var codeBlocks = new List<CodeBlock>();
         var root = await syntaxTree.GetRootAsync(cancellationToken);
-        var semanticModel = _workspace.GetCompilation()?.GetSemanticModel(syntaxTree);
+        var semanticModel = _workspace.GetSemanticModel(syntaxTree);
 
-        if (root == null || semanticModel == null)
-            return codeBlocks;
+        if (semanticModel == null)
+            return new List<CodeBlock>();
 
-        // Extract different types of code blocks based on options
+        return ExtractCodeBlocksFromRoot(root, syntaxTree.FilePath, options, new FingerprintContext(semanticModel));
+    }
+
+    private static List<CodeBlock> ExtractCodeBlocksFromRoot(
+        SyntaxNode root,
+        string filePath,
+        DuplicateDetectionOptions options,
+        FingerprintContext fingerprints)
+    {
+        var codeBlocks = new List<CodeBlock>();
+
         if (options.DetectionTypes.HasFlag(DuplicateDetectionTypes.Methods))
         {
-            var methodBlocks = ExtractMethodBlocks(root, semanticModel, syntaxTree.FilePath, options);
-            codeBlocks.AddRange(methodBlocks);
+            codeBlocks.AddRange(ExtractMethodBlocks(root, filePath, options, fingerprints));
         }
 
         if (options.DetectionTypes.HasFlag(DuplicateDetectionTypes.Classes))
         {
-            var classBlocks = ExtractClassBlocks(root, semanticModel, syntaxTree.FilePath, options);
-            codeBlocks.AddRange(classBlocks);
+            codeBlocks.AddRange(ExtractClassBlocks(root, filePath, options, fingerprints));
         }
 
         if (options.DetectionTypes.HasFlag(DuplicateDetectionTypes.CodeBlocks))
         {
-            var blockBlocks = ExtractCodeBlockStatements(root, semanticModel, syntaxTree.FilePath, options);
-            codeBlocks.AddRange(blockBlocks);
+            codeBlocks.AddRange(ExtractCodeBlockStatements(root, filePath, options, fingerprints));
         }
 
         if (options.DetectionTypes.HasFlag(DuplicateDetectionTypes.Properties))
         {
-            var propertyBlocks = ExtractPropertyBlocks(root, semanticModel, syntaxTree.FilePath, options);
-            codeBlocks.AddRange(propertyBlocks);
+            codeBlocks.AddRange(ExtractPropertyBlocks(root, filePath, options, fingerprints));
         }
 
         if (options.DetectionTypes.HasFlag(DuplicateDetectionTypes.Constructors))
         {
-            var constructorBlocks = ExtractConstructorBlocks(root, semanticModel, syntaxTree.FilePath, options);
-            codeBlocks.AddRange(constructorBlocks);
+            codeBlocks.AddRange(ExtractConstructorBlocks(root, filePath, options, fingerprints));
         }
 
         return codeBlocks;
     }
 
-    private List<CodeBlock> ExtractMethodBlocks(
+    private static List<CodeBlock> ExtractMethodBlocks(
         SyntaxNode root,
-        SemanticModel semanticModel,
         string filePath,
-        DuplicateDetectionOptions options)
+        DuplicateDetectionOptions options,
+        FingerprintContext fingerprints)
     {
         var methodBlocks = new List<CodeBlock>();
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
@@ -477,8 +496,8 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             var astStructure = ExtractAstStructure(method);
 
             // Determine if it's generated or test code
-            var isGenerated = IsGeneratedCode(method, semanticModel);
-            var isTestCode = IsTestCode(method, filePath);
+            var isGenerated = IsGeneratedCode(method);
+            var isTestCode = IsTestCode(filePath);
 
             if ((options.IgnoreGeneratedCode && isGenerated) ||
                 (options.IgnoreTestCode && isTestCode))
@@ -504,18 +523,21 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                 Complexity = complexity,
                 Tokens = tokens,
                 AstStructure = astStructure,
-                Context = ExtractContext(method, options.ContextLines)
+                Context = ExtractContext(method, options.ContextLines),
+                SpanStart = method.Span.Start,
+                SpanLength = method.Span.Length,
+                Fingerprint = fingerprints.Build(method)
             });
         }
 
         return methodBlocks;
     }
 
-    private List<CodeBlock> ExtractClassBlocks(
+    private static List<CodeBlock> ExtractClassBlocks(
         SyntaxNode root,
-        SemanticModel semanticModel,
         string filePath,
-        DuplicateDetectionOptions options)
+        DuplicateDetectionOptions options,
+        FingerprintContext fingerprints)
     {
         var classBlocks = new List<CodeBlock>();
         var classes = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
@@ -535,8 +557,8 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             var complexity = CalculateComplexity(classDecl);
             var tokens = ExtractTokens(classDecl);
             var astStructure = ExtractAstStructure(classDecl);
-            var isGenerated = IsGeneratedCode(classDecl, semanticModel);
-            var isTestCode = IsTestCode(classDecl, filePath);
+            var isGenerated = IsGeneratedCode(classDecl);
+            var isTestCode = IsTestCode(filePath);
 
             if ((options.IgnoreGeneratedCode && isGenerated) ||
                 (options.IgnoreTestCode && isTestCode))
@@ -561,18 +583,21 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                 Complexity = complexity,
                 Tokens = tokens,
                 AstStructure = astStructure,
-                Context = ExtractContext(classDecl, options.ContextLines)
+                Context = ExtractContext(classDecl, options.ContextLines),
+                SpanStart = classDecl.Span.Start,
+                SpanLength = classDecl.Span.Length,
+                Fingerprint = fingerprints.Build(classDecl)
             });
         }
 
         return classBlocks;
     }
 
-    private List<CodeBlock> ExtractCodeBlockStatements(
+    private static List<CodeBlock> ExtractCodeBlockStatements(
         SyntaxNode root,
-        SemanticModel semanticModel,
         string filePath,
-        DuplicateDetectionOptions options)
+        DuplicateDetectionOptions options,
+        FingerprintContext fingerprints)
     {
         var blockBlocks = new List<CodeBlock>();
 
@@ -596,8 +621,8 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             var astStructure = ExtractAstStructure(block);
 
             var containingMethod = block.FirstAncestorOrSelf<MethodDeclarationSyntax>();
-            var isGenerated = containingMethod != null && IsGeneratedCode(containingMethod, semanticModel);
-            var isTestCode = IsTestCode(block, filePath);
+            var isGenerated = containingMethod != null && IsGeneratedCode(containingMethod);
+            var isTestCode = IsTestCode(filePath);
 
             if ((options.IgnoreGeneratedCode && isGenerated) ||
                 (options.IgnoreTestCode && isTestCode))
@@ -623,18 +648,21 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                 Complexity = complexity,
                 Tokens = tokens,
                 AstStructure = astStructure,
-                Context = ExtractContext(block, options.ContextLines)
+                Context = ExtractContext(block, options.ContextLines),
+                SpanStart = block.Span.Start,
+                SpanLength = block.Span.Length,
+                Fingerprint = fingerprints.Build(block)
             });
         }
 
         return blockBlocks;
     }
 
-    private List<CodeBlock> ExtractPropertyBlocks(
+    private static List<CodeBlock> ExtractPropertyBlocks(
         SyntaxNode root,
-        SemanticModel semanticModel,
         string filePath,
-        DuplicateDetectionOptions options)
+        DuplicateDetectionOptions options,
+        FingerprintContext fingerprints)
     {
         var propertyBlocks = new List<CodeBlock>();
         var properties = root.DescendantNodes().OfType<PropertyDeclarationSyntax>();
@@ -656,8 +684,8 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             var complexity = CalculateComplexity(property);
             var tokens = ExtractTokens(property);
             var astStructure = ExtractAstStructure(property);
-            var isGenerated = IsGeneratedCode(property, semanticModel);
-            var isTestCode = IsTestCode(property, filePath);
+            var isGenerated = IsGeneratedCode(property);
+            var isTestCode = IsTestCode(filePath);
 
             if ((options.IgnoreGeneratedCode && isGenerated) ||
                 (options.IgnoreTestCode && isTestCode))
@@ -683,18 +711,21 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                 Complexity = complexity,
                 Tokens = tokens,
                 AstStructure = astStructure,
-                Context = ExtractContext(property, options.ContextLines)
+                Context = ExtractContext(property, options.ContextLines),
+                SpanStart = property.Span.Start,
+                SpanLength = property.Span.Length,
+                Fingerprint = fingerprints.Build(property)
             });
         }
 
         return propertyBlocks;
     }
 
-    private List<CodeBlock> ExtractConstructorBlocks(
+    private static List<CodeBlock> ExtractConstructorBlocks(
         SyntaxNode root,
-        SemanticModel semanticModel,
         string filePath,
-        DuplicateDetectionOptions options)
+        DuplicateDetectionOptions options,
+        FingerprintContext fingerprints)
     {
         var constructorBlocks = new List<CodeBlock>();
         var constructors = root.DescendantNodes().OfType<ConstructorDeclarationSyntax>();
@@ -716,8 +747,8 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             var complexity = CalculateComplexity(constructor);
             var tokens = ExtractTokens(constructor);
             var astStructure = ExtractAstStructure(constructor);
-            var isGenerated = IsGeneratedCode(constructor, semanticModel);
-            var isTestCode = IsTestCode(constructor, filePath);
+            var isGenerated = IsGeneratedCode(constructor);
+            var isTestCode = IsTestCode(filePath);
 
             if ((options.IgnoreGeneratedCode && isGenerated) ||
                 (options.IgnoreTestCode && isTestCode))
@@ -743,7 +774,10 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                 Complexity = complexity,
                 Tokens = tokens,
                 AstStructure = astStructure,
-                Context = ExtractContext(constructor, options.ContextLines)
+                Context = ExtractContext(constructor, options.ContextLines),
+                SpanStart = constructor.Span.Start,
+                SpanLength = constructor.Span.Length,
+                Fingerprint = fingerprints.Build(constructor)
             });
         }
 
@@ -755,57 +789,33 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         DuplicateDetectionOptions options,
         CancellationToken cancellationToken)
     {
-        var codeBlocks = new List<CodeBlock>();
-
         try
         {
+            // Prefer the workspace's tree (which has a semantic model); otherwise parse the file (syntax only)
+            var compilation = _workspace.GetCompilationForFile(filePath);
+            var workspaceTree = compilation?.SyntaxTrees.FirstOrDefault(t => PathsEqual(t.FilePath, filePath));
+            if (compilation != null && workspaceTree != null)
+            {
+                var workspaceRoot = await workspaceTree.GetRootAsync(cancellationToken);
+                return ExtractCodeBlocksFromRoot(workspaceRoot, filePath, options,
+                    new FingerprintContext(compilation.GetSemanticModel(workspaceTree)));
+            }
+
             var sourceText = await File.ReadAllTextAsync(filePath, cancellationToken);
-            var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: filePath);
+            var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: filePath, cancellationToken: cancellationToken);
             var root = await syntaxTree.GetRootAsync(cancellationToken);
-            var compilation = _workspace.GetCompilation();
-            var semanticModel = compilation?.GetSemanticModel(syntaxTree);
-
-            if (semanticModel == null)
-                return codeBlocks;
-
-            if (options.DetectionTypes.HasFlag(DuplicateDetectionTypes.Methods))
-            {
-                codeBlocks.AddRange(ExtractMethodBlocks(root, semanticModel, filePath, options));
-            }
-
-            if (options.DetectionTypes.HasFlag(DuplicateDetectionTypes.Classes))
-            {
-                codeBlocks.AddRange(ExtractClassBlocks(root, semanticModel, filePath, options));
-            }
-
-            if (options.DetectionTypes.HasFlag(DuplicateDetectionTypes.CodeBlocks))
-            {
-                codeBlocks.AddRange(ExtractCodeBlockStatements(root, semanticModel, filePath, options));
-            }
-
-            if (options.DetectionTypes.HasFlag(DuplicateDetectionTypes.Properties))
-            {
-                codeBlocks.AddRange(ExtractPropertyBlocks(root, semanticModel, filePath, options));
-            }
-
-            if (options.DetectionTypes.HasFlag(DuplicateDetectionTypes.Constructors))
-            {
-                codeBlocks.AddRange(ExtractConstructorBlocks(root, semanticModel, filePath, options));
-            }
+            return ExtractCodeBlocksFromRoot(root, filePath, options, new FingerprintContext(null));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "Failed to extract code blocks from file: {FilePath}", filePath);
+            LogCodeBlockExtractionFailed(_logger, ex, filePath);
+            return new List<CodeBlock>();
         }
-
-        return codeBlocks;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<DuplicateGroup>> FindExactDuplicatesInternalAsync(
+    private static List<DuplicateGroup> FindExactDuplicatesInternal(
         List<CodeBlock> codeBlocks,
-        DuplicateDetectionOptions options,
-        CancellationToken cancellationToken)
+        DuplicateDetectionOptions options)
     {
         var duplicateGroups = new List<DuplicateGroup>();
         var hashGroups = codeBlocks.GroupBy(cb => cb.CodeHash);
@@ -816,9 +826,9 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
 
             var blocksList = hashGroup.ToList();
             var similarityScore = 1.0; // Exact duplicates have 100% similarity
-            var lineCount = blocksList.First().EndLine - blocksList.First().StartLine + 1;
-            var complexity = blocksList.First().Complexity.OverallScore;
-            var duplicateType = DetermineDuplicateType(blocksList.First());
+            var lineCount = blocksList[0].EndLine - blocksList[0].StartLine + 1;
+            var complexity = blocksList[0].Complexity.OverallScore;
+            var duplicateType = DetermineDuplicateType(blocksList[0]);
 
             duplicateGroups.Add(new DuplicateGroup
             {
@@ -829,6 +839,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                 LineCount = lineCount,
                 Complexity = (int)complexity,
                 IsExactDuplicate = true,
+                CloneType = CloneType.Exact,
                 Impact = CalculateDuplicationImpact(blocksList, similarityScore),
                 Metadata = new DuplicateMetadata
                 {
@@ -847,236 +858,23 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return duplicateGroups.OrderByDescending(g => g.Complexity).ToList();
     }
 
-    private async Task<List<DuplicateGroup>> FindNearDuplicatesInternalAsync(
-        List<CodeBlock> codeBlocks,
-        double similarityThreshold,
-        DuplicateDetectionOptions options,
-        CancellationToken cancellationToken)
+    private static List<CodeDifference> FindCodeDifferences(
+        CodeBlock codeBlock1,
+        CodeBlock codeBlock2,
+        CloneAlignment? alignment)
     {
-        var duplicateGroups = new List<DuplicateGroup>();
-        var processedPairs = new HashSet<string>();
-
-        // Group by element type and similar size for efficiency
-        var typeGroups = codeBlocks.GroupBy(cb => cb.ElementType);
-
-        foreach (var typeGroup in typeGroups)
+        // Token-level diff over normalised tokens, with statement-level grouping of insertions/deletions
+        if (codeBlock1.Fingerprint != null && codeBlock2.Fingerprint != null)
         {
-            var blocksBySize = typeGroup.GroupBy(cb => cb.EndLine - cb.StartLine + 1);
-
-            foreach (var sizeGroup in blocksBySize)
+            alignment ??= CloneComparer.Align(codeBlock1.Fingerprint, codeBlock2.Fingerprint);
+            if (alignment != null)
             {
-                var blocksList = sizeGroup.ToList();
-
-                for (int i = 0; i < blocksList.Count; i++)
-                {
-                    for (int j = i + 1; j < blocksList.Count; j++)
-                    {
-                        if (cancellationToken.IsCancellationRequested)
-                            return duplicateGroups;
-
-                        var block1 = blocksList[i];
-                        var block2 = blocksList[j];
-
-                        // Skip if already processed this pair
-                        var pairKey = $"{Math.Min(block1.CodeHash.GetHashCode(), block2.CodeHash.GetHashCode())}_{Math.Max(block1.CodeHash.GetHashCode(), block2.CodeHash.GetHashCode())}";
-                        if (processedPairs.Contains(pairKey))
-                            continue;
-
-                        processedPairs.Add(pairKey);
-
-                        // Calculate similarity
-                        var similarity = await CalculateSimilarityAsync(block1, block2, options, cancellationToken);
-
-                        if (similarity >= similarityThreshold)
-                        {
-                            // Find or create duplicate group
-                            var existingGroup = FindOrCreateNearDuplicateGroup(duplicateGroups, block1, block2, similarity, options);
-
-                            if (existingGroup == null)
-                            {
-                                duplicateGroups.Add(CreateNearDuplicateGroup(block1, block2, similarity, options));
-                            }
-                        }
-                    }
-                }
+                return CloneDiffer.FindDifferences(codeBlock1.Fingerprint, codeBlock2.Fingerprint, alignment).ToList();
             }
         }
 
-        return duplicateGroups.OrderByDescending(g => g.SimilarityScore).ThenByDescending(g => g.Complexity).ToList();
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<double> CalculateSimilarityAsync(
-        CodeBlock block1,
-        CodeBlock block2,
-        DuplicateDetectionOptions options,
-        CancellationToken cancellationToken)
-    {
-        // Quick hash-based comparison first
-        if (block1.CodeHash == block2.CodeHash)
-            return 1.0;
-
-        // Calculate structural similarity
-        var structuralSim = CalculateStructuralSimilarity(block1, block2);
-
-        // Calculate token similarity
-        var tokenSim = CalculateTokenSimilarity(block1, block2, options);
-
-        // Weighted combination
-        var overallSimilarity = (structuralSim * 0.7) + (tokenSim * 0.3);
-
-        return overallSimilarity;
-    }
-
-    private double CalculateStructuralSimilarity(CodeBlock block1, CodeBlock block2)
-    {
-        // Compare AST structure hashes
-        if (block1.AstStructure.StructuralHash == block2.AstStructure.StructuralHash)
-            return 1.0;
-
-        // Compare node types sequences
-        var seq1 = block1.AstStructure.NodeTypes;
-        var seq2 = block2.AstStructure.NodeTypes;
-
-        if (seq1.Count != seq2.Count)
-            return 0.0;
-
-        var matches = 0;
-        for (int i = 0; i < seq1.Count; i++)
-        {
-            if (seq1[i] == seq2[i])
-                matches++;
-        }
-
-        return (double)matches / seq1.Count;
-    }
-
-    private double CalculateTokenSimilarity(CodeBlock block1, CodeBlock block2, DuplicateDetectionOptions options)
-    {
-        if (block1.Tokens == null || block2.Tokens == null)
-            return 0.0;
-
-        var tokens1 = FilterTokens(block1.Tokens, options);
-        var tokens2 = FilterTokens(block2.Tokens, options);
-
-        if (tokens1.Count == 0 && tokens2.Count == 0)
-            return 1.0;
-
-        if (tokens1.Count == 0 || tokens2.Count == 0)
-            return 0.0;
-
-        // Use Levenshtein distance on token sequences
-        var distance = CalculateLevenshteinDistance(
-            tokens1.Select(t => t.Type).ToList(),
-            tokens2.Select(t => t.Type).ToList());
-
-        var maxLen = Math.Max(tokens1.Count, tokens2.Count);
-        return 1.0 - ((double)distance / maxLen);
-    }
-
-    private List<CodeToken> FilterTokens(IReadOnlyList<CodeToken> tokens, DuplicateDetectionOptions options)
-    {
-        var filtered = new List<CodeToken>();
-
-        foreach (var token in tokens)
-        {
-            if (options.IgnoreTrivialDifferences && token.Type == TokenType.Whitespace)
-                continue;
-
-            if (options.IgnoreTrivialDifferences && token.Type == TokenType.Comment)
-                continue;
-
-            if (options.IgnoreIdentifiers && token.Type == TokenType.Identifier)
-                continue;
-
-            filtered.Add(token);
-        }
-
-        return filtered;
-    }
-
-    private int CalculateLevenshteinDistance<T>(IList<T> sequence1, IList<T> sequence2)
-    {
-        var matrix = new int[sequence1.Count + 1, sequence2.Count + 1];
-
-        for (int i = 0; i <= sequence1.Count; i++)
-            matrix[i, 0] = i;
-
-        for (int j = 0; j <= sequence2.Count; j++)
-            matrix[0, j] = j;
-
-        for (int i = 1; i <= sequence1.Count; i++)
-        {
-            for (int j = 1; j <= sequence2.Count; j++)
-            {
-                var cost = sequence1[i - 1]!.Equals(sequence2[j - 1]) ? 0 : 1;
-                matrix[i, j] = Math.Min(
-                    Math.Min(matrix[i - 1, j] + 1, matrix[i, j - 1] + 1),
-                    matrix[i - 1, j - 1] + cost);
-            }
-        }
-
-        return matrix[sequence1.Count, sequence2.Count];
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<double> CalculateStructuralSimilarityAsync(
-        CodeBlock codeBlock1,
-        CodeBlock codeBlock2,
-        CancellationToken cancellationToken)
-    {
-        return CalculateStructuralSimilarity(codeBlock1, codeBlock2);
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<double> CalculateTokenSimilarityAsync(
-        CodeBlock codeBlock1,
-        CodeBlock codeBlock2,
-        CodeComparisonOptions options,
-        CancellationToken cancellationToken)
-    {
-        var detectionOptions = new DuplicateDetectionOptions
-        {
-            IgnoreTrivialDifferences = options.IgnoreWhitespace && options.IgnoreComments,
-            IgnoreIdentifiers = options.IgnoreIdentifiers
-        };
-
-        return CalculateTokenSimilarity(codeBlock1, codeBlock2, detectionOptions);
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<double> CalculateSemanticSimilarityAsync(
-        CodeBlock codeBlock1,
-        CodeBlock codeBlock2,
-        CancellationToken cancellationToken)
-    {
-        // TODO: Enhance semantic similarity using Roslyn semantic analysis
-        // Future enhancement: Use syntax tree comparison and type analysis
-        // For now, return a basic similarity based on element types
-        if (codeBlock1.ElementType != codeBlock2.ElementType)
-            return 0.0;
-
-        if (codeBlock1.ContainingType == codeBlock2.ContainingType)
-            return 0.9;
-
-        if (codeBlock1.Namespace == codeBlock2.Namespace)
-            return 0.7;
-
-        return 0.5;
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<CodeDifference>> FindCodeDifferencesAsync(
-        CodeBlock codeBlock1,
-        CodeBlock codeBlock2,
-        CodeComparisonOptions options,
-        CancellationToken cancellationToken)
-    {
+        // Fingerprints unavailable or the blocks are too different to align: report a single coarse difference
         var differences = new List<CodeDifference>();
-
-        // TODO: Enhance detailed difference analysis
-        // Future enhancement: Use syntax tree diffing to identify exact changes
-        // For now, return basic difference information
         if (codeBlock1.NormalizedCode != codeBlock2.NormalizedCode)
         {
             differences.Add(new CodeDifference
@@ -1087,18 +885,16 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                 Location2 = new CodeLocation { Line = codeBlock2.StartLine, Column = codeBlock2.StartColumn, Length = codeBlock2.EndLine - codeBlock2.StartLine + 1 },
                 Text1 = codeBlock1.NormalizedCode,
                 Text2 = codeBlock2.NormalizedCode,
-                Impact = 0.5
+                Impact = CloneDiffer.StructuralDifferenceImpact
             });
         }
 
         return differences;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<CommonPattern>> FindCommonPatternsAsync(
+    private static List<CommonPattern> FindCommonPatterns(
         CodeBlock codeBlock1,
-        CodeBlock codeBlock2,
-        CancellationToken cancellationToken)
+        CodeBlock codeBlock2)
     {
         var patterns = new List<CommonPattern>();
 
@@ -1137,12 +933,9 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return patterns;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<DuplicateType?> DetermineDuplicateTypeAsync(
+    private static DuplicateType? DeterminePairDuplicateType(
         CodeBlock codeBlock1,
-        CodeBlock codeBlock2,
-        double similarity,
-        CancellationToken cancellationToken)
+        CodeBlock codeBlock2)
     {
         if (codeBlock1.ElementType != codeBlock2.ElementType)
             return null;
@@ -1158,103 +951,9 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private DuplicateGroup? FindOrCreateNearDuplicateGroup(
-        List<DuplicateGroup> groups,
-        CodeBlock block1,
-        CodeBlock block2,
-        double similarity,
-        DuplicateDetectionOptions options)
-    {
-        // Find if either block is already in a group
-        var existingGroup = groups.FirstOrDefault(g =>
-            g.CodeBlocks.Any(cb => cb.CodeHash == block1.CodeHash || cb.CodeHash == block2.CodeHash));
-
-        if (existingGroup != null)
-        {
-            // Check if the other block should be added to this group
-            if (!existingGroup.CodeBlocks.Any(cb => cb.CodeHash == block1.CodeHash))
-            {
-                var updatedBlocks = existingGroup.CodeBlocks.Append(block1).ToList();
-                // Update group properties based on all blocks
-                existingGroup = UpdateDuplicateGroup(existingGroup, updatedBlocks);
-            }
-            else if (!existingGroup.CodeBlocks.Any(cb => cb.CodeHash == block2.CodeHash))
-            {
-                var updatedBlocks = existingGroup.CodeBlocks.Append(block2).ToList();
-                existingGroup = UpdateDuplicateGroup(existingGroup, updatedBlocks);
-            }
-        }
-
-        return existingGroup;
-    }
-
-    private DuplicateGroup CreateNearDuplicateGroup(
-        CodeBlock block1,
-        CodeBlock block2,
-        double similarity,
-        DuplicateDetectionOptions options)
-    {
-        var blocks = new List<CodeBlock> { block1, block2 };
-        var lineCount = (block1.EndLine - block1.StartLine + 1 + block2.EndLine - block2.StartLine + 1) / 2;
-        var complexity = (int)((block1.Complexity.OverallScore + block2.Complexity.OverallScore) / 2);
-        var duplicateType = DetermineDuplicateType(block1);
-
-        return new DuplicateGroup
-        {
-            GroupId = Guid.NewGuid().ToString(),
-            CodeBlocks = blocks,
-            SimilarityScore = similarity,
-            DuplicationType = duplicateType,
-            LineCount = lineCount,
-            Complexity = complexity,
-            IsExactDuplicate = false,
-            Impact = CalculateDuplicationImpact(blocks, similarity),
-            Metadata = new DuplicateMetadata
-            {
-                DetectedAt = DateTime.UtcNow,
-                DetectionAlgorithm = "NearSimilarityMatch",
-                DetectionConfiguration = GetOptionsHash(options),
-                AdditionalMetadata = new Dictionary<string, object>
-                {
-                    ["SimilarityThreshold"] = options.SimilarityThreshold,
-                    ["ComparisonMethod"] = "AST+Token"
-                }
-            }
-        };
-    }
-
-    private DuplicateGroup UpdateDuplicateGroup(DuplicateGroup group, List<CodeBlock> allBlocks)
-    {
-        // Recalculate group properties based on all blocks
-        var avgLineCount = (int)allBlocks.Average(cb => cb.EndLine - cb.StartLine + 1);
-        var avgComplexity = (int)allBlocks.Average(cb => cb.Complexity.OverallScore);
-
-        return new DuplicateGroup
-        {
-            GroupId = group.GroupId,
-            CodeBlocks = allBlocks,
-            SimilarityScore = group.SimilarityScore,
-            DuplicationType = group.DuplicationType,
-            LineCount = avgLineCount,
-            Complexity = avgComplexity,
-            IsExactDuplicate = group.IsExactDuplicate,
-            RefactoringSuggestions = group.RefactoringSuggestions,
-            Impact = CalculateDuplicationImpact(allBlocks, group.SimilarityScore),
-            Metadata = group.Metadata ?? new DuplicateMetadata
-            {
-                DetectedAt = DateTime.UtcNow,
-                DetectionAlgorithm = "StructuralHash",
-                DetectionConfiguration = "Default",
-                AdditionalMetadata = new Dictionary<string, object>()
-            }
-        };
-    }
-
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<DuplicationMetrics> CalculateDuplicationMetricsAsync(
+    private static DuplicationMetrics CalculateDuplicationMetrics(
         List<DuplicateGroup> duplicateGroups,
-        List<CodeBlock> allCodeBlocks,
-        CancellationToken cancellationToken)
+        List<CodeBlock> allCodeBlocks)
     {
         var filesWithDuplicates = duplicateGroups
             .SelectMany(g => g.CodeBlocks)
@@ -1301,9 +1000,9 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
 
         var similarities = duplicateGroups.Select(g => g.SimilarityScore).ToList();
-        var avgSimilarity = similarities.Any() ? similarities.Average() : 0.0;
-        var maxSimilarity = similarities.Any() ? similarities.Max() : 0.0;
-        var minSimilarity = similarities.Any() ? similarities.Min() : 0.0;
+        var avgSimilarity = similarities.Count != 0 ? similarities.Average() : 0.0;
+        var maxSimilarity = similarities.Count != 0 ? similarities.Max() : 0.0;
+        var minSimilarity = similarities.Count != 0 ? similarities.Min() : 0.0;
 
         // Estimate costs (simplified calculation)
         var estimatedMaintenanceCost = duplicateLines * 0.5; // 0.5 hours per line of duplicate code
@@ -1328,7 +1027,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private async Task<IReadOnlyList<RefactoringSuggestion>> GenerateRefactoringSuggestionsAsync(
+    private List<RefactoringSuggestion> GenerateRefactoringSuggestions(
         List<DuplicateGroup> duplicateGroups,
         RefactoringOptions options,
         CancellationToken cancellationToken)
@@ -1337,7 +1036,8 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
 
         foreach (var group in duplicateGroups.Take(options.MaxSuggestions))
         {
-            var groupSuggestions = await GenerateSuggestionsForDuplicateGroup(group, options, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var groupSuggestions = GenerateSuggestionsForDuplicateGroup(group, options);
             suggestions.AddRange(groupSuggestions);
         }
 
@@ -1346,25 +1046,26 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                          .ToList();
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<RefactoringSuggestion>> GenerateSuggestionsForDuplicateGroup(
+    private List<RefactoringSuggestion> GenerateSuggestionsForDuplicateGroup(
         DuplicateGroup group,
-        RefactoringOptions options,
-        CancellationToken cancellationToken)
+        RefactoringOptions options)
     {
         var suggestions = new List<RefactoringSuggestion>();
+        var wantsExtractMethod = options.RefactoringTypes.HasFlag(RefactoringTypes.ExtractMethod);
+        var wantsUtilityClass = options.RefactoringTypes.HasFlag(RefactoringTypes.UtilityClass);
 
-        if (group.DuplicationType == DuplicateType.Method)
+        // Data-flow based dependency validation before suggesting any "extract shared method" refactoring
+        var blockAnalyses = wantsExtractMethod || wantsUtilityClass ? AnalyzeGroupBlocks(group) : null;
+        var safety = blockAnalyses != null ? ExtractionDependencyAnalyzer.AnalyzeGroup(blockAnalyses) : null;
+
+        if (wantsExtractMethod && group.DuplicationType is DuplicateType.Method or DuplicateType.Constructor or DuplicateType.CodeBlock)
         {
-            if (options.RefactoringTypes.HasFlag(RefactoringTypes.ExtractMethod))
-            {
-                suggestions.Add(CreateExtractMethodSuggestion(group));
-            }
+            suggestions.Add(CreateExtractMethodSuggestion(group, safety));
+        }
 
-            if (options.RefactoringTypes.HasFlag(RefactoringTypes.ExtractMethod))
-            {
-                suggestions.Add(CreateParameterizeMethodSuggestion(group));
-            }
+        if (wantsExtractMethod && group.DuplicationType == DuplicateType.Method)
+        {
+            suggestions.Add(CreateParameterizeMethodSuggestion(group, safety));
         }
 
         if (group.DuplicationType == DuplicateType.Class)
@@ -1380,17 +1081,39 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             }
         }
 
-        if (options.RefactoringTypes.HasFlag(RefactoringTypes.UtilityClass))
+        if (wantsUtilityClass)
         {
-            suggestions.Add(CreateUtilityClassSuggestion(group));
+            var staticSafety = blockAnalyses != null ? ExtractionDependencyAnalyzer.AnalyzeGroup(blockAnalyses, requireStaticTarget: true) : null;
+            suggestions.Add(CreateUtilityClassSuggestion(group, staticSafety));
         }
 
         return suggestions;
     }
 
-    private RefactoringSuggestion CreateExtractMethodSuggestion(DuplicateGroup group)
-    {
+    private static RefactoringRisk AdjustRiskForSafety(RefactoringRisk risk, ExtractionSafetyResult? safety) =>
+        safety is { IsSafe: false } && risk < RefactoringRisk.High ? RefactoringRisk.High : risk;
 
+    private static List<string> ExtractionPrerequisites(ExtractionSafetyResult? safety, params string[] defaults)
+    {
+        if (safety == null)
+        {
+            return defaults.ToList();
+        }
+
+        var prerequisites = new List<string>();
+        var signature = safety.Blocks.Select(b => b.SuggestedSignature).FirstOrDefault(s => s != null);
+        if (signature != null)
+        {
+            prerequisites.Add($"Shared method signature: {signature}");
+        }
+
+        prerequisites.AddRange(safety.UnsafeReasons.Select(r => $"Resolve before extracting: {r}"));
+        prerequisites.AddRange(safety.Warnings);
+        return prerequisites.Count > 0 ? prerequisites : defaults.ToList();
+    }
+
+    private static RefactoringSuggestion CreateExtractMethodSuggestion(DuplicateGroup group, ExtractionSafetyResult? safety)
+    {
         return new RefactoringSuggestion
         {
             SuggestionId = Guid.NewGuid().ToString(),
@@ -1401,10 +1124,11 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             Priority = CalculatePriority(group),
             EstimatedEffort = group.LineCount * 0.2, // 0.2 hours per line
             EstimatedBenefit = group.LineCount * 0.1, // 0.1 hours benefit per line
-            Risk = CalculateRisk(group),
+            Risk = AdjustRiskForSafety(CalculateRisk(group), safety),
             IsBreakingChange = false,
             ImplementationSteps = CreateExtractMethodSteps(group),
-            Prerequisites = new List<string> { "Identify common parameters", "Determine appropriate method name" },
+            Prerequisites = ExtractionPrerequisites(safety, "Identify common parameters", "Determine appropriate method name"),
+            ExtractionSafety = safety,
             SideEffects = new List<string> { "May introduce method parameter complexity", "Requires updating all call sites" },
             Metadata = new RefactoringMetadata
             {
@@ -1420,7 +1144,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private RefactoringSuggestion CreateParameterizeMethodSuggestion(DuplicateGroup group)
+    private static RefactoringSuggestion CreateParameterizeMethodSuggestion(DuplicateGroup group, ExtractionSafetyResult? safety)
     {
         return new RefactoringSuggestion
         {
@@ -1432,10 +1156,11 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             Priority = CalculatePriority(group),
             EstimatedEffort = group.LineCount * 0.3,
             EstimatedBenefit = group.LineCount * 0.15,
-            Risk = RefactoringRisk.Medium,
+            Risk = AdjustRiskForSafety(RefactoringRisk.Medium, safety),
             IsBreakingChange = true,
             ImplementationSteps = CreateParameterizeMethodSteps(group),
-            Prerequisites = new List<string> { "Analyze differences between methods", "Identify parameterization points" },
+            Prerequisites = ExtractionPrerequisites(safety, "Analyze differences between methods", "Identify parameterization points"),
+            ExtractionSafety = safety,
             SideEffects = new List<string> { "Changes method signatures", "Requires updating all call sites" },
             Metadata = new RefactoringMetadata
             {
@@ -1451,7 +1176,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private RefactoringSuggestion CreateExtractBaseClassSuggestion(DuplicateGroup group)
+    private static RefactoringSuggestion CreateExtractBaseClassSuggestion(DuplicateGroup group)
     {
         return new RefactoringSuggestion
         {
@@ -1475,14 +1200,14 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                 Confidence = 0.70,
                 AdditionalMetadata = new Dictionary<string, object>
                 {
-                    ["InheritanceDepth"] = EstimateInheritanceDepth(group),
+                    ["InheritanceDepth"] = EstimatedInheritanceDepth,
                     ["AffectedClasses"] = group.CodeBlocks.Count
                 }
             }
         };
     }
 
-    private RefactoringSuggestion CreateCompositionSuggestion(DuplicateGroup group)
+    private static RefactoringSuggestion CreateCompositionSuggestion(DuplicateGroup group)
     {
         return new RefactoringSuggestion
         {
@@ -1513,7 +1238,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private RefactoringSuggestion CreateUtilityClassSuggestion(DuplicateGroup group)
+    private static RefactoringSuggestion CreateUtilityClassSuggestion(DuplicateGroup group, ExtractionSafetyResult? safety)
     {
         return new RefactoringSuggestion
         {
@@ -1525,10 +1250,11 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             Priority = CalculatePriority(group),
             EstimatedEffort = group.LineCount * 0.25,
             EstimatedBenefit = group.LineCount * 0.12,
-            Risk = RefactoringRisk.Low,
+            Risk = AdjustRiskForSafety(RefactoringRisk.Low, safety),
             IsBreakingChange = false,
             ImplementationSteps = CreateUtilityClassSteps(group),
-            Prerequisites = new List<string> { "Determine utility class name and namespace" },
+            Prerequisites = ExtractionPrerequisites(safety, "Determine utility class name and namespace"),
+            ExtractionSafety = safety,
             SideEffects = new List<string> { "Introduces new class", "May affect encapsulation" },
             Metadata = new RefactoringMetadata
             {
@@ -1544,7 +1270,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private RefactoringPriority CalculatePriority(DuplicateGroup group)
+    private static RefactoringPriority CalculatePriority(DuplicateGroup group)
     {
         var priorityScore = 0;
 
@@ -1566,7 +1292,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private RefactoringRisk CalculateRisk(DuplicateGroup group)
+    private static RefactoringRisk CalculateRisk(DuplicateGroup group)
     {
         var riskScore = 0;
 
@@ -1596,7 +1322,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private List<RefactoringStep> CreateExtractMethodSteps(DuplicateGroup group)
+    private static List<RefactoringStep> CreateExtractMethodSteps(DuplicateGroup group)
     {
         var steps = new List<RefactoringStep>
         {
@@ -1632,7 +1358,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return steps;
     }
 
-    private List<RefactoringStep> CreateParameterizeMethodSteps(DuplicateGroup group)
+    private static List<RefactoringStep> CreateParameterizeMethodSteps(DuplicateGroup group)
     {
         return new List<RefactoringStep>
         {
@@ -1675,7 +1401,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private List<RefactoringStep> CreateExtractBaseClassSteps(DuplicateGroup group)
+    private static List<RefactoringStep> CreateExtractBaseClassSteps(DuplicateGroup group)
     {
         return new List<RefactoringStep>
         {
@@ -1709,7 +1435,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private List<RefactoringStep> CreateCompositionSteps(DuplicateGroup group)
+    private static List<RefactoringStep> CreateCompositionSteps(DuplicateGroup group)
     {
         return new List<RefactoringStep>
         {
@@ -1743,7 +1469,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private List<RefactoringStep> CreateUtilityClassSteps(DuplicateGroup group)
+    private static List<RefactoringStep> CreateUtilityClassSteps(DuplicateGroup group)
     {
         return new List<RefactoringStep>
         {
@@ -1777,11 +1503,9 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<DuplicateHotspotsResult> AnalyzeHotspotsAsync(
+    private static DuplicateHotspotsResult AnalyzeHotspots(
         List<DuplicateGroup> duplicateGroups,
-        List<CodeBlock> allCodeBlocks,
-        CancellationToken cancellationToken)
+        List<CodeBlock> allCodeBlocks)
     {
         // File hotspots
         var fileDuplicationScores = new Dictionary<string, double>();
@@ -1825,23 +1549,20 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
 
         foreach (var group in duplicateGroups)
         {
-            foreach (var block in group.CodeBlocks)
+            foreach (var block in group.CodeBlocks.Where(b => !string.IsNullOrEmpty(b.ContainingType)))
             {
-                if (!string.IsNullOrEmpty(block.ContainingType))
+                var key = $"{block.ContainingType}|{block.FilePath}";
+                if (!classDuplicationScores.TryGetValue(key, out var current))
                 {
-                    var key = $"{block.ContainingType}|{block.FilePath}";
-                    if (!classDuplicationScores.ContainsKey(key))
-                    {
-                        classDuplicationScores[key] = (0, 0, block.FilePath);
-                    }
-
-                    var current = classDuplicationScores[key];
-                    classDuplicationScores[key] = (
-                        current.Score + group.SimilarityScore * group.Complexity,
-                        current.Count + 1,
-                        block.FilePath
-                    );
+                    current = (0, 0, block.FilePath);
+                    classDuplicationScores[key] = current;
                 }
+
+                classDuplicationScores[key] = (
+                    current.Score + group.SimilarityScore * group.Complexity,
+                    current.Count + 1,
+                    block.FilePath
+                );
             }
         }
 
@@ -1866,12 +1587,12 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             foreach (var block in group.CodeBlocks)
             {
                 var key = $"{block.ElementName}|{block.ContainingType}|{block.FilePath}";
-                if (!methodDuplicationScores.ContainsKey(key))
+                if (!methodDuplicationScores.TryGetValue(key, out var current))
                 {
-                    methodDuplicationScores[key] = (0, 0, block.ContainingType ?? "", block.FilePath);
+                    current = (0, 0, block.ContainingType ?? "", block.FilePath);
+                    methodDuplicationScores[key] = current;
                 }
 
-                var current = methodDuplicationScores[key];
                 methodDuplicationScores[key] = (
                     current.Score + group.SimilarityScore * group.Complexity,
                     current.Count + 1,
@@ -1903,12 +1624,12 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             foreach (var block in group.CodeBlocks)
             {
                 var directory = Path.GetDirectoryName(block.FilePath) ?? "";
-                if (!directoryDuplicationScores.ContainsKey(directory))
+                if (!directoryDuplicationScores.TryGetValue(directory, out var current))
                 {
-                    directoryDuplicationScores[directory] = (0, 0);
+                    current = (0, 0);
+                    directoryDuplicationScores[directory] = current;
                 }
 
-                var current = directoryDuplicationScores[directory];
                 var lines = block.EndLine - block.StartLine + 1;
                 directoryDuplicationScores[directory] = (
                     current.Files + 1,
@@ -1935,13 +1656,11 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
             FileHotspots = fileHotspots,
             ClassHotspots = classHotspots,
             MethodHotspots = methodHotspots,
-            DirectoryHotspots = directoryHotspots,
-            Trends = null // TODO: Implement trend analysis if historical data is available
-                        // Future enhancement: Track duplicate code patterns over time
+            DirectoryHotspots = directoryHotspots
         };
     }
 
-    private HotspotRiskLevel CalculateHotspotRiskLevel(double score, int count)
+    private static HotspotRiskLevel CalculateHotspotRiskLevel(double score, int count)
     {
         if (score >= 100 || count >= 10)
             return HotspotRiskLevel.Critical;
@@ -1959,7 +1678,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
 
     #region Helper Methods
 
-    private bool ShouldExcludeFile(string filePath, DuplicateDetectionOptions options)
+    private static bool ShouldExcludeFile(string filePath, DuplicateDetectionOptions options)
     {
         if (options.ExcludedPaths.Any(pattern => filePath.Contains(pattern)))
             return true;
@@ -1975,43 +1694,22 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return false;
     }
 
-    private string NormalizeCode(string code, DuplicateDetectionOptions options)
+    private static string NormalizeCode(string code, DuplicateDetectionOptions options) =>
+        DuplicateDetection.DuplicateDetectionUtils.NormalizeCode(code, options);
+
+    private static string ComputeHash(string input)
     {
-        if (options.IgnoreTrivialDifferences)
-        {
-            // Remove comments
-            code = Regex.Replace(code, @"//.*$", "", RegexOptions.Multiline);
-            code = Regex.Replace(code, @"/\*.*?\*/", "", RegexOptions.Singleline);
-
-            // Normalize whitespace
-            code = Regex.Replace(code, @"\s+", " ");
-            code = code.Trim();
-        }
-
-        if (options.IgnoreIdentifiers)
-        {
-            // Replace identifiers with placeholder
-            code = Regex.Replace(code, @"\b[a-zA-Z_][a-zA-Z0-9_]*\b", "IDENTIFIER");
-        }
-
-        return code;
-    }
-
-    private string ComputeHash(string input)
-    {
-        using var sha256 = SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(input);
-        var hash = sha256.ComputeHash(bytes);
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToBase64String(hash);
     }
 
-    private string GetOptionsHash(DuplicateDetectionOptions options)
+    private static string GetOptionsHash(DuplicateDetectionOptions options)
     {
         var key = $"{options.MinBlockSize}-{options.MaxBlockSize}-{options.DetectionTypes}-{options.IgnoreGeneratedCode}-{options.IgnoreTestCode}-{options.SimilarityThreshold}";
         return ComputeHash(key);
     }
 
-    private ComplexityMetrics CalculateComplexity(SyntaxNode node)
+    private static ComplexityMetrics CalculateComplexity(SyntaxNode node)
     {
         // Calculate cyclomatic complexity
         var cyclomaticComplexity = 1; // Base complexity
@@ -2068,7 +1766,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private int CalculateCognitiveComplexity(SyntaxNode node)
+    private static int CalculateCognitiveComplexity(SyntaxNode node)
     {
         var complexity = 0;
 
@@ -2127,7 +1825,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return complexity;
     }
 
-    private int CalculateNestingDepth(SyntaxNode node)
+    private static int CalculateNestingDepth(SyntaxNode node)
     {
         var maxDepth = 0;
 
@@ -2186,7 +1884,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return maxDepth;
     }
 
-    private List<CodeToken> ExtractTokens(SyntaxNode node)
+    private static List<CodeToken> ExtractTokens(SyntaxNode node)
     {
         var tokens = new List<CodeToken>();
 
@@ -2209,7 +1907,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return tokens;
     }
 
-    private TokenType GetTokenType(SyntaxToken token)
+    private static TokenType GetTokenType(SyntaxToken token)
     {
         if (token.IsKeyword())
             return TokenType.Keyword;
@@ -2227,7 +1925,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return TokenType.Unknown;
     }
 
-    private bool IsNumericType(Type type)
+    private static bool IsNumericType(Type type)
     {
         return type == typeof(sbyte) || type == typeof(byte) ||
                type == typeof(short) || type == typeof(ushort) ||
@@ -2237,7 +1935,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                type == typeof(decimal);
     }
 
-    private AstStructure ExtractAstStructure(SyntaxNode node)
+    private static AstStructure ExtractAstStructure(SyntaxNode node)
     {
         var nodeTypes = new List<string>();
         var controlFlowPatterns = new List<ControlFlowPattern>();
@@ -2301,7 +1999,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private int CalculateMaxDepth(SyntaxNode node)
+    private static int CalculateMaxDepth(SyntaxNode node)
     {
         var maxDepth = 0;
 
@@ -2318,7 +2016,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return maxDepth;
     }
 
-    private bool IsGeneratedCode(SyntaxNode node, SemanticModel semanticModel)
+    private static bool IsGeneratedCode(SyntaxNode node)
     {
         // Check for generated code attributes
         var attributes = node.DescendantNodesAndSelf().OfType<AttributeSyntax>();
@@ -2343,7 +2041,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                filePath.Contains(".designer.cs");
     }
 
-    private bool IsTestCode(SyntaxNode node, string filePath)
+    private static bool IsTestCode(string filePath)
     {
         return filePath.Contains("Test") ||
                filePath.Contains(".Tests.") ||
@@ -2351,19 +2049,19 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
                filePath.Contains("UnitTest");
     }
 
-    private string GetContainingType(SyntaxNode node)
+    private static string GetContainingType(SyntaxNode node)
     {
         var classDecl = node.FirstAncestorOrSelf<ClassDeclarationSyntax>();
         return classDecl?.Identifier.Text ?? "";
     }
 
-    private string GetNamespace(SyntaxNode node)
+    private static string GetNamespace(SyntaxNode node)
     {
         var namespaceDecl = node.FirstAncestorOrSelf<NamespaceDeclarationSyntax>();
         return namespaceDecl?.Name.ToString() ?? "";
     }
 
-    private MCPsharp.Models.Accessibility GetAccessibility(SyntaxNode node)
+    private static MCPsharp.Models.Accessibility GetAccessibility(SyntaxNode node)
     {
         var modifiers = node.ChildTokens().FirstOrDefault(t => t.IsKind(SyntaxKind.PublicKeyword) ||
                                                                t.IsKind(SyntaxKind.PrivateKeyword) ||
@@ -2382,7 +2080,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         return MCPsharp.Models.Accessibility.Private; // Default
     }
 
-    private CodeContext? ExtractContext(SyntaxNode node, int contextLines)
+    private static CodeContext? ExtractContext(SyntaxNode node, int contextLines)
     {
         if (contextLines <= 0)
             return null;
@@ -2419,7 +2117,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private DuplicateType DetermineDuplicateType(CodeBlock codeBlock)
+    private static DuplicateType DetermineDuplicateType(CodeBlock codeBlock)
     {
         return codeBlock.ElementType switch
         {
@@ -2432,7 +2130,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private DuplicationImpact CalculateDuplicationImpact(List<CodeBlock> blocks, double similarity)
+    private static DuplicationImpact CalculateDuplicationImpact(List<CodeBlock> blocks, double similarity)
     {
         var avgComplexity = blocks.Average(cb => cb.Complexity.OverallScore);
         var blockCount = blocks.Count;
@@ -2466,45 +2164,38 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         };
     }
 
-    private double EstimateParameterComplexity(DuplicateGroup group)
+    private static double EstimateParameterComplexity(DuplicateGroup group)
     {
         // Simplified estimation based on line count and complexity
         return group.LineCount * 0.1 + group.Complexity * 0.2;
     }
 
-    private int EstimateInheritanceDepth(DuplicateGroup group)
-    {
-        // Simplified estimation - assume moderate inheritance depth
-        return 2;
-    }
+    // Simplified estimation - assume moderate inheritance depth
+    private const int EstimatedInheritanceDepth = 2;
 
     #endregion
 
-    #region Dependency Validation
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting duplicate code detection for project: {ProjectPath}")]
+    private static partial void LogStartingDuplicateDetection(ILogger logger, string projectPath);
 
-    /// <summary>
-    /// Basic dependency validation for refactoring suggestions
-    /// TODO: Enhance with comprehensive Roslyn-based call analysis
-    /// </summary>
-    private async Task ValidateBasicDependenciesAsync(
-        string groupId,
-        List<DependencyImpact> dependencyImpacts,
-        CancellationToken cancellationToken)
-    {
-        // Basic implementation - check if duplicate groups contain public methods
-        // that could have external dependencies
-        // For now, add a low-risk dependency impact note
-        // Future enhancement: Use Roslyn to analyze actual call chains
-        dependencyImpacts.Add(new DependencyImpact
-        {
-            DependentFile = $"DuplicateGroup_{groupId}",
-            ImpactType = DependencyImpactType.Minor,
-            Description = $"Duplicate code group {groupId} may have external dependencies",
-            IsBreakingChange = false
-        });
+    [LoggerMessage(Level = LogLevel.Information, Message = "Duplicate detection completed in {Duration}ms. Found {GroupCount} duplicate groups affecting {FileCount} files.")]
+    private static partial void LogDuplicateDetectionCompleted(ILogger logger, double duration, int groupCount, int fileCount);
 
-        await Task.CompletedTask;
-    }
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error during duplicate code detection")]
+    private static partial void LogDuplicateDetectionError(ILogger logger, Exception exception);
 
-    #endregion
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting duplicate detection for {FileCount} specific files")]
+    private static partial void LogStartingFileDuplicateDetection(ILogger logger, int fileCount);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error during duplicate detection in specific files")]
+    private static partial void LogFileDuplicateDetectionError(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to initialize Roslyn workspace for path: {ProjectPath}")]
+    private static partial void LogWorkspaceInitializationFailed(ILogger logger, Exception exception, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No compilation available for workspace")]
+    private static partial void LogNoCompilation(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to extract code blocks from file: {FilePath}")]
+    private static partial void LogCodeBlockExtractionFailed(ILogger logger, Exception exception, string filePath);
 }

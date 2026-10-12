@@ -15,15 +15,15 @@ namespace MCPsharp.Tests;
 [TestFixture]
 public abstract class TestBase
 {
-    protected ILogger<T> CreateNullLogger<T>() => NullLogger<T>.Instance;
-    protected ILogger CreateNullLogger() => NullLogger.Instance;
-    protected ILoggerFactory CreateNullLoggerFactory() => NullLoggerFactory.Instance;
+    protected static ILogger<T> CreateNullLogger<T>() => NullLogger<T>.Instance;
+    protected static ILogger CreateNullLogger() => NullLogger.Instance;
+    protected static ILoggerFactory CreateNullLoggerFactory() => NullLoggerFactory.Instance;
 
     /// <summary>
     /// Creates a temporary directory for test operations
     /// </summary>
     /// <returns>Path to temporary directory</returns>
-    protected string CreateTempDirectory()
+    protected static string CreateTempDirectory()
     {
         var tempPath = Path.Combine(Path.GetTempPath(), "MCPsharp_Tests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempPath);
@@ -37,7 +37,7 @@ public abstract class TestBase
     /// <param name="extension">File extension (including dot)</param>
     /// <param name="directory">Directory to create file in (optional)</param>
     /// <returns>Path to temporary file</returns>
-    protected string CreateTempFile(string content, string extension = ".cs", string? directory = null)
+    protected static string CreateTempFile(string content, string extension = ".cs", string? directory = null)
     {
         var dir = directory ?? CreateTempDirectory();
         var filePath = Path.Combine(dir, $"{Guid.NewGuid()}{extension}");
@@ -49,7 +49,7 @@ public abstract class TestBase
     /// Cleans up a directory recursively
     /// </summary>
     /// <param name="path">Directory path to clean up</param>
-    protected void CleanupDirectory(string path)
+    protected static void CleanupDirectory(string path)
     {
         try
         {
@@ -68,7 +68,7 @@ public abstract class TestBase
     /// Cleans up a file
     /// </summary>
     /// <param name="path">File path to clean up</param>
-    protected void CleanupFile(string path)
+    protected static void CleanupFile(string path)
     {
         try
         {
@@ -177,7 +177,7 @@ public abstract class PerformanceTestBase : TestBase
     /// <param name="iterations">Number of iterations to run</param>
     /// <param name="warmup">Number of warmup iterations</param>
     /// <returns>Execution time statistics</returns>
-    protected PerformanceResult MeasurePerformance(Action action, int iterations = DefaultMeasurementIterations, int warmup = DefaultWarmupIterations)
+    protected static PerformanceResult MeasurePerformance(Action action, int iterations = DefaultMeasurementIterations, int warmup = DefaultWarmupIterations)
     {
         // Warmup
         for (int i = 0; i < warmup; i++)
@@ -204,7 +204,7 @@ public abstract class PerformanceTestBase : TestBase
     /// <param name="iterations">Number of iterations to run</param>
     /// <param name="warmup">Number of warmup iterations</param>
     /// <returns>Execution time statistics</returns>
-    protected async Task<PerformanceResult> MeasurePerformanceAsync(Func<Task> action, int iterations = DefaultMeasurementIterations, int warmup = DefaultWarmupIterations)
+    protected static async Task<PerformanceResult> MeasurePerformanceAsync(Func<Task> action, int iterations = DefaultMeasurementIterations, int warmup = DefaultWarmupIterations)
     {
         // Warmup
         for (int i = 0; i < warmup; i++)
@@ -230,7 +230,7 @@ public abstract class PerformanceTestBase : TestBase
     /// <param name="result">Performance result to validate</param>
     /// <param name="maxAverageTime">Maximum allowed average time</param>
     /// <param name="maxTime">Maximum allowed time for any iteration</param>
-    protected void AssertPerformance(PerformanceResult result, TimeSpan maxAverageTime, TimeSpan? maxTime = null)
+    protected static void AssertPerformance(PerformanceResult result, TimeSpan maxAverageTime, TimeSpan? maxTime = null)
     {
         Assert.That(result.AverageTime, Is.LessThanOrEqualTo(maxAverageTime),
             $"Average time {result.AverageTime.TotalMilliseconds:F2}ms exceeds maximum {maxAverageTime.TotalMilliseconds:F2}ms");

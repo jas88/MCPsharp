@@ -10,8 +10,10 @@ namespace MCPsharp.Services.Phase3.SqlMigration;
 /// <summary>
 /// Responsible for parsing Entity Framework migration files and extracting operations
 /// </summary>
-internal class MigrationParser
+internal sealed partial class MigrationParser
 {
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+
     private readonly ILogger<MigrationParser> _logger;
     private readonly Dictionary<string, Regex> _sqlOperationPatterns;
 
@@ -21,25 +23,25 @@ internal class MigrationParser
 
         _sqlOperationPatterns = new Dictionary<string, Regex>
         {
-            ["CreateTable"] = new Regex(@"CreateTable\s*\(\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["AddColumn"] = new Regex(@"AddColumn\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["DropColumn"] = new Regex(@"DropColumn\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["AlterColumn"] = new Regex(@"AlterColumn\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["DropTable"] = new Regex(@"DropTable\s*\(\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["RenameTable"] = new Regex(@"RenameTable\s*\(\s*name:\s*[""']([^'""]+)[""']\s*,\s*newName:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["CreateIndex"] = new Regex(@"CreateIndex\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["DropIndex"] = new Regex(@"DropIndex\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["AddForeignKey"] = new Regex(@"AddForeignKey\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["DropForeignKey"] = new Regex(@"DropForeignKey\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["AddPrimaryKey"] = new Regex(@"AddPrimaryKey\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["DropPrimaryKey"] = new Regex(@"DropPrimaryKey\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            ["Sql"] = new Regex(@"Sql\s*\(\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled)
+            ["CreateTable"] = new Regex(@"CreateTable\s*\(\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["AddColumn"] = new Regex(@"AddColumn\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["DropColumn"] = new Regex(@"DropColumn\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["AlterColumn"] = new Regex(@"AlterColumn\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["DropTable"] = new Regex(@"DropTable\s*\(\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["RenameTable"] = new Regex(@"RenameTable\s*\(\s*name:\s*[""']([^'""]+)[""']\s*,\s*newName:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["CreateIndex"] = new Regex(@"CreateIndex\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["DropIndex"] = new Regex(@"DropIndex\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["AddForeignKey"] = new Regex(@"AddForeignKey\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["DropForeignKey"] = new Regex(@"DropForeignKey\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["AddPrimaryKey"] = new Regex(@"AddPrimaryKey\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["DropPrimaryKey"] = new Regex(@"DropPrimaryKey\s*\(\s*table:\s*[""']([^'""]+)[""']\s*,\s*name:\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout),
+            ["Sql"] = new Regex(@"Sql\s*\(\s*[""']([^'""]+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout)
         };
     }
 
     public async Task<MigrationInfo> ParseMigrationFileAsync(string migrationFilePath, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Parsing migration file: {FilePath}", migrationFilePath);
+        LogParsingMigrationFile(_logger, migrationFilePath);
 
         if (!File.Exists(migrationFilePath))
             throw new FileNotFoundException($"Migration file not found: {migrationFilePath}");
@@ -54,7 +56,7 @@ internal class MigrationParser
         try
         {
             var code = await File.ReadAllTextAsync(migrationFilePath, cancellationToken);
-            var syntaxTree = CSharpSyntaxTree.ParseText(code);
+            var syntaxTree = CSharpSyntaxTree.ParseText(code, cancellationToken: cancellationToken);
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             // Find the migration class
@@ -100,19 +102,30 @@ internal class MigrationParser
             // Calculate checksum
             migration.Checksum = CalculateChecksum(code);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Failed to parse migration file: {FilePath}", migrationFilePath);
-            throw;
+            LogMigrationFileParseFailed(_logger, ex, migrationFilePath);
+            throw new InvalidOperationException($"Failed to parse migration file '{migrationFilePath}': {ex.Message}", ex);
         }
 
         return migration;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<string>> GetMigrationFilesAsync(string projectPath, CancellationToken cancellationToken = default)
+    public Task<List<string>> GetMigrationFilesAsync(string projectPath, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Searching for migration files in: {ProjectPath}", projectPath);
+        try
+        {
+            return Task.FromResult(GetMigrationFiles(projectPath));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<List<string>>(ex);
+        }
+    }
+
+    private List<string> GetMigrationFiles(string projectPath)
+    {
+        LogSearchingMigrationFiles(_logger, projectPath);
 
         var migrationFiles = new List<string>();
 
@@ -127,35 +140,34 @@ internal class MigrationParser
                 Path.Combine(projectPath, "Persistence", "Migrations")
             };
 
-            foreach (var searchPath in searchPaths)
+            foreach (var searchPath in searchPaths.Where(Directory.Exists))
             {
-                if (Directory.Exists(searchPath))
-                {
-                    var files = Directory.GetFiles(searchPath, "*.cs")
-                        .Where(f => !Path.GetFileName(f).StartsWith("DesignTime"))
-                        .OrderBy(f => f);
+                var files = Directory.GetFiles(searchPath, "*.cs")
+                    .Where(f => !Path.GetFileName(f).StartsWith("DesignTime", StringComparison.Ordinal))
+                    .OrderBy(f => f)
+                    .ToList();
 
-                    migrationFiles.AddRange(files);
-                    _logger.LogDebug("Found {Count} migration files in {Path}", files.Count(), searchPath);
-                }
+                migrationFiles.AddRange(files);
+                LogFoundMigrationFilesInPath(_logger, files.Count, searchPath);
             }
 
             // Also search the entire project if no specific directories found
-            if (!migrationFiles.Any())
+            if (migrationFiles.Count == 0)
             {
                 var allCsFiles = Directory.GetFiles(projectPath, "*.cs", SearchOption.AllDirectories)
                     .Where(f => Path.GetFileNameWithoutExtension(f).Length > 15) // EF migrations have long timestamps
-                    .Where(f => !Path.GetFileName(f).StartsWith("DesignTime"))
+                    .Where(f => !Path.GetFileName(f).StartsWith("DesignTime", StringComparison.Ordinal))
                     .Where(f => !Path.GetFileName(f).Contains("ModelSnapshot"))
-                    .OrderBy(f => f);
+                    .OrderBy(f => f)
+                    .ToList();
 
                 migrationFiles.AddRange(allCsFiles);
-                _logger.LogDebug("Found {Count} potential migration files in project", allCsFiles.Count());
+                LogFoundPotentialMigrationFiles(_logger, allCsFiles.Count);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to search for migration files in: {ProjectPath}", projectPath);
+            LogMigrationFileSearchFailed(_logger, ex, projectPath);
         }
 
         return migrationFiles.Distinct().ToList();
@@ -194,18 +206,6 @@ internal class MigrationParser
             Direction = direction,
             IsBreakingChange = IsBreakingOperation(operationType)
         };
-
-        // Extract parameters
-        if (invocation.ArgumentList != null)
-        {
-            foreach (var argument in invocation.ArgumentList.Arguments)
-            {
-                if (argument.Expression is LiteralExpressionSyntax _literal)
-                {
-                    // Handle literal arguments
-                }
-            }
-        }
 
         // Use regex patterns to extract table/column names
         var fullText = invocation.ToFullString();
@@ -248,7 +248,7 @@ internal class MigrationParser
         return operation;
     }
 
-    private bool IsBreakingOperation(string operationType)
+    private static bool IsBreakingOperation(string operationType)
     {
         var breakingOperations = new[]
         {
@@ -259,7 +259,7 @@ internal class MigrationParser
         return breakingOperations.Contains(operationType, StringComparer.OrdinalIgnoreCase);
     }
 
-    private List<string> ExtractMigrationDependencies(ClassDeclarationSyntax migrationClass)
+    private static List<string> ExtractMigrationDependencies(ClassDeclarationSyntax migrationClass)
     {
         var dependencies = new List<string>();
 
@@ -277,7 +277,7 @@ internal class MigrationParser
         return dependencies;
     }
 
-    private string? ExtractStringArgument(AttributeSyntax attribute)
+    private static string? ExtractStringArgument(AttributeSyntax attribute)
     {
         if (attribute.ArgumentList?.Arguments.Any() == true)
         {
@@ -290,12 +290,28 @@ internal class MigrationParser
         return null;
     }
 
-    private string CalculateChecksum(string content)
+    private static string CalculateChecksum(string content)
     {
         // Simple checksum implementation
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var bytes = System.Text.Encoding.UTF8.GetBytes(content);
-        var hash = sha256.ComputeHash(bytes);
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content));
         return Convert.ToBase64String(hash);
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Parsing migration file: {FilePath}")]
+    private static partial void LogParsingMigrationFile(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to parse migration file: {FilePath}")]
+    private static partial void LogMigrationFileParseFailed(ILogger logger, Exception exception, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Searching for migration files in: {ProjectPath}")]
+    private static partial void LogSearchingMigrationFiles(ILogger logger, string projectPath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Found {Count} migration files in {Path}")]
+    private static partial void LogFoundMigrationFilesInPath(ILogger logger, int count, string path);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Found {Count} potential migration files in project")]
+    private static partial void LogFoundPotentialMigrationFiles(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to search for migration files in: {ProjectPath}")]
+    private static partial void LogMigrationFileSearchFailed(ILogger logger, Exception exception, string projectPath);
 }

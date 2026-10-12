@@ -118,8 +118,7 @@ public class RecursiveService
         }
 
         // Ensure compilation is ready
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (_workspace.GetCompilations().Count == 0)
         {
             throw new InvalidOperationException("Failed to create compilation for test workspace");
         }

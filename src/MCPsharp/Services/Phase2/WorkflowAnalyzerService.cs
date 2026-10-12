@@ -1,4 +1,5 @@
 using MCPsharp.Models;
+using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -27,9 +28,9 @@ public class WorkflowAnalyzerService : IWorkflowAnalyzerService
                 var workflow = await ParseWorkflowAsync(workflowFile);
                 workflows.Add(workflow);
             }
-            catch
+            catch (Exception ex) when (ex is YamlException or InvalidDataException or IOException or UnauthorizedAccessException)
             {
-                // Skip invalid workflows
+                // Skip workflows that cannot be read or parsed
             }
         }
 
@@ -45,7 +46,8 @@ public class WorkflowAnalyzerService : IWorkflowAnalyzerService
             .IgnoreUnmatchedProperties()
             .Build();
 
-        var workflow = deserializer.Deserialize<WorkflowYaml>(content);
+        var workflow = deserializer.Deserialize<WorkflowYaml?>(content)
+            ?? throw new InvalidDataException($"Workflow file '{workflowPath}' is empty");
 
         var jobs = new List<WorkflowJob>();
         if (workflow.Jobs != null)
@@ -108,14 +110,14 @@ public class WorkflowAnalyzerService : IWorkflowAnalyzerService
         {
             foreach (var step in job.Steps ?? [])
             {
-                if (step.Uses?.StartsWith("actions/setup-dotnet") == true)
+                if (step.Uses?.StartsWith("actions/setup-dotnet", StringComparison.Ordinal) == true)
                 {
                     var dotnetVersion = step.With?.GetValueOrDefault("dotnet-version");
                     if (dotnetVersion != null)
                     {
                         // Check if this matches project file target frameworks
                         var csprojFiles = Directory.GetFiles(projectPath, "*.csproj", SearchOption.AllDirectories);
-                        if (!csprojFiles.Any())
+                        if (csprojFiles.Length == 0)
                         {
                             issues.Add(new WorkflowValidationIssue
                             {
@@ -133,7 +135,7 @@ public class WorkflowAnalyzerService : IWorkflowAnalyzerService
                                 try
                                 {
                                     var csprojContent = await File.ReadAllTextAsync(csprojFile);
-                                    if (csprojContent.Contains("net8.0") && dotnetVersion?.Contains("6.0") == true)
+                                    if (csprojContent.Contains("net8.0", StringComparison.Ordinal) && dotnetVersion.Contains("6.0", StringComparison.Ordinal))
                                     {
                                         issues.Add(new WorkflowValidationIssue
                                         {
@@ -146,7 +148,7 @@ public class WorkflowAnalyzerService : IWorkflowAnalyzerService
                                         break; // Found version mismatch, no need to check more files
                                     }
                                 }
-                                catch
+                                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                                 {
                                     // Skip files we can't read
                                 }
@@ -161,26 +163,26 @@ public class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     // YAML structure classes
-    private class WorkflowYaml
+    internal sealed class WorkflowYaml
     {
-        public string? Name { get; set; }
-        public object? On { get; set; }
-        public Dictionary<string, string>? Env { get; set; }
-        public Dictionary<string, JobYaml>? Jobs { get; set; }
+        public string? Name { get; init; }
+        public object? On { get; init; }
+        public Dictionary<string, string>? Env { get; init; }
+        public Dictionary<string, JobYaml>? Jobs { get; init; }
     }
 
-    private class JobYaml
+    internal sealed class JobYaml
     {
-        public string? RunsOn { get; set; }
-        public Dictionary<string, string>? Env { get; set; }
-        public List<StepYaml>? Steps { get; set; }
+        public string? RunsOn { get; init; }
+        public Dictionary<string, string>? Env { get; init; }
+        public List<StepYaml>? Steps { get; init; }
     }
 
-    private class StepYaml
+    internal sealed class StepYaml
     {
-        public string? Name { get; set; }
-        public string? Uses { get; set; }
-        public string? Run { get; set; }
-        public Dictionary<string, string>? With { get; set; }
+        public string? Name { get; init; }
+        public string? Uses { get; init; }
+        public string? Run { get; init; }
+        public Dictionary<string, string>? With { get; init; }
     }
 }

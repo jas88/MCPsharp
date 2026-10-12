@@ -14,9 +14,15 @@ public interface IRoslynAnalyzerService
     Task<AnalyzerRunResult> RunAnalyzersAsync(string targetPath, IEnumerable<string>? analyzerIds = null, CancellationToken cancellationToken = default);
     ImmutableArray<IAnalyzer> GetLoadedAnalyzers();
     IAnalyzer? GetAnalyzer(string analyzerId);
+
+    /// <summary>
+    /// Run the configured analyzer auto-load (if any) so <see cref="GetLoadedAnalyzers"/> reflects it
+    /// without having to run the analyzers first.
+    /// </summary>
+    Task EnsureAnalyzersLoadedAsync(CancellationToken cancellationToken = default);
 }
 
-public class RoslynAnalyzerService : IRoslynAnalyzerService
+public partial class RoslynAnalyzerService : IRoslynAnalyzerService
 {
     private readonly RoslynAnalyzerLoader _loader;
     private readonly IAnalyzerHost _analyzerHost;
@@ -43,7 +49,7 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
     {
         try
         {
-            _logger.LogInformation("Loading Roslyn analyzers from {AssemblyPath}", assemblyPath);
+            LogLoadingAnalyzers(_logger, assemblyPath);
 
             var analyzers = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath, cancellationToken);
 
@@ -56,14 +62,13 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
                 }
             }
 
-            _logger.LogInformation("Loaded {Count} analyzers from {AssemblyPath}",
-                analyzers.Length, assemblyPath);
+            LogLoadedAnalyzers(_logger, analyzers.Length, assemblyPath);
 
             return analyzers;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading analyzers from {AssemblyPath}", assemblyPath);
+            LogErrorLoadingAnalyzers(_logger, ex, assemblyPath);
             return ImmutableArray<IAnalyzer>.Empty;
         }
     }
@@ -74,7 +79,7 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
     {
         try
         {
-            _logger.LogInformation("Discovering analyzer assemblies in {Directory}", directory);
+            LogDiscoveringAssemblies(_logger, directory);
 
             var assemblyPaths = _loader.DiscoverAnalyzerAssemblies(directory, recursive: true);
             var allAnalyzers = new List<IAnalyzer>();
@@ -85,14 +90,13 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
                 allAnalyzers.AddRange(analyzers);
             }
 
-            _logger.LogInformation("Loaded {Count} total analyzers from {Directory}",
-                allAnalyzers.Count, directory);
+            LogLoadedTotalAnalyzers(_logger, allAnalyzers.Count, directory);
 
             return allAnalyzers.ToImmutableArray();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading analyzers from directory {Directory}", directory);
+            LogErrorLoadingFromDirectory(_logger, ex, directory);
             return ImmutableArray<IAnalyzer>.Empty;
         }
     }
@@ -106,7 +110,7 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
 
         try
         {
-            _logger.LogInformation("Running analyzers on {TargetPath}", targetPath);
+            LogRunningAnalyzersOn(_logger, targetPath);
 
             // Auto-load analyzers if not already loaded
             await EnsureAnalyzersAutoLoadedAsync(cancellationToken);
@@ -142,13 +146,13 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
                 };
             }
 
-            _logger.LogInformation("Running {Count} analyzers", analyzersToRun.Length);
+            LogRunningAnalyzerCount(_logger, analyzersToRun.Length);
 
             // Run each analyzer
             var allIssues = new List<AnalyzerIssue>();
             var analysisResults = new List<AnalysisResult>();
 
-            foreach (var analyzer in analyzersToRun)
+            foreach (var analyzerId in analyzersToRun.Select(a => a.Id))
             {
                 try
                 {
@@ -158,7 +162,7 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
 
                     // Use the analyzer host to run the analyzer
                     var result = await _analyzerHost.RunAnalyzerAsync(
-                        analyzer.Id,
+                        analyzerId,
                         targetPath,
                         options: null,
                         cancellationToken);
@@ -169,7 +173,7 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
                         var issues = result.Findings.Select(f => new AnalyzerIssue
                         {
                             RuleId = f.Id,
-                            AnalyzerId = analyzer.Id,
+                            AnalyzerId = analyzerId,
                             Severity = f.Severity switch
                             {
                                 FindingSeverity.Info => IssueSeverity.Info,
@@ -191,15 +195,14 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
                         analysisResults.Add(new AnalysisResult
                         {
                             FilePath = targetPath,
-                            AnalyzerId = analyzer.Id,
+                            AnalyzerId = analyzerId,
                             StartTime = analysisStartTime,
                             EndTime = DateTime.UtcNow,
                             Success = true,
                             Issues = issues
                         });
 
-                        _logger.LogDebug("Analyzer {AnalyzerId} found {Count} issues",
-                            analyzer.Id, result.Findings.Count);
+                        LogAnalyzerFoundIssues(_logger, analyzerId, result.Findings.Count);
                     }
                     else
                     {
@@ -207,7 +210,7 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
                         analysisResults.Add(new AnalysisResult
                         {
                             FilePath = targetPath,
-                            AnalyzerId = analyzer.Id,
+                            AnalyzerId = analyzerId,
                             StartTime = analysisStartTime,
                             EndTime = DateTime.UtcNow,
                             Success = false,
@@ -217,12 +220,12 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
                 }
                 catch (OperationCanceledException)
                 {
-                    _logger.LogInformation("Analyzer run cancelled");
+                    LogAnalyzerRunCancelled(_logger);
                     throw;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error running analyzer {AnalyzerId}", analyzer.Id);
+                    LogErrorRunningAnalyzer(_logger, ex, analyzerId);
                 }
             }
 
@@ -254,7 +257,7 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error running analyzers on {TargetPath}", targetPath);
+            LogErrorRunningAnalyzers(_logger, ex, targetPath);
 
             return new AnalyzerRunResult
             {
@@ -274,6 +277,10 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
         }
     }
 
+    /// <inheritdoc />
+    public Task EnsureAnalyzersLoadedAsync(CancellationToken cancellationToken = default) =>
+        EnsureAnalyzersAutoLoadedAsync(cancellationToken);
+
     public IAnalyzer? GetAnalyzer(string analyzerId)
     {
         lock (_lock)
@@ -289,7 +296,7 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
     {
         if (_autoLoadService == null)
         {
-            _logger.LogDebug("Auto-load service not available, skipping auto-load");
+            LogAutoLoadUnavailable(_logger);
             return;
         }
 
@@ -304,29 +311,70 @@ public class RoslynAnalyzerService : IRoslynAnalyzerService
                 {
                     foreach (var analyzer in result.LoadedAnalyzers)
                     {
-                        if (!_loadedAnalyzers.ContainsKey(analyzer.Id))
-                        {
-                            _loadedAnalyzers[analyzer.Id] = analyzer;
-                        }
+                        _loadedAnalyzers.TryAdd(analyzer.Id, analyzer);
                     }
                 }
 
-                _logger.LogInformation("Auto-loaded {Count} analyzers in {Duration}ms",
-                    result.LoadedAnalyzers.Length,
-                    result.LoadDuration.TotalMilliseconds);
+                LogAutoLoaded(_logger, result.LoadedAnalyzers.Length, result.LoadDuration.TotalMilliseconds);
             }
-            else if (!result.Success)
+            else if (!result.Success && _logger.IsEnabled(LogLevel.Warning))
             {
-                _logger.LogWarning("Auto-load failed: {Message}. Errors: {Errors}",
-                    result.Message,
-                    string.Join("; ", result.Errors));
+                LogAutoLoadFailed(_logger, result.Message, string.Join("; ", result.Errors));
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during analyzer auto-load");
+            LogErrorDuringAutoLoad(_logger, ex);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loading Roslyn analyzers from {AssemblyPath}")]
+    private static partial void LogLoadingAnalyzers(ILogger logger, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} analyzers from {AssemblyPath}")]
+    private static partial void LogLoadedAnalyzers(ILogger logger, int count, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzers from {AssemblyPath}")]
+    private static partial void LogErrorLoadingAnalyzers(ILogger logger, Exception exception, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Discovering analyzer assemblies in {Directory}")]
+    private static partial void LogDiscoveringAssemblies(ILogger logger, string directory);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} total analyzers from {Directory}")]
+    private static partial void LogLoadedTotalAnalyzers(ILogger logger, int count, string directory);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzers from directory {Directory}")]
+    private static partial void LogErrorLoadingFromDirectory(ILogger logger, Exception exception, string directory);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Running analyzers on {TargetPath}")]
+    private static partial void LogRunningAnalyzersOn(ILogger logger, string targetPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Running {Count} analyzers")]
+    private static partial void LogRunningAnalyzerCount(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Analyzer {AnalyzerId} found {Count} issues")]
+    private static partial void LogAnalyzerFoundIssues(ILogger logger, string analyzerId, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Analyzer run cancelled")]
+    private static partial void LogAnalyzerRunCancelled(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error running analyzer {AnalyzerId}")]
+    private static partial void LogErrorRunningAnalyzer(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error running analyzers on {TargetPath}")]
+    private static partial void LogErrorRunningAnalyzers(ILogger logger, Exception exception, string targetPath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Auto-load service not available, skipping auto-load")]
+    private static partial void LogAutoLoadUnavailable(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Auto-loaded {Count} analyzers in {Duration}ms")]
+    private static partial void LogAutoLoaded(ILogger logger, int count, double duration);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Auto-load failed: {Message}. Errors: {Errors}")]
+    private static partial void LogAutoLoadFailed(ILogger logger, string? message, string errors);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error during analyzer auto-load")]
+    private static partial void LogErrorDuringAutoLoad(ILogger logger, Exception exception);
 }
 
 /// <summary>

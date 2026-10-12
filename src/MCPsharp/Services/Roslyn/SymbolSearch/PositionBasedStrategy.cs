@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MCPsharp.Services.Roslyn.SymbolSearch;
 
@@ -9,17 +10,17 @@ namespace MCPsharp.Services.Roslyn.SymbolSearch;
 /// This is the most precise strategy when location information is available.
 /// Uses Roslyn's SymbolFinder.FindSymbolAtPositionAsync().
 /// </summary>
-public class PositionBasedStrategy : ISymbolSearchStrategy
+public partial class PositionBasedStrategy : ISymbolSearchStrategy
 {
     private readonly RoslynWorkspace _workspace;
-    private readonly ILogger<PositionBasedStrategy>? _logger;
+    private readonly ILogger<PositionBasedStrategy> _logger;
 
     public string StrategyName => "PositionBased";
 
     public PositionBasedStrategy(RoslynWorkspace workspace, ILogger<PositionBasedStrategy>? logger = null)
     {
         _workspace = workspace;
-        _logger = logger;
+        _logger = logger ?? NullLogger<PositionBasedStrategy>.Instance;
     }
 
     public bool IsApplicableFor(SymbolKind kind)
@@ -35,7 +36,7 @@ public class PositionBasedStrategy : ISymbolSearchStrategy
             !request.Line.HasValue ||
             !request.Column.HasValue)
         {
-            _logger?.LogDebug("PositionBasedStrategy skipped - no location information");
+            LogSkippedNoLocation(_logger);
             return new List<ISymbol>();
         }
 
@@ -44,22 +45,21 @@ public class PositionBasedStrategy : ISymbolSearchStrategy
             var document = _workspace.GetDocument(request.FilePath);
             if (document == null)
             {
-                _logger?.LogWarning("Document not found: {FilePath}", request.FilePath);
+                LogDocumentNotFound(_logger, request.FilePath);
                 return new List<ISymbol>();
             }
 
             var syntaxTree = await document.GetSyntaxTreeAsync(ct);
             if (syntaxTree == null)
             {
-                _logger?.LogWarning("No syntax tree for document: {FilePath}", request.FilePath);
+                LogNoSyntaxTree(_logger, request.FilePath);
                 return new List<ISymbol>();
             }
 
             var text = await syntaxTree.GetTextAsync(ct);
             if (request.Line.Value < 1 || request.Line.Value > text.Lines.Count)
             {
-                _logger?.LogWarning("Line {Line} out of range for document: {FilePath}",
-                    request.Line.Value, request.FilePath);
+                LogLineOutOfRange(_logger, request.Line.Value, request.FilePath);
                 return new List<ISymbol>();
             }
 
@@ -73,20 +73,38 @@ public class PositionBasedStrategy : ISymbolSearchStrategy
 
             if (symbol != null)
             {
-                _logger?.LogDebug("PositionBasedStrategy found symbol '{Name}' at {FilePath}:{Line}:{Column}",
-                    symbol.Name, request.FilePath, request.Line.Value, column);
+                LogFoundSymbol(_logger, symbol.Name, request.FilePath, request.Line.Value, column);
                 return new List<ISymbol> { symbol };
             }
 
-            _logger?.LogDebug("PositionBasedStrategy found no symbol at {FilePath}:{Line}:{Column}",
-                request.FilePath, request.Line.Value, column);
+            LogNoSymbolFound(_logger, request.FilePath, request.Line.Value, column);
             return new List<ISymbol>();
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error in PositionBasedStrategy at {FilePath}:{Line}:{Column}",
-                request.FilePath, request.Line, request.Column);
+            LogSearchError(_logger, ex, request.FilePath, request.Line, request.Column);
             return new List<ISymbol>();
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "PositionBasedStrategy skipped - no location information")]
+    private static partial void LogSkippedNoLocation(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Document not found: {FilePath}")]
+    private static partial void LogDocumentNotFound(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No syntax tree for document: {FilePath}")]
+    private static partial void LogNoSyntaxTree(ILogger logger, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Line {Line} out of range for document: {FilePath}")]
+    private static partial void LogLineOutOfRange(ILogger logger, int line, string filePath);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "PositionBasedStrategy found symbol '{Name}' at {FilePath}:{Line}:{Column}")]
+    private static partial void LogFoundSymbol(ILogger logger, string name, string filePath, int line, int column);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "PositionBasedStrategy found no symbol at {FilePath}:{Line}:{Column}")]
+    private static partial void LogNoSymbolFound(ILogger logger, string filePath, int line, int column);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error in PositionBasedStrategy at {FilePath}:{Line}:{Column}")]
+    private static partial void LogSearchError(ILogger logger, Exception exception, string? filePath, int? line, int? column);
 }

@@ -32,6 +32,7 @@ public class McpToolsIntegrationTests : IntegrationTestBase
     {
         base.Setup();
         SetupRealisticEnvironment();
+        _bulkEdit = new BulkEditService();
     }
 
     // Initialize services in async method to properly setup workspace
@@ -46,13 +47,13 @@ public class McpToolsIntegrationTests : IntegrationTestBase
         _typeUsage = new TypeUsageService(_workspace, _symbolQuery);
         _referenceFinder = new AdvancedReferenceFinderService(
             _workspace, _symbolQuery, _callerAnalysis, _callChain, _typeUsage);
-        _bulkEdit = new BulkEditService();
     }
 
     [TearDown]
     protected override void TearDown()
     {
         _workspace?.Dispose();
+        _bulkEdit?.Dispose();
         base.TearDown();
     }
 
@@ -315,8 +316,9 @@ public class McpToolsIntegrationTests : IntegrationTestBase
         // Should have processed 2 files (those containing TODO:)
         Assert.That(result.FileResults.Count(f => f.ChangeCount > 0), Is.EqualTo(2));
 
-        // Should have skipped 1 file (no TODO) - using BulkFileEditResult structure
-        Assert.That(result.FileResults.Count(f => !f.Success && f.ChangeCount == 0), Is.EqualTo(1));
+        // Should have skipped 1 file (no TODO); a skipped file is not a failure
+        Assert.That(result.FileResults.Count(f => f.Skipped && f.ChangeCount == 0), Is.EqualTo(1));
+        Assert.That(result.FailedFiles, Is.EqualTo(0));
     }
 
     [Test]

@@ -1,0 +1,5 @@
+# Test-specific analyzer overrides (inherits from root .editorconfig)
+
+[*.cs]
+# Test names conventionally use Method_Scenario_ExpectedResult with underscores
+dotnet_diagnostic.CA1707.severity = none  # Identifiers should not contain underscores

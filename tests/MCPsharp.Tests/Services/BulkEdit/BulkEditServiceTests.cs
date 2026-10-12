@@ -29,12 +29,25 @@ public class BulkEditServiceTests : FileServiceTestBase
         _service = new BulkEditService(CreateNullLogger<BulkEditService>());
     }
 
+    [TearDown]
+    protected override void TearDown()
+    {
+        _service?.Dispose();
+        base.TearDown();
+    }
+
     [Test]
     public void Constructor_WithLogger_ShouldInitializeSuccessfully()
     {
         // Act & Assert
-        Assert.DoesNotThrow(() => new BulkEditService(CreateNullLogger<BulkEditService>()));
-        Assert.DoesNotThrow(() => new BulkEditService(null)); // Logger should be optional
+        Assert.DoesNotThrow(() =>
+        {
+            using var service = new BulkEditService(CreateNullLogger<BulkEditService>());
+        });
+        Assert.DoesNotThrow(() =>
+        {
+            using var service = new BulkEditService(null); // Logger should be optional
+        });
     }
 
     [Test]
@@ -63,6 +76,57 @@ public class BulkEditServiceTests : FileServiceTestBase
     }
 
     [Test]
+    public async Task BulkReplaceAsync_GlobWithExcludedGlob_SkipsExcludedFiles()
+    {
+        var kept = CreateTestFile("Hello kept", ".cs", "src");
+        var generated = CreateTestFile("Hello generated", ".cs", Path.Combine("src", "Generated"));
+        var options = new BulkEditOptions
+        {
+            CreateBackups = false,
+            ExcludedFiles = new List<string> { Path.Combine(TempDirectory, "src", "Generated", "**") }
+        };
+
+        var result = await _service.BulkReplaceAsync(new[] { Path.Combine(TempDirectory, "**", "*.cs") }, "Hello", "Hi", options);
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.FileResults.Select(r => r.FilePath), Is.EquivalentTo(new[] { kept }));
+        Assert.That(await File.ReadAllTextAsync(kept), Is.EqualTo("Hi kept"));
+        Assert.That(await File.ReadAllTextAsync(generated), Is.EqualTo("Hello generated"));
+    }
+
+    [Test]
+    public async Task BulkReplaceAsync_ExplicitFilesWithExcludedFileAndDirectory_SkipsBoth()
+    {
+        var kept = CreateTestFile("Hello kept");
+        var excludedFile = CreateTestFile("Hello file");
+        var inExcludedDirectory = CreateTestFile("Hello directory", ".cs", "skip");
+        var options = new BulkEditOptions
+        {
+            CreateBackups = false,
+            ExcludedFiles = new List<string> { excludedFile, Path.Combine(TempDirectory, "skip") }
+        };
+
+        var result = await _service.BulkReplaceAsync(new[] { kept, excludedFile, inExcludedDirectory }, "Hello", "Hi", options);
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(await File.ReadAllTextAsync(kept), Is.EqualTo("Hi kept"));
+        Assert.That(await File.ReadAllTextAsync(excludedFile), Is.EqualTo("Hello file"));
+        Assert.That(await File.ReadAllTextAsync(inExcludedDirectory), Is.EqualTo("Hello directory"));
+    }
+
+    [TestCase("src/Generated/**", "src/Generated/A.g.cs", true)]
+    [TestCase("src/Generated/**", "src/Other/A.cs", false)]
+    [TestCase("**/*.g.cs", "deep/nested/A.g.cs", true)]
+    [TestCase("**/*.g.cs", "deep/nested/A.cs", false)]
+    [TestCase("src/*.cs", "src/sub/A.cs", false)]
+    public void CreateExclusionFilter_MatchesGlobRelativeToItsFixedDirectory(string pattern, string file, bool excluded)
+    {
+        var filter = BulkEditService.CreateExclusionFilter(Path.Combine(TempDirectory, pattern));
+
+        Assert.That(filter(Path.GetFullPath(Path.Combine(TempDirectory, file))), Is.EqualTo(excluded));
+    }
+
+    [Test]
     public async Task BulkReplaceAsync_WithNoMatches_ShouldSkipFiles()
     {
         // Arrange
@@ -83,7 +147,7 @@ public class BulkEditServiceTests : FileServiceTestBase
     }
 
     [Test]
-    public void BulkReplaceAsync_WithInvalidRegex_ShouldFail()
+    public async Task BulkReplaceAsync_WithInvalidRegex_ShouldFail()
     {
         // Arrange
         var testFile = CreateTestFile("Some content");
@@ -91,7 +155,7 @@ public class BulkEditServiceTests : FileServiceTestBase
         var invalidPattern = @"[unclosed";
 
         // Act & Assert
-        var ex = Assert.ThrowsAsync<RegexParseException>(async () =>
+        var ex = await Assert.ThrowsAsync<RegexParseException>(async () =>
             await _service.BulkReplaceAsync(files, invalidPattern, "replacement"));
 
         Assert.That(ex, Is.Not.Null);
@@ -202,6 +266,42 @@ public class BulkEditServiceTests : FileServiceTestBase
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
         Assert.That(result.FileResults[0].ChangeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task ConditionalEditAsync_WithCreateBackups_ShouldRecordBackupInResult()
+    {
+        // Arrange
+        const string originalContent = "TODO: Fix this issue\nSome other content";
+        var testFile = CreateTestFile(originalContent);
+        var condition = new BulkEditCondition
+        {
+            ConditionType = BulkConditionType.FileContains,
+            Pattern = "TODO:"
+        };
+        var edits = new List<TextEdit>
+        {
+            new ReplaceEdit
+            {
+                StartLine = 1,
+                StartColumn = 1,
+                EndLine = 1,
+                EndColumn = 1,
+                NewText = "FIXME: Fix this issue"
+            }
+        };
+        var options = new BulkEditOptions { CreateBackups = true };
+
+        // Act
+        var result = await _service.ConditionalEditAsync(new[] { testFile }, condition, edits, options);
+
+        // Assert
+        Assert.That(result.Success, Is.True);
+        var fileResult = result.FileResults[0];
+        Assert.That(fileResult.BackupCreated, Is.True);
+        Assert.That(fileResult.BackupPath, Is.Not.Null.And.Not.Empty);
+        Assert.That(File.Exists(fileResult.BackupPath), Is.True);
+        Assert.That(await File.ReadAllTextAsync(fileResult.BackupPath!), Is.EqualTo(originalContent));
     }
 
     [Test]
@@ -665,7 +765,7 @@ public class BulkEditServiceTests : FileServiceTestBase
         };
 
         // Filter to just .cs files to test glob functionality
-        var csFiles = files.Where(f => f.EndsWith(".cs")).ToArray();
+        var csFiles = files.Where(f => f.EndsWith(".cs", StringComparison.Ordinal)).ToArray();
 
         // Act
         var result = await _service.BulkReplaceAsync(csFiles, "Content", "Modified");

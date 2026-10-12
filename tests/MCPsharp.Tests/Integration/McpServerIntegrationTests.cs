@@ -13,6 +13,17 @@ namespace MCPsharp.Tests.Integration;
 [TestFixture]
 public class McpServerIntegrationTests
 {
+    private static readonly JsonSerializerOptions CamelCaseIndentedOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true
+    };
+
+    private static readonly JsonSerializerOptions CamelCaseOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     private string _testProjectRoot = null!;
     private FileOperationsService _fileService = null!;
 
@@ -114,9 +125,9 @@ public class McpServerIntegrationTests
         // Assert
         Assert.That(listResult, Is.Not.Null);
         Assert.That(listResult.TotalFiles, Is.GreaterThan(0));
-        Assert.That(listResult.Files, Has.Some.Matches<FileInfo>(f => f.RelativePath.Contains("Program.cs")));
-        Assert.That(listResult.Files, Has.Some.Matches<FileInfo>(f => f.RelativePath.Contains("Helper.cs")));
-        Assert.That(listResult.Files, Has.Some.Matches<FileInfo>(f => f.RelativePath.Contains("README.md")));
+        Assert.That(listResult.Files, Has.Some.Matches<FileInfo>(f => f is not null && f.RelativePath.Contains("Program.cs")));
+        Assert.That(listResult.Files, Has.Some.Matches<FileInfo>(f => f is not null && f.RelativePath.Contains("Helper.cs")));
+        Assert.That(listResult.Files, Has.Some.Matches<FileInfo>(f => f is not null && f.RelativePath.Contains("README.md")));
     }
 
     [Test]
@@ -131,7 +142,7 @@ public class McpServerIntegrationTests
         // Assert
         Assert.That(listResult, Is.Not.Null);
         Assert.That(listResult.TotalFiles, Is.EqualTo(3)); // Program.cs, Helper.cs, ProgramTests.cs
-        Assert.That(listResult.Files, Has.All.Matches<FileInfo>(f => f.RelativePath.EndsWith(".cs")));
+        Assert.That(listResult.Files, Has.All.Matches<FileInfo>(f => f is not null && f.RelativePath.EndsWith(".cs", StringComparison.Ordinal)));
         Assert.That(listResult.Pattern, Is.EqualTo("**/*.cs"));
     }
 
@@ -337,7 +348,7 @@ public class McpServerIntegrationTests
         // Debug: print error if failed
         if (!editResult.Success)
         {
-            throw new Exception($"Edit failed: {editResult.Error}");
+            throw new InvalidOperationException($"Edit failed: {editResult.Error}");
         }
         Assert.That(editResult.Success, Is.True);
 
@@ -361,7 +372,7 @@ public class McpServerIntegrationTests
 
         // Assert
         Assert.That(result.TotalFiles, Is.EqualTo(1));
-        Assert.That(result.Files, Has.Exactly(1).Matches<FileInfo>(f => f.RelativePath.Contains("TestProject.csproj")));
+        Assert.That(result.Files, Has.Exactly(1).Matches<FileInfo>(f => f is not null && f.RelativePath.Contains("TestProject.csproj")));
     }
 
     [Test]
@@ -375,7 +386,7 @@ public class McpServerIntegrationTests
 
         // Assert
         Assert.That(result.TotalFiles, Is.EqualTo(1));
-        Assert.That(result.Files, Has.Exactly(1).Matches<FileInfo>(f => f.RelativePath.Contains("ProgramTests.cs")));
+        Assert.That(result.Files, Has.Exactly(1).Matches<FileInfo>(f => f is not null && f.RelativePath.Contains("ProgramTests.cs")));
     }
 
     [Test]
@@ -437,11 +448,7 @@ public class McpServerIntegrationTests
         var listResult = _fileService.ListFiles("**/*.cs");
 
         // Act - Serialize to JSON (simulating JSON-RPC response)
-        var json = JsonSerializer.Serialize(listResult, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true
-        });
+        var json = JsonSerializer.Serialize(listResult, CamelCaseIndentedOptions);
 
         // Assert - Valid JSON structure
         Assert.That(json, Does.Contain("\"files\":"));
@@ -449,10 +456,7 @@ public class McpServerIntegrationTests
         Assert.That(json, Does.Contain("\"pattern\":"));
 
         // Deserialize back
-        var deserialized = JsonSerializer.Deserialize<FileListResult>(json, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        var deserialized = JsonSerializer.Deserialize<FileListResult>(json, CamelCaseOptions);
 
         Assert.That(deserialized, Is.Not.Null);
         Assert.That(deserialized!.TotalFiles, Is.EqualTo(listResult.TotalFiles));
@@ -466,11 +470,7 @@ public class McpServerIntegrationTests
         var readResult = await _fileService.ReadFileAsync("src/Program.cs");
 
         // Act - Serialize to JSON
-        var json = JsonSerializer.Serialize(readResult, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true
-        });
+        var json = JsonSerializer.Serialize(readResult, CamelCaseIndentedOptions);
 
         // Assert
         Assert.That(json, Does.Contain("\"success\": true"));
@@ -479,10 +479,7 @@ public class McpServerIntegrationTests
         Assert.That(json, Does.Contain("\"lineCount\":"));
 
         // Deserialize back
-        var deserialized = JsonSerializer.Deserialize<FileReadResult>(json, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        var deserialized = JsonSerializer.Deserialize<FileReadResult>(json, CamelCaseOptions);
 
         Assert.That(deserialized, Is.Not.Null);
         Assert.That(deserialized!.Success, Is.True);
@@ -527,7 +524,7 @@ public class McpServerIntegrationTests
         var results = await Task.WhenAll(tasks);
 
         // Assert - All should succeed
-        Assert.That(results, Has.All.Matches<FileReadResult>(r => r.Success == true));
+        Assert.That(results, Has.All.Matches<FileReadResult>(r => r is not null && r.Success == true));
         Assert.That(results, Has.Length.EqualTo(4));
     }
 
