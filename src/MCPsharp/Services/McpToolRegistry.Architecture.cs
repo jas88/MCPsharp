@@ -114,57 +114,6 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeDependencies(JsonDocument arguments, CancellationToken ct)
-    {
-        await EnsureWorkspaceInitializedAsync();
-
-        if (_architectureValidator == null)
-        {
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = "Architecture validation service is not available"
-            };
-        }
-
-        try
-        {
-            var projectPath = GetProjectPathFromArguments(arguments);
-            var definitionElement = arguments.RootElement.GetPropertyOrNull("definition");
-            MCPsharp.Models.Architecture.ArchitectureDefinition? definition = null;
-
-            if (definitionElement.HasValue && definitionElement.Value.ValueKind != JsonValueKind.Null)
-            {
-                definition = JsonSerializer.Deserialize<MCPsharp.Models.Architecture.ArchitectureDefinition>(definitionElement.Value.GetRawText(), ToolArgumentJsonOptions);
-            }
-
-            var analysis = await _architectureValidator.AnalyzeDependenciesAsync(projectPath, definition, ct);
-
-            return new ToolCallResult
-            {
-                Success = true,
-                Result = new Dictionary<string, object>
-                {
-                    ["nodes"] = analysis.Nodes,
-                    ["edges"] = analysis.Edges,
-                    ["circularDependencies"] = analysis.CircularDependencies,
-                    ["layerDependencies"] = analysis.LayerDependencies,
-                    ["dependencyMetrics"] = analysis.DependencyMetrics,
-                    ["analysisDuration"] = analysis.AnalysisDuration.TotalMilliseconds
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeDependencies));
-            return new ToolCallResult
-            {
-                Success = false,
-                Error = $"Error analyzing dependencies: {ex.Message}"
-            };
-        }
-    }
-
     private async Task<ToolCallResult> ExecuteGetArchitectureReport(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
