@@ -86,7 +86,7 @@ public sealed partial class BulkEditService
             var successfulRollbacks = 0;
 
             // Process each file rollback
-            var filesToRollback = rollbackInfo.Files ?? new List<RollbackFileInfo>();
+            var filesToRollback = rollbackInfo.Files;
             var tasks = filesToRollback.Select(async rollbackFile =>
             {
                 await _processingSemaphore.WaitAsync(cancellationToken);

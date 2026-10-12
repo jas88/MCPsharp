@@ -319,20 +319,9 @@ public class RollbackInfo
     public required string RollbackDirectory { get; set; }
 
     /// <summary>
-    /// List of file information for rollback - this can be set directly by RollbackService
+    /// Per-file rollback details (original path, backup path, checksums).
     /// </summary>
-    public IReadOnlyList<RollbackFileInfo> Files
-    {
-        get => _files ?? ModifiedFiles.Select(file => new RollbackFileInfo
-        {
-            OriginalPath = file,
-            BackupPath = BackupLocations.GetValueOrDefault(file, string.Empty),
-            WasCreated = false,
-            WasDeleted = false
-        }).ToList();
-        set => _files = value;
-    }
-    private IReadOnlyList<RollbackFileInfo>? _files;
+    public IReadOnlyList<RollbackFileInfo> Files { get; set; } = [];
 
     // Additional properties expected by RollbackService
 

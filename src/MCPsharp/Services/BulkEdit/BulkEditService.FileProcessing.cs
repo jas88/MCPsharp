@@ -167,7 +167,7 @@ public sealed partial class BulkEditService
                 return new FileBulkEditResult
                 {
                     FilePath = filePath,
-                    Success = false,
+                    Success = true,
                     ChangesApplied = 0,
                     ChangesCount = 0,
                     Skipped = true,
