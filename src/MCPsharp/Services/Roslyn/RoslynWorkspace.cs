@@ -276,11 +276,13 @@ public partial class RoslynWorkspace : IDisposable
         foreach (var compilation in GetCompilations())
         {
             var diagnostics = compilation.GetDiagnostics(ct);
-            var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+            // Warnings promoted by TreatWarningsAsErrors don't break compilation, and diagnostic suppressors
+            // (which a real build runs but GetDiagnostics does not) may silence them, so count them as warnings
+            var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error && !d.IsWarningAsError).ToList();
             _health.ErrorCount += errors.Count;
-            _health.WarningCount += diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
-            // Generator failures are warnings but explain the errors that follow, so list them first
-            // One error per distinct ID first, so a flood of one error doesn't hide the others
+            _health.WarningCount += diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning || d.IsWarningAsError);
+            // Generator failures are warnings but explain the errors that follow, so list them first,
+            // then one error per distinct ID, so a flood of one error doesn't hide the others
             errorSamples.AddRange(diagnostics
                 .Where(d => d.Id is "CS8784" or "CS8785")
                 .Concat(errors.DistinctBy(d => d.Id, StringComparer.Ordinal))
