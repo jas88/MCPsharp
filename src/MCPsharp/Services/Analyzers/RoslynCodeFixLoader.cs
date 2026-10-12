@@ -41,7 +41,7 @@ public partial class RoslynCodeFixLoader
             var codeFixProviders = new List<RoslynCodeFixAdapter>();
 
             // Load assembly
-            var assembly = Assembly.LoadFrom(assemblyPath);
+            var assembly = AnalyzerAssemblyLoadContext.LoadAnalyzerAssembly(assemblyPath);
 
             // Find all types that inherit from CodeFixProvider
             var codeFixTypes = assembly.GetTypes()
@@ -138,7 +138,7 @@ public partial class RoslynCodeFixLoader
                 try
                 {
                     // Quick check: load assembly and see if it contains CodeFixProviders
-                    var assembly = Assembly.LoadFrom(dllFile);
+                    var assembly = AnalyzerAssemblyLoadContext.LoadAnalyzerAssembly(dllFile);
 
                     var hasCodeFixProviders = assembly.GetTypes()
                         .Any(t => t.IsClass
@@ -222,7 +222,7 @@ public partial class RoslynCodeFixLoader
             if (!File.Exists(assemblyPath))
                 return null;
 
-            var assembly = Assembly.LoadFrom(assemblyPath);
+            var assembly = AnalyzerAssemblyLoadContext.LoadAnalyzerAssembly(assemblyPath);
             var codeFixTypes = assembly.GetTypes()
                 .Where(t => t.IsClass
                     && !t.IsAbstract

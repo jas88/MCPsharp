@@ -44,7 +44,7 @@ public partial class RoslynAnalyzerLoader
             var analyzers = new List<IAnalyzer>();
 
             // Load assembly
-            var assembly = Assembly.LoadFrom(assemblyPath);
+            var assembly = AnalyzerAssemblyLoadContext.LoadAnalyzerAssembly(assemblyPath);
 
             // Find all types that inherit from DiagnosticAnalyzer
             var analyzerTypes = assembly.GetTypes()
@@ -143,7 +143,7 @@ public partial class RoslynAnalyzerLoader
                 try
                 {
                     // Quick check: load assembly and see if it contains DiagnosticAnalyzers
-                    var assembly = Assembly.LoadFrom(dllFile);
+                    var assembly = AnalyzerAssemblyLoadContext.LoadAnalyzerAssembly(dllFile);
 
                     var hasAnalyzers = assembly.GetTypes()
                         .Any(t => t.IsClass
@@ -231,7 +231,7 @@ public partial class RoslynAnalyzerLoader
             if (!File.Exists(assemblyPath))
                 return null;
 
-            var assembly = Assembly.LoadFrom(assemblyPath);
+            var assembly = AnalyzerAssemblyLoadContext.LoadAnalyzerAssembly(assemblyPath);
             var analyzerTypes = assembly.GetTypes()
                 .Where(t => t.IsClass
                     && !t.IsAbstract
