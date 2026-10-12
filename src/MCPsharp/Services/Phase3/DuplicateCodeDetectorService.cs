@@ -347,8 +347,17 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
 
     #region Private Implementation Methods
 
+    /// <summary>
+    /// Load <paramref name="projectPath"/> into the shared workspace unless it already holds that project:
+    /// reloading a real solution is expensive and discards state other tools rely on.
+    /// </summary>
     private async Task EnsureWorkspaceInitialized(string projectPath)
     {
+        if (_workspace.IsLoadedFrom(projectPath))
+        {
+            return;
+        }
+
         try
         {
             await _workspace.InitializeAsync(projectPath);

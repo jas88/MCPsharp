@@ -195,6 +195,58 @@ public class DuplicateCodeDetectorServiceTests
         Assert.That(validation.DependencyImpacts, Is.Empty);
     }
 
+    [Test]
+    public async Task DetectDuplicates_SecondCallForSameProject_ReusesLoadedWorkspace()
+    {
+        await WriteSourceAsync("Renamed.cs", RenamedClones);
+
+        var first = await _service.DetectDuplicatesAsync(_directory, MethodsOnly());
+        var solutionAfterFirstCall = _workspace.Solution;
+        var second = await _service.DetectDuplicatesAsync(_directory + Path.DirectorySeparatorChar, MethodsOnly());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.Success, Is.True, first.ErrorMessage);
+            Assert.That(second.Success, Is.True, second.ErrorMessage);
+            Assert.That(_workspace.Solution, Is.SameAs(solutionAfterFirstCall), "the workspace must not be reloaded");
+            Assert.That(_workspace.IsLoadedFrom(_directory), Is.True);
+        });
+    }
+
+    [Test]
+    public async Task DetectDuplicates_DifferentProject_ReinitialisesWorkspace()
+    {
+        await WriteSourceAsync("Renamed.cs", RenamedClones);
+        var otherDirectory = Path.Combine(_directory, "other");
+        Directory.CreateDirectory(otherDirectory);
+        await File.WriteAllTextAsync(Path.Combine(otherDirectory, "NearMiss.cs"), NearMissClones);
+
+        await _service.FindExactDuplicatesAsync(_directory);
+        var solutionForFirstProject = _workspace.Solution;
+        await _service.FindExactDuplicatesAsync(otherDirectory);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(_workspace.Solution, Is.Not.SameAs(solutionForFirstProject));
+            Assert.That(_workspace.IsLoadedFrom(otherDirectory), Is.True);
+            Assert.That(_workspace.IsLoadedFrom(_directory), Is.False);
+        });
+    }
+
+    [Test]
+    public async Task DetectDuplicates_TestWorkspace_IsReplacedByProjectLoad()
+    {
+        await WriteSourceAsync("Renamed.cs", RenamedClones);
+        await _workspace.InitializeTestWorkspaceAsync();
+        await _workspace.AddInMemoryDocumentAsync(Path.Combine(_directory, "InMemory.cs"), "public class InMemory { }");
+
+        var result = await _service.DetectDuplicatesAsync(_directory, MethodsOnly());
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(_workspace.IsLoadedFrom(_directory), Is.True, "a test workspace is not a load of the project");
+        Assert.That(result.DuplicateGroups.SelectMany(g => g.CodeBlocks).Select(b => b.ElementName), Is.SupersetOf(RenamedMethodNames));
+    }
+
     private static DuplicateDetectionOptions MethodsOnly() => new()
     {
         DetectionTypes = DuplicateDetectionTypes.Methods,

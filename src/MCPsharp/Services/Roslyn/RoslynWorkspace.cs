@@ -38,9 +38,35 @@ public partial class RoslynWorkspace : IDisposable
     public WorkspaceHealth GetHealth() => _health;
 
     /// <summary>
+    /// Full path passed to the last <see cref="InitializeAsync"/> that completed, or null when the
+    /// workspace was not loaded from a project path (never initialised, or a test workspace).
+    /// </summary>
+    public string? LoadedProjectPath { get; private set; }
+
+    /// <summary>
+    /// True when the workspace is initialised and was loaded by <see cref="InitializeAsync"/> from
+    /// <paramref name="projectPath"/> (compared as normalised full paths).
+    /// </summary>
+    public bool IsLoadedFrom(string projectPath) =>
+        IsInitialized &&
+        LoadedProjectPath != null &&
+        !string.IsNullOrEmpty(projectPath) &&
+        string.Equals(LoadedProjectPath, NormalizeProjectPath(projectPath), PathContainment.Comparison);
+
+    private static string NormalizeProjectPath(string projectPath) =>
+        Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectPath));
+
+    /// <summary>
     /// Initialize workspace with a project directory, .csproj file, or .sln/.slnx file
     /// </summary>
     public async Task InitializeAsync(string projectPath)
+    {
+        LoadedProjectPath = null;
+        await InitializeCoreAsync(projectPath);
+        LoadedProjectPath = NormalizeProjectPath(projectPath);
+    }
+
+    private async Task InitializeCoreAsync(string projectPath)
     {
         _health = new WorkspaceHealth { IsInitialized = false };
 
@@ -176,6 +202,7 @@ public partial class RoslynWorkspace : IDisposable
 
     private void CreateAdhocWorkspace(string projectName, IEnumerable<string> referencePaths)
     {
+        LoadedProjectPath = null;
         var adhocWorkspace = new AdhocWorkspace();
         _workspace?.Dispose();
         _workspace = adhocWorkspace;
