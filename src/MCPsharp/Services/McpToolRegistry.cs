@@ -67,10 +67,11 @@ public partial class McpToolRegistry
     private readonly IProgressTracker? _progressTracker;
     private readonly ITempFileManager? _tempFileManager;
 
-    // Consolidated services
-    private readonly UniversalFileOperations? _universalFileOps;
-    private readonly UnifiedAnalysisService? _unifiedAnalysis;
-    private readonly BulkOperationsHub? _bulkOperationsHub;
+    // Consolidated services. File, analysis and bulk services are rebound to the project
+    // root (and project-scoped Roslyn services) whenever a project is opened.
+    private UniversalFileOperations? _universalFileOps;
+    private UnifiedAnalysisService? _unifiedAnalysis;
+    private BulkOperationsHub? _bulkOperationsHub;
     private readonly StreamProcessingController? _streamController;
 
     // Static JSON schema fragments
@@ -145,6 +146,10 @@ public partial class McpToolRegistry
         _responseProcessor = new ResponseProcessor(responseConfig, responseLogger);
 
         _tools = RegisterTools();
+
+        // Register consolidated and Roslyn analyzer tools for the services that were supplied
+        RegisterConsolidatedTools();
+        RegisterRoslynAnalyzerTools();
 
         // Register AI-powered tools if available
         RegisterAITools();
@@ -245,10 +250,9 @@ public partial class McpToolRegistry
                 "compare_code_blocks" => await ExecuteCompareCodeBlocks(request.Arguments, ct),
                 "validate_refactoring" => await ExecuteValidateRefactoring(request.Arguments, ct),
                 // Roslyn Analyzer Tools
-                // TODO: Implement these methods or route to MCPSharpTools
-                // "load_roslyn_analyzers" => await ExecuteLoadRoslynAnalyzers(request.Arguments, ct),
-                // "run_roslyn_analyzers" => await ExecuteRunRoslynAnalyzers(request.Arguments, ct),
-                // "list_roslyn_analyzers" => await ExecuteListRoslynAnalyzers(request.Arguments, ct),
+                "load_roslyn_analyzers" => await ExecuteLoadRoslynAnalyzers(request.Arguments, ct),
+                "run_roslyn_analyzers" => await ExecuteRunRoslynAnalyzers(request.Arguments, ct),
+                "list_roslyn_analyzers" => ExecuteListRoslynAnalyzers(),
                 // Automated Code Fix Tools
                 "code_quality_analyze" => await ExecuteCodeQualityAnalyze(request.Arguments, ct),
                 "code_quality_fix" => await ExecuteCodeQualityFix(request.Arguments, ct),
@@ -276,37 +280,30 @@ public partial class McpToolRegistry
                 "detect_god_methods" => await ExecuteDetectGodMethods(request.Arguments, ct),
                 "analyze_code_smells" => await ExecuteAnalyzeCodeSmells(request.Arguments, ct),
                 // Refactoring tools
-                // TODO: Implement method extraction
-                // "extract_method" => await ExecuteExtractMethod(request.Arguments, ct),
+                "extract_method" => await ExecuteExtractMethod(request.Arguments, ct),
                 "get_optimization_recommendations" => await ExecuteGetOptimizationRecommendations(request.Arguments, ct),
-
-            // Consolidated Service Tool Routes
-            // TODO: Integrate these with consolidated services or implement methods
-            // Universal File Operations Tools
-            // "get_file_info" => await ExecuteGetFileInfo(request.Arguments, ct),
-            // "get_file_content" => await ExecuteGetFileContent(request.Arguments, ct),
-            // "execute_file_operation" => await ExecuteFileOperation(request.Arguments, ct),
-            // "execute_batch" => await ExecuteBatch(request.Arguments, ct),
-
-            // // Unified Analysis Service Tools
-            // "analyze_symbol" => await ExecuteAnalyzeSymbol(request.Arguments, ct),
-            // "analyze_type" => await ExecuteAnalyzeType(request.Arguments, ct),
-            // "analyze_file" => await ExecuteAnalyzeFile(request.Arguments, ct),
-            // "analyze_project" => await ExecuteAnalyzeProject(request.Arguments, ct),
-            // "analyze_architecture" => await ExecuteAnalyzeArchitecture(request.Arguments, ct),
-            // "analyze_dependencies" => await ExecuteAnalyzeDependenciesUnified(request.Arguments, ct),
-            // "analyze_quality" => await ExecuteAnalyzeQuality(request.Arguments, ct),
-
-            // // Bulk Operations Hub Tools
-            // "execute_bulk_operation" => await ExecuteBulkOperation(request.Arguments, ct),
-            // "preview_bulk_operation" => await ExecutePreviewBulkOperation(request.Arguments, ct),
-            // "get_bulk_progress" => await ExecuteGetBulkProgress(request.Arguments, ct),
-            // "manage_bulk_operation" => await ExecuteManageBulkOperation(request.Arguments, ct),
-
-            // // Stream Processing Controller Tools
-            // "process_stream" => await ExecuteProcessStream(request.Arguments, ct),
-            // "monitor_stream" => await ExecuteMonitorStream(request.Arguments, ct),
-            // "manage_stream" => await ExecuteManageStream(request.Arguments, ct),
+                // Universal File Operations (consolidated)
+                "get_file_info" => await ExecuteGetFileInfo(request.Arguments, ct),
+                "get_file_content" => await ExecuteGetFileContent(request.Arguments, ct),
+                "execute_file_operation" => await ExecuteFileOperation(request.Arguments, ct),
+                "execute_batch" => await ExecuteBatch(request.Arguments, ct),
+                // Unified Analysis (consolidated)
+                "analyze_symbol" => await ExecuteAnalyzeSymbol(request.Arguments, ct),
+                "analyze_type" => await ExecuteAnalyzeType(request.Arguments, ct),
+                "analyze_file" => await ExecuteAnalyzeFile(request.Arguments, ct),
+                "analyze_project" => await ExecuteAnalyzeProject(request.Arguments, ct),
+                "analyze_architecture" => await ExecuteAnalyzeArchitecture(request.Arguments, ct),
+                "analyze_dependencies" => await ExecuteAnalyzeDependenciesUnified(request.Arguments, ct),
+                "analyze_quality" => await ExecuteAnalyzeQuality(request.Arguments, ct),
+                // Bulk Operations Hub (consolidated)
+                "execute_bulk_operation" => await ExecuteBulkOperation(request.Arguments, ct),
+                "preview_bulk_operation" => await ExecutePreviewBulkOperation(request.Arguments, ct),
+                "get_bulk_progress" => await ExecuteGetBulkProgress(request.Arguments, ct),
+                "manage_bulk_operation" => await ExecuteManageBulkOperation(request.Arguments, ct),
+                // Stream Processing Controller (consolidated)
+                "process_stream" => await ExecuteProcessStream(request.Arguments, ct),
+                "monitor_stream" => await ExecuteMonitorStream(request.Arguments, ct),
+                "manage_stream" => await ExecuteManageStream(request.Arguments, ct),
 
             _ => new ToolCallResult
                 {
@@ -1396,7 +1393,7 @@ Edit types:
             new McpTool
             {
                 Name = "extract_method",
-                Description = "Extract selected code into a new method with automatic parameter inference",
+                Description = "Extract selected code into a new method with automatic parameter inference. Requires an open project. Returns the generated method, call site and inferred parameters; the file itself is not rewritten (apply the result with file_edit).",
                 InputSchema = JsonSchemaHelper.CreateSchema(
                     new PropertyDefinition
                     {
@@ -1438,7 +1435,7 @@ Edit types:
                     {
                         Name = "preview",
                         Type = "boolean",
-                        Description = "Show preview without applying changes (default: true)",
+                        Description = "Include a before/after preview of the containing method (default: true)",
                         Required = false,
                         Default = true
                     }
@@ -1487,6 +1484,8 @@ Edit types:
                 _duplicateCodeDetector = new DuplicateCodeDetectorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage,
                     LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<DuplicateCodeDetectorService>());
             }
+
+            RebindConsolidatedServices();
         }
     }
 
@@ -1545,6 +1544,8 @@ Edit types:
                 _duplicateCodeDetector = new DuplicateCodeDetectorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage,
                     LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<DuplicateCodeDetectorService>());
             }
+
+            RebindConsolidatedServices();
 
             var context = _projectContext.GetProjectContext();
             return new ToolCallResult
@@ -1741,42 +1742,7 @@ Edit types:
             };
         }
 
-        var editsArray = arguments.RootElement.GetProperty("edits");
-        var edits = new List<TextEdit>();
-
-        foreach (var editElement in editsArray.EnumerateArray())
-        {
-            var type = editElement.GetProperty("type").GetString();
-            TextEdit edit = type switch
-            {
-                "replace" => new ReplaceEdit
-                {
-                    StartLine = editElement.GetProperty("start_line").GetInt32(),
-                    StartColumn = editElement.GetProperty("start_column").GetInt32(),
-                    EndLine = editElement.GetProperty("end_line").GetInt32(),
-                    EndColumn = editElement.GetProperty("end_column").GetInt32(),
-                    NewText = editElement.GetProperty("new_text").GetString() ?? ""
-                },
-                "insert" => (TextEdit)new InsertEdit
-                {
-                    StartLine = editElement.GetProperty("line").GetInt32(),
-                    StartColumn = editElement.GetProperty("column").GetInt32(),
-                    EndLine = editElement.GetProperty("line").GetInt32(),
-                    EndColumn = editElement.GetProperty("column").GetInt32(),
-                    NewText = editElement.GetProperty("text").GetString() ?? ""
-                },
-                "delete" => (TextEdit)new DeleteEdit
-                {
-                    StartLine = editElement.GetProperty("start_line").GetInt32(),
-                    StartColumn = editElement.GetProperty("start_column").GetInt32(),
-                    EndLine = editElement.GetProperty("end_line").GetInt32(),
-                    EndColumn = editElement.GetProperty("end_column").GetInt32(),
-                    NewText = ""
-                },
-                _ => throw new ArgumentException($"Unknown edit type: {type}")
-            };
-            edits.Add(edit);
-        }
+        var edits = ParseTextEdits(arguments.RootElement.GetProperty("edits"));
 
         var result = await _fileOperations.EditFileAsync(path, edits, ct);
         return new ToolCallResult

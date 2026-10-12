@@ -189,16 +189,15 @@ public void Method(string arg)
 }
 ```
 
-## MCP Tool Integration (Future)
+## MCP Tool Integration
 
-While the infrastructure is in place, MCP tool registration is pending. The planned tools include:
+The following tools are registered whenever the server is started with a Roslyn analyzer service (the default):
 
 ### `load_roslyn_analyzers`
 Load Roslyn analyzers from assembly or directory.
 
 **Parameters**:
-- `path` (string, required): Path to assembly or directory
-- `recursive` (boolean, optional): Search recursively (default: true)
+- `path` (string, required): Path to an analyzer assembly or a directory of assemblies (relative paths resolve against the open project)
 
 **Returns**:
 ```json

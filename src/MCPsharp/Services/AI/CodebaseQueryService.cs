@@ -48,6 +48,11 @@ public partial class CodebaseQueryService
     public bool IsAvailable => _aiProvider != null;
 
     /// <summary>
+    /// Name of the configured AI provider (e.g. "Ollama"), or null when no provider is available.
+    /// </summary>
+    public string? ProviderName => _aiProvider?.ProviderName;
+
+    /// <summary>
     /// Ask a natural language question about the codebase.
     /// The AI processes verbose internal data and returns a concise answer.
     /// </summary>

@@ -25,7 +25,7 @@ public partial class McpToolRegistry
             return;
         }
 
-        LogRegisteringAIPoweredToolsUsing(_logger, "Ollama"); // TODO: Get from provider
+        LogRegisteringAIPoweredToolsUsing(_logger, _codebaseQuery.ProviderName ?? "unknown");
 
         // Read-only codebase query tool
         _tools.Add(new McpTool
