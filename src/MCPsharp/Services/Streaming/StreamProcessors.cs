@@ -631,8 +631,8 @@ public partial class BinaryStreamProcessor : IStreamProcessor
         if (options.TryGetValue("CalculateChecksums", out var checksum) && checksum is bool cs)
             config.CalculateChecksums = cs;
 
-        if (options.TryGetValue("ChecksumAlgorithm", out var algorithm) && algorithm is string algoStr)
-            config.ChecksumAlgorithm = algoStr;
+        if (options.TryGetValue("ChecksumAlgorithm", out var algorithm))
+            config.ChecksumAlgorithm = NormalizeChecksumAlgorithm(algorithm);
 
         if (options.TryGetValue("PreserveTimestamps", out var timestamps) && timestamps is bool pt)
             config.PreserveTimestamps = pt;
@@ -682,14 +682,27 @@ public partial class BinaryStreamProcessor : IStreamProcessor
         return result;
     }
 
+    private static string NormalizeChecksumAlgorithm(object? algorithm)
+    {
+        return algorithm is string name
+            ? name.ToUpperInvariant() switch
+            {
+                "SHA256" or "SHA-256" => "SHA256",
+                "SHA512" or "SHA-512" => "SHA512",
+                _ => throw new ArgumentException(
+                    $"Unsupported checksum algorithm '{name}'. Supported algorithms: SHA256, SHA512.",
+                    nameof(algorithm))
+            }
+            : throw new ArgumentException(
+                "ChecksumAlgorithm must be a string naming a supported algorithm (SHA256, SHA512).",
+                nameof(algorithm));
+    }
+
     private static string ComputeChecksum(byte[] data, string algorithm)
     {
-        var hash = algorithm.ToUpperInvariant() switch
+        var hash = NormalizeChecksumAlgorithm(algorithm) switch
         {
-            "SHA256" or "SHA-256" => SHA256.HashData(data),
-            "SHA512" or "SHA-512" => SHA512.HashData(data),
-            "SHA1" or "SHA-1" => SHA1.HashData(data),
-            "MD5" => MD5.HashData(data),
+            "SHA512" => SHA512.HashData(data),
             _ => SHA256.HashData(data)
         };
 
