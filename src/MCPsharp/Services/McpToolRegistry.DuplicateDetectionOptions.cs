@@ -116,7 +116,8 @@ public partial class McpToolRegistry
         try
         {
             var blockObj = JsonSerializer.Deserialize<Dictionary<string, object>>(blockElement.GetRawText());
-            if (blockObj == null) return null;
+            if (blockObj == null)
+                return null;
 
             if (!blockObj.TryGetValue("filePath", out var filePathObj) ||
                 !blockObj.TryGetValue("startLine", out var startLineObj) ||

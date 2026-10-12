@@ -29,12 +29,18 @@ public class MethodSignature
         var accessibility = string.IsNullOrEmpty(Accessibility) ? "" : $"{Accessibility} ";
         var modifiers = new List<string>();
 
-        if (IsStatic) modifiers.Add("static");
-        if (IsVirtual) modifiers.Add("virtual");
-        if (IsAbstract) modifiers.Add("abstract");
-        if (IsOverride) modifiers.Add("override");
-        if (IsExtension) modifiers.Add("this");
-        if (IsAsync) modifiers.Add("async");
+        if (IsStatic)
+            modifiers.Add("static");
+        if (IsVirtual)
+            modifiers.Add("virtual");
+        if (IsAbstract)
+            modifiers.Add("abstract");
+        if (IsOverride)
+            modifiers.Add("override");
+        if (IsExtension)
+            modifiers.Add("this");
+        if (IsAsync)
+            modifiers.Add("async");
 
         var modifierStr = modifiers.Count > 0 ? $"{string.Join(" ", modifiers)} " : "";
 
@@ -78,10 +84,12 @@ public class MethodSignature
     private static bool AreTypesCompatible(string type1, string type2)
     {
         // Exact match is always compatible
-        if (type1 == type2) return true;
+        if (type1 == type2)
+            return true;
 
         // object is compatible with all types
-        if (type1 == "object" || type2 == "object") return true;
+        if (type1 == "object" || type2 == "object")
+            return true;
 
         // Built-in type conversions (implicit numeric conversions)
         var numericConversions = new Dictionary<string, HashSet<string>>

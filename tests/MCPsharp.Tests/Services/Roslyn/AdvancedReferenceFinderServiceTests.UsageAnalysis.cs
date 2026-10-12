@@ -397,7 +397,8 @@ public partial class AdvancedReferenceFinderServiceTests
         var containingType = "WorkflowClass";
         var expected = new ReachabilityAnalysis
         {
-            StartMethod = new MethodSignature {
+            StartMethod = new MethodSignature
+            {
                 Name = methodName,
                 ContainingType = containingType,
                 ReturnType = "void",

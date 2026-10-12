@@ -281,10 +281,14 @@ public sealed partial class BulkEditService
             }
 
             // Add complexity factors
-            if (stats.TotalFiles > 100) complexityFactors.Add("Large number of files");
-            if (stats.TotalSize > 50 * 1024 * 1024) complexityFactors.Add("Large total file size");
-            if (request.Options.CreateBackups) complexityFactors.Add("Backup creation required");
-            if (request.Options.ValidateChanges) complexityFactors.Add("Change validation enabled");
+            if (stats.TotalFiles > 100)
+                complexityFactors.Add("Large number of files");
+            if (stats.TotalSize > 50 * 1024 * 1024)
+                complexityFactors.Add("Large total file size");
+            if (request.Options.CreateBackups)
+                complexityFactors.Add("Backup creation required");
+            if (request.Options.ValidateChanges)
+                complexityFactors.Add("Change validation enabled");
 
             // Add recommendations
             if (riskLevel >= ChangeRiskLevel.High)

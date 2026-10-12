@@ -116,7 +116,8 @@ public partial class StreamProcessingController
 
         foreach (var file in request.Files ?? new List<string>())
         {
-            if (!File.Exists(file)) continue;
+            if (!File.Exists(file))
+                continue;
 
             var fileRequest = new ConsolidatedStream.StreamProcessRequest
             {

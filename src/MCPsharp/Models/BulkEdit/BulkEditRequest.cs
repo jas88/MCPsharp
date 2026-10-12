@@ -1,4 +1,4 @@
-﻿namespace MCPsharp.Models.BulkEdit;
+namespace MCPsharp.Models.BulkEdit;
 
 /// <summary>
 /// Request for bulk edit operations across multiple files

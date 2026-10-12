@@ -57,14 +57,14 @@ public partial class McpToolRegistry
 
     private static PropertyDefinition Prop(string name, string type, string description,
         bool required = false, string[]? enumValues = null, object? items = null) => new()
-    {
-        Name = name,
-        Type = type,
-        Description = description,
-        Required = required,
-        Enum = enumValues,
-        Items = items
-    };
+        {
+            Name = name,
+            Type = type,
+            Description = description,
+            Required = required,
+            Enum = enumValues,
+            Items = items
+        };
 
     private static Dictionary<string, object> EnumItems(string[] values) => new()
     {

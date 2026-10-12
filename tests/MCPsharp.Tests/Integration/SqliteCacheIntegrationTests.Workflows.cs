@@ -101,7 +101,8 @@ public partial class SqliteCacheIntegrationTests
         // Arrange
         var projectId = await _database.GetOrCreateProjectAsync(_testProjectPath, "Test");
 
-        var solutionInfo = JsonSerializer.Serialize(new {
+        var solutionInfo = JsonSerializer.Serialize(new
+        {
             name = "Test.sln",
             projects = SampleProjectNames
         });

@@ -323,9 +323,12 @@ internal static class CodeSmellDetector
     {
         var ratio = excess / (double)threshold;
 
-        if (ratio <= 0.2) return CodeSmellSeverity.Minor;
-        if (ratio <= 0.5) return CodeSmellSeverity.Major;
-        if (ratio <= 1.0) return CodeSmellSeverity.Critical;
+        if (ratio <= 0.2)
+            return CodeSmellSeverity.Minor;
+        if (ratio <= 0.5)
+            return CodeSmellSeverity.Major;
+        if (ratio <= 1.0)
+            return CodeSmellSeverity.Critical;
         return CodeSmellSeverity.Blocker;
     }
 

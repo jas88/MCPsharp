@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -46,13 +46,13 @@ public partial class StreamOperationManager : IStreamOperationManager, IDisposab
         _executionSemaphore = new SemaphoreSlim(_maxConcurrentOperations, _maxConcurrentOperations);
 
         // Run cleanup every 10 minutes
-        _cleanupTimer = new Timer(PerformAutomaticCleanup, null, 
+        _cleanupTimer = new Timer(PerformAutomaticCleanup, null,
             TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
 
         LogStreamOperationManagerInitializedWithMaxConcurrent(_logger, _maxConcurrentOperations);
     }
 
-    public async Task<StreamOperation> CreateOperationAsync(string name, StreamProcessRequest request, 
+    public async Task<StreamOperation> CreateOperationAsync(string name, StreamProcessRequest request,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -71,8 +71,8 @@ public partial class StreamOperationManager : IStreamOperationManager, IDisposab
         _operations.TryAdd(operation.OperationId, operation);
 
         // Initialize progress tracking
-        var fileSize = request.FilePath != null && File.Exists(request.FilePath) 
-            ? new FileInfo(request.FilePath).Length 
+        var fileSize = request.FilePath != null && File.Exists(request.FilePath)
+            ? new FileInfo(request.FilePath).Length
             : 0;
         await _progressTracker.CreateProgressAsync(operation.OperationId, name, fileSize);
 
@@ -88,14 +88,14 @@ public partial class StreamOperationManager : IStreamOperationManager, IDisposab
             throw new ArgumentException($"Operation {operationId} not found", nameof(operationId));
         }
 
-        if (operation.Status != StreamOperationStatus.Created && 
+        if (operation.Status != StreamOperationStatus.Created &&
             operation.Status != StreamOperationStatus.Resumed)
         {
             throw new InvalidOperationException($"Operation {operationId} is not in a startable state: {operation.Status}");
         }
 
         await _executionSemaphore.WaitAsync(cancellationToken);
-        
+
         try
         {
             operation.Status = StreamOperationStatus.Running;
@@ -133,7 +133,7 @@ public partial class StreamOperationManager : IStreamOperationManager, IDisposab
             operation.Status = StreamOperationStatus.Cancelled;
             operation.CompletedAt = DateTime.UtcNow;
             operation.ErrorMessage = "Operation was cancelled";
-            
+
             LogStreamingOperationWasCancelled(_logger, operationId);
             throw;
         }

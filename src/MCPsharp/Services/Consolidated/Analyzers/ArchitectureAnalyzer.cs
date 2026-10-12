@@ -77,7 +77,8 @@ public partial class ArchitectureAnalyzer
     {
         try
         {
-            if (_architectureValidator == null) return null;
+            if (_architectureValidator == null)
+                return null;
 
             var architectureDefinition = ConvertToArchitectureDefinition(definition);
             var result = await _architectureValidator.ValidateArchitectureAsync(scope, architectureDefinition, ct);
@@ -99,7 +100,8 @@ public partial class ArchitectureAnalyzer
     {
         try
         {
-            if (_architectureValidator == null) return new List<ArchitectureViolation>();
+            if (_architectureValidator == null)
+                return new List<ArchitectureViolation>();
 
             var architectureDefinition = ConvertToArchitectureDefinition(definition);
             var layerViolations = await _architectureValidator.DetectLayerViolationsAsync(scope, architectureDefinition, ct);
@@ -128,7 +130,8 @@ public partial class ArchitectureAnalyzer
     {
         try
         {
-            if (_architectureValidator == null) return null;
+            if (_architectureValidator == null)
+                return null;
 
             var architectureDefinition = ConvertToArchitectureDefinition(definition);
             var dependencyAnalysis = await _architectureValidator.AnalyzeDependenciesAsync(scope, architectureDefinition, ct);
@@ -149,7 +152,8 @@ public partial class ArchitectureAnalyzer
     {
         try
         {
-            if (_architectureValidator == null) return new List<ArchitectureRecommendation>();
+            if (_architectureValidator == null)
+                return new List<ArchitectureRecommendation>();
 
             var recommendations = await _architectureValidator.GetRecommendationsAsync(violations, ct);
 

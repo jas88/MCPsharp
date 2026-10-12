@@ -82,14 +82,16 @@ public sealed partial class ReferenceIndexerService
         Dictionary<string, long> symbolLookup,
         CancellationToken cancellationToken = default)
     {
-        if (document.FilePath == null) return;
+        if (document.FilePath == null)
+            return;
 
         try
         {
             var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken).ConfigureAwait(false);
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
 
-            if (syntaxTree == null || semanticModel == null) return;
+            if (syntaxTree == null || semanticModel == null)
+                return;
 
             var root = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
 
@@ -141,7 +143,8 @@ public sealed partial class ReferenceIndexerService
                 if (fromSymbol != null)
                 {
                     var reference = CreateReference(fromSymbol, targetMethod, invocation, fileId, "Call", symbolLookup);
-                    if (reference != null) references.Add(reference);
+                    if (reference != null)
+                        references.Add(reference);
                 }
             }
         }
@@ -156,7 +159,8 @@ public sealed partial class ReferenceIndexerService
                 if (fromSymbol != null)
                 {
                     var reference = CreateReference(fromSymbol, targetProperty, memberAccess, fileId, "PropertyAccess", symbolLookup);
-                    if (reference != null) references.Add(reference);
+                    if (reference != null)
+                        references.Add(reference);
                 }
             }
         }
@@ -172,7 +176,8 @@ public sealed partial class ReferenceIndexerService
                 {
                     var kind = targetType.TypeKind == TypeKind.Interface ? "Implementation" : "Inheritance";
                     var reference = CreateReference(containingType, targetType, baseType, fileId, kind, symbolLookup);
-                    if (reference != null) references.Add(reference);
+                    if (reference != null)
+                        references.Add(reference);
                 }
             }
         }
@@ -187,7 +192,8 @@ public sealed partial class ReferenceIndexerService
                 if (fromSymbol != null)
                 {
                     var reference = CreateReference(fromSymbol, constructor.ContainingType, objectCreation, fileId, "TypeUsage", symbolLookup);
-                    if (reference != null) references.Add(reference);
+                    if (reference != null)
+                        references.Add(reference);
                 }
             }
         }

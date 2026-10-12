@@ -108,7 +108,8 @@ public partial class ResponseProcessor
     /// </summary>
     private int EstimateTokenCount(object obj)
     {
-        if (obj == null) return 0;
+        if (obj == null)
+            return 0;
 
         string jsonString;
 

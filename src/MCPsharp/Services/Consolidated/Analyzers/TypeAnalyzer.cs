@@ -34,7 +34,8 @@ public partial class TypeAnalyzer
     {
         try
         {
-            if (_classStructure == null) return null;
+            if (_classStructure == null)
+                return null;
 
             var structure = await _classStructure.GetClassStructureAsync(typeName, context);
 
@@ -62,10 +63,12 @@ public partial class TypeAnalyzer
     {
         try
         {
-            if (_classStructure == null) return null;
+            if (_classStructure == null)
+                return null;
 
             var structure = await _classStructure.GetClassStructureAsync(typeName, context);
-            if (structure == null) return null;
+            if (structure == null)
+                return null;
 
             var inheritance = new TypeInheritance
             {
@@ -103,7 +106,8 @@ public partial class TypeAnalyzer
     {
         try
         {
-            if (_referenceFinder == null || _workspace == null) return null;
+            if (_referenceFinder == null || _workspace == null)
+                return null;
 
             var referenceResult = await _referenceFinder.FindReferencesAsync(typeName);
 
@@ -132,7 +136,8 @@ public partial class TypeAnalyzer
     {
         try
         {
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             var typeSymbols = await _symbolQuery.FindSymbolsAsync(typeName, context);
             var typeKind = typeSymbols.FirstOrDefault()?.Kind;
@@ -170,10 +175,12 @@ public partial class TypeAnalyzer
     {
         try
         {
-            if (_classStructure == null) return null;
+            if (_classStructure == null)
+                return null;
 
             var structure = await _classStructure.GetClassStructureAsync(typeName, context);
-            if (structure == null) return null;
+            if (structure == null)
+                return null;
 
             var allMembers = new List<object>();
             allMembers.AddRange(structure.Properties);
@@ -266,10 +273,12 @@ public partial class TypeAnalyzer
     {
         try
         {
-            if (_classStructure == null) return null;
+            if (_classStructure == null)
+                return null;
 
             var structure = await _classStructure.GetClassStructureAsync(typeName, context);
-            if (structure == null) return null;
+            if (structure == null)
+                return null;
 
             var allMembers = new List<object>();
             allMembers.AddRange(structure.Properties);

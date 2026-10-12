@@ -72,7 +72,7 @@ public partial class AdvancedReferenceFinderServiceIntegrationTests
             Name = "Run",
             ContainingType = "MCPsharp.Tests.TestFixtures.Manager",
             ReturnType = "void",
-                Accessibility = "public"
+            Accessibility = "public"
         };
 
         var toMethod = new MethodSignature
@@ -80,7 +80,7 @@ public partial class AdvancedReferenceFinderServiceIntegrationTests
             Name = "Execute",
             ContainingType = "MCPsharp.Tests.TestFixtures.Service",
             ReturnType = "void",
-                Accessibility = "public"
+            Accessibility = "public"
         };
 
         // Act
@@ -166,7 +166,7 @@ public partial class AdvancedReferenceFinderServiceIntegrationTests
             Name = "Run",
             ContainingType = "MCPsharp.Tests.TestFixtures.Manager",
             ReturnType = "void",
-                Accessibility = "public"
+            Accessibility = "public"
         };
 
         var toMethod = new MethodSignature
@@ -174,7 +174,7 @@ public partial class AdvancedReferenceFinderServiceIntegrationTests
             Name = "Process",
             ContainingType = "MCPsharp.Tests.TestFixtures.Service",
             ReturnType = "void",
-                Accessibility = "public"
+            Accessibility = "public"
         };
 
         // Act

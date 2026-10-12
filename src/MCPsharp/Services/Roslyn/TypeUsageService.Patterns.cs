@@ -21,15 +21,15 @@ public partial class TypeUsageService
     {
         if (!_workspace.IsInitialized)
             return new TypeUsagePatternAnalysis
-        {
-            TypeStatistics = new Dictionary<string, TypeUsageStats>(),
-            CommonPatterns = new List<UsagePattern>(),
-            MostUsedTypes = new List<string>(),
-            LeastUsedTypes = new List<string>(),
-            UsageKindDistribution = new Dictionary<TypeUsageKind, int>(),
-            TotalTypesAnalyzed = 0,
-            TotalUsagesFound = 0
-        };
+            {
+                TypeStatistics = new Dictionary<string, TypeUsageStats>(),
+                CommonPatterns = new List<UsagePattern>(),
+                MostUsedTypes = new List<string>(),
+                LeastUsedTypes = new List<string>(),
+                UsageKindDistribution = new Dictionary<TypeUsageKind, int>(),
+                TotalTypesAnalyzed = 0,
+                TotalUsagesFound = 0
+            };
 
         var typeStatistics = new Dictionary<string, TypeUsageStats>();
         var usageKindDistribution = new Dictionary<TypeUsageKind, int>();

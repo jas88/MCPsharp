@@ -177,7 +177,7 @@ public class DataEntity
             Name = "HandleRequest",
             ContainingType = "MCPsharp.Tests.TestFixtures.Controller",
             ReturnType = "void",
-                Accessibility = "public"
+            Accessibility = "public"
         };
 
         var toMethod = new MethodSignature
@@ -185,7 +185,7 @@ public class DataEntity
             Name = "GetById",
             ContainingType = "MCPsharp.Tests.TestFixtures.Repository",
             ReturnType = "T",
-                Accessibility = "public"
+            Accessibility = "public"
         };
 
         // Act

@@ -19,7 +19,8 @@ public partial class FeatureTracerService
     /// </summary>
     private static string ToPascalCase(string input)
     {
-        if (string.IsNullOrEmpty(input)) return input;
+        if (string.IsNullOrEmpty(input))
+            return input;
 
         var words = input.Split(WordSeparators, StringSplitOptions.RemoveEmptyEntries);
         return string.Concat(words.Select(word =>
@@ -106,17 +107,20 @@ public partial class FeatureTracerService
         if (symbolName.EndsWith("Controller", StringComparison.Ordinal))
         {
             components.Controller = $"{filePath}::{symbolName}";
-            if (!dataFlow.Contains("Controller")) dataFlow.Add("Controller");
+            if (!dataFlow.Contains("Controller"))
+                dataFlow.Add("Controller");
         }
         else if (symbolName.EndsWith("Service", StringComparison.Ordinal))
         {
             components.Service = $"{filePath}::{symbolName}";
-            if (!dataFlow.Contains("Service")) dataFlow.Add("Service");
+            if (!dataFlow.Contains("Service"))
+                dataFlow.Add("Service");
         }
         else if (symbolName.EndsWith("Repository", StringComparison.Ordinal))
         {
             components.Repository = $"{filePath}::{symbolName}";
-            if (!dataFlow.Contains("Repository")) dataFlow.Add("Repository");
+            if (!dataFlow.Contains("Repository"))
+                dataFlow.Add("Repository");
         }
     }
 
@@ -126,15 +130,24 @@ public partial class FeatureTracerService
     private static int GetComponentCount(MutableFeatureComponents components)
     {
         var count = 0;
-        if (components.Controller != null) count++;
-        if (components.Service != null) count++;
-        if (components.Repository != null) count++;
-        if (components.Models != null) count += components.Models.Count;
-        if (components.Migrations != null) count += components.Migrations.Count;
-        if (components.Config != null) count += components.Config.Count;
-        if (components.Tests != null) count += components.Tests.Count;
-        if (components.Documentation != null) count++;
-        if (components.Workflows != null) count += components.Workflows.Count;
+        if (components.Controller != null)
+            count++;
+        if (components.Service != null)
+            count++;
+        if (components.Repository != null)
+            count++;
+        if (components.Models != null)
+            count += components.Models.Count;
+        if (components.Migrations != null)
+            count += components.Migrations.Count;
+        if (components.Config != null)
+            count += components.Config.Count;
+        if (components.Tests != null)
+            count += components.Tests.Count;
+        if (components.Documentation != null)
+            count++;
+        if (components.Workflows != null)
+            count += components.Workflows.Count;
 
         return count;
     }

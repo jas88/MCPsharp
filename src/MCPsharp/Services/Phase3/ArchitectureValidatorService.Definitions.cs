@@ -59,7 +59,8 @@ public partial class ArchitectureValidatorService
     private async Task<ArchitectureDefinition> DetectBestFitArchitecture(CancellationToken cancellationToken)
     {
         // Simple heuristic-based detection based on namespace patterns
-        if (!_workspace.IsInitialized) return _predefinedArchitectures["Clean Architecture"];
+        if (!_workspace.IsInitialized)
+            return _predefinedArchitectures["Clean Architecture"];
 
         var namespaces = new HashSet<string>();
         foreach (var syntaxTree in _workspace.GetSourceTrees())

@@ -34,46 +34,46 @@ public partial class StreamingFileProcessor
                 };
             }
 
-        // Create output path if not provided
-        var outputPath = string.IsNullOrEmpty(config.OutputPath)
-            ? filePath + ".processed"
-            : config.OutputPath;
+            // Create output path if not provided
+            var outputPath = string.IsNullOrEmpty(config.OutputPath)
+                ? filePath + ".processed"
+                : config.OutputPath;
 
-        // Create output directory if needed
-        var outputDir = Path.GetDirectoryName(outputPath);
-        if (!string.IsNullOrEmpty(outputDir))
-        {
-            Directory.CreateDirectory(outputDir);
-        }
+            // Create output directory if needed
+            var outputDir = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(outputDir))
+            {
+                Directory.CreateDirectory(outputDir);
+            }
 
-        // Write transformed content
-        await File.WriteAllTextAsync(outputPath, transformedContent);
+            // Write transformed content
+            await File.WriteAllTextAsync(outputPath, transformedContent);
 
-        var fileInfo = new FileInfo(filePath);
+            var fileInfo = new FileInfo(filePath);
 
-        var result = new StreamResult
-        {
-            Success = true,
-            WasProcessed = true,
-            OperationId = Guid.NewGuid().ToString(),
-            OutputPath = outputPath,
-            OriginalSize = fileInfo.Length,
-            BytesProcessed = transformedContent.Length,
-            ProcessedSize = transformedContent.Length,
-            ChunksProcessed = 1,
-            ProcessingTime = TimeSpan.FromMilliseconds(1), // Simplified timing
-            OutputFiles = new List<string> { outputPath }
-        };
+            var result = new StreamResult
+            {
+                Success = true,
+                WasProcessed = true,
+                OperationId = Guid.NewGuid().ToString(),
+                OutputPath = outputPath,
+                OriginalSize = fileInfo.Length,
+                BytesProcessed = transformedContent.Length,
+                ProcessedSize = transformedContent.Length,
+                ChunksProcessed = 1,
+                ProcessingTime = TimeSpan.FromMilliseconds(1), // Simplified timing
+                OutputFiles = new List<string> { outputPath }
+            };
 
-        // Update statistics
-        lock (_statisticsLock)
-        {
-            _statistics.TotalFilesProcessed++;
-            _statistics.TotalBytesProcessed += result.BytesProcessed;
-            _statistics.LastUpdated = DateTime.UtcNow;
-        }
+            // Update statistics
+            lock (_statisticsLock)
+            {
+                _statistics.TotalFilesProcessed++;
+                _statistics.TotalBytesProcessed += result.BytesProcessed;
+                _statistics.LastUpdated = DateTime.UtcNow;
+            }
 
-        return result;
+            return result;
         }
         catch (Exception ex)
         {

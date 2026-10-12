@@ -33,7 +33,8 @@ public partial class StreamingFileProcessor
             cancellationToken.ThrowIfCancellationRequested();
 
             var bytesRead = await inputStream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
-            if (bytesRead == 0) break;
+            if (bytesRead == 0)
+                break;
 
             var chunkData = new byte[bytesRead];
             Array.Copy(buffer, chunkData, bytesRead);

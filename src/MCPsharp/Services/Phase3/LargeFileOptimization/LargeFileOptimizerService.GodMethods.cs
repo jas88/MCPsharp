@@ -147,10 +147,14 @@ public partial class LargeFileOptimizerService
 
     private static GodMethodSeverity DetermineGodMethodSeverity(double score)
     {
-        if (score <= 0.3) return GodMethodSeverity.None;
-        if (score <= 0.5) return GodMethodSeverity.Low;
-        if (score <= 0.7) return GodMethodSeverity.Medium;
-        if (score <= 0.9) return GodMethodSeverity.High;
+        if (score <= 0.3)
+            return GodMethodSeverity.None;
+        if (score <= 0.5)
+            return GodMethodSeverity.Low;
+        if (score <= 0.7)
+            return GodMethodSeverity.Medium;
+        if (score <= 0.9)
+            return GodMethodSeverity.High;
         return GodMethodSeverity.Critical;
     }
 

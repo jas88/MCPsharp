@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using MCPsharp.Models.SqlMigration;
 
 namespace MCPsharp.Services.Phase3.SqlMigration;

@@ -233,8 +233,10 @@ public partial class UniversalFileOperations
         var endLine = request.Options?.EndLine ?? lines.Length - 1;
 
         // Validate line range
-        if (startLine < 0) startLine = 0;
-        if (endLine >= lines.Length) endLine = lines.Length - 1;
+        if (startLine < 0)
+            startLine = 0;
+        if (endLine >= lines.Length)
+            endLine = lines.Length - 1;
         if (startLine > endLine)
         {
             return new FileContentResponse

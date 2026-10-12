@@ -234,7 +234,8 @@ public partial class DependencyAnalyzer
 
     private static double CalculateAveragePathLength(DependencyGraph graph)
     {
-        if (graph.Nodes.Count == 0) return 0;
+        if (graph.Nodes.Count == 0)
+            return 0;
 
         var totalPathLength = 0.0;
         var pathCount = 0;

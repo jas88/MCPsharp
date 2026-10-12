@@ -50,8 +50,10 @@ public partial class RegexStreamProcessor : IStreamProcessor
         if (!string.IsNullOrEmpty(config.Pattern))
         {
             var regexOptions = config.Options;
-            if (config.Multiline) regexOptions |= RegexOptions.Multiline;
-            if (config.IgnoreCase) regexOptions |= RegexOptions.IgnoreCase;
+            if (config.Multiline)
+                regexOptions |= RegexOptions.Multiline;
+            if (config.IgnoreCase)
+                regexOptions |= RegexOptions.IgnoreCase;
 
             var regex = new Regex(config.Pattern, regexOptions, RegexTimeout);
 

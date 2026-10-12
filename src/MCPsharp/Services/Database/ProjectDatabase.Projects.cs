@@ -119,7 +119,8 @@ public sealed partial class ProjectDatabase
     {
         var conn = GetConnection();
 
-        if (!solutionCount.HasValue && !projectCount.HasValue && !fileCount.HasValue) return;
+        if (!solutionCount.HasValue && !projectCount.HasValue && !fileCount.HasValue)
+            return;
 
         await using var cmd = conn.CreateCommand();
 

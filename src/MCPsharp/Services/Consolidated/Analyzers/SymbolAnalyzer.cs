@@ -32,7 +32,8 @@ public partial class SymbolAnalyzer
         try
         {
             ct.ThrowIfCancellationRequested();
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             var symbols = await _symbolQuery.FindSymbolsAsync(symbolName, context);
             var definition = symbols.FirstOrDefault();
@@ -70,7 +71,8 @@ public partial class SymbolAnalyzer
     {
         try
         {
-            if (_referenceFinder == null || _workspace == null) return null;
+            if (_referenceFinder == null || _workspace == null)
+                return null;
 
             var references = await _referenceFinder.FindReferencesAsync(symbolName, context);
 
@@ -95,10 +97,12 @@ public partial class SymbolAnalyzer
     {
         try
         {
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             var references = await GetSymbolReferencesAsync(symbolName, context, ct);
-            if (references == null) return null;
+            if (references == null)
+                return null;
 
             var callers = new List<SymbolCaller>();
 
@@ -143,12 +147,14 @@ public partial class SymbolAnalyzer
     {
         try
         {
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             var references = await GetSymbolReferencesAsync(symbolName, context, ct);
             var callers = await GetSymbolCallersAsync(symbolName, context, ct);
 
-            if (references == null || callers == null) return null;
+            if (references == null || callers == null)
+                return null;
 
             var contexts = references
                 .Where(r => !string.IsNullOrEmpty(r.ContainingMember))
@@ -160,9 +166,12 @@ public partial class SymbolAnalyzer
                 .ToList();
 
             var patterns = new List<string>();
-            if (callers.Count > 10) patterns.Add("Frequently called");
-            if (references.Count > callers.Count) patterns.Add("Multiple references per caller");
-            if (contexts.Any(c => c.Contains("Test") || c.Contains("test"))) patterns.Add("Used in tests");
+            if (callers.Count > 10)
+                patterns.Add("Frequently called");
+            if (references.Count > callers.Count)
+                patterns.Add("Multiple references per caller");
+            if (contexts.Any(c => c.Contains("Test") || c.Contains("test")))
+                patterns.Add("Used in tests");
 
             return new SymbolUsagePatterns
             {
@@ -184,12 +193,14 @@ public partial class SymbolAnalyzer
     {
         try
         {
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             var relatedSymbols = new List<RelatedSymbol>();
 
             var definition = await GetSymbolDefinitionAsync(symbolName, context, ct);
-            if (definition == null) return null;
+            if (definition == null)
+                return null;
 
             // Get all types once to avoid duplicate calls
             var allTypes = await _symbolQuery.GetAllTypesAsync();
@@ -276,10 +287,12 @@ public partial class SymbolAnalyzer
     {
         try
         {
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             var definition = await GetSymbolDefinitionAsync(symbolName, context, ct);
-            if (definition == null) return null;
+            if (definition == null)
+                return null;
 
             var references = await GetSymbolReferencesAsync(symbolName, context, ct);
 

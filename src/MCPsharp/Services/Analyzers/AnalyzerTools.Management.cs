@@ -19,10 +19,14 @@ public static partial class AnalyzerTools
             var allAnalyzers = analyzerHost.GetLoadedAnalyzers();
             var filteredAnalyzers = allAnalyzers.Where(a =>
             {
-                if (!includeBuiltin && a.IsBuiltIn) return false;
-                if (!includeExternal && !a.IsBuiltIn) return false;
-                if (!string.IsNullOrEmpty(category) && !a.Rules.Any(r => r.Category.ToString() == category)) return false;
-                if (!string.IsNullOrEmpty(extension) && !a.SupportedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase)) return false;
+                if (!includeBuiltin && a.IsBuiltIn)
+                    return false;
+                if (!includeExternal && !a.IsBuiltIn)
+                    return false;
+                if (!string.IsNullOrEmpty(category) && !a.Rules.Any(r => r.Category.ToString() == category))
+                    return false;
+                if (!string.IsNullOrEmpty(extension) && !a.SupportedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+                    return false;
                 return true;
             });
 

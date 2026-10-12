@@ -349,7 +349,8 @@ public partial class WorkflowAnalyzerService
         {
             foreach (var job in workflow.Jobs)
             {
-                if (job.Steps == null) continue;
+                if (job.Steps == null)
+                    continue;
 
                 foreach (var step in job.Steps)
                 {

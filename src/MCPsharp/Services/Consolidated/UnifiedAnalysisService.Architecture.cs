@@ -160,11 +160,11 @@ public partial class UnifiedAnalysisService
         }
 
         return new MCPsharp.Models.Consolidated.ArchitectureDefinition
-            {
-                Name = "Default Architecture",
-                Layers = new List<MCPsharp.Models.Consolidated.ArchitectureLayer>(),
-                Rules = new List<MCPsharp.Models.Consolidated.DependencyRule>()
-            };
+        {
+            Name = "Default Architecture",
+            Layers = new List<MCPsharp.Models.Consolidated.ArchitectureLayer>(),
+            Rules = new List<MCPsharp.Models.Consolidated.DependencyRule>()
+        };
     }
 
     private ArchitectureMetrics? CalculateArchitectureMetrics(string scope, MCPsharp.Models.Architecture.ArchitectureDefinition definition)

@@ -248,22 +248,22 @@ public partial class CallChainService : ICallChainService
         var startSymbol = FindMethodSymbol(methodName, containingType, cancellationToken);
         if (startSymbol == null)
             return new ReachabilityAnalysis
-        {
-            StartMethod = new MethodSignature
             {
-                Name = methodName,
-                ContainingType = containingType ?? "",
-                ReturnType = "void",
-                Accessibility = "public"
-            },
-            ReachableMethods = new List<MethodSignature>(),
-            MethodsByDepth = new Dictionary<int, List<MethodSignature>>(),
-            UnreachableMethods = new List<MethodSignature>(),
-            MaxDepthReached = 0,
-            TotalMethodsAnalyzed = 0,
-            AnalysisDuration = TimeSpan.Zero,
-            ReachedAnalysisLimit = false
-        };
+                StartMethod = new MethodSignature
+                {
+                    Name = methodName,
+                    ContainingType = containingType ?? "",
+                    ReturnType = "void",
+                    Accessibility = "public"
+                },
+                ReachableMethods = new List<MethodSignature>(),
+                MethodsByDepth = new Dictionary<int, List<MethodSignature>>(),
+                UnreachableMethods = new List<MethodSignature>(),
+                MaxDepthReached = 0,
+                TotalMethodsAnalyzed = 0,
+                AnalysisDuration = TimeSpan.Zero,
+                ReachedAnalysisLimit = false
+            };
 
         var startSignature = CreateMethodSignature(startSymbol);
         var reachableMethods = new List<MethodSignature>();

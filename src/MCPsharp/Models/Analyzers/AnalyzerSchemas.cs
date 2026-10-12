@@ -19,13 +19,13 @@ public static class AnalyzerSchemas
             {
                 type = "boolean",
                 description = "Include built-in analyzers in the results",
-  @default = true
+                @default = true
             },
             include_external = new
             {
                 type = "boolean",
                 description = "Include external analyzers in the results",
-  @default = true
+                @default = true
             },
             category = new
             {
@@ -119,7 +119,7 @@ public static class AnalyzerSchemas
             {
                 type = "boolean",
                 description = "Generate fixes for found issues",
-  @default = true
+                @default = true
             }
         }
     };
@@ -192,7 +192,7 @@ public static class AnalyzerSchemas
             {
                 type = "boolean",
                 description = "Automatically resolve conflicts between fixes",
-  @default = true
+                @default = true
             },
             conflict_strategy = new
             {
@@ -205,7 +205,7 @@ public static class AnalyzerSchemas
             {
                 type = "boolean",
                 description = "Create backup files before applying fixes",
-  @default = true
+                @default = true
             },
             inputs = new
             {
@@ -234,7 +234,7 @@ public static class AnalyzerSchemas
             {
                 type = "boolean",
                 description = "Automatically enable the analyzer after loading",
-  @default = true
+                @default = true
             },
             permissions = new
             {

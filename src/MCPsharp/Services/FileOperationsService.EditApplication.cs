@@ -10,20 +10,20 @@ public partial class FileOperationsService
     private static void ValidateEditPosition(List<string> lines, TextEdit edit)
     {
         var (startLine, startColumn, endLine, endColumn) = GetEditBounds(edit);
-        
+
         // Validate line indices
         if (startLine < 0 || startLine >= lines.Count)
-            throw new ArgumentOutOfRangeException(nameof(edit), 
+            throw new ArgumentOutOfRangeException(nameof(edit),
                 $"StartLine {startLine} is out of range. File has {lines.Count} lines (0-{lines.Count - 1}).");
-                
+
         if (endLine < 0 || endLine >= lines.Count)
-            throw new ArgumentOutOfRangeException(nameof(edit), 
+            throw new ArgumentOutOfRangeException(nameof(edit),
                 $"EndLine {endLine} is out of range. File has {lines.Count} lines (0-{lines.Count - 1}).");
-        
+
         // Get line lengths for validation
         var startLineLength = lines[startLine].Length;
         var endLineLength = lines[endLine].Length;
-        
+
         // Validate column indices
         if (startColumn < 0 || startColumn > startLineLength)
             throw new ArgumentOutOfRangeException(nameof(edit),
@@ -36,7 +36,7 @@ public partial class FileOperationsService
                 $"EndColumn {endColumn} is out of range for line {endLine}. " +
                 $"Line {endLine} has {endLineLength} characters. Valid positions: 0-{endLineLength - 1} for replacements, 0-{endLineLength} for insertions. " +
                 $"Remember: MCPsharp uses 0-based indexing where column 0 is before the first character.");
-        
+
         // Validate that start position comes before end position
         if (startLine > endLine || (startLine == endLine && startColumn > endColumn))
             throw new ArgumentException($"Invalid edit range: start position ({startLine},{startColumn}) " +

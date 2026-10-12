@@ -126,7 +126,8 @@ public partial class ArchitectureValidatorService
 
     private static List<string> ExtractCycle(List<string> path)
     {
-        if (path.Count < 2) return path;
+        if (path.Count < 2)
+            return path;
 
         // Find the start of the cycle
         var lastNode = path[^1];

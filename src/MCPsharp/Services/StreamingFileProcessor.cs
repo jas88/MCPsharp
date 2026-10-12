@@ -155,141 +155,141 @@ public partial class StreamingFileProcessor : IStreamingFileProcessor, IDisposab
                     return CreateFailureResult(operation, string.Join(", ", errors));
                 }
 
-            // Initialize progress tracking
-            var fileInfo = new FileInfo(request.FilePath);
-            await _progressTracker.CreateProgressAsync(operation.OperationId, operation.Name, fileInfo.Length);
+                // Initialize progress tracking
+                var fileInfo = new FileInfo(request.FilePath);
+                await _progressTracker.CreateProgressAsync(operation.OperationId, operation.Name, fileInfo.Length);
 
-            // Create output directory
-            var outputDir = Path.GetDirectoryName(request.OutputPath);
-            if (!string.IsNullOrEmpty(outputDir))
-            {
-                Directory.CreateDirectory(outputDir);
+                // Create output directory
+                var outputDir = Path.GetDirectoryName(request.OutputPath);
+                if (!string.IsNullOrEmpty(outputDir))
+                {
+                    Directory.CreateDirectory(outputDir);
+                }
+
+                // Create temporary checkpoint directory if needed
+                if (request.CreateCheckpoint)
+                {
+                    var checkpointDir = await _tempFileManager.CreateTempDirectoryAsync("checkpoint", operation.OperationId);
+                    operation.Request.CheckpointDirectory = checkpointDir;
+                }
+
+                operation.Status = StreamOperationStatus.Running;
+                operation.StartedAt = DateTime.UtcNow;
+
+                StreamResult result;
+                try
+                {
+                    // Create timeout cancellation token if timeout is specified
+                    if (request.ProcessingTimeout != Timeout.InfiniteTimeSpan && request.ProcessingTimeout > TimeSpan.Zero)
+                    {
+                        using var timeoutTokenSource = new CancellationTokenSource(request.ProcessingTimeout);
+                        using var combinedToken = CancellationTokenSource.CreateLinkedTokenSource(
+                            operation.CancellationTokenSource.Token,
+                            timeoutTokenSource.Token);
+
+                        // Try the full processing first
+                        result = await ProcessFileStreamAsync(operation, combinedToken.Token);
+                    }
+                    else
+                    {
+                        // Try the full processing first
+                        result = await ProcessFileStreamAsync(operation, operation.CancellationTokenSource.Token);
+                    }
+                }
+                catch (DivideByZeroException)
+                {
+                    // Fallback to simple processing for tests
+                    LogDivideByZeroInFull(_logger);
+
+                    // Create timeout cancellation token if timeout is specified
+                    if (request.ProcessingTimeout != Timeout.InfiniteTimeSpan && request.ProcessingTimeout > TimeSpan.Zero)
+                    {
+                        using var timeoutTokenSource = new CancellationTokenSource(request.ProcessingTimeout);
+                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
+                            operation.CancellationTokenSource.Token,
+                            timeoutTokenSource.Token);
+
+                        result = await ProcessFileSimpleAsync(operation.Request, timeoutCts.Token);
+                    }
+                    else
+                    {
+                        result = await ProcessFileSimpleAsync(operation.Request, operation.CancellationTokenSource.Token);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogErrorDuringFileStreamProcessing(_logger, ex);
+                    operation.Status = StreamOperationStatus.Failed;
+                    operation.Exception = ex;
+                    operation.ErrorMessage = $"Processing error: {ex.Message}";
+                    return CreateFailureResult(operation, ex.Message);
+                }
+
+                operation.Status = StreamOperationStatus.Completed;
+                operation.CompletedAt = DateTime.UtcNow;
+                await _progressTracker.CompleteProgressAsync(operation.OperationId);
+
+                LogSuccessfullyProcessedFileToIn(_logger, request.FilePath, request.OutputPath, result.ProcessingTime);
+
+                // Update statistics correctly
+                lock (_statisticsLock)
+                {
+                    _statistics.TotalFilesProcessed++;
+                    _statistics.TotalBytesProcessed += result.BytesProcessed;
+                    if (_statistics.TotalFilesProcessed == 1)
+                    {
+                        _statistics.AverageProcessingTime = result.ProcessingTime;
+                    }
+                    else
+                    {
+                        if (_statistics.TotalFilesProcessed > 0)
+                        {
+                            _statistics.AverageProcessingTime = TimeSpan.FromTicks(
+                                (_statistics.AverageProcessingTime.Ticks * (_statistics.TotalFilesProcessed - 1) + result.ProcessingTime.Ticks) / _statistics.TotalFilesProcessed);
+                        }
+                    }
+                    _statistics.LastUpdated = DateTime.UtcNow;
+                }
+
+                return result;
             }
-
-            // Create temporary checkpoint directory if needed
-            if (request.CreateCheckpoint)
+            catch (OperationCanceledException)
             {
-                var checkpointDir = await _tempFileManager.CreateTempDirectoryAsync("checkpoint", operation.OperationId);
-                operation.Request.CheckpointDirectory = checkpointDir;
-            }
+                operation.Status = StreamOperationStatus.Cancelled;
+                operation.CompletedAt = DateTime.UtcNow;
 
-            operation.Status = StreamOperationStatus.Running;
-            operation.StartedAt = DateTime.UtcNow;
+                // Check if this was a timeout
+                var isTimeout = request.ProcessingTimeout != Timeout.InfiniteTimeSpan &&
+                               request.ProcessingTimeout > TimeSpan.Zero &&
+                               (DateTime.UtcNow - operation.StartedAt) >= request.ProcessingTimeout;
 
-            StreamResult result;
-            try
-            {
-                // Create timeout cancellation token if timeout is specified
-                if (request.ProcessingTimeout != Timeout.InfiniteTimeSpan && request.ProcessingTimeout > TimeSpan.Zero)
-                {
-                    using var timeoutTokenSource = new CancellationTokenSource(request.ProcessingTimeout);
-                    using var combinedToken = CancellationTokenSource.CreateLinkedTokenSource(
-                        operation.CancellationTokenSource.Token,
-                        timeoutTokenSource.Token);
+                var errorMessage = isTimeout
+                    ? $"Operation timed out after {request.ProcessingTimeout.TotalSeconds:F1} seconds"
+                    : "Operation was cancelled";
 
-                    // Try the full processing first
-                    result = await ProcessFileStreamAsync(operation, combinedToken.Token);
-                }
-                else
-                {
-                    // Try the full processing first
-                    result = await ProcessFileStreamAsync(operation, operation.CancellationTokenSource.Token);
-                }
-            }
-            catch (DivideByZeroException)
-            {
-                // Fallback to simple processing for tests
-                LogDivideByZeroInFull(_logger);
+                LogOperationWas(_logger, operation.OperationId, isTimeout ? "timed out" : "cancelled");
 
-                // Create timeout cancellation token if timeout is specified
-                if (request.ProcessingTimeout != Timeout.InfiniteTimeSpan && request.ProcessingTimeout > TimeSpan.Zero)
-                {
-                    using var timeoutTokenSource = new CancellationTokenSource(request.ProcessingTimeout);
-                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
-                        operation.CancellationTokenSource.Token,
-                        timeoutTokenSource.Token);
-
-                    result = await ProcessFileSimpleAsync(operation.Request, timeoutCts.Token);
-                }
-                else
-                {
-                    result = await ProcessFileSimpleAsync(operation.Request, operation.CancellationTokenSource.Token);
-                }
+                return CreateFailureResult(operation, errorMessage);
             }
             catch (Exception ex)
             {
-                LogErrorDuringFileStreamProcessing(_logger, ex);
+                LogAttemptFailedForFile(_logger, ex, attempt, request.FilePath);
+
+                // If this is not the last attempt, wait and retry
+                if (attempt <= request.RetryCount)
+                {
+                    await Task.Delay(request.RetryDelay, cancellationToken);
+                    continue;
+                }
+
                 operation.Status = StreamOperationStatus.Failed;
                 operation.Exception = ex;
-                operation.ErrorMessage = $"Processing error: {ex.Message}";
+                operation.ErrorMessage = ex.Message;
+                operation.CompletedAt = DateTime.UtcNow;
+
+                LogFailedToProcessFileAfter(_logger, ex, request.FilePath, attempt);
                 return CreateFailureResult(operation, ex.Message);
             }
-
-            operation.Status = StreamOperationStatus.Completed;
-            operation.CompletedAt = DateTime.UtcNow;
-            await _progressTracker.CompleteProgressAsync(operation.OperationId);
-
-            LogSuccessfullyProcessedFileToIn(_logger, request.FilePath, request.OutputPath, result.ProcessingTime);
-
-            // Update statistics correctly
-            lock (_statisticsLock)
-            {
-                _statistics.TotalFilesProcessed++;
-                _statistics.TotalBytesProcessed += result.BytesProcessed;
-                if (_statistics.TotalFilesProcessed == 1)
-                {
-                    _statistics.AverageProcessingTime = result.ProcessingTime;
-                }
-                else
-                {
-                    if (_statistics.TotalFilesProcessed > 0)
-                    {
-                        _statistics.AverageProcessingTime = TimeSpan.FromTicks(
-                            (_statistics.AverageProcessingTime.Ticks * (_statistics.TotalFilesProcessed - 1) + result.ProcessingTime.Ticks) / _statistics.TotalFilesProcessed);
-                    }
-                }
-                _statistics.LastUpdated = DateTime.UtcNow;
-            }
-
-            return result;
-        }
-        catch (OperationCanceledException)
-        {
-            operation.Status = StreamOperationStatus.Cancelled;
-            operation.CompletedAt = DateTime.UtcNow;
-
-            // Check if this was a timeout
-            var isTimeout = request.ProcessingTimeout != Timeout.InfiniteTimeSpan &&
-                           request.ProcessingTimeout > TimeSpan.Zero &&
-                           (DateTime.UtcNow - operation.StartedAt) >= request.ProcessingTimeout;
-
-            var errorMessage = isTimeout
-                ? $"Operation timed out after {request.ProcessingTimeout.TotalSeconds:F1} seconds"
-                : "Operation was cancelled";
-
-            LogOperationWas(_logger, operation.OperationId, isTimeout ? "timed out" : "cancelled");
-
-            return CreateFailureResult(operation, errorMessage);
-        }
-        catch (Exception ex)
-        {
-            LogAttemptFailedForFile(_logger, ex, attempt, request.FilePath);
-
-            // If this is not the last attempt, wait and retry
-            if (attempt <= request.RetryCount)
-            {
-                await Task.Delay(request.RetryDelay, cancellationToken);
-                continue;
-            }
-
-            operation.Status = StreamOperationStatus.Failed;
-            operation.Exception = ex;
-            operation.ErrorMessage = ex.Message;
-            operation.CompletedAt = DateTime.UtcNow;
-
-            LogFailedToProcessFileAfter(_logger, ex, request.FilePath, attempt);
-            return CreateFailureResult(operation, ex.Message);
-        }
         }
 
         // Fallback - should not be reached but ensures all code paths return

@@ -76,7 +76,8 @@ public partial class ArchitectureValidatorService : IArchitectureValidatorServic
             {
                 totalTypesAnalyzed++;
                 var symbol = semanticModel.GetDeclaredSymbol(typeDeclaration, cancellationToken);
-                if (symbol == null) continue;
+                if (symbol == null)
+                    continue;
 
                 var layer = IdentifyLayer(symbol, architecture);
                 if (!string.IsNullOrEmpty(layer))
@@ -146,7 +147,8 @@ public partial class ArchitectureValidatorService : IArchitectureValidatorServic
         // Build dependency graph
         foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true) continue;
+            if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true)
+                continue;
 
             var semanticModel = _workspace.GetSemanticModel(syntaxTree);
             if (semanticModel == null)
@@ -160,7 +162,8 @@ public partial class ArchitectureValidatorService : IArchitectureValidatorServic
             foreach (var typeDeclaration in typeDeclarations)
             {
                 var symbol = semanticModel.GetDeclaredSymbol(typeDeclaration, cancellationToken);
-                if (symbol == null || syntaxTree.FilePath == null) continue;
+                if (symbol == null || syntaxTree.FilePath == null)
+                    continue;
 
                 var layer = IdentifyLayer(symbol, architecture);
                 var node = CreateDependencyNode(symbol, layer, syntaxTree.FilePath);

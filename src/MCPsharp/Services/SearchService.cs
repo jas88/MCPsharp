@@ -99,7 +99,8 @@ public partial class SearchService : ISearchService
 
             await Parallel.ForEachAsync(files, ct, async (file, token) =>
             {
-                if (token.IsCancellationRequested) return;
+                if (token.IsCancellationRequested)
+                    return;
 
                 try
                 {

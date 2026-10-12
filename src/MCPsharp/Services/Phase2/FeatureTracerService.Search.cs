@@ -113,26 +113,30 @@ public partial class FeatureTracerService
             fileName.EndsWith("Controller", StringComparison.OrdinalIgnoreCase))
         {
             components.Controller = $"{relativePath}::FindEntryPoint";
-            if (!dataFlow.Contains("Controller")) dataFlow.Add("Controller");
+            if (!dataFlow.Contains("Controller"))
+                dataFlow.Add("Controller");
         }
         else if (relativePath.Contains("/Services/", StringComparison.OrdinalIgnoreCase) ||
                  fileName.EndsWith("Service", StringComparison.OrdinalIgnoreCase))
         {
             components.Service = $"{relativePath}::FindEntryPoint";
-            if (!dataFlow.Contains("Service")) dataFlow.Add("Service");
+            if (!dataFlow.Contains("Service"))
+                dataFlow.Add("Service");
         }
         else if (relativePath.Contains("/Repositories/", StringComparison.OrdinalIgnoreCase) ||
                  relativePath.Contains("/Data/", StringComparison.OrdinalIgnoreCase) ||
                  fileName.EndsWith("Repository", StringComparison.OrdinalIgnoreCase))
         {
             components.Repository = $"{relativePath}::FindEntryPoint";
-            if (!dataFlow.Contains("Repository")) dataFlow.Add("Repository");
+            if (!dataFlow.Contains("Repository"))
+                dataFlow.Add("Repository");
         }
         else if (relativePath.Contains("/Models/", StringComparison.OrdinalIgnoreCase) ||
                  relativePath.Contains("/Entities/", StringComparison.OrdinalIgnoreCase))
         {
             components.Models.Add(relativePath);
-            if (!dataFlow.Contains("Models")) dataFlow.Add("Models");
+            if (!dataFlow.Contains("Models"))
+                dataFlow.Add("Models");
         }
         else if (relativePath.Contains("/Migrations/", StringComparison.OrdinalIgnoreCase))
         {
@@ -191,7 +195,8 @@ public partial class FeatureTracerService
 
                 foreach (var location in symbols.Select(symbol => symbol.File))
                 {
-                    if (string.IsNullOrEmpty(location)) continue;
+                    if (string.IsNullOrEmpty(location))
+                        continue;
 
                     var fileInfo = new Models.FileInfo
                     {

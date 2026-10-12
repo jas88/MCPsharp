@@ -60,17 +60,23 @@ public partial class LargeFileOptimizerService
 
     private static OptimizationPriority CalculateOptimizationPriority(ClassMetrics metrics)
     {
-        if (metrics.GodClassScore.GodClassScore > 0.8) return OptimizationPriority.Critical;
-        if (metrics.GodClassScore.GodClassScore > 0.6) return OptimizationPriority.High;
-        if (metrics.GodClassScore.GodClassScore > 0.4) return OptimizationPriority.Medium;
+        if (metrics.GodClassScore.GodClassScore > 0.8)
+            return OptimizationPriority.Critical;
+        if (metrics.GodClassScore.GodClassScore > 0.6)
+            return OptimizationPriority.High;
+        if (metrics.GodClassScore.GodClassScore > 0.4)
+            return OptimizationPriority.Medium;
         return OptimizationPriority.Low;
     }
 
     private static OptimizationPriority CalculateMethodOptimizationPriority(MethodMetrics metrics)
     {
-        if (metrics.GodMethodScore.GodMethodScore > 0.8) return OptimizationPriority.Critical;
-        if (metrics.GodMethodScore.GodMethodScore > 0.6) return OptimizationPriority.High;
-        if (metrics.GodMethodScore.GodMethodScore > 0.4) return OptimizationPriority.Medium;
+        if (metrics.GodMethodScore.GodMethodScore > 0.8)
+            return OptimizationPriority.Critical;
+        if (metrics.GodMethodScore.GodMethodScore > 0.6)
+            return OptimizationPriority.High;
+        if (metrics.GodMethodScore.GodMethodScore > 0.4)
+            return OptimizationPriority.Medium;
         return OptimizationPriority.Low;
     }
 
@@ -82,9 +88,12 @@ public partial class LargeFileOptimizerService
         score += largeMethodCount * 0.1;
         score += codeSmellCount * 0.05;
 
-        if (score > 1.0) return OptimizationPriority.Critical;
-        if (score > 0.7) return OptimizationPriority.High;
-        if (score > 0.4) return OptimizationPriority.Medium;
+        if (score > 1.0)
+            return OptimizationPriority.Critical;
+        if (score > 0.7)
+            return OptimizationPriority.High;
+        if (score > 0.4)
+            return OptimizationPriority.Medium;
         return OptimizationPriority.Low;
     }
 
@@ -236,9 +245,12 @@ public partial class LargeFileOptimizerService
 
     private static OptimizationPriority DetermineOverallPriority(LargeFileInfo largeFile)
     {
-        if (largeFile.OptimizationPriority > 0.8) return OptimizationPriority.Critical;
-        if (largeFile.OptimizationPriority > 0.6) return OptimizationPriority.High;
-        if (largeFile.OptimizationPriority > 0.4) return OptimizationPriority.Medium;
+        if (largeFile.OptimizationPriority > 0.8)
+            return OptimizationPriority.Critical;
+        if (largeFile.OptimizationPriority > 0.6)
+            return OptimizationPriority.High;
+        if (largeFile.OptimizationPriority > 0.4)
+            return OptimizationPriority.Medium;
         return OptimizationPriority.Low;
     }
 
