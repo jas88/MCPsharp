@@ -453,7 +453,7 @@ public class RenameSymbolService
             // Find all symbols with the target name in the same namespace
             var existingSymbols = compilation.GetSymbolsWithName(
                 n => string.Equals(n, newName, StringComparison.Ordinal),
-                SymbolFilter.TypeAndMember)
+                SymbolFilter.TypeAndMember, ct)
                 .Where(s => s != null &&
                            s.ContainingNamespace != null &&
                            SymbolEqualityComparer.Default.Equals(s.ContainingNamespace, containingNamespace) &&

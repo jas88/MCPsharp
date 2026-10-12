@@ -65,7 +65,7 @@ public class CallerAnalysisService : ICallerAnalysisService
             return null;
 
         // Find all method symbols in the compilation
-        var methodSymbols = compilation.GetSymbolsWithName(s => s == signature.Name, SymbolFilter.Member)
+        var methodSymbols = compilation.GetSymbolsWithName(s => s == signature.Name, SymbolFilter.Member, cancellationToken)
             .OfType<IMethodSymbol>();
 
         // Find the first method that matches the signature
@@ -236,7 +236,7 @@ public class CallerAnalysisService : ICallerAnalysisService
 
             foreach (var methodDecl in methodDeclarations)
             {
-                var symbol = semanticModel.GetDeclaredSymbol(methodDecl);
+                var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken);
                 if (symbol == null || symbol.IsVirtual || symbol.IsAbstract || symbol.IsOverride)
                     continue; // Skip virtual/abstract/override methods for unused detection
 
@@ -249,7 +249,7 @@ public class CallerAnalysisService : ICallerAnalysisService
                 }
 
                 // Find references to this method
-                var references = await SymbolFinder.FindReferencesAsync(symbol, _workspace.Solution);
+                var references = await SymbolFinder.FindReferencesAsync(symbol, _workspace.Solution, cancellationToken);
                 if (!references.Any())
                 {
                     unusedMethods.Add(CreateMethodSignature(symbol));
@@ -278,12 +278,12 @@ public class CallerAnalysisService : ICallerAnalysisService
 
             foreach (var methodDecl in methodDeclarations)
             {
-                var symbol = semanticModel.GetDeclaredSymbol(methodDecl);
+                var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken);
                 if (symbol == null)
                     continue;
 
                 // Find references to this method
-                var references = await SymbolFinder.FindReferencesAsync(symbol, _workspace.Solution);
+                var references = await SymbolFinder.FindReferencesAsync(symbol, _workspace.Solution, cancellationToken);
                 var referenceFiles = references
                     .SelectMany(r => r.Locations)
                     .Select(l => l.Document.FilePath ?? "")
@@ -376,7 +376,7 @@ public class CallerAnalysisService : ICallerAnalysisService
         if (targetSymbol.ContainingType?.TypeKind == TypeKind.Interface)
         {
             var solution = _workspace.Solution;
-            var implementations = await SymbolFinder.FindImplementationsAsync(targetSymbol.ContainingType, solution);
+            var implementations = await SymbolFinder.FindImplementationsAsync(targetSymbol.ContainingType, solution, cancellationToken: cancellationToken);
             foreach (var impl in implementations)
             {
                 var implMethod = impl.GetMembers(targetSymbol.Name).FirstOrDefault();
@@ -432,7 +432,7 @@ public class CallerAnalysisService : ICallerAnalysisService
         if (methodNode == null)
             return null;
 
-        var callerSymbol = semanticModel.GetDeclaredSymbol(methodNode);
+        var callerSymbol = semanticModel.GetDeclaredSymbol(methodNode, cancellationToken);
         if (callerSymbol == null)
             return null;
 
@@ -540,7 +540,7 @@ public class CallerAnalysisService : ICallerAnalysisService
             return null;
 
         // Find all method symbols with the given name
-        var methodSymbols = compilation.GetSymbolsWithName(s => s == methodName, SymbolFilter.Member)
+        var methodSymbols = compilation.GetSymbolsWithName(s => s == methodName, SymbolFilter.Member, cancellationToken)
             .OfType<IMethodSymbol>();
 
         if (!string.IsNullOrEmpty(containingType))
@@ -589,7 +589,7 @@ public class CallerAnalysisService : ICallerAnalysisService
                     return null;
 
                 var root = await syntaxTree.GetRootAsync(cancellationToken);
-                var position = syntaxTree.GetText().Lines[line].Start + column;
+                var position = syntaxTree.GetText(cancellationToken).Lines[line].Start + column;
                 var node = root.FindToken(position).Parent;
 
                 // Check if we're in a getter or setter context
@@ -741,7 +741,7 @@ public class CallerAnalysisService : ICallerAnalysisService
 
             foreach (var methodDecl in methodDeclarations)
             {
-                var methodSymbol = semanticModel.GetDeclaredSymbol(methodDecl);
+                var methodSymbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken);
                 if (methodSymbol == null || methodSymbol.Equals(targetSymbol))
                     continue; // Skip the target method itself
 
@@ -751,7 +751,7 @@ public class CallerAnalysisService : ICallerAnalysisService
 
                 foreach (var invocation in invocations)
                 {
-                    var invocationSymbol = semanticModel.GetSymbolInfo(invocation).Symbol;
+                    var invocationSymbol = semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol;
 
                     // Check for direct match
                     if (invocationSymbol != null && invocationSymbol.Equals(targetSymbol))

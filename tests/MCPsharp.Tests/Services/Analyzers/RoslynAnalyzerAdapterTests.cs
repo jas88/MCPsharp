@@ -19,6 +19,8 @@ namespace MCPsharp.Tests.Services.Analyzers;
 [Category("Roslyn")]
 public class RoslynAnalyzerAdapterTests : FileServiceTestBase
 {
+    private static readonly string[] ExpectedCSharpExtensions = [".cs"];
+
     private ILogger<RoslynAnalyzerAdapter> _mockLogger = null!;
 
     [SetUp]
@@ -65,7 +67,7 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
         Assert.That(adapter.Version, Is.Not.Null);
         Assert.That(adapter.Author, Is.Not.Null);
         Assert.That(adapter.IsEnabled, Is.True);
-        Assert.That(adapter.SupportedExtensions, Is.EquivalentTo(new[] { ".cs" }));
+        Assert.That(adapter.SupportedExtensions, Is.EquivalentTo(ExpectedCSharpExtensions));
     }
 
     [Test]
@@ -193,18 +195,18 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
     #region InitializeAsync Tests
 
     [Test]
-    public void InitializeAsync_ShouldCompleteSuccessfully()
+    public async Task InitializeAsync_ShouldCompleteSuccessfully()
     {
         // Arrange
         var analyzer = new TestDiagnosticAnalyzer();
         var adapter = new RoslynAnalyzerAdapter(analyzer, _mockLogger);
 
         // Act & Assert
-        Assert.DoesNotThrowAsync(async () => await adapter.InitializeAsync());
+        await Assert.DoesNotThrowAsync(async () => await adapter.InitializeAsync());
     }
 
     [Test]
-    public void InitializeAsync_WithCancellation_ShouldComplete()
+    public async Task InitializeAsync_WithCancellation_ShouldComplete()
     {
         // Arrange
         var analyzer = new TestDiagnosticAnalyzer();
@@ -213,7 +215,7 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
         cts.Cancel();
 
         // Act & Assert - should complete even when cancelled
-        Assert.DoesNotThrowAsync(async () =>
+        await Assert.DoesNotThrowAsync(async () =>
             await adapter.InitializeAsync(cts.Token));
     }
 
@@ -282,7 +284,7 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
     }
 
     [Test]
-    public void AnalyzeAsync_WithCancellation_ShouldThrowOperationCanceledException()
+    public async Task AnalyzeAsync_WithCancellation_ShouldThrowOperationCanceledException()
     {
         // Arrange
         var analyzer = new TestDiagnosticAnalyzer();
@@ -292,7 +294,7 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
         cts.Cancel();
 
         // Act & Assert
-        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
             await adapter.AnalyzeAsync(filePath, "public class Test {}", cts.Token));
     }
 
@@ -430,14 +432,14 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
     #region DisposeAsync Tests
 
     [Test]
-    public void DisposeAsync_ShouldCompleteSuccessfully()
+    public async Task DisposeAsync_ShouldCompleteSuccessfully()
     {
         // Arrange
         var analyzer = new TestDiagnosticAnalyzer();
         var adapter = new RoslynAnalyzerAdapter(analyzer, _mockLogger);
 
         // Act & Assert
-        Assert.DoesNotThrowAsync(async () => await adapter.DisposeAsync());
+        await Assert.DoesNotThrowAsync(async () => await adapter.DisposeAsync());
     }
 
     #endregion
@@ -495,7 +497,7 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
     /// <summary>
     /// Test diagnostic analyzer that produces no diagnostics
     /// </summary>
-    private class TestDiagnosticAnalyzer : DiagnosticAnalyzer
+    private sealed class TestDiagnosticAnalyzer : DiagnosticAnalyzer
     {
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
             ImmutableArray<DiagnosticDescriptor>.Empty;
@@ -509,7 +511,7 @@ public class RoslynAnalyzerAdapterTests : FileServiceTestBase
     /// <summary>
     /// Test diagnostic analyzer that produces diagnostics
     /// </summary>
-    private class TestDiagnosticProducingAnalyzer : DiagnosticAnalyzer
+    private sealed class TestDiagnosticProducingAnalyzer : DiagnosticAnalyzer
     {
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: "TEST001",

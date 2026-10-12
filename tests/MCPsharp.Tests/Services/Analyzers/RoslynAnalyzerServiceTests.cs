@@ -19,6 +19,12 @@ namespace MCPsharp.Tests.Services.Analyzers;
 [Category("Roslyn")]
 public class RoslynAnalyzerServiceTests : FileServiceTestBase
 {
+    private static readonly string[] CSharpLanguages = ["C#"];
+    private static readonly string[] CSharpFileTypes = [".cs"];
+
+    private static readonly string[] SingleAnalyzerId = ["analyzer1"];
+    private static readonly string[] NonExistentAnalyzerId = ["non-existent"];
+
     private RoslynAnalyzerLoader _mockLoader = null!;
     private IAnalyzerHost _mockAnalyzerHost = null!;
     private ILogger<RoslynAnalyzerService> _mockLogger = null!;
@@ -305,7 +311,7 @@ public class RoslynAnalyzerServiceTests : FileServiceTestBase
         // Act - Run only analyzer1
         var result = await _service.RunAnalyzersAsync(
             targetPath,
-            analyzerIds: new[] { "analyzer1" });
+            analyzerIds: SingleAnalyzerId);
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -334,7 +340,7 @@ public class RoslynAnalyzerServiceTests : FileServiceTestBase
         // Act - Try to run non-existent analyzer
         var result = await _service.RunAnalyzersAsync(
             targetPath,
-            analyzerIds: new[] { "non-existent" });
+            analyzerIds: NonExistentAnalyzerId);
 
         // Assert
         Assert.That(result.Success, Is.False);
@@ -539,7 +545,7 @@ public class RoslynAnalyzerServiceTests : FileServiceTestBase
 
     #region Helper Methods
 
-    private IAnalyzer CreateMockAnalyzer(string id)
+    private static IAnalyzer CreateMockAnalyzer(string id)
     {
         var analyzer = Substitute.For<IAnalyzer>();
 
@@ -567,8 +573,8 @@ public class RoslynAnalyzerServiceTests : FileServiceTestBase
         analyzer.GetFixes(Arg.Any<string>()).Returns(ImmutableArray<AnalyzerFix>.Empty);
         analyzer.GetCapabilities().Returns(new AnalyzerCapabilities
         {
-            SupportedLanguages = new[] { "C#" },
-            SupportedFileTypes = new[] { ".cs" }
+            SupportedLanguages = CSharpLanguages,
+            SupportedFileTypes = CSharpFileTypes
         });
         analyzer.DisposeAsync().Returns(Task.CompletedTask);
 

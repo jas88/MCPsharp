@@ -71,7 +71,7 @@ public class FileOperationsServiceTests
         // Assert
         Assert.That(result.TotalFiles, Is.EqualTo(2));
         Assert.That(result.Files, Has.Count.EqualTo(2));
-        Assert.That(result.Files, Has.All.Matches<FileInfo>(f => f.RelativePath.EndsWith(".cs")));
+        Assert.That(result.Files, Has.All.Matches<FileInfo>(f => f is not null && f.RelativePath.EndsWith(".cs", StringComparison.Ordinal)));
         Assert.That(result.Pattern, Is.EqualTo("**/*.cs"));
     }
 
@@ -88,7 +88,7 @@ public class FileOperationsServiceTests
 
         // Assert
         Assert.That(result.Files, Has.Count.EqualTo(1));
-        Assert.That(result.Files, Has.All.Matches<FileInfo>(f => !f.IsHidden));
+        Assert.That(result.Files, Has.All.Matches<FileInfo>(f => f is not null && !f.IsHidden));
     }
 
     [Test]

@@ -154,7 +154,11 @@ public abstract class AutomatedCodeFixProviderBase : IAutomatedCodeFixProvider
 
             var compilationWithAnalyzers = compilation.WithAnalyzers(
                 ImmutableArray.Create(analyzer),
-                options: null);
+                new CompilationWithAnalyzersOptions(
+                    options: new AnalyzerOptions(ImmutableArray<AdditionalText>.Empty),
+                    onAnalyzerException: null,
+                    concurrentAnalysis: true,
+                    logAnalyzerExecutionTime: true));
 
             var allDiagnostics = await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync(cancellationToken);
 

@@ -11,6 +11,8 @@ namespace MCPsharp.Tests.Services;
 [TestFixture]
 public class McpPromptRegistryTests
 {
+    private static readonly string[] ExpectedPromptNames = ["analyze-codebase", "implement-feature", "fix-bug"];
+
     private McpPromptRegistry _registry = null!;
 
     [SetUp]
@@ -96,7 +98,7 @@ public class McpPromptRegistryTests
         Assert.That(result.Prompts, Is.Not.Empty);
         Assert.That(result.Prompts.Count, Is.EqualTo(3));
         Assert.That(result.Prompts.Select(p => p.Name),
-            Is.EquivalentTo(new[] { "analyze-codebase", "implement-feature", "fix-bug" }));
+            Is.EquivalentTo(ExpectedPromptNames));
     }
 
     [Test]

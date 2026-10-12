@@ -1227,7 +1227,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
 
         // Assert - Should handle cancellation gracefully (may return null or not throw)
         // This tests that the service accepts cancellation tokens without crashing
-        Assert.That(true, Is.True); // Test passes if no unhandled exception occurs
+        Assert.Pass("Service accepted cancelled tokens without an unhandled exception");
     }
 
     [Test]

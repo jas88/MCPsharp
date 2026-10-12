@@ -12,6 +12,7 @@ namespace MCPsharp.Services.Roslyn;
 public class RoslynWorkspace : IDisposable
 {
     private Workspace? _workspace;
+    private WorkspaceEventRegistration? _workspaceFailedRegistration;
     private ProjectId? _projectId;
     private Compilation? _compilation;
     private readonly Dictionary<string, DocumentId> _documentMap = new();
@@ -107,10 +108,11 @@ public class RoslynWorkspace : IDisposable
             var msbuildWorkspace = MSBuildWorkspace.Create();
 
             // Log workspace diagnostics
-            msbuildWorkspace.WorkspaceFailed += (sender, e) =>
+            _workspaceFailedRegistration?.Dispose();
+            _workspaceFailedRegistration = msbuildWorkspace.RegisterWorkspaceFailedHandler(e =>
             {
                 Console.Error.WriteLine($"MSBuildWorkspace warning: {e.Diagnostic.Kind} - {e.Diagnostic.Message}");
-            };
+            });
 
             Project project;
             if (slnPath != null)
@@ -681,6 +683,7 @@ public class RoslynWorkspace : IDisposable
                     // Dispose managed resources
                     _semanticModelCache?.Dispose();
                     _compilationCache?.Dispose();
+                    _workspaceFailedRegistration?.Dispose();
                     _workspace?.Dispose();
                 }
 

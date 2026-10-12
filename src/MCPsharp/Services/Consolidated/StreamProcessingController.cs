@@ -181,15 +181,16 @@ public class StreamProcessingController
         }
         finally
         {
-            // Schedule cleanup
+            // Schedule cleanup. Deliberately not tied to the request token:
+            // cancelling the request must not skip removal of the tracked stream.
             _ = Task.Run(async () =>
             {
-                await Task.Delay(TimeSpan.FromMinutes(10));
+                await Task.Delay(TimeSpan.FromMinutes(10), CancellationToken.None);
                 lock (_streamsLock)
                 {
                     _activeStreams.Remove(operationId);
                 }
-            }, ct);
+            }, CancellationToken.None);
         }
     }
 

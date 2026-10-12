@@ -251,7 +251,7 @@ public class RollbackService : IRollbackService
             // If rollback was successful, remove the session
             if (overallSuccess)
             {
-                _ = Task.Run(async () => await DeleteRollbackAsync(rollbackId, cancellationToken));
+                _ = Task.Run(async () => await DeleteRollbackAsync(rollbackId, cancellationToken), cancellationToken);
             }
 
             _logger?.LogInformation(

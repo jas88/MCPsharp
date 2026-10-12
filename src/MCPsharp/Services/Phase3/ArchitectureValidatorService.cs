@@ -75,7 +75,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
             foreach (var typeDeclaration in typeDeclarations)
             {
                 totalTypesAnalyzed++;
-                var symbol = semanticModel.GetDeclaredSymbol(typeDeclaration);
+                var symbol = semanticModel.GetDeclaredSymbol(typeDeclaration, cancellationToken);
                 if (symbol == null) continue;
 
                 var layer = IdentifyLayer(symbol, architecture);
@@ -157,7 +157,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
 
             foreach (var typeDeclaration in typeDeclarations)
             {
-                var symbol = semanticModel.GetDeclaredSymbol(typeDeclaration);
+                var symbol = semanticModel.GetDeclaredSymbol(typeDeclaration, cancellationToken);
                 if (symbol == null || syntaxTree.FilePath == null) continue;
 
                 var layer = IdentifyLayer(symbol, architecture);

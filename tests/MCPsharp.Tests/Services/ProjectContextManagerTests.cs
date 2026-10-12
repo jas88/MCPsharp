@@ -170,7 +170,7 @@ public class ProjectContextManagerTests
     {
         // Arrange
         _manager.OpenProject(_testRoot);
-        var upperCasePath = Path.Combine(_testRoot.ToUpper(), "file.txt");
+        var upperCasePath = Path.Combine(_testRoot.ToUpperInvariant(), "file.txt");
 
         // Act
         var isValid = _manager.IsValidPath(upperCasePath);

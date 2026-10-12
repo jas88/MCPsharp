@@ -760,7 +760,7 @@ public class DuplicateCodeDetectorService : IDuplicateCodeDetectorService
         try
         {
             var sourceText = await File.ReadAllTextAsync(filePath, cancellationToken);
-            var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: filePath);
+            var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: filePath, cancellationToken: cancellationToken);
             var root = await syntaxTree.GetRootAsync(cancellationToken);
             var compilation = _workspace.GetCompilation();
             var semanticModel = compilation?.GetSemanticModel(syntaxTree);

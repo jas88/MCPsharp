@@ -153,7 +153,7 @@ public class LargeFileOptimizerService : ILargeFileOptimizerService
             throw new InvalidOperationException("No classes found in the specified file");
 
         var targetClass = classDeclarations.First();
-        var classSymbol = semanticModel.GetDeclaredSymbol(targetClass);
+        var classSymbol = semanticModel.GetDeclaredSymbol(targetClass, cancellationToken);
         if (classSymbol == null)
             throw new InvalidOperationException("Could not get semantic information for the class");
 

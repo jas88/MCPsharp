@@ -210,7 +210,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         CancellationToken ct)
     {
         // Find all classes that implement this interface
-        var implementations = await SymbolFinder.FindImplementationsAsync(interfaceSymbol, project.Solution);
+        var implementations = await SymbolFinder.FindImplementationsAsync(interfaceSymbol, project.Solution, cancellationToken: ct);
 
         foreach (var implementation in implementations)
         {
@@ -263,7 +263,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                                 {
                                     impacts.Add(new CSharpImpact
                                     {
-                                        FilePath = doc.FilePath!,
+                                        FilePath = doc.FilePath,
                                         Line = classDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
                                         ImpactType = "interface_implementation",
                                         Description = $"Class {classSymbol.Name} implements interface {interfaceSymbol.Name}"

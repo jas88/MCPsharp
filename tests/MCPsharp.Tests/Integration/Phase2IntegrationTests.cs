@@ -138,8 +138,8 @@ jobs:
         Assert.That(details.Triggers, Does.Contain("push"));
         Assert.That(details.Triggers, Does.Contain("pull_request"));
         Assert.That(details.Jobs, Is.Not.Null);
-        Assert.That(details.Jobs, Has.Some.Matches<dynamic>(j => j.Name == "build"));
-        Assert.That(details.Jobs, Has.Some.Matches<dynamic>(j => j.Name == "deploy"));
+        Assert.That(details.Jobs, Has.Some.Matches<dynamic>(j => j is not null && j.Name == "build"));
+        Assert.That(details.Jobs, Has.Some.Matches<dynamic>(j => j is not null && j.Name == "deploy"));
     }
 
     [Test]
@@ -173,7 +173,7 @@ jobs:
 
         // Assert: Verify version mismatch is detected
         Assert.That(issues, Is.Not.Empty);
-        Assert.That(issues, Has.Some.Matches<dynamic>(i => i.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) && i.Message.Contains("version mismatch")));
+        Assert.That(issues, Has.Some.Matches<dynamic>(i => i is not null && (i.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) && i.Message.Contains("version mismatch"))));
     }
 
     #endregion
@@ -230,7 +230,7 @@ jobs:
         Assert.That(mergedConfig.SourceFiles, Has.Count.EqualTo(3));
 
         // Check that config merging worked (keys may be in different format)
-        Assert.That(mergedConfig.MergedSettings.Any(), Is.True);
+        Assert.That(mergedConfig.MergedSettings, Is.Not.Empty);
 
         // Look for keys that should exist after merging
         var logLevelDefault = mergedConfig.MergedSettings.Keys.FirstOrDefault(k => k.Contains("Default") && k.Contains("Logging"));
@@ -809,7 +809,7 @@ jobs:
         return projectDir;
     }
 
-    private string CreateWorkflowFile(string projectDir, string fileName, string content)
+    private static string CreateWorkflowFile(string projectDir, string fileName, string content)
     {
         var workflowDir = Path.Combine(projectDir, ".github", "workflows");
         Directory.CreateDirectory(workflowDir);

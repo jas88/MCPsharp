@@ -599,7 +599,7 @@ public partial class McpToolRegistry
 
         try
         {
-            var rollbacks = await _bulkEditService.GetAvailableRollbacksAsync();
+            var rollbacks = await _bulkEditService.GetAvailableRollbacksAsync(cancellationToken);
 
             return new ToolCallResult
             {

@@ -27,9 +27,9 @@ namespace MCPsharp.Tests.Integration;
 [Category("Analyzer")]
 public class RoslynAnalyzerIntegrationTests : IntegrationTestBase
 {
-    private IAnalyzerHost? _analyzerHost;
-    private IAnalyzerRegistry? _analyzerRegistry;
-    private ISecurityManager? _securityManager;
+    private AnalyzerHost? _analyzerHost;
+    private AnalyzerRegistry? _analyzerRegistry;
+    private SecurityManager? _securityManager;
     private IFixEngine? _fixEngine;
     private IAnalyzerSandboxFactory? _sandboxFactory;
     private RoslynAnalyzerLoader? _analyzerLoader;
@@ -605,7 +605,7 @@ public class TestClass
 
     #region Helper Methods
 
-    private string GenerateLargeCodeFile(int methodCount)
+    private static string GenerateLargeCodeFile(int methodCount)
     {
         var code = @"
 using System;
@@ -640,7 +640,7 @@ namespace TestNamespace
     /// <summary>
     /// Simple test analyzer that detects unused variables
     /// </summary>
-    private class TestUnusedVariableAnalyzer : DiagnosticAnalyzer
+    private sealed class TestUnusedVariableAnalyzer : DiagnosticAnalyzer
     {
         public const string DiagnosticId = "TEST001";
         private const string Category = "Usage";

@@ -13,6 +13,8 @@ namespace MCPsharp.Tests.Integration;
 [TestFixture]
 public class SqliteCacheIntegrationTests
 {
+    private static readonly string[] SampleProjectNames = ["Project1", "Project2"];
+
     private ProjectDatabase _database = null!;
     private ProjectContextManager _projectManager = null!;
     private McpResourceRegistry _resourceRegistry = null!;
@@ -311,7 +313,7 @@ public class SqliteCacheIntegrationTests
 
         var solutionInfo = JsonSerializer.Serialize(new {
             name = "Test.sln",
-            projects = new[] { "Project1", "Project2" }
+            projects = SampleProjectNames
         });
 
         // Act
@@ -557,7 +559,7 @@ public class SqliteCacheIntegrationTests
             });
 
         // Act & Assert
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _resourceRegistry.ReadResourceAsync("test://error"));
         Assert.That(ex!.Message, Is.EqualTo("Test error"));
     }

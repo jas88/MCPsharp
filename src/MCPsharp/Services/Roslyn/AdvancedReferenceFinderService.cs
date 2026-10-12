@@ -561,7 +561,7 @@ public class AdvancedReferenceFinderService
 
             foreach (var methodDecl in methodDeclarations)
             {
-                var symbol = semanticModel.GetDeclaredSymbol(methodDecl);
+                var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken);
                 if (symbol is IMethodSymbol methodSymbol)
                 {
                     methods.Add(CreateMethodSignature(methodSymbol));
@@ -589,7 +589,7 @@ public class AdvancedReferenceFinderService
 
             foreach (var typeDecl in typeDeclarations)
             {
-                var symbol = semanticModel.GetDeclaredSymbol(typeDecl);
+                var symbol = semanticModel.GetDeclaredSymbol(typeDecl, cancellationToken);
                 if (symbol != null)
                 {
                     types.Add(symbol.Name);

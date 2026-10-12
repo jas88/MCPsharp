@@ -3,7 +3,7 @@ namespace MCPsharp.Tests.TestFixtures;
 /// <summary>
 /// Test implementation for reference finding tests
 /// </summary>
-public class ServiceImpl : IService
+public class ServiceImplementation : IService
 {
     private string _data = "test";
 

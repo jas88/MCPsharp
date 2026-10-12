@@ -338,7 +338,7 @@ public class CodeBlockExtractorService
         try
         {
             var code = await File.ReadAllTextAsync(filePath, cancellationToken);
-            var tree = CSharpSyntaxTree.ParseText(code);
+            var tree = CSharpSyntaxTree.ParseText(code, cancellationToken: cancellationToken);
             var root = await tree.GetRootAsync(cancellationToken);
 
             if (root is CompilationUnitSyntax compilationUnit)

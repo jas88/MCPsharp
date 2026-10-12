@@ -43,7 +43,7 @@ public class AICodeTransformationService
         var currentCode = await File.ReadAllTextAsync(filePath, cancellationToken);
 
         // Parse to syntax tree
-        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode);
+        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode, cancellationToken: cancellationToken);
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         // Build AI prompt with context
@@ -85,7 +85,7 @@ public class AICodeTransformationService
         _logger.LogInformation("AI refactoring {FilePath}: {Goal}", filePath, refactoringGoal);
 
         var currentCode = await File.ReadAllTextAsync(filePath, cancellationToken);
-        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode);
+        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode, cancellationToken: cancellationToken);
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         var prompt = BuildRefactorPrompt(currentCode, refactoringGoal);
@@ -120,7 +120,7 @@ public class AICodeTransformationService
         _logger.LogInformation("AI implementing feature in {FilePath}: {Feature}", filePath, featureDescription);
 
         var currentCode = await File.ReadAllTextAsync(filePath, cancellationToken);
-        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode);
+        var syntaxTree = CSharpSyntaxTree.ParseText(currentCode, cancellationToken: cancellationToken);
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         var prompt = BuildImplementationPrompt(currentCode, featureDescription);
@@ -457,7 +457,7 @@ IMPORTANT:
         try
         {
             // Parse to syntax tree
-            var syntaxTree = CSharpSyntaxTree.ParseText(code, path: filePath);
+            var syntaxTree = CSharpSyntaxTree.ParseText(code, path: filePath, cancellationToken: cancellationToken);
 
             // Check for syntax errors
             var diagnostics = syntaxTree.GetDiagnostics(cancellationToken);

@@ -28,7 +28,7 @@ public class TypeUsageService : ITypeUsageService
             return null;
 
         // Find the type symbol
-        var typeSymbol = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type).OfType<INamedTypeSymbol>().FirstOrDefault();
+        var typeSymbol = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type, cancellationToken).OfType<INamedTypeSymbol>().FirstOrDefault();
         if (typeSymbol == null)
             return null;
 
@@ -61,7 +61,7 @@ public class TypeUsageService : ITypeUsageService
         // Find the type symbol by full name
         var typeSymbol = compilation.GetSymbolsWithName(
             fullTypeName.Split('.').Last(),
-            SymbolFilter.Type)
+            SymbolFilter.Type, cancellationToken)
             .OfType<INamedTypeSymbol>()
             .FirstOrDefault(t => t.ToDisplayString() == fullTypeName);
 
@@ -95,7 +95,7 @@ public class TypeUsageService : ITypeUsageService
                 IsSealed = false
             };
 
-        var typeSymbol = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type)
+        var typeSymbol = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type, cancellationToken)
             .OfType<INamedTypeSymbol>()
             .FirstOrDefault();
 
@@ -143,7 +143,7 @@ public class TypeUsageService : ITypeUsageService
             var classDeclarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
             foreach (var classDecl in classDeclarations)
             {
-                var classSymbol = semanticModel.GetDeclaredSymbol(classDecl);
+                var classSymbol = semanticModel.GetDeclaredSymbol(classDecl, cancellationToken);
                 if (classSymbol != null && InheritsFrom(classSymbol, typeSymbol))
                 {
                     var lineSpan = classDecl.Identifier.GetLocation().GetLineSpan();
@@ -186,7 +186,7 @@ public class TypeUsageService : ITypeUsageService
                 var classDeclarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
                 foreach (var classDecl in classDeclarations)
                 {
-                    var classSymbol = semanticModel.GetDeclaredSymbol(classDecl);
+                    var classSymbol = semanticModel.GetDeclaredSymbol(classDecl, cancellationToken);
                     if (classSymbol != null && ImplementsInterface(classSymbol, typeSymbol))
                     {
                         var lineSpan = classDecl.Identifier.GetLocation().GetLineSpan();
@@ -345,7 +345,7 @@ public class TypeUsageService : ITypeUsageService
 
             foreach (var typeDecl in typeDeclarations)
             {
-                var symbol = semanticModel.GetDeclaredSymbol(typeDecl);
+                var symbol = semanticModel.GetDeclaredSymbol(typeDecl, cancellationToken);
                 if (symbol == null)
                     continue;
 

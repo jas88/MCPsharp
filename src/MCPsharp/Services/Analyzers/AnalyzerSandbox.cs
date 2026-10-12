@@ -48,7 +48,7 @@ public class AnalyzerSandbox : IAnalyzerSandbox
 
         _currentUsage = new SandboxUsage { StartTime = DateTime.UtcNow };
 
-        _processingTask = Task.Run(ProcessOperationsAsync);
+        _processingTask = Task.Run(ProcessOperationsAsync, _cancellationTokenSource.Token);
     }
 
     public async Task<IAnalyzer> LoadAnalyzerAsync(string assemblyPath, CancellationToken cancellationToken = default)
@@ -174,7 +174,7 @@ public class AnalyzerSandbox : IAnalyzerSandbox
 
             try
             {
-                _processingTask.Wait(TimeSpan.FromSeconds(10));
+                _processingTask.Wait(TimeSpan.FromSeconds(10), CancellationToken.None);
             }
             catch (Exception ex)
             {

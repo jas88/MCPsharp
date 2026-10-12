@@ -50,7 +50,7 @@ public class AsyncAwaitPatternAnalyzer : DiagnosticAnalyzer
             return;
 
         // Check if return type is Task or Task<T>
-        var methodSymbol = context.SemanticModel.GetDeclaredSymbol(methodDecl);
+        var methodSymbol = context.SemanticModel.GetDeclaredSymbol(methodDecl, context.CancellationToken);
         if (methodSymbol == null)
             return;
 

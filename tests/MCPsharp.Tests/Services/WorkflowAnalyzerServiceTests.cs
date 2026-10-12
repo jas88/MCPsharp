@@ -47,7 +47,7 @@ public class WorkflowAnalyzerServiceTests
 
             // Assert
             Assert.That(result, Has.Count.EqualTo(2));
-            Assert.That(result, Has.All.Matches<string>(path => path.EndsWith(".yml") || path.EndsWith(".yaml")));
+            Assert.That(result, Has.All.Matches<string>(path => path is not null && (path.EndsWith(".yml", StringComparison.Ordinal) || path.EndsWith(".yaml", StringComparison.Ordinal))));
         }
         finally
         {
@@ -79,7 +79,7 @@ public class WorkflowAnalyzerServiceTests
         var nonExistentPath = Path.Combine(_testDataPath, "nonexistent.yml");
 
         // Act & Assert
-        Assert.ThrowsAsync<FileNotFoundException>(
+        await Assert.ThrowsAsync<FileNotFoundException>(
             async () => await _service.ParseWorkflowAsync(nonExistentPath));
     }
 
@@ -90,7 +90,7 @@ public class WorkflowAnalyzerServiceTests
         var invalidPath = Path.Combine(_testDataPath, "invalid.yml");
 
         // Act & Assert
-        Assert.ThrowsAsync<YamlDotNet.Core.SemanticErrorException>(
+        await Assert.ThrowsAsync<YamlDotNet.Core.SemanticErrorException>(
             async () => await _service.ParseWorkflowAsync(invalidPath));
     }
 
@@ -166,7 +166,7 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ParseWorkflowAsync(workflowPath);
 
         // Assert
-        var job = result.Jobs?.FirstOrDefault();
+        var job = result.Jobs is { Count: > 0 } jobs ? jobs[0] : null;
         Assert.That(job, Is.Not.Null);
         Assert.That(job.Steps, Is.Not.Null);
         Assert.That(job.Steps, Has.Count.EqualTo(4));
@@ -212,7 +212,7 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ParseWorkflowAsync(workflowPath);
 
         // Assert
-        var job = result.Jobs?.FirstOrDefault();
+        var job = result.Jobs is { Count: > 0 } jobs ? jobs[0] : null;
         Assert.That(job, Is.Not.Null);
         Assert.That(job.Environment, Is.Not.Null);
         Assert.That(job.Environment.Keys, Does.Contain("DEPLOY_ENV"));
@@ -229,7 +229,7 @@ public class WorkflowAnalyzerServiceTests
         var result = await _service.ParseWorkflowAsync(workflowPath);
 
         // Assert
-        var job = result.Jobs?.FirstOrDefault();
+        var job = result.Jobs is { Count: > 0 } jobs ? jobs[0] : null;
         Assert.That(job, Is.Not.Null);
         Assert.That(job.Steps, Is.Not.Null);
 

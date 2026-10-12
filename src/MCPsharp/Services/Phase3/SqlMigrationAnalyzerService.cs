@@ -113,7 +113,7 @@ public class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
         {
             // Parse the DbContext file to extract migration history information
             var dbContextCode = await File.ReadAllTextAsync(dbContextPath, cancellationToken);
-            var syntaxTree = CSharpSyntaxTree.ParseText(dbContextCode);
+            var syntaxTree = CSharpSyntaxTree.ParseText(dbContextCode, cancellationToken: cancellationToken);
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             // Look for OnConfiguring method or connection string configuration

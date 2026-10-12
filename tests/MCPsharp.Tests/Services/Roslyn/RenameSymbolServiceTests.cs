@@ -776,8 +776,9 @@ public class Container<TOld>
     #endregion
 
     [TearDown]
-    public void TearDown()
+    protected override void TearDown()
     {
         _workspace?.Dispose();
+        base.TearDown();
     }
 }

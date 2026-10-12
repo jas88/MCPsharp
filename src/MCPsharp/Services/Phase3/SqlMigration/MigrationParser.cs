@@ -54,7 +54,7 @@ internal class MigrationParser
         try
         {
             var code = await File.ReadAllTextAsync(migrationFilePath, cancellationToken);
-            var syntaxTree = CSharpSyntaxTree.ParseText(code);
+            var syntaxTree = CSharpSyntaxTree.ParseText(code, cancellationToken: cancellationToken);
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             // Find the migration class

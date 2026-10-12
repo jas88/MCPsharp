@@ -182,15 +182,16 @@ public class BulkOperationsHub
         }
         finally
         {
-            // Cleanup context after a delay
+            // Cleanup context after a delay. Deliberately not tied to the request token:
+            // cancelling the request must not skip removal of the tracked operation.
             _ = Task.Run(async () =>
             {
-                await Task.Delay(TimeSpan.FromMinutes(30));
+                await Task.Delay(TimeSpan.FromMinutes(30), CancellationToken.None);
                 lock (_operationsLock)
                 {
                     _activeOperations.Remove(operationId);
                 }
-            }, ct);
+            }, CancellationToken.None);
         }
     }
 

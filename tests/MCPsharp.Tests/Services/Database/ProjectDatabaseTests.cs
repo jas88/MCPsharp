@@ -7,6 +7,9 @@ namespace MCPsharp.Tests.Services.Database;
 [TestFixture]
 public class ProjectDatabaseTests
 {
+    private static readonly string[] ClassKindFilter = ["Class"];
+    private static readonly string[] TestNamespaceFilter = ["Test.Namespace"];
+
     private ProjectDatabase _db = null!;
 
     [SetUp]
@@ -397,7 +400,7 @@ public class ProjectDatabaseTests
 
         // Assert
         Assert.That(files, Has.Count.EqualTo(3));
-        Assert.That(files, Has.All.Matches<DbFile>(f => f.ProjectId == projectId));
+        Assert.That(files, Has.All.Matches<DbFile>(f => f is not null && f.ProjectId == projectId));
     }
 
     [Test]
@@ -419,7 +422,7 @@ public class ProjectDatabaseTests
 
         // Assert
         Assert.That(staleFiles, Has.Count.EqualTo(1));
-        Assert.That(staleFiles.First().RelativePath, Is.EqualTo("File2.cs"));
+        Assert.That(staleFiles[0].RelativePath, Is.EqualTo("File2.cs"));
     }
 
     [Test]
@@ -440,7 +443,7 @@ public class ProjectDatabaseTests
 
         // Assert
         Assert.That(staleFiles, Has.Count.EqualTo(1));
-        Assert.That(staleFiles.First().RelativePath, Is.EqualTo("File2.cs"));
+        Assert.That(staleFiles[0].RelativePath, Is.EqualTo("File2.cs"));
     }
 
     [Test]
@@ -458,7 +461,7 @@ public class ProjectDatabaseTests
 
         // Assert
         Assert.That(deletedFiles, Has.Count.EqualTo(1));
-        Assert.That(deletedFiles.First().RelativePath, Is.EqualTo("File2.cs"));
+        Assert.That(deletedFiles[0].RelativePath, Is.EqualTo("File2.cs"));
     }
 
     [Test]
@@ -606,7 +609,7 @@ public class ProjectDatabaseTests
 
         // Assert
         Assert.That(symbols, Has.Count.EqualTo(2));
-        Assert.That(symbols, Has.All.Matches<DbSymbol>(s => s.Name.Contains("Test")));
+        Assert.That(symbols, Has.All.Matches<DbSymbol>(s => s is not null && s.Name.Contains("Test")));
     }
 
     [Test]
@@ -624,7 +627,7 @@ public class ProjectDatabaseTests
 
         // Assert
         Assert.That(symbols, Has.Count.EqualTo(1));
-        Assert.That(symbols.First().Name, Is.EqualTo("TestClass"));
+        Assert.That(symbols[0].Name, Is.EqualTo("TestClass"));
     }
 
     [Test]
@@ -642,7 +645,7 @@ public class ProjectDatabaseTests
 
         // Assert
         Assert.That(symbols, Has.Count.EqualTo(1));
-        Assert.That(symbols.First().Name, Is.EqualTo("TestClass"));
+        Assert.That(symbols[0].Name, Is.EqualTo("TestClass"));
     }
 
     [Test]
@@ -681,12 +684,12 @@ public class ProjectDatabaseTests
         // Act
         var symbols = await _db.SearchSymbolsAsync(
             query: "Test",
-            kinds: new[] { "Class" },
-            namespaces: new[] { "Test.Namespace" });
+            kinds: ClassKindFilter,
+            namespaces: TestNamespaceFilter);
 
         // Assert
         Assert.That(symbols, Has.Count.EqualTo(1));
-        Assert.That(symbols.First().Name, Is.EqualTo("TestClass"));
+        Assert.That(symbols[0].Name, Is.EqualTo("TestClass"));
     }
 
     [Test]
@@ -821,7 +824,7 @@ public class ProjectDatabaseTests
 
         // Assert
         Assert.That(callers, Has.Count.EqualTo(1));
-        Assert.That(callers.First().Caller.Name, Is.EqualTo("Caller"));
+        Assert.That(callers[0].Caller.Name, Is.EqualTo("Caller"));
     }
 
     [Test]
@@ -848,7 +851,7 @@ public class ProjectDatabaseTests
 
         // Assert
         Assert.That(callees, Has.Count.EqualTo(1));
-        Assert.That(callees.First().Callee.Name, Is.EqualTo("Callee"));
+        Assert.That(callees[0].Callee.Name, Is.EqualTo("Callee"));
     }
 
     [Test]
@@ -1082,7 +1085,7 @@ public class ProjectDatabaseTests
         var fileCountBefore = await _db.GetFileCountAsync(projectId);
 
         // Act & Assert
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await _db.ExecuteInTransactionAsync(async (conn, tx) =>
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await _db.ExecuteInTransactionAsync(async (conn, tx) =>
         {
             await _db.UpsertFileAsync(projectId, "File1.cs", "hash1", 100, "csharp");
             throw new InvalidOperationException("Test exception");
@@ -1111,10 +1114,10 @@ public class ProjectDatabaseTests
     }
 
     [Test]
-    public void GetOrCreateProjectAsync_ThrowsException_WhenPathIsEmpty()
+    public async Task GetOrCreateProjectAsync_ThrowsException_WhenPathIsEmpty()
     {
         // Act & Assert
-        Assert.ThrowsAsync<ArgumentException>(async () =>
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
             await _db.GetOrCreateProjectAsync("", "TestProject"));
     }
 

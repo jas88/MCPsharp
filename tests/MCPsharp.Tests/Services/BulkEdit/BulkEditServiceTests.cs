@@ -83,7 +83,7 @@ public class BulkEditServiceTests : FileServiceTestBase
     }
 
     [Test]
-    public void BulkReplaceAsync_WithInvalidRegex_ShouldFail()
+    public async Task BulkReplaceAsync_WithInvalidRegex_ShouldFail()
     {
         // Arrange
         var testFile = CreateTestFile("Some content");
@@ -91,7 +91,7 @@ public class BulkEditServiceTests : FileServiceTestBase
         var invalidPattern = @"[unclosed";
 
         // Act & Assert
-        var ex = Assert.ThrowsAsync<RegexParseException>(async () =>
+        var ex = await Assert.ThrowsAsync<RegexParseException>(async () =>
             await _service.BulkReplaceAsync(files, invalidPattern, "replacement"));
 
         Assert.That(ex, Is.Not.Null);
@@ -665,7 +665,7 @@ public class BulkEditServiceTests : FileServiceTestBase
         };
 
         // Filter to just .cs files to test glob functionality
-        var csFiles = files.Where(f => f.EndsWith(".cs")).ToArray();
+        var csFiles = files.Where(f => f.EndsWith(".cs", StringComparison.Ordinal)).ToArray();
 
         // Act
         var result = await _service.BulkReplaceAsync(csFiles, "Content", "Modified");

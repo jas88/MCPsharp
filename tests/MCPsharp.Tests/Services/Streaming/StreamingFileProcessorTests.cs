@@ -184,7 +184,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
     }
 
     [Test]
-    public void ProcessFileAsync_WithCancellation_ShouldRespectCancellationToken()
+    public async Task ProcessFileAsync_WithCancellation_ShouldRespectCancellationToken()
     {
         // Arrange
         var testFile = CreateTestFile(TestDataFixtures.PerformanceTestData.GenerateLargeText(10000));
@@ -200,7 +200,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
         cts.Cancel();
 
         // Act & Assert
-        Assert.ThrowsAsync<OperationCanceledException>(
+        await Assert.ThrowsAsync<OperationCanceledException>(
             async () => await _processor.ProcessFileAsync(config, cts.Token));
     }
 
@@ -313,7 +313,7 @@ public class StreamingFileProcessorTests : FileServiceTestBase
             ChunkSize = 1024,
             ProcessorOptions = new Dictionary<string, object>()
         };
-        var transform = new Func<string, string>(content => content.ToUpper());
+        var transform = new Func<string, string>(content => content.ToUpperInvariant());
 
         // Act
         var result = await _processor.ProcessFileWithTransformAsync(testFile, config, transform);

@@ -83,8 +83,8 @@ jobs:
         var workflows = await _service.FindWorkflowsAsync(projectRoot);
 
         Assert.That(workflows.Count, Is.EqualTo(2));
-        Assert.That(workflows, Has.Some.Matches<string>(w => w.EndsWith("build.yml")));
-        Assert.That(workflows, Has.Some.Matches<string>(w => w.EndsWith("deploy.yml")));
+        Assert.That(workflows, Has.Some.Matches<string>(w => w is not null && w.EndsWith("build.yml", StringComparison.Ordinal)));
+        Assert.That(workflows, Has.Some.Matches<string>(w => w is not null && w.EndsWith("deploy.yml", StringComparison.Ordinal)));
     }
 
     [Test]
@@ -192,8 +192,8 @@ jobs:
         var workflows = await _service.GetAllWorkflowsAsync(projectRoot);
 
         Assert.That(workflows.Count, Is.EqualTo(2));
-        Assert.That(workflows, Has.Some.Matches<dynamic>(w => w.Name == "Build"));
-        Assert.That(workflows, Has.Some.Matches<dynamic>(w => w.Name == "Deploy"));
+        Assert.That(workflows, Has.Some.Matches<dynamic>(w => w is not null && w.Name == "Build"));
+        Assert.That(workflows, Has.Some.Matches<dynamic>(w => w is not null && w.Name == "Deploy"));
     }
 
     [Test]

@@ -155,7 +155,7 @@ public class CallChainService : ICallChainService
 
             foreach (var methodDecl in methodDeclarations)
             {
-                var symbol = semanticModel.GetDeclaredSymbol(methodDecl);
+                var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken);
                 if (symbol == null)
                     continue;
 
@@ -546,7 +546,7 @@ public class CallChainService : ICallChainService
 
             foreach (var invocation in invocations)
             {
-                var callSymbol = semanticModel.GetSymbolInfo(invocation).Symbol;
+                var callSymbol = semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol;
                 if (callSymbol is IMethodSymbol calledMethodSymbol)
                 {
                     var lineSpan = invocation.GetLocation().GetLineSpan();
@@ -584,7 +584,7 @@ public class CallChainService : ICallChainService
 
         foreach (var invocation in invocations)
         {
-            var symbol = semanticModel.GetSymbolInfo(invocation).Symbol;
+            var symbol = semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol;
             if (symbol is IMethodSymbol methodSymbol)
             {
                 var lineSpan = invocation.GetLocation().GetLineSpan();
@@ -651,7 +651,7 @@ public class CallChainService : ICallChainService
 
             foreach (var methodDecl in methodDeclarations)
             {
-                var symbol = semanticModel.GetDeclaredSymbol(methodDecl);
+                var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken);
                 if (symbol != null)
                 {
                     methods.Add(CreateMethodSignature(symbol));
@@ -804,7 +804,7 @@ public class CallChainService : ICallChainService
             return null;
 
         // Find all methods with the given name
-        var methodSymbols = compilation.GetSymbolsWithName(n => n == methodName, SymbolFilter.Member)
+        var methodSymbols = compilation.GetSymbolsWithName(n => n == methodName, SymbolFilter.Member, cancellationToken)
             .OfType<IMethodSymbol>();
 
         if (string.IsNullOrEmpty(containingType))

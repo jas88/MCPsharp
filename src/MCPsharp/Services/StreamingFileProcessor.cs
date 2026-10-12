@@ -207,7 +207,7 @@ public class StreamingFileProcessor : IStreamingFileProcessor, IDisposable
             // If this is not the last attempt, wait and retry
             if (attempt <= request.RetryCount)
             {
-                await Task.Delay(request.RetryDelay);
+                await Task.Delay(request.RetryDelay, cancellationToken);
                 continue;
             }
 

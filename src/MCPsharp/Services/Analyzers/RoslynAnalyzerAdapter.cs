@@ -99,7 +99,11 @@ public class RoslynAnalyzerAdapter : IAnalyzer
             // Create compilation with analyzers
             var compilationWithAnalyzers = compilation.WithAnalyzers(
                 ImmutableArray.Create(_roslynAnalyzer),
-                options: null);
+                new CompilationWithAnalyzersOptions(
+                    options: new Microsoft.CodeAnalysis.Diagnostics.AnalyzerOptions(ImmutableArray<AdditionalText>.Empty),
+                    onAnalyzerException: null,
+                    concurrentAnalysis: true,
+                    logAnalyzerExecutionTime: true));
 
             // Get diagnostics
             var diagnostics = await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync(cancellationToken);

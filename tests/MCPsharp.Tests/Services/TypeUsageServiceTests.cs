@@ -143,7 +143,7 @@ public class StringService : GenericService<string>
     public void ProcessString()
     {
         var item = Get(0);
-        Add(item.ToUpper());
+        Add(item.ToUpperInvariant());
     }
 }"),
             ("BaseClass.cs", @"
@@ -355,9 +355,9 @@ public class DerivedClass : BaseClass
         var description = usage.GetDescription();
 
         // Assert
-        Assert.That(description.ToLower(), Does.Contain("instantiation"));
-        Assert.That(description.ToLower(), Does.Contain("testmethod"));
-        Assert.That(description.ToLower(), Does.Contain("testclass"));
+        Assert.That(description.ToLowerInvariant(), Does.Contain("instantiation"));
+        Assert.That(description.ToLowerInvariant(), Does.Contain("testmethod"));
+        Assert.That(description.ToLowerInvariant(), Does.Contain("testclass"));
     }
 
     [Test]
@@ -380,7 +380,7 @@ public class DerivedClass : BaseClass
         var description = usage.GetDescription();
 
         // Assert
-        Assert.That(description.ToLower(), Does.Contain("generic"));
+        Assert.That(description.ToLowerInvariant(), Does.Contain("generic"));
         Assert.That(description, Does.Contain("string"));
     }
 
