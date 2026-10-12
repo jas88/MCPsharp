@@ -456,124 +456,104 @@ public partial class McpToolRegistry
 
     #region Helper Methods for Duplicate Code Detection
 
-    private static DuplicateDetectionOptions ParseDuplicateDetectionOptions(JsonDocument arguments)
+    /// <summary>
+    /// The "options" object argument, when present.
+    /// </summary>
+    private static JsonElement? GetOptionsObject(JsonDocument arguments)
     {
         var optionsElement = GetPropertyFromArguments(arguments, "options");
+        return optionsElement is { ValueKind: JsonValueKind.Object } ? optionsElement : null;
+    }
 
+    private static int? GetIntOption(JsonElement options, string name) =>
+        options.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var result)
+            ? result
+            : null;
+
+    private static double? GetDoubleOption(JsonElement options, string name) =>
+        options.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var result)
+            ? result
+            : null;
+
+    private static bool? GetBoolOption(JsonElement options, string name) =>
+        options.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? value.GetBoolean()
+            : null;
+
+    /// <summary>
+    /// Combine the case-insensitive flag names in a string array option; unknown names are ignored.
+    /// </summary>
+    private static TFlags? GetFlagsOption<TFlags>(JsonElement options, string name) where TFlags : struct, Enum
+    {
+        if (!options.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        ulong combined = 0;
+        foreach (var item in value.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String && Enum.TryParse<TFlags>(item.GetString(), true, out var flag))
+            {
+                combined |= Convert.ToUInt64(flag, System.Globalization.CultureInfo.InvariantCulture);
+            }
+        }
+
+        return (TFlags)Enum.ToObject(typeof(TFlags), combined);
+    }
+
+    internal static DuplicateDetectionOptions ParseDuplicateDetectionOptions(JsonDocument arguments)
+    {
         var options = new DuplicateDetectionOptions();
-
-        if (optionsElement.HasValue && optionsElement.Value.ValueKind == JsonValueKind.Object)
+        if (GetOptionsObject(arguments) is not { } element)
         {
-            var optionsObj = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsElement.Value.GetRawText());
-
-            if (optionsObj != null)
-            {
-                if (optionsObj.TryGetValue("minBlockSize", out var minBlockSize) && minBlockSize is int minBlock)
-                    options = options with { MinBlockSize = minBlock };
-
-                if (optionsObj.TryGetValue("maxBlockSize", out var maxBlockSize) && maxBlockSize is int maxBlock)
-                    options = options with { MaxBlockSize = maxBlock };
-
-                if (optionsObj.TryGetValue("similarityThreshold", out var similarityThreshold) && similarityThreshold is double similarity)
-                    options = options with { SimilarityThreshold = similarity };
-
-                if (optionsObj.TryGetValue("ignoreGeneratedCode", out var ignoreGenerated) && ignoreGenerated is bool ignoreGen)
-                    options = options with { IgnoreGeneratedCode = ignoreGen };
-
-                if (optionsObj.TryGetValue("ignoreTestCode", out var ignoreTest) && ignoreTest is bool ignoreTestCode)
-                    options = options with { IgnoreTestCode = ignoreTestCode };
-
-                if (optionsObj.TryGetValue("ignoreTrivialDifferences", out var ignoreTrivial) && ignoreTrivial is bool ignoreTrivialDifferences)
-                    options = options with { IgnoreTrivialDifferences = ignoreTrivialDifferences };
-
-                if (optionsObj.TryGetValue("detectionTypes", out var detectionTypes) && detectionTypes is JsonElement typesElement && typesElement.ValueKind == JsonValueKind.Array)
-                {
-                    var typeStrings = JsonSerializer.Deserialize<string[]>(typesElement.GetRawText());
-                    if (typeStrings != null)
-                    {
-                        var types = DuplicateDetectionTypes.None;
-                        foreach (var typeString in typeStrings)
-                        {
-                            if (Enum.TryParse<DuplicateDetectionTypes>(typeString, true, out var type))
-                                types |= type;
-                        }
-                        options = options with { DetectionTypes = types };
-                    }
-                }
-            }
+            return options;
         }
 
-        return options;
+        return options with
+        {
+            MinBlockSize = GetIntOption(element, "minBlockSize") ?? options.MinBlockSize,
+            MaxBlockSize = GetIntOption(element, "maxBlockSize") ?? options.MaxBlockSize,
+            SimilarityThreshold = GetDoubleOption(element, "similarityThreshold") ?? options.SimilarityThreshold,
+            IgnoreGeneratedCode = GetBoolOption(element, "ignoreGeneratedCode") ?? options.IgnoreGeneratedCode,
+            IgnoreTestCode = GetBoolOption(element, "ignoreTestCode") ?? options.IgnoreTestCode,
+            IgnoreTrivialDifferences = GetBoolOption(element, "ignoreTrivialDifferences") ?? options.IgnoreTrivialDifferences,
+            DetectionTypes = GetFlagsOption<DuplicateDetectionTypes>(element, "detectionTypes") ?? options.DetectionTypes
+        };
     }
 
-    private static RefactoringOptions ParseRefactoringOptions(JsonDocument arguments)
+    internal static RefactoringOptions ParseRefactoringOptions(JsonDocument arguments)
     {
-        var optionsElement = GetPropertyFromArguments(arguments, "options");
-
         var options = new RefactoringOptions();
-
-        if (optionsElement.HasValue && optionsElement.Value.ValueKind == JsonValueKind.Object)
+        if (GetOptionsObject(arguments) is not { } element)
         {
-            var optionsObj = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsElement.Value.GetRawText());
-
-            if (optionsObj != null)
-            {
-                if (optionsObj.TryGetValue("maxSuggestions", out var maxSuggestions) && maxSuggestions is int maxSugg)
-                    options = options with { MaxSuggestions = maxSugg };
-
-                if (optionsObj.TryGetValue("prioritizeBreakingChanges", out var prioritizeBreaking) && prioritizeBreaking is bool prioritize)
-                    options = options with { PrioritizeBreakingChanges = prioritize };
-
-                if (optionsObj.TryGetValue("refactoringTypes", out var refactoringTypes) && refactoringTypes is JsonElement typesElement && typesElement.ValueKind == JsonValueKind.Array)
-                {
-                    var typeStrings = JsonSerializer.Deserialize<string[]>(typesElement.GetRawText());
-                    if (typeStrings != null)
-                    {
-                        var types = RefactoringTypes.None;
-                        foreach (var typeString in typeStrings)
-                        {
-                            if (Enum.TryParse<RefactoringTypes>(typeString, true, out var type))
-                                types |= type;
-                        }
-                        options = options with { RefactoringTypes = types };
-                    }
-                }
-            }
+            return options;
         }
 
-        return options;
+        return options with
+        {
+            MaxSuggestions = GetIntOption(element, "maxSuggestions") ?? options.MaxSuggestions,
+            PrioritizeBreakingChanges = GetBoolOption(element, "prioritizeBreakingChanges") ?? options.PrioritizeBreakingChanges,
+            RefactoringTypes = GetFlagsOption<RefactoringTypes>(element, "refactoringTypes") ?? options.RefactoringTypes
+        };
     }
 
-    private static CodeComparisonOptions ParseCodeComparisonOptions(JsonDocument arguments)
+    internal static CodeComparisonOptions ParseCodeComparisonOptions(JsonDocument arguments)
     {
-        var optionsElement = GetPropertyFromArguments(arguments, "options");
-
         var options = new CodeComparisonOptions();
-
-        if (optionsElement.HasValue && optionsElement.Value.ValueKind == JsonValueKind.Object)
+        if (GetOptionsObject(arguments) is not { } element)
         {
-            var optionsObj = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsElement.Value.GetRawText());
-
-            if (optionsObj != null)
-            {
-                if (optionsObj.TryGetValue("ignoreWhitespace", out var ignoreWhitespace) && ignoreWhitespace is bool ignoreWs)
-                    options = options with { IgnoreWhitespace = ignoreWs };
-
-                if (optionsObj.TryGetValue("ignoreComments", out var ignoreComments) && ignoreComments is bool ignoreComm)
-                    options = options with { IgnoreComments = ignoreComm };
-
-                if (optionsObj.TryGetValue("ignoreIdentifiers", out var ignoreIdentifiers) && ignoreIdentifiers is bool ignoreIds)
-                    options = options with { IgnoreIdentifiers = ignoreIds };
-
-                if (optionsObj.TryGetValue("ignoreStringLiterals", out var ignoreStrings) && ignoreStrings is bool ignoreStr)
-                    options = options with { IgnoreStringLiterals = ignoreStr };
-
-                if (optionsObj.TryGetValue("ignoreNumericLiterals", out var ignoreNumbers) && ignoreNumbers is bool ignoreNum)
-                    options = options with { IgnoreNumericLiterals = ignoreNum };
-            }
+            return options;
         }
 
-        return options;
+        return options with
+        {
+            IgnoreWhitespace = GetBoolOption(element, "ignoreWhitespace") ?? options.IgnoreWhitespace,
+            IgnoreComments = GetBoolOption(element, "ignoreComments") ?? options.IgnoreComments,
+            IgnoreIdentifiers = GetBoolOption(element, "ignoreIdentifiers") ?? options.IgnoreIdentifiers,
+            IgnoreStringLiterals = GetBoolOption(element, "ignoreStringLiterals") ?? options.IgnoreStringLiterals,
+            IgnoreNumericLiterals = GetBoolOption(element, "ignoreNumericLiterals") ?? options.IgnoreNumericLiterals
+        };
     }
 
     private CodeBlock? ParseCodeBlockDefinition(JsonElement blockElement)

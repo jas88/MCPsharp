@@ -51,6 +51,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="MCPsharp.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Built-in analyzers and code fixes, instantiated in-process by BuiltInCodeFixRegistry -->
     <ProjectReference Include="..\MCPsharp.Analyzers\MCPsharp.Analyzers.csproj" />
     <ProjectReference Include="..\MCPsharp.Analyzers.CodeFixes\MCPsharp.Analyzers.CodeFixes.csproj" />
