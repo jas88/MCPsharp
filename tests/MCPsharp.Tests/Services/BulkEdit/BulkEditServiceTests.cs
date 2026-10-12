@@ -76,6 +76,57 @@ public class BulkEditServiceTests : FileServiceTestBase
     }
 
     [Test]
+    public async Task BulkReplaceAsync_GlobWithExcludedGlob_SkipsExcludedFiles()
+    {
+        var kept = CreateTestFile("Hello kept", ".cs", "src");
+        var generated = CreateTestFile("Hello generated", ".cs", Path.Combine("src", "Generated"));
+        var options = new BulkEditOptions
+        {
+            CreateBackups = false,
+            ExcludedFiles = new List<string> { Path.Combine(TempDirectory, "src", "Generated", "**") }
+        };
+
+        var result = await _service.BulkReplaceAsync(new[] { Path.Combine(TempDirectory, "**", "*.cs") }, "Hello", "Hi", options);
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.FileResults.Select(r => r.FilePath), Is.EquivalentTo(new[] { kept }));
+        Assert.That(await File.ReadAllTextAsync(kept), Is.EqualTo("Hi kept"));
+        Assert.That(await File.ReadAllTextAsync(generated), Is.EqualTo("Hello generated"));
+    }
+
+    [Test]
+    public async Task BulkReplaceAsync_ExplicitFilesWithExcludedFileAndDirectory_SkipsBoth()
+    {
+        var kept = CreateTestFile("Hello kept");
+        var excludedFile = CreateTestFile("Hello file");
+        var inExcludedDirectory = CreateTestFile("Hello directory", ".cs", "skip");
+        var options = new BulkEditOptions
+        {
+            CreateBackups = false,
+            ExcludedFiles = new List<string> { excludedFile, Path.Combine(TempDirectory, "skip") }
+        };
+
+        var result = await _service.BulkReplaceAsync(new[] { kept, excludedFile, inExcludedDirectory }, "Hello", "Hi", options);
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(await File.ReadAllTextAsync(kept), Is.EqualTo("Hi kept"));
+        Assert.That(await File.ReadAllTextAsync(excludedFile), Is.EqualTo("Hello file"));
+        Assert.That(await File.ReadAllTextAsync(inExcludedDirectory), Is.EqualTo("Hello directory"));
+    }
+
+    [TestCase("src/Generated/**", "src/Generated/A.g.cs", true)]
+    [TestCase("src/Generated/**", "src/Other/A.cs", false)]
+    [TestCase("**/*.g.cs", "deep/nested/A.g.cs", true)]
+    [TestCase("**/*.g.cs", "deep/nested/A.cs", false)]
+    [TestCase("src/*.cs", "src/sub/A.cs", false)]
+    public void CreateExclusionFilter_MatchesGlobRelativeToItsFixedDirectory(string pattern, string file, bool excluded)
+    {
+        var filter = BulkEditService.CreateExclusionFilter(Path.Combine(TempDirectory, pattern));
+
+        Assert.That(filter(Path.GetFullPath(Path.Combine(TempDirectory, file))), Is.EqualTo(excluded));
+    }
+
+    [Test]
     public async Task BulkReplaceAsync_WithNoMatches_ShouldSkipFiles()
     {
         // Arrange

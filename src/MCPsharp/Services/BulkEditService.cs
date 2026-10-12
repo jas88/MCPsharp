@@ -72,7 +72,7 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
             var filesToProcess = new List<string>();
             var fileResults = new List<FileBulkEditResult>();
 
-            foreach (var file in files)
+            foreach (var file in await SelectBulkReplaceFilesAsync(files, options, cancellationToken))
             {
                 try
                 {

@@ -113,14 +113,14 @@ public partial class McpToolRegistry
             Name = "bulk_replace",
             Description = "Regex find-and-replace across many files in the open project, with optional preview and backups for rollback.",
             InputSchema = JsonSchemaHelper.CreateSchema(
-                Prop("files", "array", "Files to edit, relative to the project root or absolute within it (patterns are not expanded; missing files are reported as failures)",
+                Prop("files", "array", "Files or glob patterns to edit, relative to the project root or absolute within it (globs are expanded to existing files; missing explicit files are reported as failures)",
                     required: true, items: StringItems),
                 Prop("regexPattern", "string", "Regular expression to match", required: true),
                 Prop("replacement", "string", "Replacement text (supports $1-style group references)", required: true),
                 Prop("maxParallelism", "integer", "Maximum files processed in parallel (default: processor count)"),
                 Prop("createBackups", "boolean", "Back up files so the edit can be rolled back (default: true)"),
                 Prop("previewMode", "boolean", "Compute changes without writing (default: false)"),
-                Prop("excludedFiles", "array", "Exclusion glob patterns; only applied when files are expanded from patterns, so they have no effect on the explicit files of bulk_replace", items: StringItems))
+                Prop("excludedFiles", "array", "Files, directories or glob patterns (relative to the project root or absolute within it) to skip; applied after the files are expanded", items: StringItems))
         },
         new McpTool
         {

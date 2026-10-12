@@ -196,6 +196,66 @@ public class McpToolRegistryToolCatalogTests
         Assert.That(File.ReadAllText(Path.Combine(_projectPath, "docs", "notes.txt")), Is.EqualTo("omega notes\n"));
     }
 
+    private static readonly string[] DocsExclusion = { "docs/**" };
+    private static readonly string[] NotesFileExclusion = { "docs/notes.txt" };
+
+    [Test]
+    public async Task BulkReplace_GlobWithExcludedGlob_SkipsExcludedFiles()
+    {
+        await OpenProjectAsync();
+
+        var result = await Execute("bulk_replace", new
+        {
+            files = ProjectGlob,
+            excludedFiles = DocsExclusion,
+            regexPattern = "alpha",
+            replacement = "omega",
+            createBackups = false
+        });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(File.ReadAllText(Path.Combine(_projectPath, "data.txt")), Is.EqualTo("omega\nbeta\n"));
+        Assert.That(File.ReadAllText(Path.Combine(_projectPath, "docs", "notes.txt")), Is.EqualTo("alpha notes\n"));
+    }
+
+    [Test]
+    public async Task BulkReplace_ExplicitFilesWithExcludedPath_SkipsExcludedFile()
+    {
+        await OpenProjectAsync();
+
+        var result = await Execute("bulk_replace", new
+        {
+            files = ProjectFiles,
+            excludedFiles = NotesFileExclusion,
+            regexPattern = "alpha",
+            replacement = "omega",
+            createBackups = false
+        });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(File.ReadAllText(Path.Combine(_projectPath, "data.txt")), Is.EqualTo("omega\nbeta\n"));
+        Assert.That(File.ReadAllText(Path.Combine(_projectPath, "docs", "notes.txt")), Is.EqualTo("alpha notes\n"));
+    }
+
+    [Test]
+    public async Task BulkReplace_ExclusionOutsideProject_IsRejected()
+    {
+        await OpenProjectAsync();
+
+        var result = await Execute("bulk_replace", new
+        {
+            files = ProjectFiles,
+            excludedFiles = TraversingGlob,
+            regexPattern = "alpha",
+            replacement = "omega",
+            createBackups = false
+        });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("'..'"));
+        Assert.That(File.ReadAllText(Path.Combine(_projectPath, "data.txt")), Is.EqualTo("alpha\nbeta\n"));
+    }
+
     [Test]
     public async Task ConditionalEdit_GlobRelativeToProject_EditsMatchingProjectFiles()
     {

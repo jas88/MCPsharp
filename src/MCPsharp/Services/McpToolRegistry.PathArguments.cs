@@ -27,7 +27,8 @@ public partial class McpToolRegistry
     private static readonly PathArgument[] ProjectPathArgument = { new("projectPath") };
     private static readonly PathArgument[] FilePathArguments = { new("projectPath"), new("filePath") };
     private static readonly PathArgument[] BulkFilesArgument = { new("files[]", AllowGlob: true) };
-    private static readonly PathArgument[] BulkReplaceFilesArgument = { new("files[]") };
+    private static readonly PathArgument[] BulkReplaceFilesArgument =
+        { new("files[]", AllowGlob: true), new("excludedFiles[]", AllowGlob: true) };
     private static readonly PathArgument[] BulkFilesAndOperationsArguments =
         { new("files[]", AllowGlob: true), new("operations[].filePattern", AllowGlob: true) };
     private static readonly PathArgument[] MultiFileOperationsArgument = { new("operations[].filePattern", AllowGlob: true) };
