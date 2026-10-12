@@ -107,6 +107,11 @@ public class DuplicateGroup
     /// Metadata about the duplication
     /// </summary>
     public required DuplicateMetadata Metadata { get; init; }
+
+    /// <summary>
+    /// Clone classification of the group (exact, renamed or near-miss)
+    /// </summary>
+    public CloneType CloneType { get; init; } = CloneType.Exact;
 }
 
 /// <summary>
@@ -208,6 +213,21 @@ public class CodeBlock
     /// Context lines before and after the code block
     /// </summary>
     public CodeContext? Context { get; init; }
+
+    /// <summary>
+    /// Absolute character offset of the block's syntax node within its file, when known
+    /// </summary>
+    public int? SpanStart { get; init; }
+
+    /// <summary>
+    /// Character length of the block's syntax node within its file, when known
+    /// </summary>
+    public int? SpanLength { get; init; }
+
+    /// <summary>
+    /// Normalised token fingerprint used for Type-2/Type-3 clone detection and diffing
+    /// </summary>
+    public CloneFingerprint? Fingerprint { get; init; }
 }
 
 /// <summary>
@@ -501,6 +521,11 @@ public class RefactoringSuggestion
     public RefactoringValidationResult? ValidationResult { get; init; }
 
     /// <summary>
+    /// Data-flow based assessment of whether the duplicated code can be extracted safely
+    /// </summary>
+    public ExtractionSafetyResult? ExtractionSafety { get; init; }
+
+    /// <summary>
     /// Metadata about this suggestion
     /// </summary>
     public required RefactoringMetadata Metadata { get; init; }
@@ -586,6 +611,11 @@ public class CodeSimilarityResult
     /// Duplicate type if they are duplicates
     /// </summary>
     public DuplicateType? DuplicateType { get; init; }
+
+    /// <summary>
+    /// Clone classification if they are duplicates
+    /// </summary>
+    public CloneType? CloneType { get; init; }
 }
 
 /// <summary>
@@ -700,11 +730,6 @@ public class DuplicateHotspotsResult
     /// Directories with highest duplication rates
     /// </summary>
     public required IReadOnlyList<DirectoryHotspot> DirectoryHotspots { get; init; }
-
-    /// <summary>
-    /// Trends in duplication over time (if historical data available)
-    /// </summary>
-    public IReadOnlyList<DuplicationTrend>? Trends { get; init; }
 }
 
 /// <summary>
@@ -836,31 +861,6 @@ public class DirectoryHotspot
     public required HotspotRiskLevel RiskLevel { get; init; }
 }
 
-/// <summary>
-/// Duplication trend over time
-/// </summary>
-public class DuplicationTrend
-{
-    /// <summary>
-    /// Date of the measurement
-    /// </summary>
-    public required DateTime Date { get; init; }
-
-    /// <summary>
-    /// Duplication percentage
-    /// </summary>
-    public required double DuplicationPercentage { get; init; }
-
-    /// <summary>
-    /// Total duplicate lines
-    /// </summary>
-    public required int TotalDuplicateLines { get; init; }
-
-    /// <summary>
-    /// Number of duplicate groups
-    /// </summary>
-    public required int DuplicateGroupCount { get; init; }
-}
 
 /// <summary>
 /// Result of refactoring validation
@@ -1513,7 +1513,17 @@ public enum DifferenceType
     /// <summary>
     /// Control flow difference
     /// </summary>
-    ControlFlow
+    ControlFlow,
+
+    /// <summary>
+    /// Statement present only in the second code block
+    /// </summary>
+    StatementAdded,
+
+    /// <summary>
+    /// Statement present only in the first code block
+    /// </summary>
+    StatementRemoved
 }
 
 /// <summary>

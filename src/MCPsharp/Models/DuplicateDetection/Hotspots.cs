@@ -24,11 +24,6 @@ public class DuplicateHotspotsResult
     /// Directories with highest duplication rates
     /// </summary>
     public required IReadOnlyList<DirectoryHotspot> DirectoryHotspots { get; init; }
-
-    /// <summary>
-    /// Trends in duplication over time (if historical data available)
-    /// </summary>
-    public IReadOnlyList<DuplicationTrend>? Trends { get; init; }
 }
 
 /// <summary>
@@ -158,30 +153,4 @@ public class DirectoryHotspot
     /// Risk level
     /// </summary>
     public required HotspotRiskLevel RiskLevel { get; init; }
-}
-
-/// <summary>
-/// Duplication trend over time
-/// </summary>
-public class DuplicationTrend
-{
-    /// <summary>
-    /// Date of the measurement
-    /// </summary>
-    public required DateTime Date { get; init; }
-
-    /// <summary>
-    /// Duplication percentage
-    /// </summary>
-    public required double DuplicationPercentage { get; init; }
-
-    /// <summary>
-    /// Total duplicate lines
-    /// </summary>
-    public required int TotalDuplicateLines { get; init; }
-
-    /// <summary>
-    /// Number of duplicate groups
-    /// </summary>
-    public required int DuplicateGroupCount { get; init; }
 }
