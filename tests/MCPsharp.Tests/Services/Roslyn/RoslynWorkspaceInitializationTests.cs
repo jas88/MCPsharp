@@ -1,9 +1,11 @@
 using System;
 using MCPsharp.Services.Roslyn;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using NUnit.Framework;
 using System.IO;
 using System.Linq;
+using System.Runtime.Loader;
 using System.Threading.Tasks;
 
 namespace MCPsharp.Tests.Services.Roslyn;
@@ -171,7 +173,26 @@ public class RoslynWorkspaceInitializationTests
             }
         }
 
+        // Two copies of the C# compiler assembly would make the generator's syntax type checks fail
+        var csharpAssemblies = AssemblyLoadContext.All
+            .SelectMany(alc => alc.Assemblies.Select(a => (alc, a)))
+            .Where(x => x.a.GetName().Name == "Microsoft.CodeAnalysis.CSharp")
+            .Select(x => $"{x.alc.Name}: {x.a.GetName().Version} {x.a.Location}");
+
+        // Does Program.cs really have a file-scoped namespace in the workspace's syntax tree?
+        var treeShape = string.Empty;
+        var programDoc = main?.Documents.FirstOrDefault(d => d.Name == "Program.cs");
+        if (programDoc != null)
+        {
+            var root = await programDoc.GetSyntaxRootAsync();
+            var classDecl = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+            treeShape = $"Program.cs kind={programDoc.SourceCodeKind} class parent={classDecl?.Parent?.GetType().FullName} " +
+                $"isFileScoped={classDecl?.Parent is FileScopedNamespaceDeclarationSyntax}";
+        }
+
         return $"\nSample errors:\n{string.Join("\n", health.ErrorSamples)}" +
+            $"\nMicrosoft.CodeAnalysis.CSharp loaded:\n{string.Join("\n", csharpAssemblies)}" +
+            $"\nSyntax: {treeShape}" +
             $"\nAnalyzer load failures:\n{string.Join("\n", health.AnalyzerLoadFailures)}" +
             $"\nGenerator references:\n{string.Join("\n", analyzers)}" +
             $"\nGenerated logging source:\n{generatedSample}";
