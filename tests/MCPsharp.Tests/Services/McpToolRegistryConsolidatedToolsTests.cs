@@ -88,7 +88,6 @@ public class Calculator
             projectContext,
             workspace,
             bulkEditService: bulkEditService,
-            fileOperationsService: fileOperations,
             universalFileOps: universalFileOps,
             unifiedAnalysis: new UnifiedAnalysisService(workspace: workspace),
             bulkOperationsHub: new BulkOperationsHub(bulkEditService, universalFileOps),
@@ -201,6 +200,32 @@ public class Calculator
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Does.Contain("operation"));
+    }
+
+    [Test]
+    public async Task Registry_CreatedWithProjectAlreadyOpen_ServesThatProject()
+    {
+        // Program auto-loads the startup directory before constructing the registry
+        var projectContext = new ProjectContextManager();
+        projectContext.OpenProject(_projectPath);
+        await _workspace.InitializeAsync(_projectPath);
+        var registry = CreateRegistry(projectContext, _workspace, _analyzerService, Path.GetTempPath());
+
+        foreach (var (tool, args) in new (string, object)[]
+                 {
+                     ("file_read", new { path = "data.txt" }),
+                     ("file_list", new { }),
+                     ("get_file_content", new { path = "data.txt" }),
+                     ("find_symbol", new { name = "Calculator" })
+                 })
+        {
+            var result = await registry.ExecuteTool(new ToolCallRequest
+            {
+                Name = tool,
+                Arguments = JsonDocument.Parse(JsonSerializer.Serialize(args))
+            });
+            Assert.That(result.Success, Is.True, $"{tool}: {result.Error}");
+        }
     }
 
     #endregion

@@ -220,7 +220,6 @@ sealed partial class Program
                 streamingProcessor: streamingProcessor,
                 progressTracker: progressTracker,
                 tempFileManager: tempFileManager,
-                fileOperationsService: fileOperations,
                 universalFileOps: universalFileOps,
                 unifiedAnalysis: unifiedAnalysis,
                 bulkOperationsHub: bulkOperationsHub,

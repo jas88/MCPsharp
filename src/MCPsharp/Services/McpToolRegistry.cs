@@ -100,7 +100,6 @@ public partial class McpToolRegistry
         ITempFileManager? tempFileManager = null,
         ISqlMigrationAnalyzerService? sqlMigrationAnalyzer = null,
         ILargeFileOptimizerService? largeFileOptimizer = null,
-        FileOperationsService? fileOperationsService = null,
         UniversalFileOperations? universalFileOps = null,
         UnifiedAnalysisService? unifiedAnalysis = null,
         BulkOperationsHub? bulkOperationsHub = null,
@@ -153,6 +152,14 @@ public partial class McpToolRegistry
 
         // Register AI-powered tools if available
         RegisterAITools();
+
+        // A project opened before the registry was created (Program auto-loads the startup directory)
+        // gets its project-scoped services now rather than only after an explicit project_open.
+        var openRoot = projectContext.GetProjectContext()?.RootPath;
+        if (openRoot != null)
+        {
+            InitializeProjectServices(openRoot);
+        }
     }
 
     /// <summary>
@@ -1457,36 +1464,53 @@ Edit types:
             if (!_workspace.IsInitialized)
             {
                 await _workspace.InitializeAsync(context.RootPath);
-
-                // Initialize services
-                _symbolQuery = new SymbolQueryService(_workspace);
-                _classStructure = new ClassStructureService(_workspace);
-                _semanticEdit = new SemanticEditService(_workspace, _classStructure);
-                _referenceFinder = new ReferenceFinderService(_workspace);
-
-                // Initialize hybrid search service with graceful degradation
-                var logger = _loggerFactory?.CreateLogger<HybridSearchService>()
-                    ?? LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<HybridSearchService>();
-                _hybridSearch = new HybridSearchService(_workspace, _symbolQuery, logger);
-
-                // Initialize advanced reverse search services
-                _callerAnalysis = new CallerAnalysisService(_workspace, _symbolQuery);
-                _callChain = new CallChainService(_workspace, _symbolQuery, _callerAnalysis);
-                _typeUsage = new TypeUsageService(_workspace, _symbolQuery);
-                _advancedReferenceFinder = new AdvancedReferenceFinderService(_workspace, _symbolQuery, _callerAnalysis, _callChain, _typeUsage);
-
-                // Initialize rename symbol service
-                _renameSymbol = new RenameSymbolService(_workspace, _advancedReferenceFinder, _symbolQuery,
-                    LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<RenameSymbolService>());
-
-                // Initialize Phase 3 services
-                _architectureValidator = new ArchitectureValidatorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage);
-                _duplicateCodeDetector = new DuplicateCodeDetectorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage,
-                    LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<DuplicateCodeDetectorService>());
+                InitializeProjectServices(context.RootPath);
             }
-
-            RebindConsolidatedServices();
+            else if (_symbolQuery == null)
+            {
+                // Workspace loaded outside the registry (e.g. auto-loaded at startup)
+                InitializeProjectServices(context.RootPath);
+            }
         }
+    }
+
+    /// <summary>
+    /// Create the project-scoped services for the project open at <paramref name="rootPath"/>:
+    /// file operations, the Roslyn-backed services when a workspace is available, and the
+    /// consolidated services re-rooted on the project.
+    /// </summary>
+    private void InitializeProjectServices(string rootPath)
+    {
+        _fileOperations = _workspace != null
+            ? new FileOperationsService(rootPath, _workspace)
+            : new FileOperationsService(rootPath);
+
+        if (_workspace != null)
+        {
+            var loggerFactory = _loggerFactory ?? NullLoggerFactory.Instance;
+            _symbolQuery = new SymbolQueryService(_workspace);
+            _classStructure = new ClassStructureService(_workspace);
+            _semanticEdit = new SemanticEditService(_workspace, _classStructure);
+            _referenceFinder = new ReferenceFinderService(_workspace);
+
+            // Hybrid search service with graceful degradation
+            _hybridSearch = new HybridSearchService(_workspace, _symbolQuery, loggerFactory.CreateLogger<HybridSearchService>());
+
+            // Advanced reverse search services
+            _callerAnalysis = new CallerAnalysisService(_workspace, _symbolQuery);
+            _callChain = new CallChainService(_workspace, _symbolQuery, _callerAnalysis);
+            _typeUsage = new TypeUsageService(_workspace, _symbolQuery);
+            _advancedReferenceFinder = new AdvancedReferenceFinderService(_workspace, _symbolQuery, _callerAnalysis, _callChain, _typeUsage);
+            _renameSymbol = new RenameSymbolService(_workspace, _advancedReferenceFinder, _symbolQuery,
+                loggerFactory.CreateLogger<RenameSymbolService>());
+
+            // Phase 3 services
+            _architectureValidator = new ArchitectureValidatorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage);
+            _duplicateCodeDetector = new DuplicateCodeDetectorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage,
+                loggerFactory.CreateLogger<DuplicateCodeDetectorService>());
+        }
+
+        RebindConsolidatedServices();
     }
 
     private async Task<ToolCallResult> ExecuteProjectOpen(JsonDocument arguments)
@@ -1505,47 +1529,12 @@ Edit types:
         {
             _projectContext.OpenProject(path);
 
-            // Initialize workspace if available
             if (_workspace != null)
             {
                 await _workspace.InitializeAsync(path);
-                _fileOperations = new FileOperationsService(path, _workspace);
-            }
-            else
-            {
-                _fileOperations = new FileOperationsService(path);
             }
 
-            // Initialize Roslyn services if workspace is available
-            if (_workspace != null)
-            {
-                _symbolQuery = new SymbolQueryService(_workspace);
-                _classStructure = new ClassStructureService(_workspace);
-                _semanticEdit = new SemanticEditService(_workspace, _classStructure);
-                _referenceFinder = new ReferenceFinderService(_workspace);
-
-                // Initialize hybrid search service with graceful degradation
-                var logger = _loggerFactory?.CreateLogger<HybridSearchService>()
-                    ?? LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<HybridSearchService>();
-                _hybridSearch = new HybridSearchService(_workspace, _symbolQuery, logger);
-
-                // Initialize advanced reverse search services for project opening
-                _callerAnalysis = new CallerAnalysisService(_workspace, _symbolQuery);
-                _callChain = new CallChainService(_workspace, _symbolQuery, _callerAnalysis);
-                _typeUsage = new TypeUsageService(_workspace, _symbolQuery);
-                _advancedReferenceFinder = new AdvancedReferenceFinderService(_workspace, _symbolQuery, _callerAnalysis, _callChain, _typeUsage);
-
-                // Initialize rename symbol service
-                _renameSymbol = new RenameSymbolService(_workspace, _advancedReferenceFinder, _symbolQuery,
-                    LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<RenameSymbolService>());
-
-                // Initialize Phase 3 services
-                _architectureValidator = new ArchitectureValidatorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage);
-                _duplicateCodeDetector = new DuplicateCodeDetectorService(_workspace, _symbolQuery, _callerAnalysis, _typeUsage,
-                    LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<DuplicateCodeDetectorService>());
-            }
-
-            RebindConsolidatedServices();
+            InitializeProjectServices(path);
 
             var context = _projectContext.GetProjectContext();
             return new ToolCallResult
