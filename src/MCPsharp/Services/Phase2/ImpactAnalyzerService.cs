@@ -113,8 +113,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         {
             var containerSymbols = root.DescendantNodes()
                 .Select(n => semanticModel.GetDeclaredSymbol(n, ct))
-                .Where(s => s != null && s is INamedTypeSymbol)
-                .Cast<INamedTypeSymbol>()
+                .OfType<INamedTypeSymbol>()
                 .Where(s => s.GetMembers(change.SymbolName).Any())
                 .ToList();
 
@@ -126,8 +125,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         {
             var allNamedTypeSymbols = root.DescendantNodes()
                 .Select(n => semanticModel.GetDeclaredSymbol(n, ct))
-                .Where(s => s != null && s is INamedTypeSymbol)
-                .Cast<INamedTypeSymbol>()
+                .OfType<INamedTypeSymbol>()
                 .ToList();
 
             // Check if any type has a property/field/method with the target name
@@ -193,7 +191,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         await FindImpactsByTextAnalysisAsync(change, impacts, ct);
 
         // For config changes, also find C# files that reference the config
-        if (change.ChangeType.Contains("Config") || change.FilePath.EndsWith(".json") || change.FilePath.EndsWith(".yml") || change.FilePath.EndsWith(".yaml"))
+        if (change.ChangeType.Contains("Config") || change.FilePath.EndsWith(".json", StringComparison.Ordinal) || change.FilePath.EndsWith(".yml", StringComparison.Ordinal) || change.FilePath.EndsWith(".yaml", StringComparison.Ordinal))
         {
             var rootProject = GetProjectRoot(change.FilePath);
             await FindConfigReferencesInCSharpAsync(change, rootProject, impacts, ct);
@@ -202,7 +200,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         return impacts;
     }
 
-    private async Task FindInterfaceImplementationsAsync(
+    private static async Task FindInterfaceImplementationsAsync(
         INamedTypeSymbol interfaceSymbol,
         Project project,
         List<CSharpImpact> impacts,
@@ -212,21 +210,18 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         // Find all classes that implement this interface
         var implementations = await SymbolFinder.FindImplementationsAsync(interfaceSymbol, project.Solution, cancellationToken: ct);
 
-        foreach (var implementation in implementations)
+        foreach (var implementation in implementations.Where(i => i.Locations.Any(l => l.SourceTree?.FilePath != null)))
         {
-            if (implementation.Locations.Any(l => l.SourceTree?.FilePath != null))
+            var filePath = implementation.Locations.First(l => l.SourceTree?.FilePath != null).SourceTree!.FilePath;
+            if (!string.IsNullOrEmpty(filePath) && filePath != change.FilePath)
             {
-                var filePath = implementation.Locations.First(l => l.SourceTree?.FilePath != null).SourceTree!.FilePath;
-                if (!string.IsNullOrEmpty(filePath) && filePath != change.FilePath)
+                impacts.Add(new CSharpImpact
                 {
-                    impacts.Add(new CSharpImpact
-                    {
-                        FilePath = filePath,
-                        Line = 1, // We don't have precise line info for implementations
-                        ImpactType = "interface_implementation",
-                        Description = $"Class {implementation.Name} implements interface {interfaceSymbol.Name}"
-                    });
-                }
+                    FilePath = filePath,
+                    Line = 1, // We don't have precise line info for implementations
+                    ImpactType = "interface_implementation",
+                    Description = $"Class {implementation.Name} implements interface {interfaceSymbol.Name}"
+                });
             }
         }
 
@@ -254,7 +249,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                         foreach (var classDecl in classDeclarations)
                         {
                             var classSymbol = semanticModel.GetDeclaredSymbol(classDecl, ct);
-                            if (classSymbol != null && classSymbol is INamedTypeSymbol namedTypeSymbol)
+                            if (classSymbol is INamedTypeSymbol namedTypeSymbol)
                             {
                                 var implementsInterface = namedTypeSymbol.AllInterfaces
                                     .Any(i => i.Name.Equals(interfaceSymbol.Name, StringComparison.Ordinal));
@@ -266,16 +261,16 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                                         FilePath = doc.FilePath,
                                         Line = classDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
                                         ImpactType = "interface_implementation",
-                                        Description = $"Class {classSymbol.Name} implements interface {interfaceSymbol.Name}"
+                                        Description = $"Class {namedTypeSymbol.Name} implements interface {interfaceSymbol.Name}"
                                     });
                                 }
                             }
                         }
                     }
                 }
-                catch
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    // Ignore errors in individual documents
+                    // Ignore errors in individual documents; the text-based search below still runs
                 }
             }
         }
@@ -285,7 +280,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         await FindInterfaceImplementationsByTextAsync(interfaceSymbol, projectRoot, impacts, change, ct);
     }
 
-    private async Task FindInterfaceImplementationsByTextAsync(
+    private static async Task FindInterfaceImplementationsByTextAsync(
         INamedTypeSymbol interfaceSymbol,
         string projectRoot,
         List<CSharpImpact> impacts,
@@ -316,14 +311,14 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                     });
                 }
             }
-            catch
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Ignore files we can't read
             }
         }
     }
 
-    private bool FileImplementsInterface(string content, string interfaceName)
+    private static bool FileImplementsInterface(string content, string interfaceName)
     {
         var lines = content.Split('\n');
 
@@ -333,7 +328,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
 
             // Look for class declarations with interface implementations
             // Pattern: class ClassName : InterfaceName, OtherInterface
-            if (line.StartsWith("class ") && line.Contains(":") && line.Contains(interfaceName))
+            if (line.StartsWith("class ", StringComparison.Ordinal) && line.Contains(':') && line.Contains(interfaceName))
             {
                 // Check if this is actually implementing our interface (not just containing the name)
                 var parts = line.Split(':');
@@ -351,7 +346,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         return false;
     }
 
-    private async Task FindImpactsByTextAnalysisAsync(CodeChange change, List<CSharpImpact> impacts, CancellationToken ct)
+    private static async Task FindImpactsByTextAnalysisAsync(CodeChange change, List<CSharpImpact> impacts, CancellationToken ct)
     {
         var projectRoot = GetProjectRoot(change.FilePath);
 
@@ -366,21 +361,18 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                 var content = await File.ReadAllTextAsync(csharpFile, ct);
                 var fileName = Path.GetFileName(csharpFile);
 
-                // Special case: If this is a User-related change, look for files that reference User type
-                if (change.FilePath.Contains("User.cs") && content.Contains("User"))
+                // Special case: If this is a User-related change, look for files that reference User type.
+                // For any User.cs change, any file that references User type should be included
+                if (change.FilePath.Contains("User.cs") && content.Contains("User") && FileContainsUserReference(content, fileName))
                 {
-                    // For any User.cs change, any file that references User type should be included
-                    if (FileContainsUserReference(content, fileName))
+                    impacts.Add(new CSharpImpact
                     {
-                        impacts.Add(new CSharpImpact
-                        {
-                            FilePath = csharpFile,
-                            Line = 1,
-                            ImpactType = "reference",
-                            Description = $"File references User type"
-                        });
-                        continue; // Skip the general check to avoid duplicates
-                    }
+                        FilePath = csharpFile,
+                        Line = 1,
+                        ImpactType = "reference",
+                        Description = $"File references User type"
+                    });
+                    continue; // Skip the general check to avoid duplicates
                 }
 
                 // Skip if the file doesn't contain our symbol
@@ -399,14 +391,14 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                     });
                 }
             }
-            catch
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Ignore files we can't read
             }
         }
     }
 
-    private bool FileContainsUserReference(string content, string fileName)
+    private static bool FileContainsUserReference(string content, string fileName)
     {
         var lines = content.Split('\n');
 
@@ -415,21 +407,18 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
             var line = lines[i].Trim();
 
             // Skip comments and using statements
-            if (line.StartsWith("//") || line.StartsWith("using ") || line.StartsWith("namespace "))
+            if (line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith("using ", StringComparison.Ordinal) || line.StartsWith("namespace ", StringComparison.Ordinal))
                 continue;
 
-            // Check for User type usage patterns
-            if (line.Contains("User "))
-            {
-                // Check for common User usage patterns
-                if (line.Contains("User user") ||
-                    line.Contains("(User user)") ||
-                    line.Contains("User user,") ||
-                    line.Contains("public User") ||
-                    line.Contains("return User") ||
-                    line.Contains("new User("))
-                    return true;
-            }
+            // Check for common User type usage patterns
+            if (line.Contains("User ") &&
+                (line.Contains("User user") ||
+                 line.Contains("(User user)") ||
+                 line.Contains("User user,") ||
+                 line.Contains("public User") ||
+                 line.Contains("return User") ||
+                 line.Contains("new User(")))
+                return true;
 
             // Check for method calls that work with User objects
             if (line.Contains("ValidateUser") || line.Contains("GetAdults") || line.Contains("Create("))
@@ -443,7 +432,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         return false;
     }
 
-    private bool FileActuallyReferencesSymbol(string content, CodeChange change)
+    private static bool FileActuallyReferencesSymbol(string content, CodeChange change)
     {
         var lines = content.Split('\n');
         var symbolName = change.SymbolName;
@@ -453,7 +442,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
             var line = lines[i].Trim();
 
             // Skip comments and using statements (but keep using for special cases)
-            if (line.StartsWith("//"))
+            if (line.StartsWith("//", StringComparison.Ordinal))
                 continue;
 
             // Special case for the User test - if this is a User type change, check for User references in different contexts
@@ -486,16 +475,16 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
             if (change.FilePath.Contains("IPaymentProcessor.cs"))
             {
                 // Look for class declarations that implement the interface
-                if (line.StartsWith("class ") && line.Contains("IPaymentProcessor"))
+                if (line.StartsWith("class ", StringComparison.Ordinal) && line.Contains("IPaymentProcessor"))
                     return true;
 
                 // Look for usage of the interface
-                if (line.Contains("IPaymentProcessor") && !line.StartsWith("using "))
+                if (line.Contains("IPaymentProcessor") && !line.StartsWith("using ", StringComparison.Ordinal))
                     return true;
             }
 
             // Skip using statements except for special cases
-            if (line.StartsWith("using "))
+            if (line.StartsWith("using ", StringComparison.Ordinal))
             {
                 // Special case: Check if file imports the namespace containing the symbol
                 if (change.FilePath.Contains("User.cs") && line.Contains("using MyApp.Models"))
@@ -507,7 +496,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
             }
 
             // Skip namespace declarations
-            if (line.StartsWith("namespace "))
+            if (line.StartsWith("namespace ", StringComparison.Ordinal))
                 continue;
 
             // Check for various reference patterns
@@ -530,19 +519,16 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                 $" {symbolName} ", $"{symbolName} ",
             };
 
-            foreach (var pattern in patterns)
+            if (patterns.Any(pattern => line.Contains(pattern, StringComparison.Ordinal)))
             {
-                if (line.Contains(pattern, StringComparison.Ordinal))
-                {
-                    return true;
-                }
+                return true;
             }
         }
 
         return false;
     }
 
-    private async Task FindConfigReferencesInCSharpAsync(CodeChange change, string projectRoot, List<CSharpImpact> impacts, CancellationToken ct)
+    private static async Task FindConfigReferencesInCSharpAsync(CodeChange change, string projectRoot, List<CSharpImpact> impacts, CancellationToken ct)
     {
         // Find all C# files in the project
         var csharpFiles = Directory.GetFiles(projectRoot, "*.cs", SearchOption.AllDirectories)
@@ -565,34 +551,31 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                     $"{configKey}",                 // Direct reference
                 };
 
-                foreach (var pattern in patterns)
+                // Only add once per file
+                if (patterns.Any(pattern => content.Contains(pattern, StringComparison.OrdinalIgnoreCase)))
                 {
-                    if (content.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                    impacts.Add(new CSharpImpact
                     {
-                        impacts.Add(new CSharpImpact
-                        {
-                            FilePath = csharpFile,
-                            Line = 1, // We don't have precise line info without full parsing
-                            ImpactType = "config_reference",
-                            Description = $"C# file references config key '{configKey}'"
-                        });
-                        break; // Only add once per file
-                    }
+                        FilePath = csharpFile,
+                        Line = 1, // We don't have precise line info without full parsing
+                        ImpactType = "config_reference",
+                        Description = $"C# file references config key '{configKey}'"
+                    });
                 }
             }
-            catch
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Ignore files we can't read
             }
         }
     }
 
-    private async Task<IReadOnlyList<ConfigImpact>> FindConfigImpactsAsync(CodeChange change, string projectRoot, CancellationToken ct = default)
+    private static async Task<IReadOnlyList<ConfigImpact>> FindConfigImpactsAsync(CodeChange change, string projectRoot, CancellationToken ct = default)
     {
         var impacts = new List<ConfigImpact>();
 
         // If the change is in a config file, always include the file itself
-        if (change.FilePath.EndsWith(".json") || change.FilePath.EndsWith(".yml") || change.FilePath.EndsWith(".yaml"))
+        if (change.FilePath.EndsWith(".json", StringComparison.Ordinal) || change.FilePath.EndsWith(".yml", StringComparison.Ordinal) || change.FilePath.EndsWith(".yaml", StringComparison.Ordinal))
         {
             impacts.Add(new ConfigImpact
             {
@@ -627,7 +610,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                     });
                 }
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Ignore files we can't read
             }
@@ -702,7 +685,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Ignore files we can't read
             }
@@ -711,7 +694,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         return impacts;
     }
 
-    private async Task<IReadOnlyList<DocumentationImpact>> FindDocumentationImpactsAsync(CodeChange change, string projectRoot, CancellationToken ct = default)
+    private static async Task<IReadOnlyList<DocumentationImpact>> FindDocumentationImpactsAsync(CodeChange change, string projectRoot, CancellationToken ct = default)
     {
         var impacts = new List<DocumentationImpact>();
 
@@ -756,7 +739,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                     });
                 }
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Ignore files we can't read
             }
@@ -803,7 +786,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
             var line = lines[i];
 
             // Track current section header
-            if (line.StartsWith("#"))
+            if (line.StartsWith('#'))
             {
                 currentSection = line.TrimStart('#').Trim();
             }
@@ -826,16 +809,16 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         while (dir != null && !string.IsNullOrEmpty(dir))
         {
             // Look for common project root indicators
-            if (Directory.GetFiles(dir, "*.sln").Any() ||
-                Directory.GetFiles(dir, "*.csproj").Any() ||
+            if (Directory.GetFiles(dir, "*.sln").Length > 0 ||
+                Directory.GetFiles(dir, "*.csproj").Length > 0 ||
                 Directory.Exists(Path.Combine(dir, ".git")))
             {
                 return dir;
             }
 
             // Look for common project files/directories that indicate a project root
-            if (Directory.GetFiles(dir, "appsettings*.json").Any() ||
-                Directory.GetFiles(dir, "*.json").Any() ||
+            if (Directory.GetFiles(dir, "appsettings*.json").Length > 0 ||
+                Directory.GetFiles(dir, "*.json").Length > 0 ||
                 Directory.Exists(Path.Combine(dir, ".github")) ||
                 Directory.Exists(Path.Combine(dir, "src")) ||
                 Directory.Exists(Path.Combine(dir, "docs")))
@@ -843,15 +826,13 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
                 // If we found project indicators, but haven't found formal project files,
                 // and we're in a subdirectory, go up one more level to find the true root
                 var parentDir = Path.GetDirectoryName(dir);
-                if (parentDir != null && parentDir != dir)
+                // Check if parent has better indicators
+                if (parentDir != null && parentDir != dir &&
+                    (Directory.GetFiles(parentDir, "*.sln").Length > 0 ||
+                     Directory.GetFiles(parentDir, "*.csproj").Length > 0 ||
+                     Directory.Exists(Path.Combine(parentDir, ".git"))))
                 {
-                    // Check if parent has better indicators
-                    if (Directory.GetFiles(parentDir, "*.sln").Any() ||
-                        Directory.GetFiles(parentDir, "*.csproj").Any() ||
-                        Directory.Exists(Path.Combine(parentDir, ".git")))
-                    {
-                        return parentDir;
-                    }
+                    return parentDir;
                 }
                 return dir;
             }
@@ -861,16 +842,13 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
 
         // If no project root indicators found, try to find common project structures
         // from the original directory
-        if (originalDir != null)
+        // If we're in a src subdirectory, go up one level
+        if (originalDir != null && Path.GetFileName(originalDir).Equals("src", StringComparison.OrdinalIgnoreCase))
         {
-            // If we're in a src subdirectory, go up one level
-            if (Path.GetFileName(originalDir).Equals("src", StringComparison.OrdinalIgnoreCase))
+            var parentDir = Path.GetDirectoryName(originalDir);
+            if (parentDir != null)
             {
-                var parentDir = Path.GetDirectoryName(originalDir);
-                if (parentDir != null)
-                {
-                    return parentDir;
-                }
+                return parentDir;
             }
         }
 
