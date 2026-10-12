@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using NUnit.Framework;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Runtime.Loader;
 using System.Threading.Tasks;
 
@@ -173,11 +174,12 @@ public class RoslynWorkspaceInitializationTests
             }
         }
 
-        // Two copies of the C# compiler assembly would make the generator's syntax type checks fail
+        // Which copies of the compiler and the logging generator are loaded, and from which files
+        // (the generator package ships roslyn3.11/4.0/4.4 builds with the same assembly identity)
         var csharpAssemblies = AssemblyLoadContext.All
             .SelectMany(alc => alc.Assemblies.Select(a => (alc, a)))
-            .Where(x => x.a.GetName().Name == "Microsoft.CodeAnalysis.CSharp")
-            .Select(x => $"{x.alc.Name}: {x.a.GetName().Version} {x.a.Location}");
+            .Where(x => x.a.GetName().Name is "Microsoft.CodeAnalysis.CSharp" or "Microsoft.Extensions.Logging.Generators")
+            .Select(x => $"{x.alc.Name ?? x.alc.GetType().Name}: {x.a.GetName().Name} {x.a.GetName().Version} {x.a.Location} sha256={HashPrefix(x.a.Location)}");
 
         // Does Program.cs really have a file-scoped namespace in the workspace's syntax tree?
         var treeShape = string.Empty;
@@ -191,11 +193,21 @@ public class RoslynWorkspaceInitializationTests
         }
 
         return $"\nSample errors:\n{string.Join("\n", health.ErrorSamples)}" +
-            $"\nMicrosoft.CodeAnalysis.CSharp loaded:\n{string.Join("\n", csharpAssemblies)}" +
+            $"\nCompiler and logging generator assemblies loaded:\n{string.Join("\n", csharpAssemblies)}" +
             $"\nSyntax: {treeShape}" +
             $"\nAnalyzer load failures:\n{string.Join("\n", health.AnalyzerLoadFailures)}" +
             $"\nGenerator references:\n{string.Join("\n", analyzers)}" +
             $"\nGenerated logging source:\n{generatedSample}";
+    }
+
+    private static string HashPrefix(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+        {
+            return "n/a";
+        }
+
+        return Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)))[..10];
     }
 
     private static string GetProjectPath()
