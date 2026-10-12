@@ -54,8 +54,8 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
             var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
 
             // Find duplicates using different strategies
-            var exactDuplicates = await FindExactDuplicatesInternalAsync(allCodeBlocks, options);
-            var nearDuplicates = await FindNearDuplicatesInternalAsync(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
+            var exactDuplicates = FindExactDuplicatesInternal(allCodeBlocks, options);
+            var nearDuplicates = FindNearDuplicatesInternal(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
 
             // Combine and group duplicates
             var allDuplicateGroups = new List<DuplicateGroup>();
@@ -63,17 +63,17 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
             allDuplicateGroups.AddRange(nearDuplicates);
 
             // Calculate metrics
-            var metrics = await CalculateDuplicationMetricsAsync(allDuplicateGroups, allCodeBlocks);
+            var metrics = CalculateDuplicationMetrics(allDuplicateGroups, allCodeBlocks);
 
             // Generate refactoring suggestions
             var refactoringOptions = new RefactoringOptions
             {
                 MaxSuggestions = 20
             };
-            var refactoringSuggestions = await GenerateRefactoringSuggestionsAsync(allDuplicateGroups, refactoringOptions, cancellationToken);
+            var refactoringSuggestions = GenerateRefactoringSuggestions(allDuplicateGroups, refactoringOptions, cancellationToken);
 
             // Get hotspots
-            var hotspots = await AnalyzeHotspotsAsync(allDuplicateGroups, allCodeBlocks);
+            var hotspots = AnalyzeHotspots(allDuplicateGroups, allCodeBlocks);
 
             var duration = DateTime.UtcNow - startTime;
 
@@ -132,7 +132,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         await EnsureWorkspaceInitialized(projectPath);
 
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
-        return await FindExactDuplicatesInternalAsync(allCodeBlocks, options);
+        return FindExactDuplicatesInternal(allCodeBlocks, options);
     }
 
     public async Task<IReadOnlyList<DuplicateGroup>> FindNearDuplicatesAsync(
@@ -146,7 +146,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         await EnsureWorkspaceInitialized(projectPath);
 
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
-        return await FindNearDuplicatesInternalAsync(allCodeBlocks, similarityThreshold, options, cancellationToken);
+        return FindNearDuplicatesInternal(allCodeBlocks, similarityThreshold, options, cancellationToken);
     }
 
     public async Task<DuplicationMetrics> AnalyzeDuplicationMetricsAsync(
@@ -158,14 +158,14 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         await EnsureWorkspaceInitialized(projectPath);
 
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
-        var exactDuplicates = await FindExactDuplicatesInternalAsync(allCodeBlocks, options);
-        var nearDuplicates = await FindNearDuplicatesInternalAsync(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
+        var exactDuplicates = FindExactDuplicatesInternal(allCodeBlocks, options);
+        var nearDuplicates = FindNearDuplicatesInternal(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
 
         var allGroups = new List<DuplicateGroup>();
         allGroups.AddRange(exactDuplicates);
         allGroups.AddRange(nearDuplicates);
 
-        return await CalculateDuplicationMetricsAsync(allGroups, allCodeBlocks);
+        return CalculateDuplicationMetrics(allGroups, allCodeBlocks);
     }
 
     public async Task<IReadOnlyList<RefactoringSuggestion>> GetRefactoringSuggestionsAsync(
@@ -177,7 +177,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         options ??= new RefactoringOptions();
         await EnsureWorkspaceInitialized(projectPath);
 
-        return await GenerateRefactoringSuggestionsAsync(duplicates.ToList(), options, cancellationToken);
+        return GenerateRefactoringSuggestions(duplicates.ToList(), options, cancellationToken);
     }
 
     public async Task<DuplicateDetectionResult> DetectDuplicatesInFilesAsync(
@@ -201,14 +201,14 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
             }
 
             // Find duplicates
-            var exactDuplicates = await FindExactDuplicatesInternalAsync(allCodeBlocks, options);
-            var nearDuplicates = await FindNearDuplicatesInternalAsync(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
+            var exactDuplicates = FindExactDuplicatesInternal(allCodeBlocks, options);
+            var nearDuplicates = FindNearDuplicatesInternal(allCodeBlocks, options.SimilarityThreshold, options, cancellationToken);
 
             var allDuplicateGroups = new List<DuplicateGroup>();
             allDuplicateGroups.AddRange(exactDuplicates);
             allDuplicateGroups.AddRange(nearDuplicates);
 
-            var metrics = await CalculateDuplicationMetricsAsync(allDuplicateGroups, allCodeBlocks);
+            var metrics = CalculateDuplicationMetrics(allDuplicateGroups, allCodeBlocks);
 
             return new DuplicateDetectionResult
             {
@@ -227,32 +227,43 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         }
     }
 
-    public async Task<CodeSimilarityResult> CompareCodeBlocksAsync(
+    public Task<CodeSimilarityResult> CompareCodeBlocksAsync(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
         CodeComparisonOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        options ??= new CodeComparisonOptions();
+        try
+        {
+            return Task.FromResult(CompareCodeBlocks(codeBlock1, codeBlock2, options ?? new CodeComparisonOptions()));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<CodeSimilarityResult>(ex);
+        }
+    }
+
+    private static CodeSimilarityResult CompareCodeBlocks(CodeBlock codeBlock1, CodeBlock codeBlock2, CodeComparisonOptions options)
+    {
 
         // Calculate different similarity scores
         var structuralSimilarity = CalculateStructuralSimilarity(codeBlock1, codeBlock2);
-        var tokenSimilarity = await CalculateTokenSimilarityAsync(codeBlock1, codeBlock2, options);
-        var semanticSimilarity = await CalculateSemanticSimilarityAsync(codeBlock1, codeBlock2);
+        var tokenSimilarity = CalculateComparisonTokenSimilarity(codeBlock1, codeBlock2, options);
+        var semanticSimilarity = CalculateSemanticSimilarity(codeBlock1, codeBlock2);
 
         // Calculate overall similarity
         var overallSimilarity = (structuralSimilarity * options.StructuralWeight) +
                                 (tokenSimilarity * options.TokenWeight);
 
         // Find differences
-        var differences = await FindCodeDifferencesAsync(codeBlock1, codeBlock2);
+        var differences = FindCodeDifferences(codeBlock1, codeBlock2);
 
         // Find common patterns
-        var commonPatterns = await FindCommonPatternsAsync(codeBlock1, codeBlock2);
+        var commonPatterns = FindCommonPatterns(codeBlock1, codeBlock2);
 
         // Determine if they are duplicates and what type
         var isDuplicate = overallSimilarity >= 0.8; // Default threshold
-        var duplicateType = await DetermineDuplicateTypeAsync(codeBlock1, codeBlock2);
+        var duplicateType = DeterminePairDuplicateType(codeBlock1, codeBlock2);
 
         return new CodeSimilarityResult
         {
@@ -278,7 +289,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
         var duplicates = await DetectDuplicatesAsync(projectPath, options, cancellationToken);
 
-        return await AnalyzeHotspotsAsync(duplicates.DuplicateGroups.ToList(), allCodeBlocks);
+        return AnalyzeHotspots(duplicates.DuplicateGroups.ToList(), allCodeBlocks);
     }
 
     public async Task<RefactoringValidationResult> ValidateRefactoringAsync(
@@ -791,8 +802,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         return codeBlocks;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<List<DuplicateGroup>> FindExactDuplicatesInternalAsync(
+    private static List<DuplicateGroup> FindExactDuplicatesInternal(
         List<CodeBlock> codeBlocks,
         DuplicateDetectionOptions options)
     {
@@ -836,7 +846,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         return duplicateGroups.OrderByDescending(g => g.Complexity).ToList();
     }
 
-    private static async Task<List<DuplicateGroup>> FindNearDuplicatesInternalAsync(
+    private static List<DuplicateGroup> FindNearDuplicatesInternal(
         List<CodeBlock> codeBlocks,
         double similarityThreshold,
         DuplicateDetectionOptions options,
@@ -874,7 +884,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
                         processedPairs.Add(pairKey);
 
                         // Calculate similarity
-                        var similarity = await CalculateSimilarityAsync(block1, block2, options);
+                        var similarity = CalculateSimilarity(block1, block2, options);
 
                         if (similarity >= similarityThreshold)
                         {
@@ -894,8 +904,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         return duplicateGroups.OrderByDescending(g => g.SimilarityScore).ThenByDescending(g => g.Complexity).ToList();
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<double> CalculateSimilarityAsync(
+    private static double CalculateSimilarity(
         CodeBlock block1,
         CodeBlock block2,
         DuplicateDetectionOptions options)
@@ -1007,8 +1016,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         return matrix[sequence1.Count, sequence2.Count];
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<double> CalculateTokenSimilarityAsync(
+    private static double CalculateComparisonTokenSimilarity(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2,
         CodeComparisonOptions options)
@@ -1022,8 +1030,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         return CalculateTokenSimilarity(codeBlock1, codeBlock2, detectionOptions);
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<double> CalculateSemanticSimilarityAsync(
+    private static double CalculateSemanticSimilarity(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2)
     {
@@ -1042,8 +1049,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         return 0.5;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<List<CodeDifference>> FindCodeDifferencesAsync(
+    private static List<CodeDifference> FindCodeDifferences(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2)
     {
@@ -1069,8 +1075,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         return differences;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<List<CommonPattern>> FindCommonPatternsAsync(
+    private static List<CommonPattern> FindCommonPatterns(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2)
     {
@@ -1111,8 +1116,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         return patterns;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<DuplicateType?> DetermineDuplicateTypeAsync(
+    private static DuplicateType? DeterminePairDuplicateType(
         CodeBlock codeBlock1,
         CodeBlock codeBlock2)
     {
@@ -1220,8 +1224,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<DuplicationMetrics> CalculateDuplicationMetricsAsync(
+    private static DuplicationMetrics CalculateDuplicationMetrics(
         List<DuplicateGroup> duplicateGroups,
         List<CodeBlock> allCodeBlocks)
     {
@@ -1297,7 +1300,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         };
     }
 
-    private static async Task<IReadOnlyList<RefactoringSuggestion>> GenerateRefactoringSuggestionsAsync(
+    private static List<RefactoringSuggestion> GenerateRefactoringSuggestions(
         List<DuplicateGroup> duplicateGroups,
         RefactoringOptions options,
         CancellationToken cancellationToken)
@@ -1307,7 +1310,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         foreach (var group in duplicateGroups.Take(options.MaxSuggestions))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var groupSuggestions = await GenerateSuggestionsForDuplicateGroup(group, options);
+            var groupSuggestions = GenerateSuggestionsForDuplicateGroup(group, options);
             suggestions.AddRange(groupSuggestions);
         }
 
@@ -1316,8 +1319,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
                          .ToList();
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<List<RefactoringSuggestion>> GenerateSuggestionsForDuplicateGroup(
+    private static List<RefactoringSuggestion> GenerateSuggestionsForDuplicateGroup(
         DuplicateGroup group,
         RefactoringOptions options)
     {
@@ -1746,8 +1748,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<DuplicateHotspotsResult> AnalyzeHotspotsAsync(
+    private static DuplicateHotspotsResult AnalyzeHotspots(
         List<DuplicateGroup> duplicateGroups,
         List<CodeBlock> allCodeBlocks)
     {

@@ -300,7 +300,7 @@ public partial class StreamingFileProcessor : IStreamingFileProcessor, IDisposab
     public async Task<List<StreamResult>> BulkTransformAsync(BulkTransformRequest request, IProgress<StreamProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         var results = new List<StreamResult>();
-        var inputFiles = await GetInputFilesAsync(request);
+        var inputFiles = GetInputFiles(request);
 
         LogStartingBulkTransformationOfFiles(_logger, inputFiles.Count, request.MaxDegreeOfParallelism);
 
@@ -350,7 +350,6 @@ public partial class StreamingFileProcessor : IStreamingFileProcessor, IDisposab
         return null;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
     public async Task<bool> CancelOperationAsync(string operationId)
     {
         if (_operations.TryGetValue(operationId, out var operation))
@@ -441,13 +440,12 @@ public partial class StreamingFileProcessor : IStreamingFileProcessor, IDisposab
         return checkpoint;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<StreamOperation>> ListOperationsAsync(int maxCount = 50)
+    public Task<List<StreamOperation>> ListOperationsAsync(int maxCount = 50)
     {
-        return _operations.Values
+        return Task.FromResult(_operations.Values
             .OrderByDescending(o => o.CreatedAt)
             .Take(maxCount)
-            .ToList();
+            .ToList());
     }
 
     public async Task CleanupAsync(TimeSpan? olderThan = null)
@@ -478,15 +476,14 @@ public partial class StreamingFileProcessor : IStreamingFileProcessor, IDisposab
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<ChunkProcessor>> GetAvailableProcessorsAsync()
+    public Task<List<ChunkProcessor>> GetAvailableProcessorsAsync()
     {
-        return _processors.Select(kvp => new ChunkProcessor
+        return Task.FromResult(_processors.Select(kvp => new ChunkProcessor
         {
             Name = kvp.Key.ToString(),
             ProcessorType = kvp.Key,
             Options = new Dictionary<string, object>()
-        }).ToList();
+        }).ToList());
     }
 
     public async Task<(bool IsValid, List<string> Errors)> ValidateRequestAsync(StreamProcessRequest request)
@@ -537,8 +534,7 @@ public partial class StreamingFileProcessor : IStreamingFileProcessor, IDisposab
         return (errors.Count == 0, errors);
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<TimeSpan> EstimateProcessingTimeAsync(StreamProcessRequest request)
+    public Task<TimeSpan> EstimateProcessingTimeAsync(StreamProcessRequest request)
     {
         try
         {
@@ -556,12 +552,12 @@ public partial class StreamingFileProcessor : IStreamingFileProcessor, IDisposab
             };
 
             var seconds = (bytesPerSecond > 0 && fileSize >= 0) ? fileSize / bytesPerSecond : 1;
-            return TimeSpan.FromSeconds(seconds);
+            return Task.FromResult(TimeSpan.FromSeconds(seconds));
         }
         catch (Exception ex)
         {
             LogProcessingTimeEstimateFailed(_logger, ex, request.FilePath);
-            return TimeSpan.FromMinutes(1); // Default estimate
+            return Task.FromResult(TimeSpan.FromMinutes(1)); // Default estimate
         }
     }
 
@@ -893,8 +889,7 @@ public partial class StreamingFileProcessor : IStreamingFileProcessor, IDisposab
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<List<string>> GetInputFilesAsync(BulkTransformRequest request)
+    private static List<string> GetInputFiles(BulkTransformRequest request)
     {
         var inputFiles = new List<string>();
 
@@ -1278,12 +1273,11 @@ public partial class StreamingFileProcessor : IStreamingFileProcessor, IDisposab
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<ProcessingStatistics> GetProcessingStatisticsAsync()
+    public Task<ProcessingStatistics> GetProcessingStatisticsAsync()
     {
         _statistics.ActiveProcessingTasks = _operations.Values
             .Count(o => o.Status == StreamOperationStatus.Running || o.Status == StreamOperationStatus.Resumed);
-        return _statistics;
+        return Task.FromResult(_statistics);
     }
 
     public async Task ClearStatisticsAsync()

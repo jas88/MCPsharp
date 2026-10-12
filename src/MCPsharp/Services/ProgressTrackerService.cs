@@ -80,8 +80,7 @@ public partial class ProgressTrackerService : IProgressTracker, IDisposable
         return Task.CompletedTask;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task UpdateProgressAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default)
+    public Task UpdateProgressAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default)
     {
         if (_progressTracker.TryGetValue(operationId, out var progress))
         {
@@ -112,6 +111,8 @@ public partial class ProgressTrackerService : IProgressTracker, IDisposable
 
             LogUpdatedProgressForOperationStep(_logger, operationId, progressInfo.CurrentStep, progressInfo.TotalSteps);
         }
+
+        return Task.CompletedTask;
     }
 
     public Task<StreamProgress?> GetProgressAsync(string operationId)
@@ -255,8 +256,7 @@ public partial class ProgressTrackerService : IProgressTracker, IDisposable
         LogReportedProgressForOperation(_logger, progress.OperationId, progress.ProgressPercentage);
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<string> StartTrackingAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default)
+    public Task<string> StartTrackingAsync(string operationId, ProgressInfo progressInfo, CancellationToken ct = default)
     {
         var progress = new StreamProgress
         {
@@ -276,11 +276,10 @@ public partial class ProgressTrackerService : IProgressTracker, IDisposable
 
         LogStartedProgressTrackingForOperation(_logger, operationId, progressInfo.Title, progressInfo.CurrentStep, progressInfo.TotalSteps);
 
-        return operationId;
+        return Task.FromResult(operationId);
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task CompleteTrackingAsync(string progressId, ProgressResult result, CancellationToken ct = default)
+    public Task CompleteTrackingAsync(string progressId, ProgressResult result, CancellationToken ct = default)
     {
         if (_progressTracker.TryGetValue(progressId, out var progress))
         {
@@ -311,6 +310,8 @@ public partial class ProgressTrackerService : IProgressTracker, IDisposable
 
             LogCompletedProgressTrackingForOperation(_logger, progressId, result.Success, result.Message);
         }
+
+        return Task.CompletedTask;
     }
 
     public void Dispose()

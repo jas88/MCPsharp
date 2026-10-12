@@ -181,7 +181,7 @@ sealed partial class Program
             }
 
             // Setup resource content generators
-            var resourceGenerators = new ResourceContentGenerators(projectManager, () => projectDatabase);
+            var resourceGenerators = new ResourceContentGenerators(projectManager);
 
             // Register MCP resources
             resourceRegistry.RegisterResource(

@@ -405,8 +405,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// Execute get_analyzer_config tool
     /// </summary>
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<ToolCallResult> ExecuteGetAnalyzerConfig()
+    private Task<ToolCallResult> ExecuteGetAnalyzerConfig()
     {
         try
         {
@@ -415,7 +414,7 @@ public partial class McpToolRegistry
 
             var config = _analyzerConfigManager.GetConfiguration();
 
-            return new ToolCallResult
+            return Task.FromResult(new ToolCallResult
             {
                 Success = true,
                 Result = new
@@ -438,16 +437,16 @@ public partial class McpToolRegistry
                         properties = kvp.Value.Properties
                     }).ToList()
                 }
-            };
+            });
         }
         catch (Exception ex)
         {
             LogToolOperationFailed(_logger, ex, nameof(ExecuteGetAnalyzerConfig));
-            return new ToolCallResult
+            return Task.FromResult(new ToolCallResult
             {
                 Success = false,
                 Error = $"Failed to get analyzer configuration: {ex.Message}"
-            };
+            });
         }
     }
 

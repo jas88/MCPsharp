@@ -323,7 +323,7 @@ public partial class UnifiedAnalysisService
             };
 
             // Basic project structure
-            response.Structure = await GetProjectStructureAsync(request.ProjectPath);
+            response.Structure = GetProjectStructure(request.ProjectPath);
 
             // File inventory
             if (request.Options?.Detail >= DetailLevel.Standard)
@@ -399,7 +399,7 @@ public partial class UnifiedAnalysisService
 
             // Load or use provided architecture definition
             var scopeString = request.Scope.ToString();
-            var architectureDefinition = ConvertToArchitectureDefinition(request.Definition ?? await GetDefaultArchitectureDefinitionAsync());
+            var architectureDefinition = ConvertToArchitectureDefinition(request.Definition ?? GetDefaultArchitectureDefinition());
 
             // Validate architecture
             response.Validation = ConvertToValidationResult(await _architectureValidator.ValidateArchitectureAsync(scopeString, architectureDefinition, ct));
@@ -442,7 +442,7 @@ public partial class UnifiedAnalysisService
             // Architecture metrics
             if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
             {
-                response.Metrics = await CalculateArchitectureMetricsAsync(scopeString, architectureDefinition);
+                response.Metrics = CalculateArchitectureMetrics(scopeString, architectureDefinition);
             }
 
             stopwatch.Stop();
@@ -514,7 +514,7 @@ public partial class UnifiedAnalysisService
             // Dependency metrics
             if (request.Options?.Include.HasFlag(IncludeFlags.Metrics) == true)
             {
-                response.Metrics = await CalculateDependencyMetricsAsync(response.Graph);
+                response.Metrics = CalculateDependencyMetrics(response.Graph);
             }
 
             stopwatch.Stop();
@@ -593,7 +593,7 @@ public partial class UnifiedAnalysisService
             // Test coverage
             if (request.Metrics.Contains(AnalysisQualityMetric.TestCoverage) || request.Metrics.Contains(AnalysisQualityMetric.All))
             {
-                response.TestCoverage = await AnalyzeTestCoverageAsync(request.Scope.ToString());
+                response.TestCoverage = AnalyzeTestCoverage(request.Scope.ToString());
             }
 
             // Code smells
@@ -605,13 +605,13 @@ public partial class UnifiedAnalysisService
             // Quality score
             if (request.Options?.Detail >= DetailLevel.Standard)
             {
-                response.QualityScore = await CalculateQualityScoreAsync(response);
+                response.QualityScore = CalculateQualityScore(response);
             }
 
             // Recommendations
             if (request.Options?.Include.HasFlag(IncludeFlags.Suggestions) == true)
             {
-                response.Recommendations = await GenerateQualityRecommendationsAsync(response);
+                response.Recommendations = GenerateQualityRecommendations(response);
             }
 
             stopwatch.Stop();
@@ -1595,8 +1595,7 @@ public partial class UnifiedAnalysisService
         return null;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<ProjectStructure> GetProjectStructureAsync(string projectPath)
+    private ProjectStructure GetProjectStructure(string projectPath)
     {
         try
         {
@@ -1629,7 +1628,6 @@ public partial class UnifiedAnalysisService
 
         return new ProjectStructure { ProjectPath = projectPath, ProjectType = "Unknown" };
     }
-    #pragma warning restore CS1998
 
     private async Task<List<ProjectFile>> GetProjectFileInventoryAsync(string projectPath, CancellationToken ct)
     {
@@ -1793,8 +1791,7 @@ public partial class UnifiedAnalysisService
         return null;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<MCPsharp.Models.Consolidated.ArchitectureDefinition> GetDefaultArchitectureDefinitionAsync()
+    private MCPsharp.Models.Consolidated.ArchitectureDefinition GetDefaultArchitectureDefinition()
     {
         try
         {
@@ -1830,8 +1827,7 @@ public partial class UnifiedAnalysisService
             };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<ArchitectureMetrics?> CalculateArchitectureMetricsAsync(string scope, MCPsharp.Models.Architecture.ArchitectureDefinition definition)
+    private ArchitectureMetrics? CalculateArchitectureMetrics(string scope, MCPsharp.Models.Architecture.ArchitectureDefinition definition)
     {
         try
         {
@@ -2008,8 +2004,7 @@ public partial class UnifiedAnalysisService
         return new List<CriticalPath>();
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<DependencyMetrics?> CalculateDependencyMetricsAsync(DependencyGraph graph)
+    private DependencyMetrics? CalculateDependencyMetrics(DependencyGraph graph)
     {
         try
         {
@@ -2166,8 +2161,7 @@ public partial class UnifiedAnalysisService
         return null;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<TestCoverageAnalysis?> AnalyzeTestCoverageAsync(string scope)
+    private TestCoverageAnalysis? AnalyzeTestCoverage(string scope)
     {
         try
         {
@@ -2277,8 +2271,7 @@ public partial class UnifiedAnalysisService
         return new List<CodeSmell>();
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<QualityScore?> CalculateQualityScoreAsync(QualityAnalysisResponse analysis)
+    private QualityScore? CalculateQualityScore(QualityAnalysisResponse analysis)
     {
         try
         {
@@ -2330,8 +2323,7 @@ public partial class UnifiedAnalysisService
         return null;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<QualityRecommendation>> GenerateQualityRecommendationsAsync(QualityAnalysisResponse analysis)
+    private List<QualityRecommendation> GenerateQualityRecommendations(QualityAnalysisResponse analysis)
     {
         try
         {

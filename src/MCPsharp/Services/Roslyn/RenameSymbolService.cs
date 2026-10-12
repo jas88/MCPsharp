@@ -629,26 +629,11 @@ public partial class RenameSymbolService
 
         await LogRenameDiagnosticsAsync(symbol, solution, ct);
 
-        var optionSet = solution.Options;
-
-        // Configure rename options
-        // Note: Using OptionSet approach as older API, newer code should use SymbolRenameOptions
-        #pragma warning disable CS0618
-        if (request.RenameInComments)
-        {
-            optionSet = optionSet.WithChangedOption(RenameOptions.RenameInComments, true);
-        }
-
-        if (request.RenameInStrings)
-        {
-            optionSet = optionSet.WithChangedOption(RenameOptions.RenameInStrings, true);
-        }
-
-        if (request.RenameOverloads && symbol is IMethodSymbol)
-        {
-            optionSet = optionSet.WithChangedOption(RenameOptions.RenameOverloads, true);
-        }
-        #pragma warning restore CS0618
+        var renameOptions = new SymbolRenameOptions(
+            RenameOverloads: request.RenameOverloads && symbol is IMethodSymbol,
+            RenameInStrings: request.RenameInStrings,
+            RenameInComments: request.RenameInComments,
+            RenameFile: false);
 
         // Track modified files
         var modifiedFiles = new HashSet<string>();
@@ -656,14 +641,12 @@ public partial class RenameSymbolService
 
         // Use Roslyn's Renamer API for the actual rename.
         // Failures propagate to RenameSymbolAsync, which logs them and converts them to a failed result.
-        #pragma warning disable CS0618
         var newSolution = await Renamer.RenameSymbolAsync(
             solution,
             symbol,
+            renameOptions,
             request.NewName,
-            optionSet,
             ct);
-        #pragma warning restore CS0618
 
         // Calculate changes
         var changes = newSolution.GetChanges(solution);

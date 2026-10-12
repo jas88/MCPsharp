@@ -697,10 +697,14 @@ public partial class RollbackService : IRollbackService, IDisposable
     }
 
     /// <inheritdoc />
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<long> EstimateBackupSpaceAsync(
+    public Task<long> EstimateBackupSpaceAsync(
         IReadOnlyList<string> files,
         CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(EstimateBackupSpace(files, cancellationToken));
+    }
+
+    private long EstimateBackupSpace(IReadOnlyList<string> files, CancellationToken cancellationToken)
     {
         if (files == null || !files.Any())
             return 0;

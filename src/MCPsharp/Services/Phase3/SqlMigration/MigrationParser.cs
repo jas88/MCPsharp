@@ -111,8 +111,19 @@ internal sealed partial class MigrationParser
         return migration;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<string>> GetMigrationFilesAsync(string projectPath, CancellationToken cancellationToken = default)
+    public Task<List<string>> GetMigrationFilesAsync(string projectPath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return Task.FromResult(GetMigrationFiles(projectPath));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<List<string>>(ex);
+        }
+    }
+
+    private List<string> GetMigrationFiles(string projectPath)
     {
         LogSearchingMigrationFiles(_logger, projectPath);
 

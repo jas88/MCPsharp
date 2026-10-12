@@ -15,8 +15,7 @@ internal sealed partial class BreakingChangeAnalyzer
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public static async Task<List<BreakingChange>> DetectBreakingChangesInMigrationsAsync(List<MigrationInfo> migrations, CancellationToken cancellationToken = default)
+    public static List<BreakingChange> DetectBreakingChangesInMigrations(List<MigrationInfo> migrations)
     {
         var breakingChanges = new List<BreakingChange>();
 

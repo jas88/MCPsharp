@@ -68,8 +68,19 @@ public partial class McpToolRegistry
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<ToolCallResult> ExecuteValidateWorkflowConsistency(JsonDocument arguments)
+    private Task<ToolCallResult> ExecuteValidateWorkflowConsistency(JsonDocument arguments)
+    {
+        try
+        {
+            return Task.FromResult(ValidateWorkflowConsistency(arguments));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<ToolCallResult>(ex);
+        }
+    }
+
+    private ToolCallResult ValidateWorkflowConsistency(JsonDocument arguments)
     {
         if (_workflowAnalyzer == null)
         {

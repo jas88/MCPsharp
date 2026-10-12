@@ -351,8 +351,12 @@ public partial class FixEngine : IFixEngine
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<Models.Analyzers.RollbackResult> RollbackFixesAsync(string sessionId, CancellationToken cancellationToken = default)
+    public Task<Models.Analyzers.RollbackResult> RollbackFixesAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(RollbackFixes(sessionId));
+    }
+
+    private Models.Analyzers.RollbackResult RollbackFixes(string sessionId)
     {
         try
         {
@@ -467,7 +471,6 @@ public partial class FixEngine : IFixEngine
             };
         }
     }
-    #pragma warning restore CS1998
 
     public async Task<Models.Analyzers.ValidationResult> ValidateFixesAsync(string sessionId, CancellationToken cancellationToken = default)
     {
@@ -546,18 +549,15 @@ public partial class FixEngine : IFixEngine
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<ImmutableArray<FixSession>> GetFixHistoryAsync(int maxSessions = 50, CancellationToken cancellationToken = default)
+    public Task<ImmutableArray<FixSession>> GetFixHistoryAsync(int maxSessions = 50, CancellationToken cancellationToken = default)
     {
-        return _sessions.Values
+        return Task.FromResult(_sessions.Values
             .OrderByDescending(s => s.StartTime)
             .Take(maxSessions)
-            .ToImmutableArray();
+            .ToImmutableArray());
     }
-    #pragma warning restore CS1998
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<FixStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
+    public Task<FixStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
     {
         var sessions = _sessions.Values.ToList();
         var now = DateTime.UtcNow;
@@ -565,7 +565,7 @@ public partial class FixEngine : IFixEngine
 
         var recentSessions = sessions.Where(s => s.StartTime >= periodStart).ToList();
 
-        return new FixStatistics
+        return Task.FromResult(new FixStatistics
         {
             TotalSessions = sessions.Count,
             SuccessfulSessions = sessions.Count(s => s.Success),
@@ -590,9 +590,8 @@ public partial class FixEngine : IFixEngine
                 .ToImmutableArray(),
             PeriodStart = periodStart,
             PeriodEnd = now
-        };
+        });
     }
-    #pragma warning restore CS1998
 
     private static FixPreview GeneratePreview(
         AnalyzerFix fix,

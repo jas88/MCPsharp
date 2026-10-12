@@ -241,12 +241,12 @@ public partial class McpToolRegistry
     /// <returns>Tool execution result indicating success or failure</returns>
     private async Task<ToolCallResult> ExecuteCancelStreamOperation(JsonDocument arguments)
     {
-        if (_progressTracker == null)
+        if (_streamingProcessor == null)
         {
             return new ToolCallResult
             {
                 Success = false,
-                Error = "ProgressTracker is not available. Ensure it's properly initialized."
+                Error = "StreamingFileProcessor is not available. Ensure it's properly initialized."
             };
         }
 
@@ -259,9 +259,7 @@ public partial class McpToolRegistry
                 return new ToolCallResult { Success = false, Error = "operationId is required" };
             }
 
-            #pragma warning disable CS8602 // _streamingProcessor is checked for null at method entry
             var cancelled = await _streamingProcessor.CancelOperationAsync(operationId);
-            #pragma warning restore CS8602
 
             return new ToolCallResult
             {
@@ -303,9 +301,7 @@ public partial class McpToolRegistry
                 return new ToolCallResult { Success = false, Error = "operationId is required" };
             }
 
-            #pragma warning disable CS8602 // _streamingProcessor is checked for null at method entry
             var result = await _streamingProcessor.ResumeOperationAsync(operationId, cancellationToken);
-            #pragma warning restore CS8602
             if (result == null)
                 throw new InvalidOperationException("Resume operation returned null result");
 

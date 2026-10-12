@@ -15,8 +15,7 @@ internal sealed partial class DependencyAnalyzer
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public static async Task AnalyzeDependenciesAsync(List<MigrationInfo> migrations, CancellationToken cancellationToken = default)
+    public static void AnalyzeDependencies(List<MigrationInfo> migrations)
     {
         // Build dependency graph based on migration timestamps and operations
         for (int i = 1; i < migrations.Count; i++)

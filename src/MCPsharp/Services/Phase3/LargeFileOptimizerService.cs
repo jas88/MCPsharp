@@ -157,13 +157,13 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
             throw new InvalidOperationException("Could not get semantic information for the class");
 
         // Analyze current metrics
-        var currentMetrics = await AnalyzeClassMetrics(targetClass, semanticModel, cancellationToken);
+        var currentMetrics = AnalyzeClassMetrics(targetClass, semanticModel, cancellationToken);
 
         // Generate splitting strategies
         var splittingStrategies = GenerateSplittingStrategies(targetClass, currentMetrics);
 
         // Generate refactoring suggestions
-        var refactoringSuggestions = await GenerateClassRefactoringSuggestions(targetClass, currentMetrics);
+        var refactoringSuggestions = GenerateClassRefactoringSuggestions(targetClass, currentMetrics);
 
         // Generate before/after examples
         var beforeAfterExamples = GenerateClassBeforeAfterExamples(splittingStrategies);
@@ -215,7 +215,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
             throw new InvalidOperationException("Method must be within a class");
 
         // Analyze current metrics
-        var currentMetrics = await AnalyzeMethodMetrics(targetMethod);
+        var currentMetrics = AnalyzeMethodMetrics(targetMethod);
 
         // Generate refactoring strategies
         var refactoringStrategies = GenerateMethodRefactoringStrategies(currentMetrics);
@@ -263,12 +263,12 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
             if (methodDeclarations.Count > 0)
             {
-                return await CalculateMethodComplexity(methodDeclarations[0]);
+                return CalculateMethodComplexity(methodDeclarations[0]);
             }
         }
 
         // Analyze entire file
-        return await CalculateFileComplexity(root, cancellationToken);
+        return CalculateFileComplexity(root, cancellationToken);
     }
 
     public async Task<OptimizationPlan> GenerateOptimizationPlanAsync(string filePath, CancellationToken cancellationToken = default)
@@ -359,7 +359,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
             foreach (var classDecl in classDeclarations)
             {
-                var godClassAnalysis = await AnalyzeGodClass(classDecl, semanticModel, syntaxTree.FilePath);
+                var godClassAnalysis = AnalyzeGodClass(classDecl, semanticModel, syntaxTree.FilePath);
                 if (godClassAnalysis.Severity != GodClassSeverity.None)
                 {
                     godClasses.Add(godClassAnalysis);
@@ -388,7 +388,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
             foreach (var methodDecl in methodDeclarations)
             {
-                var godMethodAnalysis = await AnalyzeGodMethod(methodDecl, syntaxTree.FilePath);
+                var godMethodAnalysis = AnalyzeGodMethod(methodDecl, syntaxTree.FilePath);
                 if (godMethodAnalysis.Severity != GodMethodSeverity.None)
                 {
                     godMethods.Add(godMethodAnalysis);
@@ -434,7 +434,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
         foreach (var issue in issues)
         {
-            var suggestion = await GenerateRefactoringSuggestion(issue);
+            var suggestion = GenerateRefactoringSuggestion(issue);
             if (suggestion != null)
             {
                 suggestions.Add(suggestion);
@@ -444,8 +444,19 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         return suggestions.OrderByDescending(s => s.Confidence).ToList();
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<OptimizationEstimate> EstimateOptimizationEffortAsync(OptimizationPlan optimizationPlan, CancellationToken cancellationToken = default)
+    public Task<OptimizationEstimate> EstimateOptimizationEffortAsync(OptimizationPlan optimizationPlan, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return Task.FromResult(EstimateOptimizationEffort(optimizationPlan));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<OptimizationEstimate>(ex);
+        }
+    }
+
+    private static OptimizationEstimate EstimateOptimizationEffort(OptimizationPlan optimizationPlan)
     {
         var effortByType = new Dictionary<OptimizationActionType, int>();
         var benefits = new Dictionary<string, double>();
@@ -563,7 +574,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
             var codeSmells = await AnalyzeCodeSmellsAsync(filePath, cancellationToken);
 
             // Calculate overall complexity
-            var overallComplexity = await CalculateFileComplexity(root, cancellationToken);
+            var overallComplexity = CalculateFileComplexity(root, cancellationToken);
 
             // Calculate optimization priority
             var priorityScore = CalculateFileOptimizationPriority(lineCount, largeClasses.Count, largeMethods.Count, codeSmells.Count);
@@ -594,7 +605,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         }
     }
 
-    private static async Task<ComplexityMetrics> CalculateFileComplexity(SyntaxNode root, CancellationToken cancellationToken)
+    private static ComplexityMetrics CalculateFileComplexity(SyntaxNode root, CancellationToken cancellationToken)
     {
         var cyclomaticComplexity = 0;
         var cognitiveComplexity = 0;
@@ -608,7 +619,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         foreach (var method in methodDeclarations)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var methodComplexity = await CalculateMethodComplexity(method);
+            var methodComplexity = CalculateMethodComplexity(method);
             cyclomaticComplexity = Math.Max(cyclomaticComplexity, methodComplexity.CyclomaticComplexity);
             cognitiveComplexity = Math.Max(cognitiveComplexity, methodComplexity.CognitiveComplexity);
             maxNestingDepth = Math.Max(maxNestingDepth, methodComplexity.MaximumNestingDepth);
@@ -642,8 +653,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<ComplexityMetrics> CalculateMethodComplexity(MethodDeclarationSyntax method)
+    private static ComplexityMetrics CalculateMethodComplexity(MethodDeclarationSyntax method)
     {
         var cyclomaticComplexity = 1; // Base complexity
         var cognitiveComplexity = 0;
@@ -744,7 +754,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Class Analysis Methods
 
-    private static async Task<ClassMetrics> AnalyzeClassMetrics(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, CancellationToken cancellationToken)
+    private static ClassMetrics AnalyzeClassMetrics(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var lineCount = classDecl.GetText().Lines.Count;
         var methodDeclarations = classDecl.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
@@ -753,7 +763,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         var constructorDeclarations = classDecl.DescendantNodes().OfType<ConstructorDeclarationSyntax>().ToList();
 
         // Calculate complexity
-        var complexity = await CalculateClassComplexity(classDecl, cancellationToken);
+        var complexity = CalculateClassComplexity(classDecl, cancellationToken);
 
         // Analyze responsibilities
         var responsibilities = IdentifyClassResponsibilities(classDecl);
@@ -762,7 +772,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         var dependencies = IdentifyClassDependencies(classDecl, semanticModel);
 
         // Analyze God class score
-        var godClassScore = await AnalyzeGodClass(classDecl, semanticModel, classDecl.SyntaxTree.FilePath);
+        var godClassScore = AnalyzeGodClass(classDecl, semanticModel, classDecl.SyntaxTree.FilePath);
 
         return new ClassMetrics
         {
@@ -780,7 +790,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
-    private static async Task<ComplexityMetrics> CalculateClassComplexity(ClassDeclarationSyntax classDecl, CancellationToken cancellationToken)
+    private static ComplexityMetrics CalculateClassComplexity(ClassDeclarationSyntax classDecl, CancellationToken cancellationToken)
     {
         var methodDeclarations = classDecl.DescendantNodes().OfType<MethodDeclarationSyntax>();
         var maxCyclomatic = 0;
@@ -792,7 +802,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         foreach (var method in methodDeclarations)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var methodComplexity = await CalculateMethodComplexity(method);
+            var methodComplexity = CalculateMethodComplexity(method);
             maxCyclomatic = Math.Max(maxCyclomatic, methodComplexity.CyclomaticComplexity);
             maxCognitive = Math.Max(maxCognitive, methodComplexity.CognitiveComplexity);
             maxNestingDepth = Math.Max(maxNestingDepth, methodComplexity.MaximumNestingDepth);
@@ -904,7 +914,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Method Analysis Methods
 
-    private static async Task<MethodMetrics> AnalyzeMethodMetrics(MethodDeclarationSyntax methodDecl)
+    private static MethodMetrics AnalyzeMethodMetrics(MethodDeclarationSyntax methodDecl)
     {
         var lineCount = methodDecl.GetText().Lines.Count;
         var parameterCount = methodDecl.ParameterList.Parameters.Count;
@@ -933,10 +943,10 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         }
 
         // Calculate complexity
-        var complexity = await CalculateMethodComplexity(methodDecl);
+        var complexity = CalculateMethodComplexity(methodDecl);
 
         // Analyze God method score
-        var godMethodScore = await AnalyzeGodMethod(methodDecl, methodDecl.SyntaxTree.FilePath);
+        var godMethodScore = AnalyzeGodMethod(methodDecl, methodDecl.SyntaxTree.FilePath);
 
         return new MethodMetrics
         {
@@ -959,8 +969,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region God Class Analysis
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<GodClassAnalysis> AnalyzeGodClass(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, string filePath)
+    private static GodClassAnalysis AnalyzeGodClass(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, string filePath)
     {
         var className = classDecl.Identifier.Text;
         var violations = new List<string>();
@@ -1053,7 +1062,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region God Method Analysis
 
-    private static async Task<GodMethodAnalysis> AnalyzeGodMethod(MethodDeclarationSyntax methodDecl, string filePath)
+    private static GodMethodAnalysis AnalyzeGodMethod(MethodDeclarationSyntax methodDecl, string filePath)
     {
         var methodName = methodDecl.Identifier.Text;
         var className = methodDecl.FirstAncestorOrSelf<ClassDeclarationSyntax>()?.Identifier.Text ?? "Unknown";
@@ -1086,7 +1095,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         }
 
         // Calculate complexity
-        var complexity = await CalculateMethodComplexity(methodDecl);
+        var complexity = CalculateMethodComplexity(methodDecl);
 
         // Calculate God method score
         var godMethodScore = CalculateGodMethodScore(lineCount, parameterCount, localVariableCount, complexity.CyclomaticComplexity);
@@ -1624,8 +1633,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
     #region Refactoring Suggestion Generation
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<RefactoringSuggestion?> GenerateRefactoringSuggestion(CodeSmell codeSmell)
+    private static RefactoringSuggestion? GenerateRefactoringSuggestion(CodeSmell codeSmell)
     {
         if (codeSmell.RefactoringPatterns.Count == 0)
             return null;
@@ -1673,8 +1681,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<List<RefactoringSuggestion>> GenerateClassRefactoringSuggestions(ClassDeclarationSyntax classDecl, ClassMetrics metrics)
+    private static List<RefactoringSuggestion> GenerateClassRefactoringSuggestions(ClassDeclarationSyntax classDecl, ClassMetrics metrics)
     {
         var suggestions = new List<RefactoringSuggestion>();
 

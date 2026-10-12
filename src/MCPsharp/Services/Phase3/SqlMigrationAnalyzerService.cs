@@ -73,10 +73,10 @@ public partial class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
             result.Migrations = result.Migrations.OrderBy(m => m.CreatedAt).ToList();
 
             // Analyze dependencies
-            await DependencyAnalyzer.AnalyzeDependenciesAsync(result.Migrations, cancellationToken);
+            DependencyAnalyzer.AnalyzeDependencies(result.Migrations);
 
             // Detect breaking changes
-            result.BreakingChanges = await BreakingChangeAnalyzer.DetectBreakingChangesInMigrationsAsync(result.Migrations, cancellationToken);
+            result.BreakingChanges = BreakingChangeAnalyzer.DetectBreakingChangesInMigrations(result.Migrations);
 
             // Build schema changes
             SchemaEvolutionTracker.BuildSchemaChanges(result);
@@ -124,11 +124,13 @@ public partial class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
             {
                 // Extract connection information
                 var connectionInfo = ExtractConnectionInfo(onConfiguringMethod);
-                if (connectionInfo != null)
+                if (connectionInfo != null && _logger.IsEnabled(LogLevel.Debug))
                 {
                     // In a real implementation, we would connect to the database and query the __EFMigrationsHistory table
                     // For now, return a placeholder implementation
-                    LogWouldQueryMigrationHistory(_logger, connectionInfo);
+                    // Only a redacted server/database description is logged, never the raw connection string
+                    var connectionTarget = DescribeConnectionTarget(connectionInfo);
+                    LogWouldQueryMigrationHistory(_logger, connectionTarget);
                 }
             }
 
@@ -392,8 +394,45 @@ public partial class SqlMigrationAnalyzerService : ISqlMigrationAnalyzerService
     [LoggerMessage(Level = LogLevel.Information, Message = "Getting migration history from DbContext: {DbContextPath}")]
     private static partial void LogGettingMigrationHistory(ILogger logger, string dbContextPath);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Would query migration history from database: {ConnectionString}")]
-    private static partial void LogWouldQueryMigrationHistory(ILogger logger, string connectionString);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Would query migration history from database: {ConnectionTarget}")]
+    private static partial void LogWouldQueryMigrationHistory(ILogger logger, string connectionTarget);
+
+    private static readonly string[] ServerKeys = { "Data Source", "Server", "Host", "Address", "Addr", "Network Address" };
+    private static readonly string[] DatabaseKeys = { "Initial Catalog", "Database" };
+
+    /// <summary>
+    /// Produces a log-safe description of a connection string containing only the server and database
+    /// names, so credentials (passwords, tokens, account keys) are never written to logs.
+    /// </summary>
+    public static string DescribeConnectionTarget(string connectionString)
+    {
+        var builder = new System.Data.Common.DbConnectionStringBuilder();
+        try
+        {
+            builder.ConnectionString = connectionString;
+        }
+        catch (ArgumentException)
+        {
+            return "<unparseable connection string>";
+        }
+
+        var server = FindFirstValue(builder, ServerKeys) ?? "<unknown>";
+        var database = FindFirstValue(builder, DatabaseKeys) ?? "<unknown>";
+        return $"server={server}; database={database}";
+    }
+
+    private static string? FindFirstValue(System.Data.Common.DbConnectionStringBuilder builder, string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (builder.TryGetValue(key, out var value) && value is not null && !string.IsNullOrWhiteSpace(value.ToString()))
+            {
+                return value.ToString();
+            }
+        }
+
+        return null;
+    }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "DbContext configured via options pattern")]
     private static partial void LogDbContextOptionsPattern(ILogger logger);

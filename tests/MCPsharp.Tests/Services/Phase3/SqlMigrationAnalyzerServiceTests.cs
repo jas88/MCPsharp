@@ -320,6 +320,26 @@ namespace TestProject.Migrations
         Directory.Delete(tempDir, true);
     }
 
+    [Test]
+    public void DescribeConnectionTarget_ShouldOmitCredentials()
+    {
+        var description = SqlMigrationAnalyzerService.DescribeConnectionTarget(
+            "Server=db.example.org;Database=Orders;User Id=admin;Password=hunter2;");
+
+        Assert.That(description, Does.Contain("db.example.org"));
+        Assert.That(description, Does.Contain("Orders"));
+        Assert.That(description, Does.Not.Contain("hunter2"));
+        Assert.That(description, Does.Not.Contain("admin"));
+    }
+
+    [Test]
+    public void DescribeConnectionTarget_ShouldNotEchoUnparseableInput()
+    {
+        var description = SqlMigrationAnalyzerService.DescribeConnectionTarget("Password='unterminated");
+
+        Assert.That(description, Does.Not.Contain("unterminated"));
+    }
+
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {

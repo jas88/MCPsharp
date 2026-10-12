@@ -85,8 +85,8 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
                 }
 
                 // Validate type against architectural rules
-                var typeViolations = await ValidateTypeAsync(symbol, layer, architecture, syntaxTree.FilePath);
-                var typeWarnings = await AnalyzeTypeWarningsAsync(symbol, layer, syntaxTree.FilePath);
+                var typeViolations = ValidateType(symbol, layer, architecture, syntaxTree.FilePath);
+                var typeWarnings = AnalyzeTypeWarnings(symbol, layer, syntaxTree.FilePath);
 
                 violations.AddRange(typeViolations);
                 warnings.AddRange(typeWarnings);
@@ -165,7 +165,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
                 nodes.Add(node);
 
                 // Analyze dependencies
-                var dependencies = await AnalyzeTypeDependencies(symbol, architecture, syntaxTree.FilePath);
+                var dependencies = AnalyzeTypeDependencies(symbol, architecture, syntaxTree.FilePath);
                 edges.AddRange(dependencies);
 
                 // Update layer dependencies
@@ -231,15 +231,21 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<ArchitectureDefinition> DefineCustomArchitectureAsync(ArchitectureDefinition definition, CancellationToken cancellationToken = default)
+    public Task<ArchitectureDefinition> DefineCustomArchitectureAsync(ArchitectureDefinition definition, CancellationToken cancellationToken = default)
     {
-        // Validate the definition
-        ValidateArchitectureDefinition(definition);
+        try
+        {
+            // Validate the definition
+            ValidateArchitectureDefinition(definition);
 
-        // Store for future use (could be persisted to file/database)
+            // Store for future use (could be persisted to file/database)
 
-        return definition;
+            return Task.FromResult(definition);
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<ArchitectureDefinition>(ex);
+        }
     }
 
     public async Task<List<MCPsharp.Models.Architecture.CircularDependency>> AnalyzeCircularDependenciesAsync(string projectPath, ArchitectureDefinition? definition = null, CancellationToken cancellationToken = default)
@@ -256,8 +262,19 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return CreateArchitectureDiagram(dependencyAnalysis, architecture);
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<ArchitectureRecommendation>> GetRecommendationsAsync(List<LayerViolation> violations, CancellationToken cancellationToken = default)
+    public Task<List<ArchitectureRecommendation>> GetRecommendationsAsync(List<LayerViolation> violations, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return Task.FromResult(GetRecommendations(violations));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<List<ArchitectureRecommendation>>(ex);
+        }
+    }
+
+    private static List<ArchitectureRecommendation> GetRecommendations(List<LayerViolation> violations)
     {
         var recommendations = new List<ArchitectureRecommendation>();
 
@@ -316,10 +333,10 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
             var syntax = await syntaxReferences.First().GetSyntaxAsync(cancellationToken);
             var filePath = syntax.SyntaxTree.FilePath;
 
-            var typeViolations = await ValidateTypeAsync(symbol, layer, definition, filePath);
+            var typeViolations = ValidateType(symbol, layer, definition, filePath);
             violations.AddRange(typeViolations.Select(v => v.Description));
 
-            var typeDependencies = await AnalyzeTypeDependencies(symbol, definition, filePath);
+            var typeDependencies = AnalyzeTypeDependencies(symbol, definition, filePath);
             dependencies.AddRange(typeDependencies.Select(d => new DependencyInfo
             {
                 TargetType = d.To,
@@ -342,10 +359,9 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<Dictionary<string, ArchitectureDefinition>> GetPredefinedArchitecturesAsync(CancellationToken cancellationToken = default)
+    public Task<Dictionary<string, ArchitectureDefinition>> GetPredefinedArchitecturesAsync(CancellationToken cancellationToken = default)
     {
-        return new Dictionary<string, ArchitectureDefinition>(_predefinedArchitectures);
+        return Task.FromResult(new Dictionary<string, ArchitectureDefinition>(_predefinedArchitectures));
     }
 
     private void InitializePredefinedArchitectures()
@@ -450,7 +466,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return match?.Name ?? "Unknown";
     }
 
-    private async Task<List<LayerViolation>> ValidateTypeAsync(INamedTypeSymbol symbol, string layer, ArchitectureDefinition architecture, string filePath)
+    private List<LayerViolation> ValidateType(INamedTypeSymbol symbol, string layer, ArchitectureDefinition architecture, string filePath)
     {
         var violations = new List<LayerViolation>();
 
@@ -482,7 +498,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         if (_workspace.GetCompilation() == null) return violations;
 
         // Analyze dependencies for violations
-        var dependencies = await AnalyzeTypeDependencies(symbol, architecture, filePath);
+        var dependencies = AnalyzeTypeDependencies(symbol, architecture, filePath);
 
         foreach (var dependency in dependencies)
         {
@@ -510,8 +526,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return violations;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<List<ArchitectureWarning>> AnalyzeTypeWarningsAsync(INamedTypeSymbol symbol, string layer, string filePath)
+    private static List<ArchitectureWarning> AnalyzeTypeWarnings(INamedTypeSymbol symbol, string layer, string filePath)
     {
         var warnings = new List<ArchitectureWarning>();
 
@@ -531,8 +546,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         return warnings;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<List<DependencyEdge>> AnalyzeTypeDependencies(INamedTypeSymbol symbol, ArchitectureDefinition architecture, string filePath)
+    private static List<DependencyEdge> AnalyzeTypeDependencies(INamedTypeSymbol symbol, ArchitectureDefinition architecture, string filePath)
     {
         var dependencies = new List<DependencyEdge>();
         var sourceLayer = IdentifyLayer(symbol, architecture);

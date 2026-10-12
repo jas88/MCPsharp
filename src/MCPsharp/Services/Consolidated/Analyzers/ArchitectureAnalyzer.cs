@@ -30,8 +30,12 @@ public partial class ArchitectureAnalyzer
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ArchitectureAnalyzer>.Instance;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<ConsolidatedArchitectureDefinition> GetDefaultArchitectureDefinitionAsync(CancellationToken ct)
+    public Task<ConsolidatedArchitectureDefinition> GetDefaultArchitectureDefinitionAsync(CancellationToken ct)
+    {
+        return Task.FromResult(GetDefaultArchitectureDefinition());
+    }
+
+    private ConsolidatedArchitectureDefinition GetDefaultArchitectureDefinition()
     {
         try
         {

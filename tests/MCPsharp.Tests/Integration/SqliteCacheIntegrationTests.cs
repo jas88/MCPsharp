@@ -67,7 +67,7 @@ public class SqliteCacheIntegrationTests
         _projectManager.OpenProject(_testProjectPath);
 
         // Set up resource generators
-        var generators = new ResourceContentGenerators(_projectManager, () => _database);
+        var generators = new ResourceContentGenerators(_projectManager);
 
         // Register resources
         _resourceRegistry.RegisterResource(
@@ -247,7 +247,7 @@ public class SqliteCacheIntegrationTests
     public void Resources_ListAllAvailable()
     {
         // Arrange
-        var generators = new ResourceContentGenerators(_projectManager, () => _database);
+        var generators = new ResourceContentGenerators(_projectManager);
 
         _resourceRegistry.RegisterResource(
             new McpResource { Uri = "project://overview", Name = "Overview" },
@@ -335,7 +335,7 @@ public class SqliteCacheIntegrationTests
     {
         // Arrange
         _projectManager.OpenProject(_testProjectPath);
-        var generators = new ResourceContentGenerators(_projectManager, () => _database);
+        var generators = new ResourceContentGenerators(_projectManager);
 
         // Act
         var overview = generators.GenerateOverview();
@@ -405,7 +405,7 @@ public class SqliteCacheIntegrationTests
         await _database.UpsertSymbolsBatchAsync(new[] { classSymbol, methodSymbol });
 
         // Set up resources
-        var generators = new ResourceContentGenerators(_projectManager, () => _database);
+        var generators = new ResourceContentGenerators(_projectManager);
         _resourceRegistry.RegisterResource(
             new McpResource { Uri = "project://overview", Name = "Overview" },
             () => generators.GenerateOverview());

@@ -80,7 +80,7 @@ public partial class BulkOperationsHub
             }
 
             // Validate request
-            var validation = await ValidateBulkOperationRequestAsync(request);
+            var validation = ValidateBulkOperationRequest(request);
             if (!validation.IsValid)
             {
                 response.Error = validation.ErrorMessage;
@@ -242,8 +242,8 @@ public partial class BulkOperationsHub
             }, ct);
 
             response.PreviewResults = previewResults;
-            response.ImpactAnalysis = await AnalyzeBulkImpactAsync(previewResults);
-            response.RiskAssessment = await AssessBulkRisksAsync(previewResults);
+            response.ImpactAnalysis = AnalyzeBulkImpact(previewResults);
+            response.RiskAssessment = AssessBulkRisks(previewResults);
             response.EstimatedTime = EstimateExecutionTime(previewResults);
 
             stopwatch.Stop();
@@ -352,7 +352,12 @@ public partial class BulkOperationsHub
     /// bulk_management - Manage bulk operations
     /// Consolidates: Management tools
     /// </summary>
-    public async Task<BulkManagementResponse> ManageBulkOperationAsync(BulkManagementRequest request, CancellationToken ct = default)
+    public Task<BulkManagementResponse> ManageBulkOperationAsync(BulkManagementRequest request, CancellationToken ct = default)
+    {
+        return Task.FromResult(ManageBulkOperation(request));
+    }
+
+    private BulkManagementResponse ManageBulkOperation(BulkManagementRequest request)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
@@ -368,7 +373,7 @@ public partial class BulkOperationsHub
             switch (request.Action)
             {
                 case BulkManagementAction.List:
-                    response.ActiveOperations = await ListActiveOperationsAsync();
+                    response.ActiveOperations = ListActiveOperations();
                     break;
 
                 case BulkManagementAction.Cancel:
@@ -378,7 +383,7 @@ public partial class BulkOperationsHub
                     }
                     else
                     {
-                        response.CancelResult = await CancelBulkOperationAsync();
+                        response.CancelResult = CancelBulkOperation();
                     }
                     break;
 
@@ -389,7 +394,7 @@ public partial class BulkOperationsHub
                     }
                     else
                     {
-                        response.PauseResult = await PauseBulkOperationAsync();
+                        response.PauseResult = PauseBulkOperation();
                     }
                     break;
 
@@ -400,12 +405,12 @@ public partial class BulkOperationsHub
                     }
                     else
                     {
-                        response.ResumeResult = await ResumeBulkOperationAsync();
+                        response.ResumeResult = ResumeBulkOperation();
                     }
                     break;
 
                 case BulkManagementAction.Cleanup:
-                    response.CleanupResult = await CleanupBulkOperationsAsync(request.MaxAge);
+                    response.CleanupResult = CleanupBulkOperations(request.MaxAge);
                     break;
 
                 case BulkManagementAction.Status:
@@ -415,7 +420,7 @@ public partial class BulkOperationsHub
                     }
                     else
                     {
-                        response.StatusResult = await GetBulkOperationStatusAsync(request.Target);
+                        response.StatusResult = GetBulkOperationStatus(request.Target);
                     }
                     break;
 
@@ -449,8 +454,7 @@ public partial class BulkOperationsHub
 
     #region Private Helper Methods
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<BulkValidationResult> ValidateBulkOperationRequestAsync(BulkOperationRequest request)
+    private BulkValidationResult ValidateBulkOperationRequest(BulkOperationRequest request)
     {
         // Check if we have the necessary services
         if (_bulkEditService == null && request.OperationType != BulkOperationType.FileOperation)
@@ -846,8 +850,7 @@ public partial class BulkOperationsHub
         }
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<BulkImpactAnalysis> AnalyzeBulkImpactAsync(List<BulkOperationResult> results)
+    private static BulkImpactAnalysis AnalyzeBulkImpact(List<BulkOperationResult> results)
     {
         return new BulkImpactAnalysis
         {
@@ -859,8 +862,7 @@ public partial class BulkOperationsHub
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<BulkRiskAssessment> AssessBulkRisksAsync(List<BulkOperationResult> results)
+    private static BulkRiskAssessment AssessBulkRisks(List<BulkOperationResult> results)
     {
         var riskLevel = MCPsharp.Models.BulkEdit.RiskLevel.Low;
         var warnings = new List<string>();
@@ -924,8 +926,7 @@ public partial class BulkOperationsHub
         return baseTime + (perFileTime * totalFiles) + (perChangeTime * totalChanges);
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<BulkOperationInfo>> ListActiveOperationsAsync()
+    private List<BulkOperationInfo> ListActiveOperations()
     {
         List<BulkOperationInfo> operations;
 
@@ -945,8 +946,7 @@ public partial class BulkOperationsHub
         return operations;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<BulkCancelResult> CancelBulkOperationAsync()
+    private static BulkCancelResult CancelBulkOperation()
     {
         // Implementation for canceling operations
         return new BulkCancelResult
@@ -956,8 +956,7 @@ public partial class BulkOperationsHub
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<BulkPauseResult> PauseBulkOperationAsync()
+    private static BulkPauseResult PauseBulkOperation()
     {
         // Implementation for pausing operations
         return new BulkPauseResult
@@ -967,8 +966,7 @@ public partial class BulkOperationsHub
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private static async Task<BulkResumeResult> ResumeBulkOperationAsync()
+    private static BulkResumeResult ResumeBulkOperation()
     {
         // Implementation for resuming operations
         return new BulkResumeResult
@@ -978,8 +976,7 @@ public partial class BulkOperationsHub
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<BulkCleanupResult> CleanupBulkOperationsAsync(TimeSpan? maxAge)
+    private BulkCleanupResult CleanupBulkOperations(TimeSpan? maxAge)
     {
         var cleanedCount = 0;
         var cutoff = DateTime.UtcNow - (maxAge ?? TimeSpan.FromHours(24));
@@ -1006,8 +1003,7 @@ public partial class BulkOperationsHub
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<BulkOperationStatusResult> GetBulkOperationStatusAsync(string operationId)
+    private BulkOperationStatusResult GetBulkOperationStatus(string operationId)
     {
         BulkOperationContext? context;
 

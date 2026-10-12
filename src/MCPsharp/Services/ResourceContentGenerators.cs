@@ -31,16 +31,10 @@ public static class ProjectResourceUris
 public sealed class ResourceContentGenerators
 {
     private readonly ProjectContextManager _projectContext;
-#pragma warning disable S4487 // Field reserved for future database statistics integration
-    private readonly Func<Database.ProjectDatabase?> _getDatabaseFunc;
-#pragma warning restore S4487
 
-    public ResourceContentGenerators(
-        ProjectContextManager projectContext,
-        Func<Database.ProjectDatabase?> getDatabaseFunc)
+    public ResourceContentGenerators(ProjectContextManager projectContext)
     {
         _projectContext = projectContext;
-        _getDatabaseFunc = getDatabaseFunc;
     }
 
     /// <summary>

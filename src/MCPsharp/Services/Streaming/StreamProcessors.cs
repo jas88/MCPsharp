@@ -42,16 +42,27 @@ public partial class LineStreamProcessor : IStreamProcessor
     [LoggerMessage(Level = LogLevel.Debug, Message = "Invalid line processor options")]
     private static partial void LogInvalidOptions(ILogger logger, Exception exception);
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    public Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    {
+        try
+        {
+            return Task.FromResult(ProcessChunk(chunk, options));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<StreamChunk>(ex);
+        }
+    }
+
+    private static StreamChunk ProcessChunk(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
         var lines = ExtractLines(chunk, config.Encoding ?? Encoding.UTF8);
         var processedLines = new List<string>();
 
-        foreach (var line in lines)
+        for (var i = 0; i < lines.Count; i++)
         {
-            var processedLine = ProcessLine(line, config, lines.IndexOf(line) + 1);
+            var processedLine = ProcessLine(lines[i], config, i + 1);
             if (!string.IsNullOrEmpty(processedLine))
             {
                 processedLines.Add(processedLine);
@@ -75,18 +86,17 @@ public partial class LineStreamProcessor : IStreamProcessor
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
+    public Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try
         {
             ParseConfig(options);
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             LogInvalidOptions(_logger, ex);
-            return false;
+            return Task.FromResult(false);
         }
     }
 
@@ -228,8 +238,19 @@ public partial class RegexStreamProcessor : IStreamProcessor
     [LoggerMessage(Level = LogLevel.Debug, Message = "Invalid regex processor options")]
     private static partial void LogInvalidOptions(ILogger logger, Exception exception);
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    public Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    {
+        try
+        {
+            return Task.FromResult(ProcessChunk(chunk, options));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<StreamChunk>(ex);
+        }
+    }
+
+    private static StreamChunk ProcessChunk(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
         var text = Encoding.UTF8.GetString(chunk.Data);
@@ -281,18 +302,17 @@ public partial class RegexStreamProcessor : IStreamProcessor
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
+    public Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try
         {
             ParseConfig(options);
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             LogInvalidOptions(_logger, ex);
-            return false;
+            return Task.FromResult(false);
         }
     }
 
@@ -347,8 +367,19 @@ public partial class CsvStreamProcessor : IStreamProcessor
     [LoggerMessage(Level = LogLevel.Debug, Message = "Invalid csv processor options")]
     private static partial void LogInvalidOptions(ILogger logger, Exception exception);
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    public Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    {
+        try
+        {
+            return Task.FromResult(ProcessChunk(chunk, options));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<StreamChunk>(ex);
+        }
+    }
+
+    private static StreamChunk ProcessChunk(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
         var text = Encoding.UTF8.GetString(chunk.Data);
@@ -415,18 +446,17 @@ public partial class CsvStreamProcessor : IStreamProcessor
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
+    public Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try
         {
             ParseConfig(options);
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             LogInvalidOptions(_logger, ex);
-            return false;
+            return Task.FromResult(false);
         }
     }
 
@@ -525,8 +555,19 @@ public partial class BinaryStreamProcessor : IStreamProcessor
     [LoggerMessage(Level = LogLevel.Debug, Message = "Invalid binary processor options")]
     private static partial void LogInvalidOptions(ILogger logger, Exception exception);
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    public Task<StreamChunk> ProcessChunkAsync(StreamChunk chunk, Dictionary<string, object> options)
+    {
+        try
+        {
+            return Task.FromResult(ProcessChunk(chunk, options));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<StreamChunk>(ex);
+        }
+    }
+
+    private static StreamChunk ProcessChunk(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
         var data = new List<byte>(chunk.Data);
@@ -563,18 +604,17 @@ public partial class BinaryStreamProcessor : IStreamProcessor
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
+    public Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
         try
         {
             ParseConfig(options);
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             LogInvalidOptions(_logger, ex);
-            return false;
+            return Task.FromResult(false);
         }
     }
 
