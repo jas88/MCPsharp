@@ -449,3 +449,14 @@ claude_*.md
 *claude*
 temp_*.cs
 src/temp_*.cs
+
+# Local scratch / backup files
+pub/
+*.bak
+*.bak[0-9]
+*.backup
+*.backup[0-9]
+*.backup_*
+*.cs.tmp
+*.log
+coverage.cobertura.xml
