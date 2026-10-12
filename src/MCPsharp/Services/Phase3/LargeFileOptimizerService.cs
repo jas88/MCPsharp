@@ -47,8 +47,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         var largestFileSize = 0;
         var globalRecommendations = new List<OptimizationRecommendation>();
 
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
         {
             return new LargeFileAnalysisResult
             {
@@ -77,7 +76,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
         }
 
         // Analyze each syntax tree
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
             if (string.IsNullOrEmpty(syntaxTree.FilePath) || !syntaxTree.FilePath.EndsWith(".cs", StringComparison.Ordinal) || !IsFileInProject(syntaxTree.FilePath, projectPath))
                 continue;
@@ -343,18 +342,20 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
     public async Task<List<GodClassAnalysis>> DetectGodClassesAsync(string projectPath, string? filePath = null, CancellationToken cancellationToken = default)
     {
         var godClasses = new List<GodClassAnalysis>();
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
             return godClasses;
 
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
             if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true) continue;
             if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath) continue;
             if (syntaxTree.FilePath == null || !IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
 
             var root = await syntaxTree.GetRootAsync(cancellationToken);
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var classDeclarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
 
             foreach (var classDecl in classDeclarations)
@@ -373,11 +374,10 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
     public async Task<List<GodMethodAnalysis>> DetectGodMethodsAsync(string projectPath, string? filePath = null, CancellationToken cancellationToken = default)
     {
         var godMethods = new List<GodMethodAnalysis>();
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
             return godMethods;
 
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
             if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true) continue;
             if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath) continue;

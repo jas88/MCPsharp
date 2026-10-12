@@ -21,13 +21,7 @@ public class SymbolQueryService
     /// </summary>
     public List<ISymbol> FindSymbolsByName(string name, string? kind = null)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-        {
-            return new List<ISymbol>();
-        }
-
-        var symbols = compilation.GetSymbolsWithName(n => n == name, SymbolFilter.TypeAndMember);
+        var symbols = _workspace.FindSourceSymbols(name, SymbolFilter.TypeAndMember);
         var results = new List<ISymbol>();
 
         foreach (var symbol in symbols)
@@ -60,13 +54,7 @@ public class SymbolQueryService
 
     private List<SymbolResult> FindSymbols(string name, string? kind)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-        {
-            return new List<SymbolResult>();
-        }
-
-        var symbols = compilation.GetSymbolsWithName(n => n == name, SymbolFilter.TypeAndMember);
+        var symbols = _workspace.FindSourceSymbols(name, SymbolFilter.TypeAndMember);
         var results = new List<SymbolResult>();
 
         foreach (var symbol in symbols)
@@ -251,17 +239,16 @@ public class SymbolQueryService
     /// </summary>
     public async Task<List<SymbolResult>> GetAllTypesAsync()
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-        {
-            return new List<SymbolResult>();
-        }
-
         var results = new List<SymbolResult>();
 
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+            {
+                continue;
+            }
+
             var root = await syntaxTree.GetRootAsync();
 
             var typeDeclarations = root.DescendantNodes()
@@ -311,28 +298,22 @@ public class SymbolQueryService
 
     private List<SymbolResult> GetSymbolsInNamespace(string namespaceName)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-        {
-            return new List<SymbolResult>();
-        }
-
         var results = new List<SymbolResult>();
+        var seenLocations = new HashSet<(string, int, int)>();
 
-        // Find the namespace symbol
+        // A namespace can be declared in several projects; collect its members from each of them
         var simpleName = namespaceName.Split('.')[^1];
-        var namespaceSymbol = compilation.GetSymbolsWithName(
-            n => n == simpleName,
-            SymbolFilter.Namespace)
+        var namespaceSymbols = _workspace.FindSourceSymbols(simpleName, SymbolFilter.Namespace)
             .OfType<INamespaceSymbol>()
-            .FirstOrDefault(ns => ns.ToDisplayString() == namespaceName);
+            .Where(ns => ns.ToDisplayString() == namespaceName);
 
-        if (namespaceSymbol != null)
+        foreach (var namespaceSymbol in namespaceSymbols)
         {
             foreach (var member in namespaceSymbol.GetMembers())
             {
                 var location = member.Locations.FirstOrDefault();
-                if (location != null && location.IsInSource)
+                if (location != null && location.IsInSource &&
+                    seenLocations.Add((location.GetLineSpan().Path, location.SourceSpan.Start, location.SourceSpan.Length)))
                 {
                     var lineSpan = location.GetLineSpan();
                     results.Add(new SymbolResult

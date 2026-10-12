@@ -51,15 +51,12 @@ public partial class SemanticEditService
             }
 
             // Find the class declaration
-            var compilation = _workspace.GetCompilation();
-            if (compilation == null)
+            if (!_workspace.IsInitialized)
             {
                 return new EditResult { Success = false, Error = "Workspace not initialized" };
             }
 
-            var classSymbol = compilation.GetSymbolsWithName(className, SymbolFilter.Type)
-                .OfType<INamedTypeSymbol>()
-                .FirstOrDefault(t => t.TypeKind == TypeKind.Class);
+            var classSymbol = _classStructure.FindClassSymbol(className, filePath);
 
             if (classSymbol == null)
             {
@@ -149,15 +146,12 @@ public partial class SemanticEditService
                 return new EditResult { Success = false, Error = $"Class '{className}' not found" };
             }
 
-            var compilation = _workspace.GetCompilation();
-            if (compilation == null)
+            if (!_workspace.IsInitialized)
             {
                 return new EditResult { Success = false, Error = "Workspace not initialized" };
             }
 
-            var classSymbol = compilation.GetSymbolsWithName(className, SymbolFilter.Type)
-                .OfType<INamedTypeSymbol>()
-                .FirstOrDefault(t => t.TypeKind == TypeKind.Class);
+            var classSymbol = _classStructure.FindClassSymbol(className, filePath);
 
             if (classSymbol == null)
             {
@@ -236,15 +230,12 @@ public partial class SemanticEditService
                 return new EditResult { Success = false, Error = $"Class '{className}' not found" };
             }
 
-            var compilation = _workspace.GetCompilation();
-            if (compilation == null)
+            if (!_workspace.IsInitialized)
             {
                 return new EditResult { Success = false, Error = "Workspace not initialized" };
             }
 
-            var classSymbol = compilation.GetSymbolsWithName(className, SymbolFilter.Type)
-                .OfType<INamedTypeSymbol>()
-                .FirstOrDefault(t => t.TypeKind == TypeKind.Class);
+            var classSymbol = _classStructure.FindClassSymbol(className, filePath);
 
             if (classSymbol == null)
             {

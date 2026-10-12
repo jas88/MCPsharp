@@ -44,23 +44,40 @@ public partial class CompilationStrategy : ISymbolSearchStrategy
 
     public async Task<List<ISymbol>> SearchAsync(SymbolSearchRequest request, CancellationToken ct = default)
     {
-        // CRITICAL: Use the current solution's compilation, not the cached compilation
-        // Symbols from a cached compilation won't work correctly with Renamer API
-        var project = _workspace.Solution.Projects.FirstOrDefault();
-        if (project == null)
+        // CRITICAL: Use the current solution's compilations, not cached compilations.
+        // Symbols from a stale compilation won't work correctly with Renamer API.
+        var projects = _workspace.GetProjects();
+        if (projects.Count == 0)
         {
             LogNoProject(_logger);
             return new List<ISymbol>();
         }
 
-        var compilation = await project.GetCompilationAsync(ct);
-        if (compilation == null)
+        var results = new List<ISymbol>();
+        foreach (var project in projects)
         {
-            LogNoCompilation(_logger);
-            return new List<ISymbol>();
+            var compilation = await project.GetCompilationAsync(ct);
+            if (compilation == null)
+            {
+                LogNoCompilation(_logger);
+                continue;
+            }
+
+            SearchCompilation(compilation, request, results, ct);
         }
 
-        var results = new List<ISymbol>();
+        // Remove duplicates
+        results = results
+            .Distinct(SymbolEqualityComparer.Default)
+            .ToList();
+
+        LogCandidatesFound(_logger, results.Count, request.Name);
+
+        return results;
+    }
+
+    private void SearchCompilation(Compilation compilation, SymbolSearchRequest request, List<ISymbol> results, CancellationToken ct)
+    {
 
         // Try multiple SymbolFilter values to maximize coverage
         var filters = new[]
@@ -118,14 +135,6 @@ public partial class CompilationStrategy : ISymbolSearchStrategy
             }
         }
 
-        // Remove duplicates
-        results = results
-            .Distinct(SymbolEqualityComparer.Default)
-            .ToList();
-
-        LogCandidatesFound(_logger, results.Count, request.Name);
-
-        return results;
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "No project available for symbol search")]

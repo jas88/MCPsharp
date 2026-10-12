@@ -492,15 +492,16 @@ IMPORTANT:
         string filePath,
         CancellationToken cancellationToken)
     {
-        var compilation = _workspace.GetCompilation();
         var document = _workspace.GetDocument(filePath);
-        if (compilation == null || document == null)
+        if (document == null)
         {
             return true;
         }
 
+        // Validate against the compilation of the project that owns the file
         var oldTree = await document.GetSyntaxTreeAsync(cancellationToken);
-        if (oldTree == null || !compilation.ContainsSyntaxTree(oldTree))
+        var compilation = oldTree == null ? null : _workspace.GetCompilationForTree(oldTree);
+        if (oldTree == null || compilation == null)
         {
             return true;
         }

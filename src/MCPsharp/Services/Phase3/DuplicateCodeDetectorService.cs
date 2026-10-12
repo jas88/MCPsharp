@@ -371,16 +371,14 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         }
 
         var allCodeBlocks = new List<CodeBlock>();
-        var compilation = _workspace.GetCompilation();
-
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
         {
             LogNoCompilation(_logger);
             return allCodeBlocks;
         }
 
         // Process each syntax tree
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
             if (cancellationToken.IsCancellationRequested)
                 break;
@@ -411,7 +409,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
     {
         var codeBlocks = new List<CodeBlock>();
         var root = await syntaxTree.GetRootAsync(cancellationToken);
-        var semanticModel = _workspace.GetCompilation()?.GetSemanticModel(syntaxTree);
+        var semanticModel = _workspace.GetSemanticModel(syntaxTree);
 
         if (root == null || semanticModel == null)
             return codeBlocks;
@@ -763,10 +761,9 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
             var sourceText = await File.ReadAllTextAsync(filePath, cancellationToken);
             var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: filePath, cancellationToken: cancellationToken);
             var root = await syntaxTree.GetRootAsync(cancellationToken);
-            var compilation = _workspace.GetCompilation();
-            var semanticModel = compilation?.GetSemanticModel(syntaxTree);
 
-            if (semanticModel == null)
+            // Extraction is purely syntactic; only require a loaded workspace
+            if (!_workspace.IsInitialized)
                 return codeBlocks;
 
             if (options.DetectionTypes.HasFlag(DuplicateDetectionTypes.Methods))

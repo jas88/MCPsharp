@@ -443,8 +443,7 @@ public partial class RenameSymbolService
                 return;
             }
 
-            var compilation = _workspace.GetCompilation();
-            if (compilation == null)
+            if (!_workspace.IsInitialized)
             {
                 LogNoCompilationForNamespaceCheck(_logger);
                 return;
@@ -452,14 +451,15 @@ public partial class RenameSymbolService
 
             var namespaceName = containingNamespace.ToDisplayString();
 
-            // Find all symbols with the target name in the same namespace
-            var existingSymbols = compilation.GetSymbolsWithName(
+            // Find all symbols with the target name in the same namespace, in any project of the solution.
+            // Namespace symbols from different compilations are distinct instances, so compare by name.
+            var existingSymbols = _workspace.FindSourceSymbols(
                 n => string.Equals(n, newName, StringComparison.Ordinal),
                 SymbolFilter.TypeAndMember, ct)
                 .Where(s => s != null &&
                            s.ContainingNamespace != null &&
-                           SymbolEqualityComparer.Default.Equals(s.ContainingNamespace, containingNamespace) &&
-                           !SymbolEqualityComparer.Default.Equals(s, originalSymbol) &&
+                           string.Equals(s.ContainingNamespace.ToDisplayString(), namespaceName, StringComparison.Ordinal) &&
+                           !CrossProjectSymbolComparer.AreEquivalent(s, originalSymbol) &&
                            s.Locations.Any(l => l?.IsInSource == true))
                 .ToList();
 
@@ -655,6 +655,10 @@ public partial class RenameSymbolService
 
         var fileChanges = new List<FileChange>();
 
+        // A file shared by several projects (multi-targeting, linked files) changes once per project;
+        // report and count each file only once.
+        var processedFiles = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var projectChange in projectChanges)
         {
             var changedDocs = projectChange.GetChangedDocuments().ToList();
@@ -666,6 +670,11 @@ public partial class RenameSymbolService
                 var newDoc = newSolution.GetDocument(docId);
 
                 if (oldDoc == null || newDoc == null)
+                {
+                    continue;
+                }
+
+                if (oldDoc.FilePath != null && !processedFiles.Add(oldDoc.FilePath))
                 {
                     continue;
                 }
@@ -700,9 +709,14 @@ public partial class RenameSymbolService
         }
 
         // Apply changes if not preview mode
-        if (!request.PreviewOnly && !_workspace.Solution.Workspace.TryApplyChanges(newSolution))
+        if (!request.PreviewOnly)
         {
-            return RenameResult.Failed(ApplyChangesFailedErrors);
+            if (!_workspace.Solution.Workspace.TryApplyChanges(newSolution))
+            {
+                return RenameResult.Failed(ApplyChangesFailedErrors);
+            }
+
+            await _workspace.RefreshAfterSolutionChangeAsync(projectChanges.Select(pc => pc.ProjectId), ct);
         }
 
         return new RenameResult

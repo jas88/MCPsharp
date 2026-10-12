@@ -42,18 +42,15 @@ public class ReferenceFinderService
             var position = (await syntaxTree.GetTextAsync()).Lines[line.Value].Start + column.Value;
             var node = (await syntaxTree.GetRootAsync()).FindToken(position).Parent;
             var symbolInfo = node != null ? semanticModel.GetSymbolInfo(node) : default;
-            symbol = symbolInfo.CandidateSymbols.FirstOrDefault();
+            symbol = node == null
+                ? null
+                : semanticModel.GetDeclaredSymbol(node) ?? symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
         }
         else if (symbolName != null)
         {
-            // Find symbol by name
-            var compilation = _workspace.GetCompilation();
-            if (compilation == null)
-            {
-                return null;
-            }
-
-            symbol = compilation.GetSymbolsWithName(n => n == symbolName).FirstOrDefault();
+            // Find symbol by name in any project of the solution
+            var candidates = _workspace.FindSourceSymbols(symbolName);
+            symbol = candidates.Count > 0 ? candidates[0] : null;
         }
 
         if (symbol == null)
@@ -61,15 +58,11 @@ public class ReferenceFinderService
             return null;
         }
 
-        // Find all references
+        // Find all references across the whole solution; multi-targeted projects report the
+        // same source location once per target framework, so de-duplicate by position.
         var references = new List<Models.Roslyn.ReferenceLocation>();
-        var project = _workspace.GetAllDocuments().FirstOrDefault()?.Project;
-        if (project == null)
-        {
-            return null;
-        }
-
-        var referencedSymbols = await SymbolFinder.FindReferencesAsync(symbol, project.Solution);
+        var seen = new HashSet<(string, int, int)>();
+        var referencedSymbols = await SymbolFinder.FindReferencesAsync(symbol, _workspace.Solution);
 
         foreach (var referencedSymbol in referencedSymbols)
         {
@@ -77,6 +70,11 @@ public class ReferenceFinderService
             {
                 var doc = location.Document;
                 var lineSpan = location.Location.GetLineSpan();
+                if (!seen.Add((doc.FilePath ?? "", lineSpan.StartLinePosition.Line, lineSpan.StartLinePosition.Character)))
+                {
+                    continue;
+                }
+
                 var text = await doc.GetTextAsync();
                 var lineText = text.Lines[lineSpan.StartLinePosition.Line].ToString();
 
@@ -103,27 +101,18 @@ public class ReferenceFinderService
     /// </summary>
     public async Task<List<SymbolResult>> FindImplementationsAsync(string symbolName)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-        {
-            return new List<SymbolResult>();
-        }
-
-        var symbol = compilation.GetSymbolsWithName(n => n == symbolName, SymbolFilter.Type).FirstOrDefault();
+        var candidates = _workspace.FindSourceSymbols(symbolName, SymbolFilter.Type);
+        var symbol = candidates.Count > 0 ? candidates[0] : null;
         if (symbol is not INamedTypeSymbol typeSymbol)
         {
             return new List<SymbolResult>();
         }
 
         var results = new List<SymbolResult>();
-        var project = _workspace.GetAllDocuments().FirstOrDefault()?.Project;
-        if (project == null)
-        {
-            return results;
-        }
+        var seen = new HashSet<(string, int, int)>();
 
-        // Find implementations
-        var implementations = await SymbolFinder.FindImplementationsAsync(typeSymbol, project.Solution);
+        // Find implementations across the whole solution
+        var implementations = await SymbolFinder.FindImplementationsAsync(typeSymbol, _workspace.Solution);
 
         foreach (var impl in implementations.OfType<INamedTypeSymbol>())
         {
@@ -134,6 +123,11 @@ public class ReferenceFinderService
             }
 
             var lineSpan = location.GetLineSpan();
+            if (!seen.Add((lineSpan.Path, lineSpan.StartLinePosition.Line, lineSpan.StartLinePosition.Character)))
+            {
+                continue;
+            }
+
             results.Add(new SymbolResult
             {
                 Name = impl.Name,

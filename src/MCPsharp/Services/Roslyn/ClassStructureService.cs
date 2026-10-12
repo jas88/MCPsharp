@@ -17,34 +17,30 @@ public class ClassStructureService
     }
 
     /// <summary>
+    /// Find a source-declared class by name in any project of the solution.
+    /// When <paramref name="filePath"/> is given, only a class declared in that file is accepted.
+    /// </summary>
+    public INamedTypeSymbol? FindClassSymbol(string className, string? filePath = null)
+    {
+        var candidates = _workspace.FindSourceSymbols(className, SymbolFilter.Type)
+            .OfType<INamedTypeSymbol>()
+            .Where(t => t.TypeKind == TypeKind.Class);
+
+        return filePath == null
+            ? candidates.FirstOrDefault()
+            : candidates.FirstOrDefault(t => t.Locations.Any(l =>
+                l.IsInSource && l.GetLineSpan().Path.Equals(filePath, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
     /// Get complete structure of a class
     /// </summary>
     public async Task<ClassStructure?> GetClassStructureAsync(string className, string? filePath = null)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-        {
-            return null;
-        }
-
-        // Find the class symbol
-        var classSymbol = compilation.GetSymbolsWithName(className, SymbolFilter.Type)
-            .OfType<INamedTypeSymbol>()
-            .FirstOrDefault(t => t.TypeKind == TypeKind.Class);
-
+        var classSymbol = FindClassSymbol(className, filePath);
         if (classSymbol == null)
         {
             return null;
-        }
-
-        // If filePath specified, filter by file
-        if (filePath != null)
-        {
-            var location = classSymbol.Locations.FirstOrDefault();
-            if (location == null || !location.GetLineSpan().Path.Equals(filePath, StringComparison.OrdinalIgnoreCase))
-            {
-                return null;
-            }
         }
 
         // Get properties

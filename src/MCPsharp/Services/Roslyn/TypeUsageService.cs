@@ -23,12 +23,8 @@ public class TypeUsageService : ITypeUsageService
     public async Task<TypeUsageResult?> FindTypeUsagesAsync(string typeName, CancellationToken cancellationToken = default)
     {
         var startTime = DateTime.UtcNow;
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return null;
-
-        // Find the type symbol
-        var typeSymbol = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type, cancellationToken).OfType<INamedTypeSymbol>().FirstOrDefault();
+        // Find the type symbol in any project of the solution
+        var typeSymbol = _workspace.FindSourceSymbols(typeName, SymbolFilter.Type, cancellationToken).OfType<INamedTypeSymbol>().FirstOrDefault();
         if (typeSymbol == null)
             return null;
 
@@ -54,12 +50,8 @@ public class TypeUsageService : ITypeUsageService
     public async Task<TypeUsageResult?> FindTypeUsagesByFullNameAsync(string fullTypeName, CancellationToken cancellationToken = default)
     {
         var startTime = DateTime.UtcNow;
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return null;
-
         // Find the type symbol by full name
-        var typeSymbol = compilation.GetSymbolsWithName(
+        var typeSymbol = _workspace.FindSourceSymbols(
             fullTypeName.Split('.')[^1],
             SymbolFilter.Type, cancellationToken)
             .OfType<INamedTypeSymbol>()
@@ -79,8 +71,7 @@ public class TypeUsageService : ITypeUsageService
 
     public async Task<InheritanceAnalysis> AnalyzeInheritanceAsync(string typeName, CancellationToken cancellationToken = default)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
             return new InheritanceAnalysis
             {
                 TargetType = typeName,
@@ -95,7 +86,7 @@ public class TypeUsageService : ITypeUsageService
                 IsSealed = false
             };
 
-        var typeSymbol = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type, cancellationToken)
+        var typeSymbol = _workspace.FindSourceSymbols(typeName, SymbolFilter.Type, cancellationToken)
             .OfType<INamedTypeSymbol>()
             .FirstOrDefault();
 
@@ -137,7 +128,11 @@ public class TypeUsageService : ITypeUsageService
             if (syntaxTree == null)
                 continue;
 
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            // Use the semantic model of the document's own project so derived types in other projects resolve
+            var semanticModel = await _workspace.GetSemanticModelAsync(document, cancellationToken);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var classDeclarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
@@ -180,7 +175,10 @@ public class TypeUsageService : ITypeUsageService
                 if (syntaxTree == null)
                     continue;
 
-                var semanticModel = compilation.GetSemanticModel(syntaxTree);
+                var semanticModel = await _workspace.GetSemanticModelAsync(document, cancellationToken);
+                if (semanticModel == null)
+                    continue;
+
                 var root = await syntaxTree.GetRootAsync(cancellationToken);
 
                 var classDeclarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
@@ -316,8 +314,7 @@ public class TypeUsageService : ITypeUsageService
 
     public async Task<TypeUsagePatternAnalysis> AnalyzeUsagePatternsAsync(string? namespaceFilter = null, CancellationToken cancellationToken = default)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
             return new TypeUsagePatternAnalysis
         {
             TypeStatistics = new Dictionary<string, TypeUsageStats>(),
@@ -334,9 +331,12 @@ public class TypeUsageService : ITypeUsageService
         var allTypes = new List<string>();
 
         // Analyze all types in the namespace
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var typeDeclarations = root.DescendantNodes()
@@ -490,8 +490,7 @@ public class TypeUsageService : ITypeUsageService
 
     private async Task<TypeUsageResult> FindTypeUsagesCoreAsync(INamedTypeSymbol typeSymbol, DateTime startTime, CancellationToken cancellationToken)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
             throw new InvalidOperationException("Compilation not available");
 
         var usages = new List<TypeUsageInfo>();
@@ -683,7 +682,7 @@ public class TypeUsageService : ITypeUsageService
         var current = classSymbol.BaseType;
         while (current != null && current.SpecialType != SpecialType.System_Object)
         {
-            if (SymbolEqualityComparer.Default.Equals(current, baseTypeSymbol))
+            if (CrossProjectSymbolComparer.AreEquivalent(current, baseTypeSymbol))
                 return true;
             current = current.BaseType;
         }
@@ -692,6 +691,6 @@ public class TypeUsageService : ITypeUsageService
 
     private static bool ImplementsInterface(INamedTypeSymbol classSymbol, INamedTypeSymbol interfaceSymbol)
     {
-        return classSymbol.AllInterfaces.Contains(interfaceSymbol);
+        return classSymbol.AllInterfaces.Any(i => CrossProjectSymbolComparer.AreEquivalent(i, interfaceSymbol));
     }
 }

@@ -59,13 +59,8 @@ public class CallerAnalysisService : ICallerAnalysisService
     {
         var startTime = DateTime.UtcNow;
 
-        // Get compilation for direct symbol lookup
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return null;
-
-        // Find all method symbols in the compilation
-        var methodSymbols = compilation.GetSymbolsWithName(s => s == signature.Name, SymbolFilter.Member, cancellationToken)
+        // Find all method symbols with this name in every project of the solution
+        var methodSymbols = _workspace.FindSourceSymbols(signature.Name, SymbolFilter.Member, cancellationToken)
             .OfType<IMethodSymbol>();
 
         // Find the first method that matches the signature
@@ -220,15 +215,17 @@ public class CallerAnalysisService : ICallerAnalysisService
 
     public async Task<List<MethodSignature>> FindUnusedMethodsAsync(string? namespaceFilter = null, CancellationToken cancellationToken = default)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
             return new List<MethodSignature>();
 
         var unusedMethods = new List<MethodSignature>();
 
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var methodDeclarations = root.DescendantNodes()
@@ -262,15 +259,17 @@ public class CallerAnalysisService : ICallerAnalysisService
 
     public async Task<List<MethodSignature>> FindTestOnlyMethodsAsync(CancellationToken cancellationToken = default)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
             return new List<MethodSignature>();
 
         var testOnlyMethods = new List<MethodSignature>();
 
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var methodDeclarations = root.DescendantNodes()
@@ -302,8 +301,7 @@ public class CallerAnalysisService : ICallerAnalysisService
 
     private async Task<CallerResult?> FindCallersCoreAsync(ISymbol symbol, DateTime startTime, CancellationToken cancellationToken)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
             return null;
 
         var targetSignature = CreateMethodSignature(symbol);
@@ -311,7 +309,8 @@ public class CallerAnalysisService : ICallerAnalysisService
         var filesAnalyzed = 0;
         var methodsAnalyzed = 0;
 
-        // Find all references to the symbol
+        // Find all references to the symbol across every project in the solution
+        var seenLocations = new HashSet<(string, int, int)>();
         var referencedSymbols = await SymbolFinder.FindReferencesAsync(symbol, _workspace.Solution, cancellationToken);
 
         foreach (var referencedSymbol in referencedSymbols)
@@ -324,6 +323,10 @@ public class CallerAnalysisService : ICallerAnalysisService
 
                 var document = location.Document;
                 if (document == null)
+                    continue;
+
+                // Multi-targeted projects report the same source location once per target framework
+                if (!seenLocations.Add((lineSpan.Path ?? "", lineSpan.StartLinePosition.Line, lineSpan.StartLinePosition.Character)))
                     continue;
 
                 filesAnalyzed++;
@@ -339,7 +342,10 @@ public class CallerAnalysisService : ICallerAnalysisService
 
         // Fallback: If SymbolFinder doesn't find references, search manually
         // For test scenarios and simple files, always use manual search as fallback
-        callers.AddRange(await FindCallersManuallyAsync(symbol, cancellationToken));
+        // Only keep manual matches for call sites SymbolFinder did not already report
+        var reportedSites = callers.Select(c => (c.File, c.Line, c.CallerMethod)).ToHashSet();
+        callers.AddRange((await FindCallersManuallyAsync(symbol, cancellationToken))
+            .Where(c => reportedSites.Add((c.File, c.Line, c.CallerMethod))));
         filesAnalyzed += callers.Count;
         methodsAnalyzed += callers.Count;
 
@@ -368,8 +374,7 @@ public class CallerAnalysisService : ICallerAnalysisService
     private async Task<List<CallerInfo>> FindIndirectCallers(ISymbol targetSymbol, CancellationToken cancellationToken)
     {
         var indirectCallers = new List<CallerInfo>();
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
             return indirectCallers;
 
         // If target method is part of an interface, find all implementations and their callers
@@ -456,7 +461,7 @@ public class CallerAnalysisService : ICallerAnalysisService
             Confidence = confidence,
             CallerSignature = callerSignature,
             Context = lineText.Trim(),
-            IsRecursive = SymbolEqualityComparer.Default.Equals(callerSymbol, targetSymbol)
+            IsRecursive = CrossProjectSymbolComparer.AreEquivalent(callerSymbol, targetSymbol)
         };
     }
 
@@ -468,8 +473,7 @@ public class CallerAnalysisService : ICallerAnalysisService
             // Check if this is an interface method call
             if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
             {
-                var compilation = _workspace.GetCompilation();
-                var semanticModel = compilation?.GetSemanticModel(memberAccess.SyntaxTree);
+                var semanticModel = _workspace.GetSemanticModel(memberAccess.SyntaxTree);
                 if (semanticModel != null)
                 {
                     var symbolInfo = semanticModel.GetSymbolInfo(memberAccess);
@@ -490,8 +494,7 @@ public class CallerAnalysisService : ICallerAnalysisService
         // For member access expressions
         if (node is MemberAccessExpressionSyntax memberAccessExpr)
         {
-            var compilation = _workspace.GetCompilation();
-            var semanticModel = compilation?.GetSemanticModel(memberAccessExpr.SyntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(memberAccessExpr.SyntaxTree);
             if (semanticModel != null)
             {
                 var symbolInfo = semanticModel.GetSymbolInfo(memberAccessExpr);
@@ -534,13 +537,8 @@ public class CallerAnalysisService : ICallerAnalysisService
         if (matchingSymbol != null)
             return await GetMethodSymbolAsync(matchingSymbol.File, matchingSymbol.Line, cancellationToken);
 
-        // Fallback: Search compilation directly
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return null;
-
-        // Find all method symbols with the given name
-        var methodSymbols = compilation.GetSymbolsWithName(s => s == methodName, SymbolFilter.Member, cancellationToken)
+        // Fallback: search every compilation in the solution directly
+        var methodSymbols = _workspace.FindSourceSymbols(methodName, SymbolFilter.Member, cancellationToken)
             .OfType<IMethodSymbol>();
 
         if (!string.IsNullOrEmpty(containingType))
@@ -579,9 +577,8 @@ public class CallerAnalysisService : ICallerAnalysisService
         // If it's a property or field, try to find its getter/setter
         if (symbol is IPropertySymbol propertySymbol)
         {
-            var compilation = _workspace.GetCompilation();
             var document = _workspace.GetDocument(filePath);
-            if (compilation != null && document != null)
+            if (document != null)
             {
                 var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
                 var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -726,13 +723,13 @@ public class CallerAnalysisService : ICallerAnalysisService
     private async Task<List<CallerInfo>> FindCallersManuallyAsync(ISymbol targetSymbol, CancellationToken cancellationToken)
     {
         var callers = new List<CallerInfo>();
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return callers;
 
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             // Find all method declarations
@@ -742,7 +739,7 @@ public class CallerAnalysisService : ICallerAnalysisService
             foreach (var methodDecl in methodDeclarations)
             {
                 var methodSymbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken);
-                if (methodSymbol == null || SymbolEqualityComparer.Default.Equals(methodSymbol, targetSymbol))
+                if (methodSymbol == null || CrossProjectSymbolComparer.AreEquivalent(methodSymbol, targetSymbol))
                     continue; // Skip the target method itself
 
                 // Find all invocation expressions within this method
@@ -754,7 +751,7 @@ public class CallerAnalysisService : ICallerAnalysisService
                     var invocationSymbol = semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol;
 
                     // Check for direct match
-                    if (invocationSymbol != null && SymbolEqualityComparer.Default.Equals(invocationSymbol, targetSymbol))
+                    if (invocationSymbol != null && CrossProjectSymbolComparer.AreEquivalent(invocationSymbol, targetSymbol))
                     {
                         var lineSpan = invocation.GetLocation().GetLineSpan();
                         var callType = DetermineCallType(invocation, targetSymbol);
@@ -772,7 +769,7 @@ public class CallerAnalysisService : ICallerAnalysisService
                             CallExpression = invocation.ToString(),
                             Context = invocation.Parent?.ToString() ?? "",
                             CallChain = new List<string>(),
-                            IsRecursive = methodSymbol.ContainingType != null && SymbolEqualityComparer.Default.Equals(methodSymbol.ContainingType, targetSymbol.ContainingType)
+                            IsRecursive = methodSymbol.ContainingType != null && CrossProjectSymbolComparer.AreEquivalent(methodSymbol.ContainingType, targetSymbol.ContainingType)
                         });
                     }
                     // Check for interface method calls matching by name and parameter count

@@ -1158,9 +1158,8 @@ public class AdvancedReferenceFinderServiceTests : TestBase
     [Test]
     public async Task FindSimilarMethodsAsync_WithThreshold_ShouldReturnSimilarMethods()
     {
-        // Arrange - Test with null compilation to avoid mocking issues
-        Microsoft.CodeAnalysis.Compilation? nullCompilation = null;
-        _mockWorkspace.GetCompilation().Returns(nullCompilation);
+        // Arrange - Test with no compilations to avoid mocking issues
+        _mockWorkspace.GetCompilations().Returns(Array.Empty<Microsoft.CodeAnalysis.Compilation>());
         var methodName = "ProcessData";
         var threshold = 0.8;
 
@@ -1175,17 +1174,16 @@ public class AdvancedReferenceFinderServiceTests : TestBase
     [Test]
     public async Task GetCapabilitiesAsync_WithReadyWorkspace_ShouldReturnCapabilities()
     {
-        // Arrange - Test with null compilation to avoid mocking complications
+        // Arrange - Test with no compilations to avoid mocking complications
         // but test that the service handles it gracefully
-        Microsoft.CodeAnalysis.Compilation? nullCompilation = null;
 
-        // Set up mock to return null compilation
-        _mockWorkspace.GetCompilation().Returns(nullCompilation);
+        // Set up mock to return no compilations
+        _mockWorkspace.GetCompilations().Returns(Array.Empty<Microsoft.CodeAnalysis.Compilation>());
 
         // Act
         var result = await _service.GetCapabilitiesAsync();
 
-        // Assert - Should return not-ready state when compilation is null
+        // Assert - Should return not-ready state when there are no compilations
         Assert.That(result, Is.Not.Null);
         Assert.That(result.IsWorkspaceReady, Is.False);
         Assert.That(result.TotalFiles, Is.EqualTo(0));
@@ -1198,8 +1196,7 @@ public class AdvancedReferenceFinderServiceTests : TestBase
     public async Task GetCapabilitiesAsync_WithNullCompilation_ShouldReturnNotReady()
     {
         // This test is now redundant with the one above, but let's keep it for completeness
-        Microsoft.CodeAnalysis.Compilation? nullCompilation = null;
-        _mockWorkspace.GetCompilation().Returns(nullCompilation);
+        _mockWorkspace.GetCompilations().Returns(Array.Empty<Microsoft.CodeAnalysis.Compilation>());
 
         // Act
         var result = await _service.GetCapabilitiesAsync();
@@ -1234,13 +1231,12 @@ public class AdvancedReferenceFinderServiceTests : TestBase
     [Repeat(3)] // Test multiple times to check for consistency
     public async Task LevenshteinDistanceCalculation_ShouldBeConsistent()
     {
-        // Arrange - Test with null compilation to avoid mocking issues
+        // Arrange - Test with no compilations to avoid mocking issues
         var methodName = "ProcessData";
         var threshold = 0.8;
-        Microsoft.CodeAnalysis.Compilation? nullCompilation = null;
 
-        // Set up mock to return null compilation
-        _mockWorkspace.GetCompilation().Returns(nullCompilation);
+        // Set up mock to return no compilations
+        _mockWorkspace.GetCompilations().Returns(Array.Empty<Microsoft.CodeAnalysis.Compilation>());
 
         // Act
         var result1 = await _service.FindSimilarMethodsAsync(methodName, threshold);

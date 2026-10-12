@@ -66,9 +66,9 @@ public class TestClass
 
         // DEBUG: Check workspace state
         var documents = _workspace.GetAllDocuments().ToList();
-        var compilation = _workspace.GetCompilation();
+        var compilations = _workspace.GetCompilations();
         Assert.That(documents, Is.Not.Empty); // Should have 1 document
-        Assert.That(compilation, Is.Not.Null); // Should have a compilation
+        Assert.That(compilations, Has.Count.EqualTo(1)); // Should have a single compilation
 
         var request = new RenameRequest
         {

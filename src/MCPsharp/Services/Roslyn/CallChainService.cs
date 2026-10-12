@@ -122,8 +122,7 @@ public class CallChainService : ICallChainService
 
     public async Task<CallGraphAnalysis> AnalyzeCallGraphAsync(string? typeName = null, string? namespaceName = null, CancellationToken cancellationToken = default)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
             return new CallGraphAnalysis
             {
                 Scope = typeName ?? namespaceName ?? "all",
@@ -144,9 +143,12 @@ public class CallChainService : ICallChainService
         var reverseCallGraph = new Dictionary<string, List<string>>();
 
         // Get all methods in scope
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var methodDeclarations = root.DescendantNodes()
@@ -516,9 +518,6 @@ public class CallChainService : ICallChainService
     private async Task<List<MethodCallInfo>> FindCalledMethodsAsync(ISymbol methodSymbol, CancellationToken cancellationToken)
     {
         var calledMethods = new List<MethodCallInfo>();
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return calledMethods;
 
         // Find the syntax nodes for this method
         var syntaxReferences = methodSymbol.DeclaringSyntaxReferences;
@@ -528,9 +527,9 @@ public class CallChainService : ICallChainService
             if (syntaxNode == null)
                 continue;
 
-            // Get the semantic model for this syntax tree
+            // Get the semantic model from the compilation of the project that declares the method
             var syntaxTree = syntaxNode.SyntaxTree;
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
             if (semanticModel == null)
                 continue;
 
@@ -634,14 +633,13 @@ public class CallChainService : ICallChainService
 
     private async Task<List<MethodSignature>> GetAllMethodsAsync(CancellationToken cancellationToken)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return new List<MethodSignature>();
-
         var methods = new List<MethodSignature>();
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var methodDeclarations = root.DescendantNodes()
@@ -793,12 +791,8 @@ public class CallChainService : ICallChainService
 
     private IMethodSymbol? FindMethodSymbol(string methodName, string? containingType, CancellationToken cancellationToken)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return null;
-
-        // Find all methods with the given name
-        var methodSymbols = compilation.GetSymbolsWithName(n => n == methodName, SymbolFilter.Member, cancellationToken)
+        // Find all methods with the given name in every project of the solution
+        var methodSymbols = _workspace.FindSourceSymbols(methodName, SymbolFilter.Member, cancellationToken)
             .OfType<IMethodSymbol>();
 
         if (string.IsNullOrEmpty(containingType))

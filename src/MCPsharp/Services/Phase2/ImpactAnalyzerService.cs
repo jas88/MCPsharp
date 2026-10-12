@@ -148,12 +148,12 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         // Process found symbols through Roslyn
         foreach (var symbol in symbols.OfType<ISymbol>())
         {
-            // Find all references to this symbol
-            var project = _workspace.GetAllDocuments().FirstOrDefault()?.Project;
-            if (project == null)
+            // Find all references to this symbol across every project in the solution
+            if (!_workspace.IsInitialized)
                 continue;
 
-            var references = await SymbolFinder.FindReferencesAsync(symbol, project.Solution, ct);
+            var solution = _workspace.Solution;
+            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct);
 
             foreach (var reference in references)
             {
@@ -183,7 +183,7 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
             if (symbol.Kind == Microsoft.CodeAnalysis.SymbolKind.NamedType &&
                 ((INamedTypeSymbol)symbol).TypeKind == TypeKind.Interface)
             {
-                await FindInterfaceImplementationsAsync((INamedTypeSymbol)symbol, project, impacts, change, ct);
+                await FindInterfaceImplementationsAsync((INamedTypeSymbol)symbol, solution, _workspace.GetAllDocuments(), impacts, change, ct);
             }
         }
 
@@ -202,13 +202,14 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
 
     private static async Task FindInterfaceImplementationsAsync(
         INamedTypeSymbol interfaceSymbol,
-        Project project,
+        Solution solution,
+        IReadOnlyList<Document> allDocuments,
         List<CSharpImpact> impacts,
         CodeChange change,
         CancellationToken ct)
     {
         // Find all classes that implement this interface
-        var implementations = await SymbolFinder.FindImplementationsAsync(interfaceSymbol, project.Solution, cancellationToken: ct);
+        var implementations = await SymbolFinder.FindImplementationsAsync(interfaceSymbol, solution, cancellationToken: ct);
 
         foreach (var implementation in implementations.Where(i => i.Locations.Any(l => l.SourceTree?.FilePath != null)))
         {
@@ -228,7 +229,6 @@ public class ImpactAnalyzerService : IImpactAnalyzerService
         // Fallback: Manually scan all documents for implementations if SymbolFinder didn't work
         if (!implementations.Any())
         {
-            var allDocuments = project.Solution.Projects.SelectMany(p => p.Documents);
             foreach (var doc in allDocuments)
             {
                 if (string.IsNullOrEmpty(doc.FilePath) || doc.FilePath == change.FilePath)

@@ -113,17 +113,13 @@ public partial class SymbolResolutionService : ISymbolResolutionService
         string? containingType = null,
         string? containingNamespace = null)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
         {
             return Task.FromResult<ISymbol?>(null);
         }
 
-        // Find all symbols with the given name
-        var symbols = compilation.GetSymbolsWithName(
-            name => name == symbolName,
-            SymbolFilter.All,
-            CancellationToken.None);
+        // Find all symbols with the given name in every project of the solution
+        var symbols = _workspace.FindSourceSymbols(symbolName, SymbolFilter.All);
 
         // Return the first symbol matching the optional context filters
         var match = symbols.FirstOrDefault(symbol =>

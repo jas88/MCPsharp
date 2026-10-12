@@ -191,6 +191,9 @@ public partial class NavigationService : INavigationService
                 }
             }
 
+            // Multi-targeted projects yield the same source location once per target framework
+            locations = locations.Distinct(new NavigationLocationComparer()).ToList();
+
             return new MultiNavigationResult
             {
                 Success = true,
@@ -263,21 +266,17 @@ public partial class NavigationService : INavigationService
             }
 
             // Include extension methods if requested
-            if (includeExtensions)
+            if (includeExtensions && _workspace.IsInitialized && method.ContainingType != null)
             {
-                var compilation = _workspace.GetCompilation();
-                if (compilation != null && method.ContainingType != null)
-                {
-                    var extensionMethods = await FindExtensionMethodOverloadsAsync(
-                        compilation, method.Name, method.ContainingType);
+                var extensionMethods = await FindExtensionMethodOverloadsAsync(
+                    method.Name, method.ContainingType);
 
-                    foreach (var extMethod in extensionMethods)
+                foreach (var extMethod in extensionMethods)
+                {
+                    var location = CreateNavigationLocation(extMethod);
+                    if (location != null)
                     {
-                        var location = CreateNavigationLocation(extMethod);
-                        if (location != null)
-                        {
-                            locations.Add(location);
-                        }
+                        locations.Add(location);
                     }
                 }
             }
@@ -573,7 +572,10 @@ public partial class NavigationService : INavigationService
                 var implementations = await SymbolFinder.FindImplementationsAsync(
                     symbol, solution, cancellationToken: CancellationToken.None);
 
-                var implList = implementations.ToList();
+                // De-duplicate symbols reported once per target framework of a multi-targeted project
+                var implList = implementations
+                    .DistinctBy(GetSourceLocationKey)
+                    .ToList();
 
                 if (implList.Count == 0)
                 {
@@ -949,17 +951,18 @@ public partial class NavigationService : INavigationService
         }
 
         var derivedTypes = new List<INamedTypeSymbol>();
-        var compilation = _workspace.GetCompilation();
-
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
         {
             return derivedTypes;
         }
 
         // Search all types in the compilation
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync();
 
             var typeDeclarations = root.DescendantNodes()
@@ -992,13 +995,13 @@ public partial class NavigationService : INavigationService
     private static bool DerivesFrom(INamedTypeSymbol derivedType, INamedTypeSymbol baseType)
     {
         // Check direct base type
-        if (SymbolEqualityComparer.Default.Equals(derivedType.BaseType, baseType))
+        if (CrossProjectSymbolComparer.AreEquivalent(derivedType.BaseType, baseType))
         {
             return true;
         }
 
         // Check interfaces
-        if (derivedType.Interfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, baseType)))
+        if (derivedType.Interfaces.Any(i => CrossProjectSymbolComparer.AreEquivalent(i, baseType)))
         {
             return true;
         }
@@ -1007,7 +1010,7 @@ public partial class NavigationService : INavigationService
         var current = derivedType.BaseType;
         while (current != null)
         {
-            if (SymbolEqualityComparer.Default.Equals(current, baseType))
+            if (CrossProjectSymbolComparer.AreEquivalent(current, baseType))
             {
                 return true;
             }
@@ -1017,16 +1020,18 @@ public partial class NavigationService : INavigationService
         return false;
     }
 
-    private static async Task<List<IMethodSymbol>> FindExtensionMethodOverloadsAsync(
-        Compilation compilation,
+    private async Task<List<IMethodSymbol>> FindExtensionMethodOverloadsAsync(
         string methodName,
         INamedTypeSymbol extendedType)
     {
         var extensionMethods = new List<IMethodSymbol>();
 
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync();
 
             var methodDeclarations = root.DescendantNodes()
@@ -1043,7 +1048,7 @@ public partial class NavigationService : INavigationService
                     if (firstParam != null)
                     {
                         var paramType = firstParam.Type;
-                        if (SymbolEqualityComparer.Default.Equals(paramType, extendedType) ||
+                        if (CrossProjectSymbolComparer.AreEquivalent(paramType, extendedType) ||
                             IsAssignableFrom(extendedType, paramType))
                         {
                             extensionMethods.Add(methodSymbol);
@@ -1059,7 +1064,7 @@ public partial class NavigationService : INavigationService
     private static bool IsAssignableFrom(ITypeSymbol targetType, ITypeSymbol sourceType)
     {
         // Check if sourceType can be assigned to targetType
-        if (SymbolEqualityComparer.Default.Equals(targetType, sourceType))
+        if (CrossProjectSymbolComparer.AreEquivalent(targetType, sourceType))
         {
             return true;
         }
@@ -1070,7 +1075,7 @@ public partial class NavigationService : INavigationService
             var current = namedSource.BaseType;
             while (current != null)
             {
-                if (SymbolEqualityComparer.Default.Equals(current, targetType))
+                if (CrossProjectSymbolComparer.AreEquivalent(current, targetType))
                 {
                     return true;
                 }
@@ -1079,10 +1084,18 @@ public partial class NavigationService : INavigationService
 
             // Check interfaces
             return namedSource.AllInterfaces.Any(i =>
-                SymbolEqualityComparer.Default.Equals(i, targetType));
+                CrossProjectSymbolComparer.AreEquivalent(i, targetType));
         }
 
         return false;
+    }
+
+    private static string GetSourceLocationKey(ISymbol symbol)
+    {
+        var location = symbol.Locations.FirstOrDefault(l => l.IsInSource);
+        return location == null
+            ? symbol.ToDisplayString()
+            : $"{location.SourceTree?.FilePath}:{location.SourceSpan.Start}";
     }
 
     /// <summary>

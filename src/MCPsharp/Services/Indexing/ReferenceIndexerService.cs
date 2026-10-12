@@ -48,9 +48,8 @@ public sealed partial class ReferenceIndexerService
             return;
         }
 
-        var solution = _workspace.Solution;
-        var documents = solution.Projects
-            .SelectMany(p => p.Documents)
+        // One document per file across all projects (multi-targeted projects are not indexed twice)
+        var documents = _workspace.GetAllDocuments()
             .Where(d => d.FilePath?.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) == true)
             .ToList();
 

@@ -41,8 +41,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         var compliantTypes = 0;
         var layerStats = new Dictionary<string, int>();
 
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
         {
             return new ArchitectureValidationResult
             {
@@ -59,13 +58,16 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         }
 
         // Analyze each syntax tree
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
             if (string.IsNullOrEmpty(syntaxTree.FilePath) || !syntaxTree.FilePath.EndsWith(".cs", StringComparison.Ordinal))
                 continue;
 
             analyzedFiles.Add(syntaxTree.FilePath);
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             // Find all type declarations
@@ -130,8 +132,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         var edges = new List<DependencyEdge>();
         var layerDependencies = new Dictionary<string, List<string>>();
 
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
         {
             return new DependencyAnalysisResult
             {
@@ -145,11 +146,14 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         }
 
         // Build dependency graph
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
             if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true) continue;
 
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var typeDeclarations = root.DescendantNodes()
@@ -293,8 +297,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
 
     public async Task<TypeComplianceResult> CheckTypeComplianceAsync(string typeName, ArchitectureDefinition definition, CancellationToken cancellationToken = default)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
+        if (!_workspace.IsInitialized)
         {
             return new TypeComplianceResult
             {
@@ -307,7 +310,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
             };
         }
 
-        var symbol = compilation.GetTypeByMetadataName(typeName);
+        var symbol = _workspace.GetTypeByMetadataName(typeName);
         if (symbol == null)
         {
             return new TypeComplianceResult
@@ -414,11 +417,10 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
     private async Task<ArchitectureDefinition> DetectBestFitArchitecture(CancellationToken cancellationToken)
     {
         // Simple heuristic-based detection based on namespace patterns
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null) return _predefinedArchitectures["Clean Architecture"];
+        if (!_workspace.IsInitialized) return _predefinedArchitectures["Clean Architecture"];
 
         var namespaces = new HashSet<string>();
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
             var root = await syntaxTree.GetRootAsync(cancellationToken);
             var namespaceDeclarations = root.DescendantNodes()
@@ -495,7 +497,7 @@ public class ArchitectureValidatorService : IArchitectureValidatorService
         if (sourceLayer == null) return violations;
 
         // Get all dependencies of this type
-        if (_workspace.GetCompilation() == null) return violations;
+        if (!_workspace.IsInitialized) return violations;
 
         // Analyze dependencies for violations
         var dependencies = AnalyzeTypeDependencies(symbol, architecture, filePath);

@@ -517,8 +517,7 @@ public partial class AdvancedReferenceFinderService
             // Wait a short time for workspace to initialize
             await Task.Delay(100, cancellationToken);
 
-            var compilation = _workspace.GetCompilation();
-            if (compilation == null)
+            if (!_workspace.IsInitialized)
             {
                 return new ReverseSearchCapabilities
                 {
@@ -530,7 +529,7 @@ public partial class AdvancedReferenceFinderService
                 };
             }
 
-            var totalFiles = compilation.SyntaxTrees.Count();
+            var totalFiles = _workspace.GetSourceTrees().Count;
             var totalTypes = await GetAllTypesAsync(cancellationToken);
             var totalMethods = await GetAllMethodsAsync(cancellationToken);
 
@@ -570,14 +569,13 @@ public partial class AdvancedReferenceFinderService
 
     private async Task<List<MethodSignature>> GetAllMethodsAsync(CancellationToken cancellationToken)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return new List<MethodSignature>();
-
         var methods = new List<MethodSignature>();
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var methodDeclarations = root.DescendantNodes()
@@ -598,14 +596,13 @@ public partial class AdvancedReferenceFinderService
 
     private async Task<List<string>> GetAllTypesAsync(CancellationToken cancellationToken)
     {
-        var compilation = _workspace.GetCompilation();
-        if (compilation == null)
-            return new List<string>();
-
         var types = new List<string>();
-        foreach (var syntaxTree in compilation.SyntaxTrees)
+        foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            var semanticModel = _workspace.GetSemanticModel(syntaxTree);
+            if (semanticModel == null)
+                continue;
+
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
             var typeDeclarations = root.DescendantNodes()

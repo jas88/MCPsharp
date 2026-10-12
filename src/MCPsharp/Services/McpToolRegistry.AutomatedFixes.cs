@@ -99,12 +99,12 @@ public partial class McpToolRegistry
 
             // Get documents to analyze
             var documentsToAnalyze = new List<Document>();
-            var solution = _workspace.Solution;
+            // One document per file, even for multi-targeted projects
+            var allDocuments = _workspace.GetAllDocuments();
 
             if (isFile)
             {
-                var doc = solution.Projects
-                    .SelectMany(p => p.Documents)
+                var doc = allDocuments
                     .FirstOrDefault(d => d.FilePath?.Equals(fullPath, StringComparison.OrdinalIgnoreCase) == true);
 
                 if (doc != null)
@@ -116,8 +116,7 @@ public partial class McpToolRegistry
             {
                 // Directory - find all documents under it
                 documentsToAnalyze.AddRange(
-                    solution.Projects
-                        .SelectMany(p => p.Documents)
+                    allDocuments
                         .Where(d => d.FilePath != null && PathContainment.IsWithin(fullPath, d.FilePath)));
             }
 
@@ -313,12 +312,12 @@ public partial class McpToolRegistry
 
             // Get documents to fix
             var documentsToFix = new List<Document>();
-            var solution = _workspace.Solution;
+            // One document per file, even for multi-targeted projects
+            var allDocuments = _workspace.GetAllDocuments();
 
             if (isFile)
             {
-                var doc = solution.Projects
-                    .SelectMany(p => p.Documents)
+                var doc = allDocuments
                     .FirstOrDefault(d => d.FilePath?.Equals(fullPath, StringComparison.OrdinalIgnoreCase) == true);
 
                 if (doc != null)
@@ -330,8 +329,7 @@ public partial class McpToolRegistry
             {
                 // Directory - find all documents under it
                 documentsToFix.AddRange(
-                    solution.Projects
-                        .SelectMany(p => p.Documents)
+                    allDocuments
                         .Where(d => d.FilePath != null && PathContainment.IsWithin(fullPath, d.FilePath)));
             }
 

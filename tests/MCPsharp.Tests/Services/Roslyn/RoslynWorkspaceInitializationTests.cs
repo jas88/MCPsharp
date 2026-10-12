@@ -62,7 +62,8 @@ public class RoslynWorkspaceInitializationTests
         await workspace.InitializeAsync(projectPath);
 
         // Act
-        var compilation = workspace.GetCompilation();
+        var compilations = workspace.GetCompilations();
+        var compilation = compilations.Count > 0 ? compilations[0] : null;
 
         // Assert
         Assert.That(compilation, Is.Not.Null);
