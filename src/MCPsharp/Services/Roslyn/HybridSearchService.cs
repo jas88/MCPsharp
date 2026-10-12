@@ -64,11 +64,13 @@ public class HybridSearchResult
 /// Hybrid search service that automatically falls back from semantic → syntax → text
 /// based on workspace health and availability
 /// </summary>
-public class HybridSearchService
+public partial class HybridSearchService
 {
     private readonly RoslynWorkspace _workspace;
     private readonly SymbolQueryService? _symbolQuery;
     private readonly ILogger<HybridSearchService> _logger;
+
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
 
     public HybridSearchService(
         RoslynWorkspace workspace,
@@ -116,7 +118,7 @@ public class HybridSearchService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning($"Semantic search failed: {ex.Message}");
+                LogSemanticSearchFailed(_logger, ex.Message, ex);
                 result.Warnings.Add($"Semantic search failed: {ex.Message}");
             }
         }
@@ -137,7 +139,7 @@ public class HybridSearchService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning($"Syntax search failed: {ex.Message}");
+                LogSyntaxSearchFailed(_logger, ex.Message, ex);
                 result.Warnings.Add($"Syntax search failed: {ex.Message}");
             }
         }
@@ -154,7 +156,7 @@ public class HybridSearchService
         }
         catch (Exception ex)
         {
-            _logger.LogError($"All search methods failed: {ex.Message}");
+            LogAllSearchMethodsFailed(_logger, ex.Message, ex);
             result.Warnings.Add($"Text search failed: {ex.Message}");
             result.Success = false;
             return result;
@@ -164,7 +166,7 @@ public class HybridSearchService
     /// <summary>
     /// Determine the optimal search strategy based on workspace health
     /// </summary>
-    private SearchStrategy DetermineOptimalStrategy(WorkspaceHealth health)
+    private static SearchStrategy DetermineOptimalStrategy(WorkspaceHealth health)
     {
         if (health.CanDoSemanticOperations)
         {
@@ -295,7 +297,7 @@ public class HybridSearchService
             }
             catch (Exception ex)
             {
-                _logger.LogDebug($"Failed to parse {file}: {ex.Message}");
+                LogParseFailed(_logger, file, ex.Message, ex);
                 // Continue with other files - partial results better than no results
             }
         }
@@ -322,10 +324,10 @@ public class HybridSearchService
             $@"(?:public|private|protected|internal)?\s*(?:static|virtual|override)?\s*\w+\s+{Regex.Escape(name)}\s*\{{",
             // Field declarations
             $@"(?:public|private|protected|internal)?\s*(?:static|readonly)?\s*\w+\s+{Regex.Escape(name)}\s*[;=]"
-        };
+        }.Select(p => new Regex(p, RegexOptions.None, RegexTimeout)).ToArray();
 
         // Search all files, not just parseable ones
-        var allFiles = health.FileStatus.Keys.Where(f => f.EndsWith(".cs")).ToList();
+        var allFiles = health.FileStatus.Keys.Where(f => f.EndsWith(".cs", StringComparison.Ordinal)).ToList();
 
         foreach (var file in allFiles)
         {
@@ -338,7 +340,7 @@ public class HybridSearchService
                 {
                     foreach (var pattern in patterns)
                     {
-                        var match = Regex.Match(lines[i], pattern);
+                        var match = pattern.Match(lines[i]);
                         if (match.Success)
                         {
                             var kind = InferKind(lines[i]);
@@ -359,7 +361,7 @@ public class HybridSearchService
             }
             catch (Exception ex)
             {
-                _logger.LogDebug($"Failed to read {file}: {ex.Message}");
+                LogReadFailed(_logger, file, ex.Message, ex);
                 // Continue with other files
             }
         }
@@ -367,7 +369,7 @@ public class HybridSearchService
         return symbols;
     }
 
-    private string GetDeclarationKind(BaseTypeDeclarationSyntax decl)
+    private static string GetDeclarationKind(BaseTypeDeclarationSyntax decl)
     {
         return decl switch
         {
@@ -380,7 +382,7 @@ public class HybridSearchService
         };
     }
 
-    private string? GetContainingType(SyntaxNode node)
+    private static string? GetContainingType(SyntaxNode node)
     {
         var parent = node.Parent;
         while (parent != null)
@@ -399,7 +401,7 @@ public class HybridSearchService
         return null;
     }
 
-    private string? GetNamespace(SyntaxNode node)
+    private static string? GetNamespace(SyntaxNode node)
     {
         var parent = node.Parent;
         while (parent != null)
@@ -414,16 +416,31 @@ public class HybridSearchService
         return null;
     }
 
-    private string InferKind(string line)
+    private static string InferKind(string line)
     {
         if (line.Contains(" class ")) return "class";
         if (line.Contains(" interface ")) return "interface";
         if (line.Contains(" record ")) return "record";
         if (line.Contains(" struct ")) return "struct";
         if (line.Contains(" enum ")) return "enum";
-        if (line.Contains("(")) return "method";
-        if (line.Contains("{")) return "property";
-        if (line.Contains(";") || line.Contains("=")) return "field";
+        if (line.Contains('(')) return "method";
+        if (line.Contains('{')) return "property";
+        if (line.Contains(';') || line.Contains('=')) return "field";
         return "unknown";
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Semantic search failed: {ErrorMessage}")]
+    private static partial void LogSemanticSearchFailed(ILogger logger, string errorMessage, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Syntax search failed: {ErrorMessage}")]
+    private static partial void LogSyntaxSearchFailed(ILogger logger, string errorMessage, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "All search methods failed: {ErrorMessage}")]
+    private static partial void LogAllSearchMethodsFailed(ILogger logger, string errorMessage, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Failed to parse {File}: {ErrorMessage}")]
+    private static partial void LogParseFailed(ILogger logger, string file, string errorMessage, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Failed to read {File}: {ErrorMessage}")]
+    private static partial void LogReadFailed(ILogger logger, string file, string errorMessage, Exception exception);
 }

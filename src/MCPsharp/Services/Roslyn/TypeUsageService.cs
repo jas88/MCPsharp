@@ -32,7 +32,13 @@ public class TypeUsageService : ITypeUsageService
         if (typeSymbol == null)
             return null;
 
-        return await FindTypeUsagesAsync(typeSymbol, startTime, cancellationToken);
+        return await FindTypeUsagesCoreAsync(typeSymbol, startTime, cancellationToken);
+    }
+
+    public async Task<TypeUsageResult?> FindTypeUsagesAsync(INamedTypeSymbol typeSymbol, CancellationToken cancellationToken = default)
+    {
+        var startTime = DateTime.UtcNow;
+        return await FindTypeUsagesCoreAsync(typeSymbol, startTime, cancellationToken);
     }
 
     public async Task<TypeUsageResult?> FindTypeUsagesAtLocationAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)
@@ -42,13 +48,7 @@ public class TypeUsageService : ITypeUsageService
         if (symbolInfo?.Symbol == null || symbolInfo.Symbol is not INamedTypeSymbol typeSymbol)
             return null;
 
-        return await FindTypeUsagesAsync(typeSymbol, startTime, cancellationToken);
-    }
-
-    public async Task<TypeUsageResult?> FindTypeUsagesAsync(INamedTypeSymbol typeSymbol, CancellationToken cancellationToken = default)
-    {
-        var startTime = DateTime.UtcNow;
-        return await FindTypeUsagesAsync(typeSymbol, startTime, cancellationToken);
+        return await FindTypeUsagesCoreAsync(typeSymbol, startTime, cancellationToken);
     }
 
     public async Task<TypeUsageResult?> FindTypeUsagesByFullNameAsync(string fullTypeName, CancellationToken cancellationToken = default)
@@ -60,7 +60,7 @@ public class TypeUsageService : ITypeUsageService
 
         // Find the type symbol by full name
         var typeSymbol = compilation.GetSymbolsWithName(
-            fullTypeName.Split('.').Last(),
+            fullTypeName.Split('.')[^1],
             SymbolFilter.Type, cancellationToken)
             .OfType<INamedTypeSymbol>()
             .FirstOrDefault(t => t.ToDisplayString() == fullTypeName);
@@ -68,7 +68,7 @@ public class TypeUsageService : ITypeUsageService
         if (typeSymbol == null)
             return null;
 
-        return await FindTypeUsagesAsync(typeSymbol, startTime, cancellationToken);
+        return await FindTypeUsagesCoreAsync(typeSymbol, startTime, cancellationToken);
     }
 
     public async Task<List<TypeUsageInfo>> FindInstantiationsAsync(string typeName, CancellationToken cancellationToken = default)
@@ -307,12 +307,11 @@ public class TypeUsageService : ITypeUsageService
         };
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<List<MethodSignature>> FindSimilarTypesAsync(string typeName, CancellationToken cancellationToken = default)
+    public Task<List<MethodSignature>> FindSimilarTypesAsync(string typeName, CancellationToken cancellationToken = default)
     {
         // This is a placeholder implementation
         // In practice, you'd want to analyze base classes, interfaces, and patterns
-        return new List<MethodSignature>();
+        return Task.FromResult(new List<MethodSignature>());
     }
 
     public async Task<TypeUsagePatternAnalysis> AnalyzeUsagePatternsAsync(string? namespaceFilter = null, CancellationToken cancellationToken = default)
@@ -423,39 +422,39 @@ public class TypeUsageService : ITypeUsageService
         var duplicatedTypes = new List<MethodSignature>();
 
         // Find unused types
-        foreach (var kvp in patternAnalysis.TypeStatistics)
+        foreach (var stats in patternAnalysis.TypeStatistics.Values)
         {
-            if (kvp.Value.TotalUsages == 0)
+            if (stats.TotalUsages == 0)
             {
                 unusedTypes.Add(new MethodSignature
                 {
-                    Name = kvp.Value.TypeName,
-                    ContainingType = kvp.Value.TypeName,
+                    Name = stats.TypeName,
+                    ContainingType = stats.TypeName,
                     ReturnType = "void",
                     Accessibility = "public"
                 });
             }
 
             // Find single implementation interfaces
-            if (kvp.Value.TypeName.StartsWith("I") && kvp.Value.TotalUsages == 1)
+            if (stats.TypeName.StartsWith('I') && stats.TotalUsages == 1)
             {
                 singleImplementationInterfaces.Add(new MethodSignature
                 {
-                    Name = kvp.Value.TypeName,
-                    ContainingType = kvp.Value.TypeName,
+                    Name = stats.TypeName,
+                    ContainingType = stats.TypeName,
                     ReturnType = "void",
                     Accessibility = "public"
                 });
             }
 
             // Find potential sealed types (classes that are never inherited)
-            if (!kvp.Value.TypeName.StartsWith("I") &&
-            kvp.Value.UsagesByKind.GetValueOrDefault(TypeUsageKind.BaseClass, 0) == 0)
+            if (!stats.TypeName.StartsWith('I') &&
+            stats.UsagesByKind.GetValueOrDefault(TypeUsageKind.BaseClass, 0) == 0)
             {
                 potentialSealedTypes.Add(new MethodSignature
                 {
-                    Name = kvp.Value.TypeName,
-                    ContainingType = kvp.Value.TypeName,
+                    Name = stats.TypeName,
+                    ContainingType = stats.TypeName,
                     ReturnType = "void",
                     Accessibility = "public"
                 });
@@ -489,7 +488,7 @@ public class TypeUsageService : ITypeUsageService
         };
     }
 
-    private async Task<TypeUsageResult> FindTypeUsagesAsync(INamedTypeSymbol typeSymbol, DateTime startTime, CancellationToken cancellationToken)
+    private async Task<TypeUsageResult> FindTypeUsagesCoreAsync(INamedTypeSymbol typeSymbol, DateTime startTime, CancellationToken cancellationToken)
     {
         var compilation = _workspace.GetCompilation();
         if (compilation == null)
@@ -549,7 +548,7 @@ public class TypeUsageService : ITypeUsageService
                 Line = lineSpan.StartLinePosition.Line,
                 Column = lineSpan.StartLinePosition.Character,
                 UsageKind = TypeUsageKind.TypeDeclaration,
-                Context = $"{typeSymbol.TypeKind.ToString().ToLower()} {typeSymbol.Name}",
+                Context = $"{typeSymbol.TypeKind.ToString().ToLowerInvariant()} {typeSymbol.Name}",
                 Confidence = ConfidenceLevel.High,
                 MemberName = typeSymbol.Name,
                 ContainerName = typeSymbol.ContainingNamespace?.ToDisplayString()
@@ -574,133 +573,7 @@ public class TypeUsageService : ITypeUsageService
         };
     }
 
-    private async Task<TypeUsageInfo?> AnalyzeTypeUsageLocation(Models.Roslyn.SymbolLocation location, INamedTypeSymbol typeSymbol, CancellationToken cancellationToken)
-    {
-        var document = location.Document;
-        if (document == null)
-            return null;
-
-        var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (syntaxTree == null || semanticModel == null)
-            return null;
-
-        var root = await syntaxTree.GetRootAsync(cancellationToken);
-        var node = root.FindNode(location.TextSpan ?? location.Location?.SourceSpan ?? default);
-
-        var text = await document.GetTextAsync(cancellationToken);
-        var lineText = location.Line < text.Lines.Count
-            ? text.Lines[location.Line].ToString()
-            : string.Empty;
-
-        var usageKind = DetermineUsageKind(node, typeSymbol);
-        var confidence = DetermineUsageConfidence(node, typeSymbol);
-
-        // Extract generic information
-        var isGeneric = false;
-        var genericArguments = new List<string>();
-
-        if (node is GenericNameSyntax genericName)
-        {
-            isGeneric = true;
-            genericArguments = genericName.TypeArgumentList.Arguments
-                .Select(a => a.ToString())
-                .ToList();
-        }
-
-        return new TypeUsageInfo
-        {
-            File = location.FilePath ?? document.FilePath ?? "",
-            Line = location.Line,
-            Column = location.Column,
-            UsageKind = usageKind,
-            Context = lineText.Trim(),
-            Confidence = confidence,
-            MemberName = GetContainingMember(node),
-            ContainerName = GetContainingType(node, semanticModel),
-            AccessModifier = GetAccessModifier(node, semanticModel),
-            IsGeneric = isGeneric,
-            GenericArguments = genericArguments
-        };
-    }
-
-    private TypeUsageKind DetermineUsageKind(SyntaxNode node, INamedTypeSymbol typeSymbol)
-    {
-        // Check the context to determine usage kind
-        var parent = node.Parent;
-
-        while (parent != null)
-        {
-            switch (parent)
-            {
-                case MethodDeclarationSyntax methodDecl:
-                    if (methodDecl.ReturnType.Contains(node))
-                        return TypeUsageKind.ReturnType;
-                    if (methodDecl.ParameterList?.Parameters.Any(p => p.Type != null && p.Type.Contains(node)) == true)
-                        return TypeUsageKind.Parameter;
-                    break;
-
-                case PropertyDeclarationSyntax propDecl:
-                    if (propDecl.Type.Contains(node))
-                        return TypeUsageKind.Property;
-                    break;
-
-                case FieldDeclarationSyntax fieldDecl:
-                    if (fieldDecl.Declaration.Type.Contains(node))
-                        return TypeUsageKind.Field;
-                    break;
-
-                case BaseListSyntax baseList:
-                    if (baseList.Types.Any(t => t.Type.Contains(node)))
-                        return typeSymbol.TypeKind == TypeKind.Interface
-                            ? TypeUsageKind.InterfaceImplementation
-                            : TypeUsageKind.BaseClass;
-                    break;
-
-                case ObjectCreationExpressionSyntax:
-                    return TypeUsageKind.Instantiation;
-
-                case TypeOfExpressionSyntax:
-                    return TypeUsageKind.TypeOf;
-
-                case IsPatternExpressionSyntax:
-                    return TypeUsageKind.IsOperator;
-
-                case BinaryExpressionSyntax binary when binary.OperatorToken.IsKind(SyntaxKind.AsKeyword):
-                    return TypeUsageKind.AsOperator;
-
-                case CastExpressionSyntax:
-                    return TypeUsageKind.TypeCast;
-
-                case TypeArgumentListSyntax:
-                    return TypeUsageKind.GenericArgument;
-
-                case TypeParameterConstraintClauseSyntax:
-                    return TypeUsageKind.GenericConstraint;
-            }
-
-            parent = parent.Parent;
-        }
-
-        // Default to unknown if we can't determine the context
-        return TypeUsageKind.Unknown;
-    }
-
-    private ConfidenceLevel DetermineUsageConfidence(SyntaxNode node, INamedTypeSymbol typeSymbol)
-    {
-        // High confidence for direct type references
-        if (node is IdentifierNameSyntax || node is GenericNameSyntax)
-            return ConfidenceLevel.High;
-
-        // Medium confidence for more complex expressions
-        if (node.Parent is QualifiedNameSyntax)
-            return ConfidenceLevel.Medium;
-
-        // Low confidence for uncertain cases
-        return ConfidenceLevel.Low;
-    }
-
-    private string? GetContainingMember(SyntaxNode node)
+    private static string? GetContainingMember(SyntaxNode node)
     {
         var memberNode = node.FirstAncestorOrSelf<MemberDeclarationSyntax>();
         return memberNode switch
@@ -713,29 +586,7 @@ public class TypeUsageService : ITypeUsageService
         };
     }
 
-    private string? GetContainingType(SyntaxNode node, SemanticModel semanticModel)
-    {
-        var typeNode = node.FirstAncestorOrSelf<BaseTypeDeclarationSyntax>();
-        if (typeNode != null)
-        {
-            var symbol = semanticModel.GetDeclaredSymbol(typeNode);
-            return symbol?.ToDisplayString();
-        }
-        return null;
-    }
-
-    private string GetAccessModifier(SyntaxNode node, SemanticModel semanticModel)
-    {
-        var memberNode = node.FirstAncestorOrSelf<MemberDeclarationSyntax>();
-        if (memberNode != null)
-        {
-            var symbol = semanticModel.GetDeclaredSymbol(memberNode);
-            return symbol?.DeclaredAccessibility.ToString().ToLower() ?? "private";
-        }
-        return "private";
-    }
-
-    private TypeUsageInfo CreateTypeUsageInfo(INamedTypeSymbol typeSymbol, TypeUsageKind usageKind)
+    private static TypeUsageInfo CreateTypeUsageInfo(INamedTypeSymbol typeSymbol, TypeUsageKind usageKind)
     {
         var location = typeSymbol.Locations.FirstOrDefault();
         if (location == null || !location.IsInSource)
@@ -760,20 +611,20 @@ public class TypeUsageService : ITypeUsageService
             Line = lineSpan.StartLinePosition.Line,
             Column = lineSpan.StartLinePosition.Character,
             UsageKind = usageKind,
-            Context = $"{typeSymbol.TypeKind.ToString().ToLower()} {typeSymbol.Name}",
+            Context = $"{typeSymbol.TypeKind.ToString().ToLowerInvariant()} {typeSymbol.Name}",
             Confidence = ConfidenceLevel.High,
             MemberName = typeSymbol.Name,
             ContainerName = typeSymbol.ContainingNamespace?.ToDisplayString()
         };
     }
 
-    private bool IsTestFile(string filePath)
+    private static bool IsTestFile(string filePath)
     {
         return filePath.Contains("test", StringComparison.OrdinalIgnoreCase) ||
                filePath.Contains("spec", StringComparison.OrdinalIgnoreCase);
     }
 
-    private bool IsTypeReference(SyntaxNode node, INamedTypeSymbol typeSymbol)
+    private static bool IsTypeReference(SyntaxNode node, INamedTypeSymbol typeSymbol)
     {
         if (node is IdentifierNameSyntax identifier && identifier.Identifier.Text == typeSymbol.Name)
         {
@@ -788,7 +639,7 @@ public class TypeUsageService : ITypeUsageService
         return false;
     }
 
-    private TypeUsageKind DetermineUsageKindSimple(SyntaxNode node)
+    private static TypeUsageKind DetermineUsageKindSimple(SyntaxNode node)
     {
         var parent = node.Parent;
 
@@ -821,13 +672,13 @@ public class TypeUsageService : ITypeUsageService
         return TypeUsageKind.Unknown;
     }
 
-    private string? GetContainingTypeSimple(SyntaxNode node)
+    private static string? GetContainingTypeSimple(SyntaxNode node)
     {
         var typeNode = node.FirstAncestorOrSelf<BaseTypeDeclarationSyntax>();
         return typeNode?.Identifier.Text;
     }
 
-    private bool InheritsFrom(INamedTypeSymbol classSymbol, INamedTypeSymbol baseTypeSymbol)
+    private static bool InheritsFrom(INamedTypeSymbol classSymbol, INamedTypeSymbol baseTypeSymbol)
     {
         var current = classSymbol.BaseType;
         while (current != null && current.SpecialType != SpecialType.System_Object)
@@ -839,25 +690,8 @@ public class TypeUsageService : ITypeUsageService
         return false;
     }
 
-    private bool ImplementsInterface(INamedTypeSymbol classSymbol, INamedTypeSymbol interfaceSymbol)
+    private static bool ImplementsInterface(INamedTypeSymbol classSymbol, INamedTypeSymbol interfaceSymbol)
     {
         return classSymbol.AllInterfaces.Contains(interfaceSymbol);
-    }
-
-    /// <summary>
-    /// Converts Microsoft.CodeAnalysis.Location to SymbolLocation
-    /// </summary>
-    private static Models.Roslyn.SymbolLocation ConvertToSymbolLocation(Microsoft.CodeAnalysis.Location location)
-    {
-        var lineSpan = location.GetLineSpan();
-
-        return new Models.Roslyn.SymbolLocation
-        {
-            FilePath = lineSpan.Path,
-            Line = lineSpan.StartLinePosition.Line,
-            Column = lineSpan.StartLinePosition.Character,
-            Location = location,
-            TextSpan = location.SourceSpan
-        };
     }
 }

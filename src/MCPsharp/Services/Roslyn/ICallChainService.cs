@@ -14,6 +14,11 @@ public interface ICallChainService
     Task<CallChainResult?> FindCallChainsAsync(string methodName, string? containingType = null, int maxDepth = 10, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Find call chains for a specific symbol
+    /// </summary>
+    Task<CallChainResult?> FindCallChainsAsync(ISymbol symbol, CallDirection direction = CallDirection.Backward, int maxDepth = 10, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Find call chains from a specific method (forward analysis)
     /// </summary>
     Task<CallChainResult?> FindForwardCallChainsAsync(string methodName, string? containingType = null, int maxDepth = 10, CancellationToken cancellationToken = default);
@@ -22,11 +27,6 @@ public interface ICallChainService
     /// Find call chains for a method at a specific location
     /// </summary>
     Task<CallChainResult?> FindCallChainsAtLocationAsync(string filePath, int line, int column, CallDirection direction = CallDirection.Backward, int maxDepth = 10, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Find call chains for a specific symbol
-    /// </summary>
-    Task<CallChainResult?> FindCallChainsAsync(ISymbol symbol, CallDirection direction = CallDirection.Backward, int maxDepth = 10, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Find call chains between two specific methods

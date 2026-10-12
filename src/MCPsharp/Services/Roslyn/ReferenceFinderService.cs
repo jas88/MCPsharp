@@ -39,7 +39,7 @@ public class ReferenceFinderService
                 return null;
             }
 
-            var position = syntaxTree.GetText().Lines[line.Value].Start + column.Value;
+            var position = (await syntaxTree.GetTextAsync()).Lines[line.Value].Start + column.Value;
             var node = (await syntaxTree.GetRootAsync()).FindToken(position).Parent;
             var symbolInfo = node != null ? semanticModel.GetSymbolInfo(node) : default;
             symbol = symbolInfo.CandidateSymbols.FirstOrDefault();
@@ -137,7 +137,7 @@ public class ReferenceFinderService
             results.Add(new SymbolResult
             {
                 Name = impl.Name,
-                Kind = impl.TypeKind.ToString().ToLower(),
+                Kind = impl.TypeKind.ToString().ToLowerInvariant(),
                 File = lineSpan.Path,
                 Line = lineSpan.StartLinePosition.Line,
                 Column = lineSpan.StartLinePosition.Character,

@@ -19,9 +19,9 @@ public class RoslynWorkspace : IDisposable
     private readonly SemanticModelCache _semanticModelCache;
     private readonly CompilationCache _compilationCache;
     private readonly object _disposeLock = new();
-    private bool _disposed = false;
+    private bool _disposed;
     private WorkspaceHealth _health = new();
-    private bool _useAdhoc = false; // Track whether we're using adhoc workspace
+    private bool _useAdhoc; // Track whether we're using adhoc workspace
 
     public RoslynWorkspace()
     {
@@ -182,7 +182,7 @@ public class RoslynWorkspace : IDisposable
             catch (Exception ex)
             {
                 // Compilation failed - log and track
-                Console.Error.WriteLine($"Compilation failed: {ex.Message}");
+                await Console.Error.WriteLineAsync($"Compilation failed: {ex}");
                 _health.LoadedProjects = 0;
             }
 
@@ -191,7 +191,7 @@ public class RoslynWorkspace : IDisposable
         catch (Exception ex)
         {
             // MSBuildWorkspace failed, fallback to ad-hoc workspace
-            Console.Error.WriteLine($"MSBuildWorkspace initialization failed: {ex.Message}");
+            await Console.Error.WriteLineAsync($"MSBuildWorkspace initialization failed: {ex}");
 
             // Determine workspace root for adhoc fallback
             string adhocRoot = projectPath;
@@ -245,12 +245,9 @@ public class RoslynWorkspace : IDisposable
                 typeof(System.Collections.Generic.List<string>).Assembly.Location
             };
 
-            foreach (var reference in metadataReferences)
+            foreach (var reference in metadataReferences.Where(File.Exists))
             {
-                if (File.Exists(reference))
-                {
-                    project = project.AddMetadataReference(MetadataReference.CreateFromFile(reference));
-                }
+                project = project.AddMetadataReference(MetadataReference.CreateFromFile(reference));
             }
 
             adhocWorkspace.TryApplyChanges(project.Solution);
@@ -295,9 +292,10 @@ public class RoslynWorkspace : IDisposable
 
                 _health.LoadedProjects = 1;
             }
-            catch
+            catch (Exception ex)
             {
-                // Compilation failed - health already tracks this
+                // Compilation failed - log and track
+                await Console.Error.WriteLineAsync($"Compilation failed: {ex}");
                 _health.LoadedProjects = 0;
             }
         }
@@ -308,7 +306,7 @@ public class RoslynWorkspace : IDisposable
     /// <summary>
     /// Track file health without adding to workspace (for MSBuildWorkspace which already has documents)
     /// </summary>
-    private async Task<FileHealth> TrackFileHealthAsync(string filePath)
+    private static async Task<FileHealth> TrackFileHealthAsync(string filePath)
     {
         var fileHealth = new FileHealth
         {
@@ -324,7 +322,6 @@ public class RoslynWorkspace : IDisposable
             // Try to parse the file first (Level 1: Syntax-only)
             var text = await File.ReadAllTextAsync(filePath);
             var syntaxTree = CSharpSyntaxTree.ParseText(text, path: filePath);
-            var root = await syntaxTree.GetRootAsync();
 
             // Check for syntax errors
             var syntaxDiagnostics = syntaxTree.GetDiagnostics();
@@ -335,9 +332,15 @@ public class RoslynWorkspace : IDisposable
         {
             fileHealth.IsParseable = false;
             fileHealth.ParseError = ex.Message;
+            await ReportFileAnalysisFailureAsync(filePath, ex);
         }
 
         return fileHealth;
+    }
+
+    private static Task ReportFileAnalysisFailureAsync(string filePath, Exception exception)
+    {
+        return Console.Error.WriteLineAsync($"Failed to analyze file {filePath}: {exception}");
     }
 
     /// <summary>
@@ -409,7 +412,6 @@ public class RoslynWorkspace : IDisposable
             // Try to parse the file first (Level 1: Syntax-only)
             var text = await File.ReadAllTextAsync(filePath);
             var syntaxTree = CSharpSyntaxTree.ParseText(text, path: filePath);
-            var root = await syntaxTree.GetRootAsync();
 
             // Check for syntax errors
             var syntaxDiagnostics = syntaxTree.GetDiagnostics();
@@ -423,6 +425,7 @@ public class RoslynWorkspace : IDisposable
         {
             fileHealth.IsParseable = false;
             fileHealth.ParseError = ex.Message;
+            await ReportFileAnalysisFailureAsync(filePath, ex);
         }
 
         return fileHealth;
@@ -497,12 +500,9 @@ public class RoslynWorkspace : IDisposable
                 typeof(Task).Assembly.Location
             };
 
-            foreach (var reference in metadataReferences)
+            foreach (var reference in metadataReferences.Where(File.Exists))
             {
-                if (File.Exists(reference))
-                {
-                    project = project.AddMetadataReference(MetadataReference.CreateFromFile(reference));
-                }
+                project = project.AddMetadataReference(MetadataReference.CreateFromFile(reference));
             }
 
             adhocWorkspace.TryApplyChanges(project.Solution);
@@ -619,23 +619,17 @@ public class RoslynWorkspace : IDisposable
     /// <summary>
     /// Get semantic model for a syntax tree (legacy method)
     /// </summary>
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    public async Task<SemanticModel?> GetSemanticModelAsync(
+    public Task<SemanticModel?> GetSemanticModelAsync(
         SyntaxTree syntaxTree,
         CancellationToken ct = default)
     {
-        if (_compilation == null)
+        // Only return a model if the syntax tree belongs to this compilation
+        if (_compilation == null || !_compilation.ContainsSyntaxTree(syntaxTree))
         {
-            return null;
+            return Task.FromResult<SemanticModel?>(null);
         }
 
-        // Check if the syntax tree belongs to this compilation
-        if (!_compilation.ContainsSyntaxTree(syntaxTree))
-        {
-            return null;
-        }
-
-        return _compilation.GetSemanticModel(syntaxTree);
+        return Task.FromResult<SemanticModel?>(_compilation.GetSemanticModel(syntaxTree));
     }
 
     /// <summary>
@@ -660,10 +654,7 @@ public class RoslynWorkspace : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(RoslynWorkspace));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
     public void Dispose()

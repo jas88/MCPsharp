@@ -24,25 +24,7 @@ public class CallChainService : ICallChainService
 
     public async Task<CallChainResult?> FindCallChainsAsync(string methodName, string? containingType = null, int maxDepth = 10, CancellationToken cancellationToken = default)
     {
-        return await FindCallChainsAsync(methodName, containingType, CallDirection.Backward, maxDepth, cancellationToken);
-    }
-
-    public async Task<CallChainResult?> FindForwardCallChainsAsync(string methodName, string? containingType = null, int maxDepth = 10, CancellationToken cancellationToken = default)
-    {
-        return await FindCallChainsAsync(methodName, containingType, CallDirection.Forward, maxDepth, cancellationToken);
-    }
-
-    public async Task<CallChainResult?> FindCallChainsAtLocationAsync(string filePath, int line, int column, CallDirection direction = CallDirection.Backward, int maxDepth = 10, CancellationToken cancellationToken = default)
-    {
-        var symbolInfo = await _symbolQuery.GetSymbolAtLocationAsync(filePath, line, column);
-        if (symbolInfo?.Symbol == null)
-            return null;
-
-        var methodSymbol = await ConvertToMethodSymbol(symbolInfo.Symbol, filePath, line, column, cancellationToken);
-        if (methodSymbol == null)
-            return null;
-
-        return await FindCallChainsAsync(methodSymbol, direction, maxDepth, cancellationToken);
+        return await FindCallChainsByNameAsync(methodName, containingType, CallDirection.Backward, maxDepth, cancellationToken);
     }
 
     public async Task<CallChainResult?> FindCallChainsAsync(ISymbol symbol, CallDirection direction = CallDirection.Backward, int maxDepth = 10, CancellationToken cancellationToken = default)
@@ -92,13 +74,30 @@ public class CallChainService : ICallChainService
         };
     }
 
+    public async Task<CallChainResult?> FindForwardCallChainsAsync(string methodName, string? containingType = null, int maxDepth = 10, CancellationToken cancellationToken = default)
+    {
+        return await FindCallChainsByNameAsync(methodName, containingType, CallDirection.Forward, maxDepth, cancellationToken);
+    }
+
+    public async Task<CallChainResult?> FindCallChainsAtLocationAsync(string filePath, int line, int column, CallDirection direction = CallDirection.Backward, int maxDepth = 10, CancellationToken cancellationToken = default)
+    {
+        var symbolInfo = await _symbolQuery.GetSymbolAtLocationAsync(filePath, line, column);
+        if (symbolInfo?.Symbol == null)
+            return null;
+
+        if (symbolInfo.Symbol is not IMethodSymbol methodSymbol)
+            return null;
+
+        return await FindCallChainsAsync(methodSymbol, direction, maxDepth, cancellationToken);
+    }
+
     public async Task<List<CallChainPath>> FindCallChainsBetweenAsync(MethodSignature fromMethod, MethodSignature toMethod, int maxDepth = 10, CancellationToken cancellationToken = default)
     {
         var paths = new List<CallChainPath>();
         var visited = new HashSet<string>();
 
-        var fromSymbol = await FindMethodSymbol(fromMethod.Name, fromMethod.ContainingType, cancellationToken);
-        var toSymbol = await FindMethodSymbol(toMethod.Name, toMethod.ContainingType, cancellationToken);
+        var fromSymbol = FindMethodSymbol(fromMethod.Name, fromMethod.ContainingType, cancellationToken);
+        var toSymbol = FindMethodSymbol(toMethod.Name, toMethod.ContainingType, cancellationToken);
 
         if (fromSymbol == null || toSymbol == null)
             return paths;
@@ -109,7 +108,7 @@ public class CallChainService : ICallChainService
 
     public async Task<List<CallChainPath>> FindRecursiveCallChainsAsync(string methodName, string? containingType = null, int maxDepth = 20, CancellationToken cancellationToken = default)
     {
-        var symbol = await FindMethodSymbol(methodName, containingType, cancellationToken);
+        var symbol = FindMethodSymbol(methodName, containingType, cancellationToken);
         if (symbol == null)
             return new List<CallChainPath>();
 
@@ -167,7 +166,7 @@ public class CallChainService : ICallChainService
                 methods.Add(signature);
 
                 // Analyze method calls
-                var methodCalls = await AnalyzeMethodCalls(methodDecl, semanticModel, cancellationToken);
+                var methodCalls = AnalyzeMethodCalls(methodDecl, semanticModel, cancellationToken);
                 foreach (var call in methodCalls)
                 {
                     var relationship = new CallRelationship
@@ -213,7 +212,7 @@ public class CallChainService : ICallChainService
             .ToList();
 
         // Find circular dependencies
-        var circularDependencies = await FindCircularDependenciesInGraph(callGraph, cancellationToken);
+        var circularDependencies = FindCircularDependenciesInGraph(callGraph);
 
         return new CallGraphAnalysis
         {
@@ -245,7 +244,7 @@ public class CallChainService : ICallChainService
     public async Task<ReachabilityAnalysis> FindReachableMethodsAsync(string methodName, string? containingType = null, int maxDepth = 10, CancellationToken cancellationToken = default)
     {
         var startTime = DateTime.UtcNow;
-        var startSymbol = await FindMethodSymbol(methodName, containingType, cancellationToken);
+        var startSymbol = FindMethodSymbol(methodName, containingType, cancellationToken);
         if (startSymbol == null)
             return new ReachabilityAnalysis
         {
@@ -287,7 +286,7 @@ public class CallChainService : ICallChainService
             ReachableMethods = reachableMethods,
             MethodsByDepth = methodsByDepth,
             UnreachableMethods = unreachableMethods,
-            MaxDepthReached = methodsByDepth.Keys.Any() ? methodsByDepth.Keys.Max() : 0,
+            MaxDepthReached = methodsByDepth.Count > 0 ? methodsByDepth.Keys.Max() : 0,
             TotalMethodsAnalyzed = allMethods.Count,
             AnalysisDuration = analysisDuration,
             ReachedAnalysisLimit = false
@@ -341,7 +340,7 @@ public class CallChainService : ICallChainService
             // Continue building chain backwards
             if (caller.CallerSignature != null)
             {
-                var callerSymbol = await FindMethodSymbol(caller.CallerSignature.Name, caller.CallerSignature.ContainingType, cancellationToken);
+                var callerSymbol = FindMethodSymbol(caller.CallerSignature.Name, caller.CallerSignature.ContainingType, cancellationToken);
                 if (callerSymbol != null)
                 {
                     var result = await BuildBackwardCallChainsAsync(callerSymbol, caller.CallerSignature, newPath, paths, visited, maxDepth, reachedMaxDepth, filesAnalyzed, methodsAnalyzed, cancellationToken);
@@ -395,7 +394,7 @@ public class CallChainService : ICallChainService
             });
 
             // Continue building chain forwards
-            var calledSymbol = await FindMethodSymbol(calledMethod.Signature.Name, calledMethod.Signature.ContainingType, cancellationToken);
+            var calledSymbol = FindMethodSymbol(calledMethod.Signature.Name, calledMethod.Signature.ContainingType, cancellationToken);
             if (calledSymbol != null)
             {
                 var result = await BuildForwardCallChainsAsync(calledSymbol, calledMethod.Signature, newPath, paths, visited, maxDepth, reachedMaxDepth, filesAnalyzed, methodsAnalyzed, cancellationToken);
@@ -453,7 +452,7 @@ public class CallChainService : ICallChainService
 
             callStack.Add(step);
 
-            var calledSymbol = await FindMethodSymbol(calledMethod.Signature.Name, calledMethod.Signature.ContainingType, cancellationToken);
+            var calledSymbol = FindMethodSymbol(calledMethod.Signature.Name, calledMethod.Signature.ContainingType, cancellationToken);
             if (calledSymbol != null)
             {
                 await DetectRecursiveCallsAsync(originalSymbol, calledSymbol, callStack, paths, visited, maxDepth, cancellationToken);
@@ -506,7 +505,7 @@ public class CallChainService : ICallChainService
             }
 
             // Continue searching
-            var calledSymbol = await FindMethodSymbol(calledMethod.Signature.Name, calledMethod.Signature.ContainingType, cancellationToken);
+            var calledSymbol = FindMethodSymbol(calledMethod.Signature.Name, calledMethod.Signature.ContainingType, cancellationToken);
             if (calledSymbol != null)
             {
                 await FindPathsBetweenAsync(calledSymbol, toSymbol, new List<CallChainStep>(currentPath) { step }, paths, visited, maxDepth, cancellationToken);
@@ -558,7 +557,7 @@ public class CallChainService : ICallChainService
                         File = syntaxTree.FilePath ?? "",
                         Line = lineSpan.StartLinePosition.Line,
                         Column = lineSpan.StartLinePosition.Character,
-                        CallType = DetermineCallType(invocation, calledMethodSymbol),
+                        CallType = DetermineCallType(invocation),
                         Confidence = ConfidenceLevel.High,
                         CallExpression = invocation.ToString(),
                         Context = invocation.Parent?.ToString() ?? ""
@@ -570,8 +569,7 @@ public class CallChainService : ICallChainService
         return calledMethods;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<MethodCallInfo>> AnalyzeMethodCalls(MethodDeclarationSyntax methodDecl, SemanticModel semanticModel, CancellationToken cancellationToken)
+    private List<MethodCallInfo> AnalyzeMethodCalls(MethodDeclarationSyntax methodDecl, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var methodCalls = new List<MethodCallInfo>();
         var filePath = semanticModel.SyntaxTree.FilePath;
@@ -596,7 +594,7 @@ public class CallChainService : ICallChainService
                     File = document.FilePath ?? "",
                     Line = lineSpan.StartLinePosition.Line,
                     Column = lineSpan.StartLinePosition.Character,
-                    CallType = DetermineCallType(invocation, methodSymbol),
+                    CallType = DetermineCallType(invocation),
                     Confidence = ConfidenceLevel.High,
                     CallExpression = invocation.ToString(),
                     Context = invocation.Parent?.ToString() ?? ""
@@ -624,12 +622,12 @@ public class CallChainService : ICallChainService
         methodsByDepth[currentDepth].Add(currentSignature);
 
         var calledMethods = await FindCalledMethodsAsync(currentSymbol, cancellationToken);
-        foreach (var calledMethod in calledMethods)
+        foreach (var calledSignature in calledMethods.Select(m => m.Signature))
         {
-            var calledSymbol = await FindMethodSymbol(calledMethod.Signature.Name, calledMethod.Signature.ContainingType, cancellationToken);
+            var calledSymbol = FindMethodSymbol(calledSignature.Name, calledSignature.ContainingType, cancellationToken);
             if (calledSymbol != null)
             {
-                await BuildReachableMethodsAsync(calledSymbol, calledMethod.Signature, currentDepth + 1, maxDepth, reachableMethods, methodsByDepth, visited, cancellationToken);
+                await BuildReachableMethodsAsync(calledSymbol, calledSignature, currentDepth + 1, maxDepth, reachableMethods, methodsByDepth, visited, cancellationToken);
             }
         }
     }
@@ -662,7 +660,7 @@ public class CallChainService : ICallChainService
         return methods;
     }
 
-    private bool IsMethodInScope(ISymbol symbol, string? typeName, string? namespaceName)
+    private static bool IsMethodInScope(ISymbol symbol, string? typeName, string? namespaceName)
     {
         if (string.IsNullOrEmpty(typeName) && string.IsNullOrEmpty(namespaceName))
             return true;
@@ -679,54 +677,51 @@ public class CallChainService : ICallChainService
         return false;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<List<CircularDependency>> FindCircularDependenciesInGraph(Dictionary<string, List<string>> callGraph, CancellationToken cancellationToken)
+    private static List<CircularDependency> FindCircularDependenciesInGraph(Dictionary<string, List<string>> callGraph)
     {
         var circularDependencies = new List<CircularDependency>();
         var visited = new HashSet<string>();
         var recursionStack = new HashSet<string>();
 
-        foreach (var method in callGraph.Keys)
+        // visited is updated during traversal; the lazy Where re-checks it for each key
+        foreach (var method in callGraph.Keys.Where(m => !visited.Contains(m)))
         {
-            if (!visited.Contains(method))
+            var cycle = DetectCycleInGraph(method, callGraph, visited, recursionStack, new List<string>());
+            if (cycle.Count > 0)
             {
-                var cycle = DetectCycleInGraph(method, callGraph, visited, recursionStack, new List<string>());
-                if (cycle.Count > 0)
+                var dependency = new CircularDependency
                 {
-                    var dependency = new CircularDependency
+                    Methods = cycle.Select(m => CreateMethodSignatureFromString(m)).ToList(),
+                    CycleLength = cycle.Count,
+                    Steps = cycle.Zip(cycle.Skip(1).Append(cycle[0]), (from, to) => new CallChainStep
                     {
-                        Methods = cycle.Select(m => CreateMethodSignatureFromString(m)).ToList(),
-                        CycleLength = cycle.Count,
-                        Steps = cycle.Zip(cycle.Skip(1).Append(cycle.First()), (from, to) => new CallChainStep
-                        {
-                            FromMethod = CreateMethodSignatureFromString(from),
-                            ToMethod = CreateMethodSignatureFromString(to),
-                            File = "",
-                            Line = 0,
-                            Column = 0,
-                            CallType = CallType.Direct,
-                            Confidence = ConfidenceLevel.High
-                        }).ToList(),
-                        Confidence = ConfidenceLevel.Medium,
-                        FilesInvolved = new List<string>()
-                    };
-                    circularDependencies.Add(dependency);
-                }
+                        FromMethod = CreateMethodSignatureFromString(from),
+                        ToMethod = CreateMethodSignatureFromString(to),
+                        File = "",
+                        Line = 0,
+                        Column = 0,
+                        CallType = CallType.Direct,
+                        Confidence = ConfidenceLevel.High
+                    }).ToList(),
+                    Confidence = ConfidenceLevel.Medium,
+                    FilesInvolved = new List<string>()
+                };
+                circularDependencies.Add(dependency);
             }
         }
 
         return circularDependencies;
     }
 
-    private List<string> DetectCycleInGraph(string method, Dictionary<string, List<string>> callGraph, HashSet<string> visited, HashSet<string> recursionStack, List<string> path)
+    private static List<string> DetectCycleInGraph(string method, Dictionary<string, List<string>> callGraph, HashSet<string> visited, HashSet<string> recursionStack, List<string> path)
     {
         visited.Add(method);
         recursionStack.Add(method);
         path.Add(method);
 
-        if (callGraph.ContainsKey(method))
+        if (callGraph.TryGetValue(method, out var calledMethods))
         {
-            foreach (var calledMethod in callGraph[method])
+            foreach (var calledMethod in calledMethods)
             {
                 if (!visited.Contains(calledMethod))
                 {
@@ -747,7 +742,7 @@ public class CallChainService : ICallChainService
         return new List<string>();
     }
 
-    private int CalculateMaxCallDepth(Dictionary<string, List<string>> callGraph, List<string> entryPoints)
+    private static int CalculateMaxCallDepth(Dictionary<string, List<string>> callGraph, List<string> entryPoints)
     {
         var maxDepth = 0;
         foreach (var entryPoint in entryPoints)
@@ -758,15 +753,15 @@ public class CallChainService : ICallChainService
         return maxDepth;
     }
 
-    private int CalculateMaxDepthFromNode(string node, Dictionary<string, List<string>> callGraph, HashSet<string> visited)
+    private static int CalculateMaxDepthFromNode(string node, Dictionary<string, List<string>> callGraph, HashSet<string> visited)
     {
-        if (visited.Contains(node) || !callGraph.ContainsKey(node))
+        if (visited.Contains(node) || !callGraph.TryGetValue(node, out var children))
             return 0;
 
         visited.Add(node);
         var maxChildDepth = 0;
 
-        foreach (var child in callGraph[node])
+        foreach (var child in children)
         {
             var childDepth = CalculateMaxDepthFromNode(child, callGraph, new HashSet<string>(visited));
             maxChildDepth = Math.Max(maxChildDepth, childDepth);
@@ -775,7 +770,7 @@ public class CallChainService : ICallChainService
         return maxChildDepth + 1;
     }
 
-    private double CalculateAverageCallDepth(Dictionary<string, List<string>> callGraph, List<string> entryPoints)
+    private static double CalculateAverageCallDepth(Dictionary<string, List<string>> callGraph, List<string> entryPoints)
     {
         var depths = new List<int>();
         foreach (var entryPoint in entryPoints)
@@ -787,17 +782,16 @@ public class CallChainService : ICallChainService
         return depths.Count > 0 ? depths.Average() : 0;
     }
 
-    private async Task<CallChainResult?> FindCallChainsAsync(string methodName, string? containingType, CallDirection direction, int maxDepth, CancellationToken cancellationToken)
+    private async Task<CallChainResult?> FindCallChainsByNameAsync(string methodName, string? containingType, CallDirection direction, int maxDepth, CancellationToken cancellationToken)
     {
-        var symbol = await FindMethodSymbol(methodName, containingType, cancellationToken);
+        var symbol = FindMethodSymbol(methodName, containingType, cancellationToken);
         if (symbol == null)
             return null;
 
         return await FindCallChainsAsync(symbol, direction, maxDepth, cancellationToken);
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<IMethodSymbol?> FindMethodSymbol(string methodName, string? containingType, CancellationToken cancellationToken)
+    private IMethodSymbol? FindMethodSymbol(string methodName, string? containingType, CancellationToken cancellationToken)
     {
         var compilation = _workspace.GetCompilation();
         if (compilation == null)
@@ -813,22 +807,13 @@ public class CallChainService : ICallChainService
         // Filter by containing type
         var matchingSymbol = methodSymbols.FirstOrDefault(m =>
             m.ContainingType?.Name == containingType ||
-            m.ContainingType?.ToDisplayString().EndsWith(containingType) == true ||
+            m.ContainingType?.ToDisplayString().EndsWith(containingType, StringComparison.Ordinal) == true ||
             m.ContainingType?.ToDisplayString().Contains(containingType) == true);
 
         return matchingSymbol;
     }
 
-    #pragma warning disable CS1998 // Async method lacks await (synchronous implementation)
-    private async Task<IMethodSymbol?> ConvertToMethodSymbol(ISymbol symbol, string filePath, int line, int column, CancellationToken cancellationToken)
-    {
-        if (symbol is IMethodSymbol methodSymbol)
-            return methodSymbol;
-
-        return null;
-    }
-
-    private CallType DetermineCallType(SyntaxNode node, ISymbol targetSymbol)
+    private static CallType DetermineCallType(SyntaxNode node)
     {
         if (node is InvocationExpressionSyntax)
             return CallType.Direct;
@@ -836,7 +821,7 @@ public class CallChainService : ICallChainService
         return CallType.Unknown;
     }
 
-    private MethodSignature CreateMethodSignature(ISymbol symbol)
+    private static MethodSignature CreateMethodSignature(ISymbol symbol)
     {
         if (symbol is not IMethodSymbol methodSymbol)
             throw new ArgumentException("Symbol must be a method");
@@ -859,7 +844,7 @@ public class CallChainService : ICallChainService
             ReturnType = methodSymbol.ReturnType.ToDisplayString(),
             Parameters = parameters,
             ContainingType = methodSymbol.ContainingType?.ToDisplayString() ?? "",
-            Accessibility = methodSymbol.DeclaredAccessibility.ToString().ToLower(),
+            Accessibility = methodSymbol.DeclaredAccessibility.ToString().ToLowerInvariant(),
             IsStatic = methodSymbol.IsStatic,
             IsVirtual = methodSymbol.IsVirtual,
             IsAbstract = methodSymbol.IsAbstract,
@@ -870,7 +855,7 @@ public class CallChainService : ICallChainService
         };
     }
 
-    private MethodSignature CreateMethodSignatureFromString(string methodKey)
+    private static MethodSignature CreateMethodSignatureFromString(string methodKey)
     {
         var parts = methodKey.Split('.');
         var methodName = parts.LastOrDefault() ?? "";
@@ -885,7 +870,7 @@ public class CallChainService : ICallChainService
         };
     }
 
-    private class MethodCallInfo
+    private sealed class MethodCallInfo
     {
         public required MethodSignature Signature { get; init; }
         public required string File { get; init; }
