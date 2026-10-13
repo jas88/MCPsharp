@@ -205,7 +205,6 @@ public partial class StreamProcessingController
         _processors["binary"] = new BinaryStreamProcessor();
         _processors["xml"] = new XmlStreamProcessor();
         _processors["log"] = new LogStreamProcessor();
-        _processors["transform"] = new TransformStreamProcessor();
     }
 
     private StreamValidationResult ValidateStreamRequest(ConsolidatedStream.StreamProcessRequest request)

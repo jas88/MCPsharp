@@ -6,7 +6,7 @@ using static MCPsharp.Tests.Services.Consolidated.ConsolidatedStreamProcessorTes
 namespace MCPsharp.Tests.Services.Consolidated;
 
 /// <summary>
-/// Consolidated json/xml/log processors and the unsupported transform processor
+/// Consolidated json/xml/log processors
 /// </summary>
 [TestFixture]
 [Category("Unit")]
@@ -162,15 +162,5 @@ public class DocumentStreamProcessorTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Does.Contain("Unknown log level 'loud'"));
-    }
-
-    [Test]
-    public async Task Transform_IsNotSupported_AndReportsFailure()
-    {
-        var (result, output) = await RunTextAsync(new TransformStreamProcessor(), "anything");
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Does.Contain("not supported"));
-        Assert.That(output, Is.Empty);
     }
 }

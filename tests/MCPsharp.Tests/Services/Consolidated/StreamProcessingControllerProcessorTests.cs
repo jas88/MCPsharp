@@ -123,7 +123,7 @@ public class StreamProcessingControllerProcessorTests
     }
 
     [Test]
-    public async Task ProcessFile_WithTransformProcessor_ReportsNotSupported()
+    public async Task ProcessFile_WithUnknownProcessor_IsRejected()
     {
         var input = WriteInput("data.txt", "content\n");
 
@@ -135,8 +135,7 @@ public class StreamProcessingControllerProcessorTests
         });
 
         Assert.That(response.Success, Is.False);
-        Assert.That(response.Summary!.FailedFiles, Is.EqualTo(1));
-        Assert.That(response.Results![0].Error, Does.Contain("not supported"));
+        Assert.That(response.Error, Does.Contain("Unknown processor type: transform"));
     }
 
     private string WriteInput(string name, string content)

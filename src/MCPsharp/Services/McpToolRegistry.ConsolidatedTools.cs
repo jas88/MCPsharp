@@ -21,7 +21,7 @@ public partial class McpToolRegistry
     private static readonly string[] BulkOperationTypeValues = { "replace", "conditional", "refactor", "multi_edit", "file_operation" };
     private static readonly string[] BulkManagementActionValues = { "list", "cancel", "pause", "resume", "cleanup", "status" };
     private static readonly string[] StreamInputTypeValues = { "file", "directory", "multiple_files" };
-    private static readonly string[] StreamProcessorValues = { "line", "regex", "csv", "json", "binary", "xml", "log", "transform" };
+    private static readonly string[] StreamProcessorValues = { "line", "regex", "csv", "json", "binary", "xml", "log" };
 
     private const string ProcessorOptionsDescription =
         "Processor parameters (keys are case-insensitive). " +
@@ -336,7 +336,7 @@ public partial class McpToolRegistry
         new McpTool
         {
             Name = "process_stream",
-            Description = "Stream-process large files in the open project with a built-in processor (line, regex, csv, json, binary, xml, log, transform) in chunks. Returns an operation_id usable with monitor_stream.",
+            Description = "Stream-process large files in the open project with a built-in processor (line, regex, csv, json, binary, xml, log) in chunks. Returns an operation_id usable with monitor_stream.",
             InputSchema = JsonSchemaHelper.CreateSchema(
                 Prop("processor_type", "string", "Processor to apply", required: true, enumValues: StreamProcessorValues),
                 Prop("input_type", "string", "Input kind (default: file)", enumValues: StreamInputTypeValues),
