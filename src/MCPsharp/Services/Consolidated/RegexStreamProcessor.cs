@@ -12,8 +12,6 @@ namespace MCPsharp.Services.Consolidated;
 /// </summary>
 public class RegexStreamProcessor : IStreamProcessor
 {
-    private const string MaxMatchesKey = "MaxMatches";
-
     private readonly StreamingRegexProcessor _processor = new();
 
     public Task InitializeAsync(ProcessorOptions options, CancellationToken ct) => Task.CompletedTask;
@@ -22,12 +20,6 @@ public class RegexStreamProcessor : IStreamProcessor
         => StreamProcessorExecution.RunAsync("regex", () =>
         {
             var options = StreamProcessorOptionMapper.ToOptionDictionary(context.Options);
-
-            // MaxMatches is documented as "0 = unlimited", but the Streaming processor passes it straight to
-            // Regex.Replace, where only a negative count means unlimited
-            if (!options.TryGetValue(MaxMatchesKey, out var maxMatches) || maxMatches is int and <= 0)
-                options[MaxMatchesKey] = -1;
-
             var inputEncoding = StreamProcessorOptionMapper.ResolveEncoding(context.Options);
             return StreamingProcessorAdapter.ProcessLinesAsync(_processor, input, output, context, options, inputEncoding, Encoding.UTF8, ct);
         });
@@ -42,6 +34,6 @@ public class RegexStreamProcessor : IStreamProcessor
             SupportsCheckpoints = false,
             SupportsCompression = false,
             MaxFileSize = long.MaxValue,
-            OptionalParameters = new List<string> { "Pattern", "Replacement", "IgnoreCase", "Multiline", "MatchWholeLine", MaxMatchesKey, "Options" }
+            OptionalParameters = new List<string> { "Pattern", "Replacement", "IgnoreCase", "Multiline", "MatchWholeLine", "MaxMatches", "Options" }
         });
 }

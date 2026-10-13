@@ -19,6 +19,7 @@ public partial class StreamingFileProcessor
         var processedChunks = 0L;
         var processedLines = 0L;
         var processedItems = 0L;
+        var peakBufferBytes = 0L;
 
         await _progressTracker.SetPhaseAsync(operation.OperationId, "Processing");
 
@@ -48,6 +49,7 @@ public partial class StreamingFileProcessor
             };
 
             var processedChunk = await processor.ProcessChunkAsync(chunk, request.ProcessorOptions);
+            peakBufferBytes = Math.Max(peakBufferBytes, (long)buffer.Length + chunkData.Length + processedChunk.Data.Length);
 
             // Update counters
             processedBytes += bytesRead;
@@ -88,7 +90,6 @@ public partial class StreamingFileProcessor
 
         var processingTime = DateTime.UtcNow - operation.StartedAt!.Value;
         var originalSize = new FileInfo(request.FilePath).Length;
-        var memoryUsage = GC.GetTotalMemory(false);
 
         try
         {
@@ -102,9 +103,10 @@ public partial class StreamingFileProcessor
                 ChunksProcessed = processedChunks,
                 LinesProcessed = processedLines,
                 ItemsProcessed = processedItems,
-                MemoryUsage = memoryUsage,
+                // Peak size of the read buffer plus the input and processed copies of one chunk
+                MemoryUsage = peakBufferBytes,
                 ProcessingTime = processingTime,
-                ProcessingSpeedBytesPerSecond = processingTime.TotalSeconds > 0 && processedBytes > 0 ? (processedBytes / (long)processingTime.TotalSeconds) : 0,
+                ProcessingSpeedBytesPerSecond = BytesPerSecond(processedBytes, processingTime),
                 OutputFiles = new List<string> { request.OutputPath },
                 TemporaryFiles = operation.TemporaryFiles,
                 FinalCheckpoint = operation.LastCheckpoint
@@ -222,6 +224,13 @@ public partial class StreamingFileProcessor
             };
         }
     }
+
+    /// <summary>
+    /// Processing speed in bytes per second. Computed in floating point: truncating the elapsed seconds
+    /// to an integer divides by zero for any run shorter than a second.
+    /// </summary>
+    private static long BytesPerSecond(long bytes, TimeSpan elapsed)
+        => elapsed.TotalSeconds > 0 && bytes > 0 ? (long)(bytes / elapsed.TotalSeconds) : 0;
 
     private static async Task WriteCompressedAsync(Stream outputStream, byte[] data, CancellationToken cancellationToken)
     {

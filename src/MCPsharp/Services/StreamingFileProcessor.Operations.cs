@@ -159,6 +159,7 @@ public partial class StreamingFileProcessor
         var processedChunks = checkpoint.ChunksProcessed;
         var processedLines = checkpoint.LinesProcessed;
         var processedItems = 0L;
+        var peakBufferBytes = 0L;
 
         await _progressTracker.SetPhaseAsync(operation.OperationId, "Resuming from checkpoint");
 
@@ -184,6 +185,7 @@ public partial class StreamingFileProcessor
             };
 
             var processedChunk = await processor.ProcessChunkAsync(chunk, request.ProcessorOptions);
+            peakBufferBytes = Math.Max(peakBufferBytes, (long)buffer.Length + chunkData.Length + processedChunk.Data.Length);
 
             processedBytes += bytesRead;
             processedChunks++;
@@ -213,7 +215,6 @@ public partial class StreamingFileProcessor
 
         var processingTime = DateTime.UtcNow - operation.StartedAt!.Value;
         var originalSize = new FileInfo(request.FilePath).Length;
-        var memoryUsage = GC.GetTotalMemory(false);
 
         try
         {
@@ -227,9 +228,10 @@ public partial class StreamingFileProcessor
                 ChunksProcessed = processedChunks,
                 LinesProcessed = processedLines,
                 ItemsProcessed = processedItems,
-                MemoryUsage = memoryUsage,
+                // Peak size of the read buffer plus the input and processed copies of one chunk
+                MemoryUsage = peakBufferBytes,
                 ProcessingTime = processingTime,
-                ProcessingSpeedBytesPerSecond = processingTime.TotalSeconds > 0 && processedBytes > 0 ? (processedBytes / (long)processingTime.TotalSeconds) : 0,
+                ProcessingSpeedBytesPerSecond = BytesPerSecond(processedBytes, processingTime),
                 OutputFiles = new List<string> { request.OutputPath },
                 TemporaryFiles = operation.TemporaryFiles,
                 FinalCheckpoint = operation.LastCheckpoint

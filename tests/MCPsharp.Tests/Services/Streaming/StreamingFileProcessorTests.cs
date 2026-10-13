@@ -94,8 +94,7 @@ public partial class StreamingFileProcessorTests : FileServiceTestBase
         // Assert
         Assert.That(result.Success);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.BytesProcessed, Is.EqualTo(largeContent.Length));
-        Assert.That(result.BytesProcessed, Is.EqualTo(largeContent.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(new FileInfo(testFile).Length));
         Assert.That(result.ChunksProcessed, Is.GreaterThan(10)); // Should have multiple chunks
         Assert.That(result.MemoryUsage, Is.LessThan(largeContent.Length)); // Should use less memory than file size
     }

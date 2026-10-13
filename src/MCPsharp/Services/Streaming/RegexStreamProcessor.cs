@@ -55,7 +55,10 @@ public partial class RegexStreamProcessor : IStreamProcessor
 
             if (!string.IsNullOrEmpty(config.Replacement))
             {
-                processedText = regex.Replace(processedText, config.Replacement, config.MaxMatches);
+                // MaxMatches <= 0 means unlimited; Regex.Replace only treats a negative count as unlimited
+                // (a count of 0 replaces nothing)
+                var count = config.MaxMatches > 0 ? config.MaxMatches : -1;
+                processedText = regex.Replace(processedText, config.Replacement, count);
             }
             else if (config.MatchWholeLine)
             {

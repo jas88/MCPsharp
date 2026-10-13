@@ -136,8 +136,7 @@ public partial class StreamingFileProcessorTests
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
-        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(new FileInfo(testFile).Length));
         Assert.That(result.ChunksProcessed, Is.GreaterThan(0));
     }
 
@@ -154,8 +153,7 @@ public partial class StreamingFileProcessorTests
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.BytesProcessed, Is.EqualTo(0));
-        Assert.That(result.BytesProcessed, Is.EqualTo(0));
+        Assert.That(result.BytesProcessed, Is.EqualTo(new FileInfo(testFile).Length));
         // Empty files still process 1 chunk (empty chunk)
         Assert.That(result.ChunksProcessed, Is.GreaterThanOrEqualTo(0));
     }
@@ -180,8 +178,7 @@ public partial class StreamingFileProcessorTests
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
-        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(new FileInfo(testFile).Length));
     }
 
     [Test]

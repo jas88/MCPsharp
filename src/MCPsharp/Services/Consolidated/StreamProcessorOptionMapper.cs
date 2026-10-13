@@ -16,12 +16,19 @@ internal static class StreamProcessorOptionMapper
     /// converting JSON values (as produced by MCP argument deserialization) to plain CLR values.
     /// </summary>
     public static Dictionary<string, object> ToOptionDictionary(ProcessorOptions? options)
+        => ToOptionDictionary(options?.Parameters);
+
+    /// <summary>
+    /// Builds a case-insensitive option dictionary from raw processor parameters, converting JSON values
+    /// (as produced by MCP argument deserialization) to plain CLR values.
+    /// </summary>
+    public static Dictionary<string, object> ToOptionDictionary(IEnumerable<KeyValuePair<string, object>>? parameters)
     {
         var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-        if (options == null)
+        if (parameters == null)
             return result;
 
-        foreach (var (key, value) in options.Parameters)
+        foreach (var (key, value) in parameters)
         {
             var normalized = Normalize(value);
             if (normalized != null)
