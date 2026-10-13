@@ -13,6 +13,8 @@ namespace MCPsharp.Tests.Services.Consolidated;
 [Category("Streaming")]
 public class StreamProcessingControllerProcessorTests
 {
+    private static readonly string[] OriginalInputNames = ["data.txt", "more.txt"];
+
     private string _tempDir = null!;
     private StreamProcessingController _controller = null!;
 
@@ -106,6 +108,62 @@ public class StreamProcessingControllerProcessorTests
     }
 
     [Test]
+    public async Task ProcessDirectory_SameFileNameInSubdirectories_WritesSeparateOutputs()
+    {
+        var inputDir = Path.Combine(_tempDir, "in");
+        WriteFile(Path.Combine(inputDir, "one", "data.txt"), "first\n");
+        WriteFile(Path.Combine(inputDir, "two", "data.txt"), "second\n");
+        var outputDir = Path.Combine(_tempDir, "out");
+
+        var response = await _controller.ProcessStreamAsync(PrefixRequest(StreamInputType.Directory, inputDir, outputDir));
+
+        Assert.That(response.Success, Is.True, response.Error ?? response.Results?.FirstOrDefault(r => !r.Success)?.Error);
+        Assert.That(response.Summary!.SuccessfulFiles, Is.EqualTo(2));
+        Assert.That(await File.ReadAllTextAsync(Path.Combine(outputDir, "one", "data_processed.txt")), Is.EqualTo(Lines("> first")));
+        Assert.That(await File.ReadAllTextAsync(Path.Combine(outputDir, "two", "data_processed.txt")), Is.EqualTo(Lines("> second")));
+    }
+
+    [Test]
+    public async Task ProcessMultipleFiles_SameFileNameInDifferentDirectories_WritesSeparateOutputs()
+    {
+        var first = Path.Combine(_tempDir, "a", "data.txt");
+        var second = Path.Combine(_tempDir, "b", "c", "data.txt");
+        WriteFile(first, "first\n");
+        WriteFile(second, "second\n");
+        var outputDir = Path.Combine(_tempDir, "out");
+
+        var request = PrefixRequest(StreamInputType.MultipleFiles, null, outputDir);
+        request.Files = new List<string> { first, second };
+        var response = await _controller.ProcessStreamAsync(request);
+
+        Assert.That(response.Success, Is.True, response.Error ?? response.Results?.FirstOrDefault(r => !r.Success)?.Error);
+        Assert.That(await File.ReadAllTextAsync(Path.Combine(outputDir, "a", "data_processed.txt")), Is.EqualTo(Lines("> first")));
+        Assert.That(await File.ReadAllTextAsync(Path.Combine(outputDir, "b", "c", "data_processed.txt")), Is.EqualTo(Lines("> second")));
+    }
+
+    [TestCase("out")]
+    [TestCase("")]
+    public async Task ProcessDirectory_OutputInsideInput_DoesNotReprocessOutputs(string outputSubdirectory)
+    {
+        var inputDir = Path.Combine(_tempDir, "in");
+        WriteFile(Path.Combine(inputDir, "data.txt"), "line\n");
+        WriteFile(Path.Combine(inputDir, "sub", "more.txt"), "other\n");
+        var outputDir = Path.Combine(inputDir, outputSubdirectory);
+
+        for (var run = 1; run <= 2; run++)
+        {
+            var response = await _controller.ProcessStreamAsync(PrefixRequest(StreamInputType.Directory, inputDir, outputDir));
+
+            Assert.That(response.Success, Is.True, response.Error ?? response.Results?.FirstOrDefault(r => !r.Success)?.Error);
+            Assert.That(response.Results!.Select(r => Path.GetFileName(r.InputPath)), Is.EquivalentTo(OriginalInputNames), $"run {run}");
+        }
+
+        Assert.That(await File.ReadAllTextAsync(Path.Combine(outputDir, "data_processed.txt")), Is.EqualTo(Lines("> line")));
+        Assert.That(await File.ReadAllTextAsync(Path.Combine(outputDir, "sub", "more_processed.txt")), Is.EqualTo(Lines("> other")));
+        Assert.That(Directory.EnumerateFiles(inputDir, "*_processed_processed*", SearchOption.AllDirectories), Is.Empty);
+    }
+
+    [Test]
     public async Task ProcessFile_WithJsonProcessor_InvalidInput_ReportsFailure()
     {
         var input = WriteInput("bad.json", "{ \"unterminated\": ");
@@ -143,5 +201,24 @@ public class StreamProcessingControllerProcessorTests
         var path = Path.Combine(_tempDir, name);
         File.WriteAllText(path, content);
         return path;
+    }
+
+    private static StreamProcessRequest PrefixRequest(StreamInputType inputType, string? inputPath, string outputPath) => new()
+    {
+        InputType = inputType,
+        ProcessorType = "line",
+        InputPath = inputPath,
+        OutputPath = outputPath,
+        Recursive = true,
+        ProcessorOptions = new ProcessorOptions
+        {
+            Parameters = new Dictionary<string, object> { ["LinePrefix"] = "> " }
+        }
+    };
+
+    private static void WriteFile(string path, string content)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, content);
     }
 }
