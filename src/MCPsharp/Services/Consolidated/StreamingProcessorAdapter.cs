@@ -2,6 +2,7 @@ using System.Text;
 using MCPsharp.Models.Consolidated;
 using MCPsharp.Models.Streaming;
 using ChunkProcessor = MCPsharp.Services.Streaming.IStreamProcessor;
+using StreamingLineProcessor = MCPsharp.Services.Streaming.LineStreamProcessor;
 
 namespace MCPsharp.Services.Consolidated;
 
@@ -16,9 +17,11 @@ internal static class StreamingProcessorAdapter
 
     /// <summary>
     /// Processes text input line by line. Chunks always end on a line boundary so no line is split
-    /// between two chunks; lines inside a chunk are joined with <see cref="Environment.NewLine"/>,
-    /// which is what the Streaming text processors split on, and each processed chunk is written
-    /// followed by a newline.
+    /// between two chunks; each line in a chunk is terminated with <see cref="Environment.NewLine"/>,
+    /// and the chunk's metadata carries the number of its first line
+    /// (<see cref="StreamingLineProcessor.StartLineNumberKey"/>) so line numbering continues across
+    /// chunks. Processed chunks are written as returned, terminated with a newline if they are not
+    /// already.
     /// </summary>
     public static async Task<ProcessingResult> ProcessLinesAsync(
         ChunkProcessor processor,
@@ -49,14 +52,14 @@ internal static class StreamingProcessorAdapter
 
             if (batchBytes >= chunkSize)
             {
-                await ProcessTextBatchAsync(processor, output, options, chunkEncoding, batch, newLine, state, isLast: false, ct).ConfigureAwait(false);
+                await ProcessTextBatchAsync(processor, output, options, chunkEncoding, batch, linesRead - batch.Count + 1, newLine, state, isLast: false, ct).ConfigureAwait(false);
                 batch.Clear();
                 batchBytes = 0;
             }
         }
 
         if (batch.Count > 0)
-            await ProcessTextBatchAsync(processor, output, options, chunkEncoding, batch, newLine, state, isLast: true, ct).ConfigureAwait(false);
+            await ProcessTextBatchAsync(processor, output, options, chunkEncoding, batch, linesRead - batch.Count + 1, newLine, state, isLast: true, ct).ConfigureAwait(false);
 
         await output.FlushAsync(ct).ConfigureAwait(false);
 
@@ -156,21 +159,30 @@ internal static class StreamingProcessorAdapter
         Dictionary<string, object> options,
         Encoding chunkEncoding,
         List<string> batch,
+        long firstLineNumber,
         byte[] newLine,
         RunState state,
         bool isLast,
         CancellationToken ct)
     {
-        var data = chunkEncoding.GetBytes(string.Join(Environment.NewLine, batch));
-        var processed = await RunChunkAsync(processor, options, data, state, isLast).ConfigureAwait(false);
-        state.BytesRead += newLine.Length * batch.Count;
+        var text = new StringBuilder();
+        foreach (var line in batch)
+            text.Append(line).Append(Environment.NewLine);
+
+        var metadata = new Dictionary<string, object> { [StreamingLineProcessor.StartLineNumberKey] = firstLineNumber };
+        var processed = await RunChunkAsync(processor, options, chunkEncoding.GetBytes(text.ToString()), state, isLast, metadata).ConfigureAwait(false);
 
         if (processed.Data.Length == 0)
             return;
 
         await output.WriteAsync(processed.Data, ct).ConfigureAwait(false);
-        await output.WriteAsync(newLine, ct).ConfigureAwait(false);
-        state.BytesWritten += processed.Data.Length + newLine.Length;
+        state.BytesWritten += processed.Data.Length;
+
+        if (!processed.Data.AsSpan().EndsWith(newLine))
+        {
+            await output.WriteAsync(newLine, ct).ConfigureAwait(false);
+            state.BytesWritten += newLine.Length;
+        }
     }
 
     private static async Task ProcessByteChunkAsync(
@@ -196,7 +208,8 @@ internal static class StreamingProcessorAdapter
         Dictionary<string, object> options,
         byte[] data,
         RunState state,
-        bool isLast)
+        bool isLast,
+        Dictionary<string, object>? metadata = null)
     {
         var chunk = new StreamChunk
         {
@@ -204,7 +217,8 @@ internal static class StreamingProcessorAdapter
             Position = state.BytesRead,
             Length = data.Length,
             ChunkIndex = state.Chunks,
-            IsLastChunk = isLast
+            IsLastChunk = isLast,
+            Metadata = metadata ?? new Dictionary<string, object>()
         };
 
         var processed = await processor.ProcessChunkAsync(chunk, options).ConfigureAwait(false);

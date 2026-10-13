@@ -203,6 +203,10 @@ public class LineProcessorConfig
     public bool IncludeLineNumbers { get; set; }
     public string? LinePrefix { get; set; }
     public string? LineSuffix { get; set; }
+
+    /// <summary>
+    /// Drop empty and whitespace-only lines. Default false: empty lines are kept.
+    /// </summary>
     public bool RemoveEmptyLines { get; set; }
     public string? FieldSeparator { get; set; }
     public List<int> SelectedFields { get; set; } = new();

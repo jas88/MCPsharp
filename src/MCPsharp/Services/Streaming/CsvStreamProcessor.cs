@@ -39,7 +39,7 @@ public partial class CsvStreamProcessor : IStreamProcessor
     {
         var config = ParseConfig(options);
         var text = Encoding.UTF8.GetString(chunk.Data);
-        var lines = text.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+        var lines = TextChunkLines.Split(text, out var endsWithLineBreak);
         var processedLines = new List<string>();
 
         foreach (var line in lines)
@@ -86,7 +86,7 @@ public partial class CsvStreamProcessor : IStreamProcessor
             processedLines.Add(string.Join(config.Delimiter, fields));
         }
 
-        var processedText = string.Join(Environment.NewLine, processedLines);
+        var processedText = TextChunkLines.Join(processedLines, endsWithLineBreak);
         var processedData = Encoding.UTF8.GetBytes(processedText);
 
         return new StreamChunk

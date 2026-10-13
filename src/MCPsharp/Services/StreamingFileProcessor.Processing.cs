@@ -1,5 +1,6 @@
 using System.Text;
 using MCPsharp.Models.Streaming;
+using MCPsharp.Services.Streaming;
 
 namespace MCPsharp.Services;
 
@@ -13,7 +14,8 @@ public partial class StreamingFileProcessor
         using var inputStream = new FileStream(request.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var outputStream = new FileStream(request.OutputPath, FileMode.Create, FileAccess.Write, FileShare.None);
 
-        var buffer = new byte[request.ChunkSize];
+        var reader = CreateChunkReader(inputStream, request);
+        var nextLineNumber = 1L;
         var chunkIndex = 0;
         var processedBytes = 0L;
         var processedChunks = 0L;
@@ -27,29 +29,29 @@ public partial class StreamingFileProcessor
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var bytesRead = await inputStream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
-            if (bytesRead == 0)
+            var chunkData = await reader.ReadChunkAsync(cancellationToken);
+            if (chunkData == null)
                 break;
 
-            var chunkData = new byte[bytesRead];
-            Array.Copy(buffer, chunkData, bytesRead);
-
+            var bytesRead = chunkData.Length;
             var chunk = new StreamChunk
             {
                 Data = chunkData,
                 Position = processedBytes,
                 Length = bytesRead,
                 ChunkIndex = chunkIndex,
-                IsLastChunk = inputStream.Position == inputStream.Length,
+                IsLastChunk = reader.IsAtEnd,
                 Metadata = new Dictionary<string, object>
                 {
                     ["ChunkIndex"] = chunkIndex,
-                    ["OriginalSize"] = bytesRead
+                    ["OriginalSize"] = bytesRead,
+                    [LineStreamProcessor.StartLineNumberKey] = nextLineNumber
                 }
             };
 
             var processedChunk = await processor.ProcessChunkAsync(chunk, request.ProcessorOptions);
-            peakBufferBytes = Math.Max(peakBufferBytes, (long)buffer.Length + chunkData.Length + processedChunk.Data.Length);
+            peakBufferBytes = Math.Max(peakBufferBytes, (long)reader.BufferSize + chunkData.Length + processedChunk.Data.Length);
+            nextLineNumber += TextChunkLines.CountLineBreaks(chunkData);
 
             // Update counters
             processedBytes += bytesRead;
@@ -224,6 +226,13 @@ public partial class StreamingFileProcessor
             };
         }
     }
+
+    /// <summary>
+    /// Creates the chunk reader for a request. Text processors get line-aligned chunks so no line is
+    /// split between two chunks; the binary processor gets fixed-size chunks.
+    /// </summary>
+    private static StreamChunkReader CreateChunkReader(Stream inputStream, StreamProcessRequest request)
+        => new(inputStream, (int)request.ChunkSize, alignToLines: request.ProcessorType != StreamProcessorType.BinaryProcessor);
 
     /// <summary>
     /// Processing speed in bytes per second. Computed in floating point: truncating the elapsed seconds

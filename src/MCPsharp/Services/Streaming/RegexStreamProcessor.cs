@@ -75,7 +75,8 @@ public partial class RegexStreamProcessor : IStreamProcessor
                     }
                 }
 
-                processedText = string.Join(Environment.NewLine, matchingLines);
+                var endsWithLineBreak = processedText.Length > 0 && processedText[^1] is '\n' or '\r';
+                processedText = TextChunkLines.Join(matchingLines, endsWithLineBreak);
             }
         }
 

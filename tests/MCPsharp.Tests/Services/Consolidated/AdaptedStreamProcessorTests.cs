@@ -42,6 +42,40 @@ public class AdaptedStreamProcessorTests
     }
 
     [Test]
+    public async Task Line_IncludeLineNumbers_ContinueAcrossChunks()
+    {
+        var lines = Enumerable.Range(1, 30).Select(i => $"row {i}").ToArray();
+
+        var (result, output) = await RunTextAsync(new LineStreamProcessor(), string.Join("\n", lines),
+            new Dictionary<string, object> { ["IncludeLineNumbers"] = true }, chunkSize: 16);
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That((long)result.Metrics!["ChunksProcessed"], Is.GreaterThan(1));
+        Assert.That(output, Is.EqualTo(Lines(lines.Select((l, i) => $"{i + 1}: {l}").ToArray())));
+    }
+
+    [TestCase(65536)]
+    [TestCase(1)]
+    public async Task Line_EmptyLines_ArePreservedByDefault(int chunkSize)
+    {
+        var (result, output) = await RunTextAsync(new LineStreamProcessor(), "a\n\nb\n\n\nc\n",
+            new Dictionary<string, object>(), chunkSize: chunkSize);
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(output, Is.EqualTo(Lines("a", "", "b", "", "", "c")));
+    }
+
+    [Test]
+    public async Task Line_RemoveEmptyLines_DropsThem()
+    {
+        var (result, output) = await RunTextAsync(new LineStreamProcessor(), "a\n\nb\n  \nc\n",
+            new Dictionary<string, object> { ["RemoveEmptyLines"] = true });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(output, Is.EqualTo(Lines("a", "b", "c")));
+    }
+
+    [Test]
     public async Task Line_InvalidFilterRegex_ReportsFailure()
     {
         var (result, _) = await RunTextAsync(new LineStreamProcessor(), "text\n",

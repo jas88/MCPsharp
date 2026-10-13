@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MCPsharp.Models.Streaming;
+using MCPsharp.Services.Streaming;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;
@@ -153,7 +154,8 @@ public partial class StreamingFileProcessor
         // Seek to checkpoint position
         inputStream.Seek(checkpoint.Position, SeekOrigin.Begin);
 
-        var buffer = new byte[request.ChunkSize];
+        var reader = CreateChunkReader(inputStream, request);
+        var nextLineNumber = 1 + await CountLineBreaksBeforeAsync(request.FilePath, checkpoint.Position, cancellationToken);
         var chunkIndex = checkpoint.ChunksProcessed;
         var processedBytes = checkpoint.BytesProcessed;
         var processedChunks = checkpoint.ChunksProcessed;
@@ -167,25 +169,27 @@ public partial class StreamingFileProcessor
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var bytesRead = await inputStream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
-            if (bytesRead == 0)
+            var chunkData = await reader.ReadChunkAsync(cancellationToken);
+            if (chunkData == null)
                 break;
 
-            var chunkData = new byte[bytesRead];
-            Array.Copy(buffer, chunkData, bytesRead);
-
+            var bytesRead = chunkData.Length;
             var chunk = new StreamChunk
             {
                 Data = chunkData,
                 Position = processedBytes,
                 Length = bytesRead,
                 ChunkIndex = chunkIndex,
-                IsLastChunk = inputStream.Position == inputStream.Length,
-                Metadata = checkpoint.CustomState
+                IsLastChunk = reader.IsAtEnd,
+                Metadata = new Dictionary<string, object>(checkpoint.CustomState)
+                {
+                    [LineStreamProcessor.StartLineNumberKey] = nextLineNumber
+                }
             };
 
             var processedChunk = await processor.ProcessChunkAsync(chunk, request.ProcessorOptions);
-            peakBufferBytes = Math.Max(peakBufferBytes, (long)buffer.Length + chunkData.Length + processedChunk.Data.Length);
+            peakBufferBytes = Math.Max(peakBufferBytes, (long)reader.BufferSize + chunkData.Length + processedChunk.Data.Length);
+            nextLineNumber += TextChunkLines.CountLineBreaks(chunkData);
 
             processedBytes += bytesRead;
             processedChunks++;
@@ -242,6 +246,38 @@ public partial class StreamingFileProcessor
             LogErrorCreatingStreamResultProcessedBytesProcessingTime(_logger, ex, processedBytes, processingTime, processingTime.TotalSeconds);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Counts the line breaks in the first <paramref name="length"/> bytes of a file, so line numbering
+    /// continues correctly when processing resumes from a checkpoint. Checkpoints of text processors fall
+    /// on line boundaries, so a "\r\n" pair is never split between the counted prefix and the rest.
+    /// </summary>
+    private static async Task<long> CountLineBreaksBeforeAsync(string filePath, long length, CancellationToken cancellationToken)
+    {
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var buffer = new byte[81920];
+        var remaining = length;
+        var count = 0L;
+        var previousEndedWithCarriageReturn = false;
+
+        while (remaining > 0)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), cancellationToken);
+            if (read == 0)
+                break;
+
+            count += TextChunkLines.CountLineBreaks(buffer.AsSpan(0, read));
+
+            // A "\r\n" split across two reads was counted twice: once for the '\r' and once for the '\n'
+            if (previousEndedWithCarriageReturn && buffer[0] == '\n')
+                count--;
+
+            previousEndedWithCarriageReturn = buffer[read - 1] == '\r';
+            remaining -= read;
+        }
+
+        return count;
     }
 
     private async Task SaveCheckpointAsync(CheckpointData checkpoint)

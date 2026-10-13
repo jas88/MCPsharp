@@ -8,11 +8,17 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MCPsharp.Services.Streaming;
 
 /// <summary>
-/// Line-based stream processor for text files
+/// Line-based stream processor for text files. Empty lines are kept unless the RemoveEmptyLines option
+/// is true (TrimWhitespace, on by default, makes whitespace-only lines empty). With IncludeLineNumbers,
+/// lines are numbered from the chunk's <see cref="StartLineNumberKey"/> metadata value.
 /// </summary>
 public partial class LineStreamProcessor : IStreamProcessor
 {
-    private static readonly string[] LineSeparators = { "\r\n", "\n", "\r" };
+    /// <summary>
+    /// Chunk metadata key holding the line number of the chunk's first line (long or int, default 1)
+    /// </summary>
+    public const string StartLineNumberKey = "StartLineNumber";
+
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
     private readonly ILogger<LineStreamProcessor> _logger;
 
@@ -41,20 +47,23 @@ public partial class LineStreamProcessor : IStreamProcessor
     private static StreamChunk ProcessChunk(StreamChunk chunk, Dictionary<string, object> options)
     {
         var config = ParseConfig(options);
-        var lines = ExtractLines(chunk, config.Encoding ?? Encoding.UTF8);
+        var encoding = config.Encoding ?? Encoding.UTF8;
+        var lines = TextChunkLines.Split(encoding.GetString(chunk.Data), out var endsWithLineBreak);
+        var firstLineNumber = GetStartLineNumber(chunk);
         var processedLines = new List<string>();
 
         for (var i = 0; i < lines.Count; i++)
         {
-            var processedLine = ProcessLine(lines[i], config, i + 1);
-            if (!string.IsNullOrEmpty(processedLine))
+            // Null means the line was filtered out; an empty string is an empty line and is kept
+            var processedLine = ProcessLine(lines[i], config, firstLineNumber + i);
+            if (processedLine != null)
             {
                 processedLines.Add(processedLine);
             }
         }
 
-        var processedText = string.Join(Environment.NewLine, processedLines);
-        var processedData = (config.Encoding ?? Encoding.UTF8).GetBytes(processedText);
+        var processedText = TextChunkLines.Join(processedLines, endsWithLineBreak);
+        var processedData = encoding.GetBytes(processedText);
 
         return new StreamChunk
         {
@@ -69,6 +78,17 @@ public partial class LineStreamProcessor : IStreamProcessor
             Checksum = ComputeChecksum(processedData)
         };
     }
+
+    /// <summary>
+    /// Line number of the chunk's first line, from <see cref="StartLineNumberKey"/> in the chunk metadata
+    /// (1 when absent). Callers that split one input into several chunks set it so numbering continues
+    /// across chunks; keeping it on the chunk rather than in the processor lets one processor instance
+    /// serve concurrent runs.
+    /// </summary>
+    private static long GetStartLineNumber(StreamChunk chunk)
+        => chunk.Metadata.TryGetValue(StartLineNumberKey, out var value)
+            ? value switch { long number => number, int number => number, _ => 1 }
+            : 1;
 
     public Task<bool> ValidateOptionsAsync(Dictionary<string, object> options)
     {
@@ -121,24 +141,8 @@ public partial class LineStreamProcessor : IStreamProcessor
         return config;
     }
 
-    private static List<string> ExtractLines(StreamChunk chunk, Encoding encoding)
+    private static string? ProcessLine(string line, LineProcessorConfig config, long lineNumber)
     {
-        var text = encoding.GetString(chunk.Data);
-        var lines = text.Split(LineSeparators, StringSplitOptions.None).ToList();
-
-        // Handle the case where the last line might be incomplete
-        if (!chunk.IsLastChunk && lines.Count > 0 && !text.EndsWith(Environment.NewLine, StringComparison.Ordinal))
-        {
-            // Keep the last line as it might be continued in the next chunk
-            return lines;
-        }
-
-        return lines;
-    }
-
-    private static string? ProcessLine(string line, LineProcessorConfig config, long lineNumber = 0)
-    {
-
         // Trim whitespace if configured
         if (config.TrimWhitespace)
         {

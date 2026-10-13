@@ -6,8 +6,9 @@ namespace MCPsharp.Services.Consolidated;
 
 /// <summary>
 /// Line processor: filters and rewrites text lines using <see cref="StreamingLineProcessor"/>.
-/// Parameters: LineFilter, LineReplacement, LinePrefix, LineSuffix, RemoveEmptyLines, TrimWhitespace,
-/// FieldSeparator, SelectedFields, IncludeLineNumbers (numbers restart in each chunk), Encoding.
+/// Parameters: LineFilter, LineReplacement, LinePrefix, LineSuffix, RemoveEmptyLines (default false:
+/// empty lines are kept), TrimWhitespace, FieldSeparator, SelectedFields, IncludeLineNumbers (numbered
+/// continuously across chunks), Encoding.
 /// </summary>
 public class LineStreamProcessor : IStreamProcessor
 {
