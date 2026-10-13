@@ -92,6 +92,21 @@ public class DocumentStreamProcessorTests
         Assert.That(output.ReplaceLineEndings("\n"), Does.EndWith("<root>\n  <a>\n    <b />\n  </a>\n</root>"));
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task Xml_CarriageReturnReferences_SurviveRoundTrip(bool indent)
+    {
+        var (result, output) = await RunTextAsync(new XmlStreamProcessor(),
+            "<r a=\"x&#xD;&#xA;y\">a&#xD;b</r>",
+            new Dictionary<string, object> { ["Indent"] = indent });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(output, Does.Contain("a&#xD;b"));
+        var reparsed = System.Xml.Linq.XDocument.Parse(output).Root!;
+        Assert.That(reparsed.Value, Is.EqualTo("a\rb"));
+        Assert.That(reparsed.Attribute("a")!.Value, Is.EqualTo("x\r\ny"));
+    }
+
     [TestCase("<root><a></root>")]
     [TestCase("<!DOCTYPE root [<!ENTITY e \"x\">]><root>&e;</root>")]
     public async Task Xml_MalformedOrDtd_ReportsFailure(string xml)

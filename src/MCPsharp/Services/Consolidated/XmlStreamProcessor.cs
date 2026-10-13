@@ -43,8 +43,10 @@ public class XmlStreamProcessor : IStreamProcessor
         {
             Async = true,
             Indent = indent,
-            // Without indenting, copy the document's own line breaks rather than converting them to Environment.NewLine
-            NewLineHandling = indent ? NewLineHandling.Replace : NewLineHandling.None,
+            // Keep the document's own (reader-normalized) line breaks in text as-is, but write any character the
+            // next parse would normalize away as a reference: a lone CR in text and line breaks in attributes.
+            // Replace would turn a CR from &#xD; into a line break and None would write it raw, losing it either way.
+            NewLineHandling = NewLineHandling.Entitize,
             Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             CloseOutput = false
         };
