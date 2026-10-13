@@ -77,10 +77,22 @@ public partial class StreamProcessingController
 
             try
             {
+                // Resolve the inputs before writing anything, so the step count is exact and a request
+                // that would write several inputs to one existing file is rejected up front
+                var selection = SelectInputs(request);
+                if (selection is { Files.Count: > 1 } && !string.IsNullOrEmpty(request.OutputPath) && File.Exists(request.OutputPath))
+                {
+                    response.Error = $"Output path must be a directory when processing several files: {request.OutputPath}";
+                    response.Success = false;
+                    context.Status = StreamStatus.Failed;
+                    context.AddLog(response.Error);
+                    return response;
+                }
+
                 // Initialize progress tracking
                 if (_progressTracker != null)
                 {
-                    var estimatedSteps = EstimateProcessingSteps(request);
+                    var estimatedSteps = selection?.Count ?? 10;
                     context.ProgressId = await _progressTracker.StartTrackingAsync(operationId, new ProgressInfo
                     {
                         Title = $"Stream processing with {request.ProcessorType}",
@@ -101,14 +113,14 @@ public partial class StreamProcessingController
                 }
 
                 // Process based on input type
-                var results = request.InputType switch
-                {
-                    StreamInputType.File => await ProcessFileStreamAsync(request, processor, context, ct),
-                    StreamInputType.Directory => await ProcessDirectoryStreamAsync(request, processor, context, ct),
-                    StreamInputType.MultipleFiles => await ProcessMultipleFilesStreamAsync(request, processor, context, ct),
-                    StreamInputType.Stream => ProcessDataStream(),
-                    _ => throw new ArgumentException($"Unsupported input type: {request.InputType}")
-                };
+                var results = selection != null
+                    ? await ProcessFilesAsync(request, processor, context, selection, ct)
+                    : request.InputType switch
+                    {
+                        StreamInputType.File => await ProcessFileStreamAsync(request, processor, context, ct),
+                        StreamInputType.Stream => ProcessDataStream(),
+                        _ => throw new ArgumentException($"Unsupported input type: {request.InputType}")
+                    };
 
                 response.Results = results;
                 response.Summary = new StreamProcessSummary
@@ -268,18 +280,6 @@ public partial class StreamProcessingController
             };
         }
 
-        // Several inputs can't share one output file: each result would overwrite the previous one
-        if (request.InputType is StreamInputType.Directory or StreamInputType.MultipleFiles
-            && !string.IsNullOrEmpty(request.OutputPath)
-            && File.Exists(request.OutputPath))
-        {
-            return new StreamValidationResult
-            {
-                IsValid = false,
-                ErrorMessage = $"Output path must be a directory when processing several files: {request.OutputPath}"
-            };
-        }
-
         return new StreamValidationResult { IsValid = true };
     }
 
@@ -293,17 +293,6 @@ public partial class StreamProcessingController
 
         // Try to create processor from factory if available
         return null;
-    }
-
-    private static int EstimateProcessingSteps(ConsolidatedStream.StreamProcessRequest request)
-    {
-        return request.InputType switch
-        {
-            StreamInputType.File => 10,
-            StreamInputType.Directory => request.Files?.Count ?? 100,
-            StreamInputType.MultipleFiles => request.Files?.Count ?? 10,
-            _ => 10
-        };
     }
 
     private static void CleanupStreamContext(StreamOperationContext context)

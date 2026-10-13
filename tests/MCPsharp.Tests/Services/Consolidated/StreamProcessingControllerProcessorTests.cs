@@ -203,6 +203,93 @@ public class StreamProcessingControllerProcessorTests
     }
 
     [Test]
+    public async Task ProcessDirectory_SingleMatchingFileWithExistingOutputFile_WritesToThatFile()
+    {
+        var inputDir = Path.Combine(_tempDir, "in");
+        WriteFile(Path.Combine(inputDir, "a.txt"), "first\n");
+        WriteFile(Path.Combine(inputDir, "b.log"), "ignored\n");
+        var outputFile = WriteInput("existing.txt", "old\n");
+
+        var request = PrefixRequest(StreamInputType.Directory, inputDir, outputFile);
+        request.SearchPattern = "*.txt";
+        var response = await _controller.ProcessStreamAsync(request);
+
+        Assert.That(response.Success, Is.True, response.Error ?? response.Results?.FirstOrDefault(r => !r.Success)?.Error);
+        Assert.That(response.Summary!.TotalFiles, Is.EqualTo(1));
+        Assert.That(await File.ReadAllTextAsync(outputFile), Is.EqualTo(Lines("> first")));
+    }
+
+    [Test]
+    public async Task ProcessMultipleFiles_SingleFileWithExistingOutputFile_WritesToThatFile()
+    {
+        var input = WriteInput("data.txt", "only\n");
+        var outputFile = WriteInput("existing.txt", "old\n");
+
+        var request = PrefixRequest(StreamInputType.MultipleFiles, null, outputFile);
+        request.Files = new List<string> { input };
+        var response = await _controller.ProcessStreamAsync(request);
+
+        Assert.That(response.Success, Is.True, response.Error ?? response.Results?.FirstOrDefault(r => !r.Success)?.Error);
+        Assert.That(response.Summary!.TotalFiles, Is.EqualTo(1));
+        Assert.That(await File.ReadAllTextAsync(outputFile), Is.EqualTo(Lines("> only")));
+    }
+
+    [Test]
+    public async Task ProcessMultipleFiles_TwoFilesWithExistingOutputFile_IsRejected()
+    {
+        var first = WriteInput("a.txt", "first\n");
+        var second = WriteInput("b.txt", "second\n");
+        var outputFile = WriteInput("existing.txt", "keep me\n");
+
+        var request = PrefixRequest(StreamInputType.MultipleFiles, null, outputFile);
+        request.Files = new List<string> { first, second };
+        var response = await _controller.ProcessStreamAsync(request);
+
+        Assert.That(response.Success, Is.False);
+        Assert.That(response.Error, Is.EqualTo($"Output path must be a directory when processing several files: {outputFile}"));
+        Assert.That(File.ReadAllText(outputFile), Is.EqualTo("keep me\n"));
+    }
+
+    [Test]
+    public async Task ProcessMultipleFiles_AllPathsMissing_ReportsEachAsFailed()
+    {
+        var missing = new List<string> { Path.Combine(_tempDir, "nope.txt"), Path.Combine(_tempDir, "gone.txt") };
+
+        var request = PrefixRequest(StreamInputType.MultipleFiles, null, Path.Combine(_tempDir, "out"));
+        request.Files = missing;
+        var response = await _controller.ProcessStreamAsync(request);
+
+        Assert.That(response.Success, Is.False);
+        var results = response.Results!;
+        Assert.That(results.Select(r => r.InputPath), Is.EqualTo(missing));
+        Assert.That(results.Select(r => r.Success), Is.All.False);
+        Assert.That(results.Select(r => r.Error), Is.EqualTo(missing.Select(path => $"File not found: {path}")));
+        Assert.That(response.Summary!.TotalFiles, Is.EqualTo(2));
+        Assert.That(response.Summary.FailedFiles, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task ProcessMultipleFiles_OneMissing_ProcessesTheOtherAndReportsMissingAsFailed()
+    {
+        var present = WriteInput("data.txt", "here\n");
+        var missing = Path.Combine(_tempDir, "nope.txt");
+        var outputDir = Path.Combine(_tempDir, "out");
+
+        var request = PrefixRequest(StreamInputType.MultipleFiles, null, outputDir);
+        request.Files = new List<string> { missing, present };
+        var response = await _controller.ProcessStreamAsync(request);
+
+        Assert.That(response.Success, Is.False);
+        Assert.That(response.Summary!.TotalFiles, Is.EqualTo(2));
+        Assert.That(response.Summary.SuccessfulFiles, Is.EqualTo(1));
+        Assert.That(response.Summary.FailedFiles, Is.EqualTo(1));
+        var failed = response.Results!.Single(r => !r.Success);
+        Assert.That(failed.InputPath, Is.EqualTo(missing));
+        Assert.That(failed.Error, Is.EqualTo($"File not found: {missing}"));
+        Assert.That(await File.ReadAllTextAsync(Path.Combine(outputDir, "data_processed.txt")), Is.EqualTo(Lines("> here")));
+    }
+
+    [Test]
     public async Task ProcessFile_WithUnknownProcessor_IsRejected()
     {
         var input = WriteInput("data.txt", "content\n");
