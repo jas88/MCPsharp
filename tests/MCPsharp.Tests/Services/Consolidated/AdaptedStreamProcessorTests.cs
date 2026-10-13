@@ -146,6 +146,17 @@ public class AdaptedStreamProcessorTests
     }
 
     [Test]
+    public async Task Csv_SelectedQuotedColumn_IsRequotedInOutput()
+    {
+        var (result, output) = await RunTextAsync(new CsvStreamProcessor(),
+            "name,\"city, region\",note\nann,\"Leeds, UK\",\"said \"\"hi\"\"\"\n",
+            new Dictionary<string, object> { ["SelectedColumnIndexes"] = new List<object> { 1, 2, 0 } });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(output, Is.EqualTo(Lines("\"city, region\",note,name", "\"Leeds, UK\",\"said \"\"hi\"\"\",ann")));
+    }
+
+    [Test]
     public async Task Csv_ColumnIndexesFromJson_AreHonoured()
     {
         var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(

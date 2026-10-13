@@ -83,7 +83,7 @@ public partial class CsvStreamProcessor : IStreamProcessor
                 fields = fields.Select(f => f?.Trim() ?? "").ToArray();
             }
 
-            processedLines.Add(string.Join(config.Delimiter, fields));
+            processedLines.Add(string.Join(config.Delimiter, fields.Select(f => QuoteField(f, config))));
         }
 
         var processedText = TextChunkLines.Join(processedLines, endsWithLineBreak);
@@ -144,9 +144,30 @@ public partial class CsvStreamProcessor : IStreamProcessor
         return config;
     }
 
+    /// <summary>
+    /// Quotes a field for output per RFC 4180 when it contains the delimiter, the quote character or a
+    /// line break, doubling any embedded quote characters.
+    /// </summary>
+    internal static string QuoteField(string field, CsvProcessorConfig config)
+    {
+        var quote = config.QuoteCharacter;
+        if (string.IsNullOrEmpty(quote))
+            return field;
+
+        var needsQuoting = field.Contains(config.Delimiter, StringComparison.Ordinal)
+            || field.Contains(quote, StringComparison.Ordinal)
+            || field.AsSpan().IndexOfAny('\r', '\n') >= 0;
+
+        return needsQuoting
+            ? string.Concat(quote, field.Replace(quote, quote + quote, StringComparison.Ordinal), quote)
+            : field;
+    }
+
     private static string[] ParseCsvLine(string line, CsvProcessorConfig config)
     {
-        // Simple CSV parsing - in practice, you might want to use a more robust CSV library
+        // Simple CSV parsing - in practice, you might want to use a more robust CSV library.
+        // Rows are parsed one line at a time, so a quoted field containing a line break that spans
+        // lines (or chunks) is not supported.
         var result = new List<string>();
         var current = new StringBuilder();
         var inQuotes = false;
