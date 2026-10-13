@@ -43,6 +43,8 @@ public class XmlStreamProcessor : IStreamProcessor
         {
             Async = true,
             Indent = indent,
+            // Without indenting, copy the document's own line breaks rather than converting them to Environment.NewLine
+            NewLineHandling = indent ? NewLineHandling.Replace : NewLineHandling.None,
             Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             CloseOutput = false
         };
