@@ -98,17 +98,14 @@ public sealed partial class ProjectDatabase
         return null;
     }
 
-    private static readonly string[] StatsTables =
-        ["projects", "files", "symbols", "symbol_references", "analysis_results"];
-
-    // One column per entry in StatsTables, in the same order.
+    // Each column is aliased with the table it counts; the aliases become the stats dictionary keys
     private const string TableCountsQuery = @"
             SELECT
-                (SELECT COUNT(*) FROM projects),
-                (SELECT COUNT(*) FROM files),
-                (SELECT COUNT(*) FROM symbols),
-                (SELECT COUNT(*) FROM symbol_references),
-                (SELECT COUNT(*) FROM analysis_results)";
+                (SELECT COUNT(*) FROM projects) AS projects,
+                (SELECT COUNT(*) FROM files) AS files,
+                (SELECT COUNT(*) FROM symbols) AS symbols,
+                (SELECT COUNT(*) FROM symbol_references) AS symbol_references,
+                (SELECT COUNT(*) FROM analysis_results) AS analysis_results";
 
     /// <summary>
     /// Updates project statistics.
@@ -239,9 +236,9 @@ public sealed partial class ProjectDatabase
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            for (var i = 0; i < StatsTables.Length; i++)
+            for (var i = 0; i < reader.FieldCount; i++)
             {
-                stats[StatsTables[i]] = reader.GetInt64(i);
+                stats[reader.GetName(i)] = reader.GetInt64(i);
             }
         }
 

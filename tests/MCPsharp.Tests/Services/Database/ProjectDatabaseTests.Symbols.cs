@@ -1,4 +1,6 @@
 using MCPsharp.Models.Database;
+using MCPsharp.Services.Database;
+using Microsoft.Data.Sqlite;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.Database;
@@ -155,6 +157,71 @@ public partial class ProjectDatabaseTests
 
         // Assert
         Assert.That(symbols, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public async Task SearchSymbolsAsync_KindsAndNamespacesWithoutQuery_AppliesEachFilter()
+    {
+        // Arrange
+        var projectId = await _db.GetOrCreateProjectAsync("/test/path", "TestProject");
+        var fileId = await _db.UpsertFileAsync(projectId, "Program.cs", "hash1", 100, "csharp");
+
+        await _db.UpsertSymbolAsync(CreateTestSymbol(fileId, "A", "Class", ns: "N1"));
+        await _db.UpsertSymbolAsync(CreateTestSymbol(fileId, "B", "Interface", ns: "N2"));
+        await _db.UpsertSymbolAsync(CreateTestSymbol(fileId, "C", "Method", ns: "N1"));
+        await _db.UpsertSymbolAsync(CreateTestSymbol(fileId, "D", "Class", ns: "N3"));
+
+        // Act
+        var both = await _db.SearchSymbolsAsync(kinds: ["Class", "Interface"], namespaces: ["N1", "N2"]);
+        var kindsOnly = await _db.SearchSymbolsAsync(kinds: ["Class"]);
+        var namespacesOnly = await _db.SearchSymbolsAsync(namespaces: ["N1"]);
+        var emptyLists = await _db.SearchSymbolsAsync(kinds: [], namespaces: []);
+
+        // Assert
+        Assert.That(string.Join(",", both.Select(s => s.Name)), Is.EqualTo("A,B"));
+        Assert.That(string.Join(",", kindsOnly.Select(s => s.Name)), Is.EqualTo("A,D"));
+        Assert.That(string.Join(",", namespacesOnly.Select(s => s.Name)), Is.EqualTo("A,C"));
+        Assert.That(emptyLists, Has.Count.EqualTo(4));
+    }
+
+    [Test]
+    public async Task SearchSymbolsByKindQuery_UsesKindIndex()
+    {
+        var plan = await ExplainSymbolSearchAsync(cmd => cmd.CommandText = "EXPLAIN QUERY PLAN " + ProjectDatabase.SearchSymbolsByKindQuery);
+
+        Assert.That(plan, Has.Some.Contains("USING INDEX idx_symbols_kind"), string.Join("; ", plan));
+    }
+
+    [Test]
+    public async Task SearchSymbolsByNamespaceQuery_UsesNamespaceIndex()
+    {
+        var plan = await ExplainSymbolSearchAsync(cmd => cmd.CommandText = "EXPLAIN QUERY PLAN " + ProjectDatabase.SearchSymbolsByNamespaceQuery);
+
+        Assert.That(plan, Has.Some.Contains("USING INDEX idx_symbols_namespace"), string.Join("; ", plan));
+    }
+
+    private static async Task<List<string>> ExplainSymbolSearchAsync(Action<SqliteCommand> setCommandText)
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using (var create = connection.CreateCommand())
+        {
+            create.CommandText = ProjectDatabaseSchema.CreateAllTables;
+            await create.ExecuteNonQueryAsync();
+        }
+
+        await using var explain = connection.CreateCommand();
+        setCommandText(explain);
+        explain.Parameters.AddWithValue("$query", DBNull.Value);
+        explain.Parameters.AddWithValue("$kinds", "[\"Class\"]");
+        explain.Parameters.AddWithValue("$namespaces", "[\"N1\"]");
+        explain.Parameters.AddWithValue("$limit", 100);
+
+        var plan = new List<string>();
+        await using var reader = await explain.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            plan.Add(reader.GetString(3));
+        return plan;
     }
 
     [Test]

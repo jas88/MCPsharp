@@ -324,11 +324,14 @@ public partial class ProjectDatabaseTests
         var stats = await _db.GetDatabaseStatsAsync();
 
         // Assert
-        Assert.That(stats, Does.ContainKey("projects"));
-        Assert.That(stats["projects"], Is.EqualTo(1));
-        Assert.That(stats, Does.ContainKey("files"));
-        Assert.That(stats, Does.ContainKey("symbols"));
-        Assert.That(stats, Does.ContainKey("symbol_references"));
+        Assert.That(stats, Is.EquivalentTo(new Dictionary<string, long>
+        {
+            ["projects"] = 1,
+            ["files"] = 0,
+            ["symbols"] = 0,
+            ["symbol_references"] = 0,
+            ["analysis_results"] = 0
+        }));
     }
 
     #endregion

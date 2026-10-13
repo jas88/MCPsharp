@@ -187,18 +187,33 @@ public sealed partial class ProjectDatabase
         await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private const string SearchSymbolsQuery = @"
+    // One fixed query per combination of active list filters, so SQLite can use the kind/namespace
+    // indexes (a "$p IS NULL OR ..." guard would prevent that). The name filter is a substring LIKE,
+    // which cannot use an index, so it stays optional via NULL.
+    private const string SearchSymbolsSelect = @"
             SELECT id, file_id, name, kind, namespace, containing_type, line, column, end_line, end_column, accessibility, signature
             FROM symbols
-            WHERE ($query IS NULL OR name LIKE $query)
-              AND ($kinds IS NULL OR kind IN (SELECT value FROM json_each($kinds)))
-              AND ($namespaces IS NULL OR namespace IN (SELECT value FROM json_each($namespaces)))
+            WHERE ($query IS NULL OR name LIKE $query)";
+
+    private const string KindFilter = @"
+              AND kind IN (SELECT value FROM json_each($kinds))";
+
+    private const string NamespaceFilter = @"
+              AND namespace IN (SELECT value FROM json_each($namespaces))";
+
+    private const string SearchSymbolsOrder = @"
             ORDER BY name LIMIT $limit";
 
-    private static object ToJsonArrayOrNull(IEnumerable<string>? values)
+    private const string SearchSymbolsQuery = SearchSymbolsSelect + SearchSymbolsOrder;
+    internal const string SearchSymbolsByKindQuery = SearchSymbolsSelect + KindFilter + SearchSymbolsOrder;
+    internal const string SearchSymbolsByNamespaceQuery = SearchSymbolsSelect + NamespaceFilter + SearchSymbolsOrder;
+    private const string SearchSymbolsByKindAndNamespaceQuery =
+        SearchSymbolsSelect + KindFilter + NamespaceFilter + SearchSymbolsOrder;
+
+    private static string? ToJsonArrayOrNull(IEnumerable<string>? values)
     {
         var list = values?.ToList();
-        return list is { Count: > 0 } ? JsonSerializer.Serialize(list) : DBNull.Value;
+        return list is { Count: > 0 } ? JsonSerializer.Serialize(list) : null;
     }
 
     /// <summary>
@@ -216,12 +231,32 @@ public sealed partial class ProjectDatabase
 
         await using var cmd = conn.CreateCommand();
 
-        // Fixed command text: optional filters are disabled by passing NULL, and the
-        // kind/namespace lists are bound as JSON arrays expanded with json_each.
-        cmd.CommandText = SearchSymbolsQuery;
+        // Fixed command text per filter combination; the kind/namespace lists are bound as JSON arrays
+        // expanded with json_each.
+        var kindsJson = ToJsonArrayOrNull(kinds);
+        var namespacesJson = ToJsonArrayOrNull(namespaces);
+        if (kindsJson != null && namespacesJson != null)
+        {
+            cmd.CommandText = SearchSymbolsByKindAndNamespaceQuery;
+        }
+        else if (kindsJson != null)
+        {
+            cmd.CommandText = SearchSymbolsByKindQuery;
+        }
+        else if (namespacesJson != null)
+        {
+            cmd.CommandText = SearchSymbolsByNamespaceQuery;
+        }
+        else
+        {
+            cmd.CommandText = SearchSymbolsQuery;
+        }
+
         cmd.Parameters.AddWithValue("$query", string.IsNullOrEmpty(query) ? DBNull.Value : $"%{query}%");
-        cmd.Parameters.AddWithValue("$kinds", ToJsonArrayOrNull(kinds));
-        cmd.Parameters.AddWithValue("$namespaces", ToJsonArrayOrNull(namespaces));
+        if (kindsJson != null)
+            cmd.Parameters.AddWithValue("$kinds", kindsJson);
+        if (namespacesJson != null)
+            cmd.Parameters.AddWithValue("$namespaces", namespacesJson);
         cmd.Parameters.AddWithValue("$limit", limit);
 
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);

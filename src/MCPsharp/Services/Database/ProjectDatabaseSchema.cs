@@ -150,23 +150,6 @@ CREATE INDEX IF NOT EXISTS idx_structure_key ON project_structure(key);";
         + CreateProjectStructureTable;
 
     /// <summary>
-    /// Returns all table creation scripts in dependency order.
-    /// </summary>
-    public static IReadOnlyList<string> GetAllCreateTableScripts()
-    {
-        return new[]
-        {
-            CreateVersionTable,
-            CreateProjectsTable,
-            CreateFilesTable,
-            CreateSymbolsTable,
-            CreateReferencesTable,
-            CreateAnalysisResultsTable,
-            CreateProjectStructureTable
-        };
-    }
-
-    /// <summary>
     /// SQL to enable foreign keys (must be run per connection).
     /// </summary>
     public const string EnableForeignKeys = "PRAGMA foreign_keys = ON;";
