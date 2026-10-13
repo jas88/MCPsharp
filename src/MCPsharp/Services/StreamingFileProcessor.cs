@@ -181,33 +181,11 @@ public partial class StreamingFileProcessor : IStreamingFileProcessor, IDisposab
                             operation.CancellationTokenSource.Token,
                             timeoutTokenSource.Token);
 
-                        // Try the full processing first
                         result = await ProcessFileStreamAsync(operation, combinedToken.Token);
                     }
                     else
                     {
-                        // Try the full processing first
                         result = await ProcessFileStreamAsync(operation, operation.CancellationTokenSource.Token);
-                    }
-                }
-                catch (DivideByZeroException)
-                {
-                    // Fallback to simple processing for tests
-                    LogDivideByZeroInFull(_logger);
-
-                    // Create timeout cancellation token if timeout is specified
-                    if (request.ProcessingTimeout != Timeout.InfiniteTimeSpan && request.ProcessingTimeout > TimeSpan.Zero)
-                    {
-                        using var timeoutTokenSource = new CancellationTokenSource(request.ProcessingTimeout);
-                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
-                            operation.CancellationTokenSource.Token,
-                            timeoutTokenSource.Token);
-
-                        result = await ProcessFileSimpleAsync(operation.Request, timeoutCts.Token);
-                    }
-                    else
-                    {
-                        result = await ProcessFileSimpleAsync(operation.Request, operation.CancellationTokenSource.Token);
                     }
                 }
                 catch (Exception ex)

@@ -1,4 +1,5 @@
 using MCPsharp.Models.Streaming;
+using NSubstitute;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.Streaming;
@@ -88,17 +89,49 @@ public partial class StreamingFileProcessorTests
             ProcessorOptions = new Dictionary<string, object>()
         };
 
+        // Track how many files are being processed at once: progress is created when a file starts
+        // and completed when it finishes. The delay holds each start open so concurrent runs overlap.
+        var inFlight = 0;
+        var maxInFlight = 0;
+        _mockProgressTracker.CreateProgressAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<long>())
+            .Returns(async call =>
+            {
+                var current = Interlocked.Increment(ref inFlight);
+                InterlockedMax(ref maxInFlight, current);
+                await Task.Delay(20);
+                return call.ArgAt<string>(0);
+            });
+        _mockProgressTracker.CompleteProgressAsync(Arg.Any<string>())
+            .Returns(_ =>
+            {
+                Interlocked.Decrement(ref inFlight);
+                return Task.CompletedTask;
+            });
+
         // Act
-        var startTime = DateTime.UtcNow;
         var results = await _processor.ProcessMultipleFilesAsync(files, config);
-        var endTime = DateTime.UtcNow;
 
         // Assert
         Assert.That(results, Is.Not.Null);
         Assert.That(results.Count, Is.EqualTo(10));
         Assert.That(results.All(r => r.Success), Is.True);
-        // With concurrency limit, processing should take longer than unlimited parallelism
-        Assert.That(endTime - startTime, Is.GreaterThan(TimeSpan.FromMilliseconds(100)));
+        Assert.That(maxInFlight, Is.LessThanOrEqualTo(3), "no more files than MaxConcurrentFiles at once");
+        Assert.That(maxInFlight, Is.GreaterThan(1), "files are processed concurrently");
+    }
+
+    private static void InterlockedMax(ref int target, int value)
+    {
+        var current = Volatile.Read(ref target);
+        while (value > current)
+        {
+            var observed = Interlocked.CompareExchange(ref target, value, current);
+            if (observed == current)
+            {
+                return;
+            }
+
+            current = observed;
+        }
     }
 
     [Test]

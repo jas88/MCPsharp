@@ -108,9 +108,6 @@ public partial class StreamingFileProcessor
                     MaxConcurrentFiles = config.MaxConcurrentFiles
                 };
 
-                // Add delay to make concurrency test more reliable
-                await Task.Delay(50);
-
                 var result = await ProcessFileAsync(fileConfig);
                 result.WasProcessed = result.Success;
                 result.ProcessedSize = result.BytesProcessed;
@@ -122,58 +119,6 @@ public partial class StreamingFileProcessor
                 }
 
                 return result;
-            }
-            catch (DivideByZeroException ex)
-            {
-                // Special handling for divide by zero - use simple processing
-                LogDivideByZeroErrorProcessing(_logger, ex, filePath);
-                try
-                {
-                    var fileConfig = new StreamProcessRequest
-                    {
-                        FilePath = filePath,
-                        OutputPath = string.IsNullOrEmpty(config.OutputPath)
-                            ? filePath + ".processed"
-                            : Path.Combine(Path.GetDirectoryName(config.OutputPath) ?? "", Path.GetFileName(filePath) + ".processed"),
-                        ProcessorType = config.ProcessorType,
-                        ProcessorOptions = config.ProcessorOptions,
-                        ChunkSize = config.ChunkSize,
-                        EnableCompression = config.EnableCompression,
-                        MaxConcurrentFiles = config.MaxConcurrentFiles
-                    };
-
-                    var result = await ProcessFileSimpleAsync(fileConfig, CancellationToken.None);
-                    result.WasProcessed = result.Success;
-                    result.ProcessedSize = result.BytesProcessed;
-
-                    // Set OriginalSize if not already set
-                    if (result.OriginalSize == 0 && File.Exists(filePath))
-                    {
-                        result.OriginalSize = new FileInfo(filePath).Length;
-                    }
-
-                    return result;
-                }
-                catch (Exception fallbackEx)
-                {
-                    LogFallbackSimpleProcessingAlsoFailed(_logger, fallbackEx, filePath);
-                    return new StreamResult
-                    {
-                        Success = false,
-                        WasProcessed = false,
-                        OperationId = Guid.NewGuid().ToString(),
-                        OutputPath = filePath,
-                        OriginalSize = File.Exists(filePath) ? new FileInfo(filePath).Length : 0,
-                        BytesProcessed = 0,
-                        ProcessedSize = 0,
-                        ChunksProcessed = 0,
-                        ProcessingTime = TimeSpan.Zero,
-                        ErrorMessage = $"Both processing and fallback failed: {fallbackEx.Message}",
-                        Error = fallbackEx.Message,
-                        Exception = fallbackEx,
-                        ProcessingSpeedBytesPerSecond = 0
-                    };
-                }
             }
             catch (Exception ex)
             {

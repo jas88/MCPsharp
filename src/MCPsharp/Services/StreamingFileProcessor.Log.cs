@@ -10,9 +10,6 @@ public partial class StreamingFileProcessor
     [LoggerMessage(Level = LogLevel.Debug, Message = "Could not estimate processing time for {FilePath}; using default")]
     private static partial void LogProcessingTimeEstimateFailed(ILogger logger, Exception exception, string filePath);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Divide by zero in full processing, falling back to simple processing")]
-    private static partial void LogDivideByZeroInFull(ILogger logger);
-
     [LoggerMessage(Level = LogLevel.Error, Message = "Error during file stream processing")]
     private static partial void LogErrorDuringFileStreamProcessing(ILogger logger, Exception exception);
 
@@ -63,12 +60,6 @@ public partial class StreamingFileProcessor
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Error during automatic cleanup")]
     private static partial void LogErrorDuringAutomaticCleanup(ILogger logger, Exception exception);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Divide by zero error processing file {FilePath}, falling back to simple processing")]
-    private static partial void LogDivideByZeroErrorProcessing(ILogger logger, DivideByZeroException exception, string filePath);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Fallback simple processing also failed for file {FilePath}")]
-    private static partial void LogFallbackSimpleProcessingAlsoFailed(ILogger logger, Exception exception, string filePath);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Error processing file {FilePath}")]
     private static partial void LogErrorProcessingFile(ILogger logger, Exception exception, string filePath);
