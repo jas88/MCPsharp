@@ -186,7 +186,7 @@ public partial class StreamingFileProcessorTests : FileServiceTestBase
             OutputPath = testFile + ".processed",
             ChunkSize = 512
         };
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
 
         // Cancel immediately
         cts.Cancel();

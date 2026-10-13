@@ -17,6 +17,11 @@
     <MinVerMinimumMajorMinor>0.1</MinVerMinimumMajorMinor>
   </PropertyGroup>
 
+  <!-- Shared analyzer severities (e.g. IDE0005 unused usings) -->
+  <ItemGroup>
+    <GlobalAnalyzerConfigFiles Include="$(MSBuildThisFileDirectory)build-standards/analyzers/.globalconfig" />
+  </ItemGroup>
+
   <!-- Keep existing analyzer references in csproj files -->
   <!-- MCPsharp.csproj already has comprehensive analyzers configured -->
 

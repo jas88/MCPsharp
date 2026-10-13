@@ -163,7 +163,7 @@ public class OldName
 }";
 
         await _workspace.InitializeTestWorkspaceAsync();
-        var docId = await _workspace.AddInMemoryDocumentAsync("test.cs", originalCode);
+        _ = await _workspace.AddInMemoryDocumentAsync("test.cs", originalCode);
 
         var request = new RenameRequest
         {

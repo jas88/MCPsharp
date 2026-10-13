@@ -10,12 +10,27 @@ namespace MCPsharp.Tests.Services.Analyzers;
 
 public class StaticMethodAnalyzerTests
 {
-    private static async Task<(Document document, Compilation compilation)> CreateTestDocument(string code)
+    // Documents handed to the code fixer belong to this workspace, so it lives for the whole test
+    private AdhocWorkspace _workspace = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _workspace = new AdhocWorkspace();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _workspace.Dispose();
+    }
+
+    private async Task<(Document document, Compilation compilation)> CreateTestDocument(string code)
     {
         var projectId = ProjectId.CreateNewId();
         var documentId = DocumentId.CreateNewId(projectId);
 
-        var solution = new AdhocWorkspace()
+        var solution = _workspace
             .CurrentSolution
             .AddProject(projectId, "TestProject", "TestProject", LanguageNames.CSharp)
             .AddMetadataReference(projectId, MetadataReference.CreateFromFile(typeof(object).Assembly.Location))

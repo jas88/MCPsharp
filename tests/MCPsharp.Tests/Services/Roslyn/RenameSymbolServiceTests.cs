@@ -15,6 +15,7 @@ public partial class RenameSymbolServiceTests : TestBase
     private RenameSymbolService _service = null!;
     private RoslynWorkspace _workspace = null!;
     private ILogger<RenameSymbolService> _logger = null!;
+    private ILoggerFactory _loggerFactory = null!;
 
     [SetUp]
     public void SetUp()
@@ -30,12 +31,12 @@ public partial class RenameSymbolServiceTests : TestBase
         var symbolQuery = new SymbolQueryService(_workspace);
 
         // Use a real logger factory with console output for debugging
-        var loggerFactory = LoggerFactory.Create(builder =>
+        _loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddConsole();
             builder.SetMinimumLevel(LogLevel.Debug);
         });
-        _logger = loggerFactory.CreateLogger<RenameSymbolService>();
+        _logger = _loggerFactory.CreateLogger<RenameSymbolService>();
 
         _service = new RenameSymbolService(
             _workspace,
@@ -226,6 +227,7 @@ public partial class PartialClass
     protected override void TearDown()
     {
         _workspace?.Dispose();
+        _loggerFactory?.Dispose();
         base.TearDown();
     }
 }

@@ -212,9 +212,6 @@ public class RecursiveClass
     }
 }";
 
-        var filePath = Path.Combine(Directory.GetCurrentDirectory(), "TestFixtures", "RecursiveClass.cs");
-        // await _workspace.AddDocumentAsync(filePath); // Method no longer available
-
         // Act
         var result = await _callChain.FindRecursiveCallChainsAsync("RecursiveMethod", "RecursiveClass", 10);
 
@@ -269,9 +266,6 @@ public class B
     public void MethodB() => _a.MethodA();
 }";
 
-        var filePath = Path.Combine(Directory.GetCurrentDirectory(), "TestFixtures", "Circular.cs");
-        // await _workspace.AddDocumentAsync(filePath); // Method no longer available
-
         // Act
         var result = await _callChain.FindCircularDependenciesAsync("MCPsharp.Tests.TestFixtures");
 
@@ -314,7 +308,7 @@ public class B
         };
 
         // Act
-        var result = await _callChain.FindShortestPathAsync(fromMethod, toMethod);
+        _ = await _callChain.FindShortestPathAsync(fromMethod, toMethod);
 
         // Assert
         // May return null if no path exists in our test setup

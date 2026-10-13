@@ -8,13 +8,13 @@ using Microsoft.Extensions.Logging;
 
 namespace MCPsharp;
 
-sealed partial class Program
+internal sealed partial class Program
 {
     private Program()
     {
     }
 
-    static async Task<int> Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
         try
         {

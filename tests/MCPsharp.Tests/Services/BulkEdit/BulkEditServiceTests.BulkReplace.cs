@@ -182,9 +182,7 @@ public partial class BulkEditServiceTests
         };
 
         // Act
-        var startTime = DateTime.UtcNow;
         var result = await _service.BulkReplaceAsync(files, "content", "modified", new BulkEditOptions { MaxParallelism = 3 });
-        var endTime = DateTime.UtcNow;
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -260,7 +258,7 @@ public partial class BulkEditServiceTests
         // Arrange
         var testFile1 = CreateTestFile("Test content 1");
         var testFile2 = CreateTestFile("Test content 2");
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
 
         // Act & Assert - Cancel right before the call
         cts.Cancel();
@@ -273,7 +271,7 @@ public partial class BulkEditServiceTests
         Assert.That(result, Is.Not.Null);
 
         // Test with a new cancellation token for preview
-        var cts2 = new CancellationTokenSource();
+        using var cts2 = new CancellationTokenSource();
         cts2.Cancel();
         var previewRequest = new BulkEditRequest
         {

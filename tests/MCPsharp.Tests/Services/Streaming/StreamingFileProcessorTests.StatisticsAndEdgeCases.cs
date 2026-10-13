@@ -52,7 +52,7 @@ public partial class StreamingFileProcessorTests
         await _processor.ProcessFileAsync(testFile);
         await _processor.ProcessMultipleFilesAsync(files, config);
 
-        var statsBefore = await _processor.GetProcessingStatisticsAsync();
+        _ = await _processor.GetProcessingStatisticsAsync();
 
         // Act
         await _processor.ClearStatisticsAsync();
@@ -187,8 +187,8 @@ public partial class StreamingFileProcessorTests
     [Test]
     public async Task Dispose_ShouldCleanupResources()
     {
-        // Arrange
-        var processor = new StreamingFileProcessor(
+        // Arrange - the using also covers failure paths; disposing twice is permitted
+        using var processor = new StreamingFileProcessor(
             CreateNullLogger<StreamingFileProcessor>(),
             Substitute.For<IProgressTracker>(),
             Substitute.For<ITempFileManager>());

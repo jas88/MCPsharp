@@ -98,14 +98,17 @@ public sealed partial class ProjectDatabase
         return null;
     }
 
-    private static readonly (string Table, string CountQuery)[] TableCountQueries =
-    [
-        ("projects", "SELECT COUNT(*) FROM projects"),
-        ("files", "SELECT COUNT(*) FROM files"),
-        ("symbols", "SELECT COUNT(*) FROM symbols"),
-        ("symbol_references", "SELECT COUNT(*) FROM symbol_references"),
-        ("analysis_results", "SELECT COUNT(*) FROM analysis_results"),
-    ];
+    private static readonly string[] StatsTables =
+        ["projects", "files", "symbols", "symbol_references", "analysis_results"];
+
+    // One column per entry in StatsTables, in the same order.
+    private const string TableCountsQuery = @"
+            SELECT
+                (SELECT COUNT(*) FROM projects),
+                (SELECT COUNT(*) FROM files),
+                (SELECT COUNT(*) FROM symbols),
+                (SELECT COUNT(*) FROM symbol_references),
+                (SELECT COUNT(*) FROM analysis_results)";
 
     /// <summary>
     /// Updates project statistics.
@@ -231,12 +234,15 @@ public sealed partial class ProjectDatabase
         var conn = GetConnection();
         var stats = new Dictionary<string, long>();
 
-        foreach (var (table, countQuery) in TableCountQueries)
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = TableCountsQuery;
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = countQuery;
-            var count = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            stats[table] = Convert.ToInt64(count, CultureInfo.InvariantCulture);
+            for (var i = 0; i < StatsTables.Length; i++)
+            {
+                stats[StatsTables[i]] = reader.GetInt64(i);
+            }
         }
 
         return stats;

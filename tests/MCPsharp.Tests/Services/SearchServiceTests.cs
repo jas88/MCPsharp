@@ -385,7 +385,7 @@ public class SearchServiceTests
             CreateTestFile($"test{i}.cs", string.Join("\n", Enumerable.Range(1, 1000).Select(j => $"line {j}")));
         }
 
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.CancelAfter(TimeSpan.FromMilliseconds(10)); // Cancel quickly
 
         var request = new SearchRequest

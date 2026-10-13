@@ -12,7 +12,7 @@ public partial class StreamingFileProcessor
 
         LogStartingBulkTransformationOfFiles(_logger, inputFiles.Count, request.MaxDegreeOfParallelism);
 
-        var semaphore = new SemaphoreSlim(request.MaxDegreeOfParallelism, request.MaxDegreeOfParallelism);
+        using var semaphore = new SemaphoreSlim(request.MaxDegreeOfParallelism, request.MaxDegreeOfParallelism);
         var tasks = inputFiles.Select(async inputFile =>
         {
             await semaphore.WaitAsync(cancellationToken);
@@ -89,7 +89,7 @@ public partial class StreamingFileProcessor
     public async Task<List<StreamResult>> ProcessMultipleFilesAsync(string[] files, StreamProcessRequest config)
     {
         var results = new List<StreamResult>();
-        var semaphore = new SemaphoreSlim(config.MaxConcurrentFiles, config.MaxConcurrentFiles);
+        using var semaphore = new SemaphoreSlim(config.MaxConcurrentFiles, config.MaxConcurrentFiles);
         var tasks = files.Select(async filePath =>
         {
             await semaphore.WaitAsync();

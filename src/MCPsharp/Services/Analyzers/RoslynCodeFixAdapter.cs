@@ -92,7 +92,7 @@ public partial class RoslynCodeFixAdapter
                 options: LibraryCompilationOptions);
 
             // Create a workspace and document
-            var workspace = new AdhocWorkspace();
+            using var workspace = new AdhocWorkspace();
             var projectId = ProjectId.CreateNewId();
 
             var projectInfo = ProjectInfo.Create(

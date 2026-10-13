@@ -139,7 +139,7 @@ public class TestClass
         await _analyzerRegistry!.RegisterAnalyzerAsync(adapter);
 
         // Create cancellation token that's already cancelled
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert: Should handle cancellation

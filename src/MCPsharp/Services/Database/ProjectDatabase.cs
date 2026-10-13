@@ -146,13 +146,10 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
 
         if (currentVersion < ProjectDatabaseSchema.CurrentSchemaVersion)
         {
-            // Create all tables
-            foreach (var createScript in ProjectDatabaseSchema.GetAllCreateTableScripts())
-            {
-                await using var cmd = _connection.CreateCommand();
-                cmd.CommandText = createScript;
-                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
+            // Create all tables (Microsoft.Data.Sqlite executes every statement in the batch)
+            await using var cmd = _connection.CreateCommand();
+            cmd.CommandText = ProjectDatabaseSchema.CreateAllTables;
+            await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
             // Update version
             await SetSchemaVersionAsync(ProjectDatabaseSchema.CurrentSchemaVersion, cancellationToken)

@@ -318,7 +318,7 @@ public partial class ProjectDatabaseTests
     public async Task GetDatabaseStatsAsync_ReturnsCorrectCounts()
     {
         // Arrange
-        var projectId = await _db.GetOrCreateProjectAsync("/test/path", "TestProject");
+        _ = await _db.GetOrCreateProjectAsync("/test/path", "TestProject");
 
         // Act
         var stats = await _db.GetDatabaseStatsAsync();

@@ -267,8 +267,8 @@ public partial class AnalyzerSandbox : IAnalyzerSandbox
 
     private async Task ProcessFixAsync(SandboxOperation operation)
     {
-        // Check permissions for all affected files
-        foreach (var issueId in operation.FixRequest!.IssueIds)
+        // Check permissions for all affected files (one audited check per issue)
+        for (var i = 0; i < operation.FixRequest!.IssueIds.Length; i++)
         {
             // This would need to be expanded to resolve issue IDs to file paths
             // For now, just check general write permission

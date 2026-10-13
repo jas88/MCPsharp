@@ -138,6 +138,18 @@ CREATE INDEX IF NOT EXISTS idx_structure_project ON project_structure(project_id
 CREATE INDEX IF NOT EXISTS idx_structure_key ON project_structure(key);";
 
     /// <summary>
+    /// All table creation scripts in dependency order, as a single batch.
+    /// </summary>
+    public const string CreateAllTables =
+        CreateVersionTable
+        + CreateProjectsTable
+        + CreateFilesTable
+        + CreateSymbolsTable
+        + CreateReferencesTable
+        + CreateAnalysisResultsTable
+        + CreateProjectStructureTable;
+
+    /// <summary>
     /// Returns all table creation scripts in dependency order.
     /// </summary>
     public static IReadOnlyList<string> GetAllCreateTableScripts()

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using MCPsharp.Models.Database;
 using Microsoft.Data.Sqlite;
 
@@ -186,6 +187,20 @@ public sealed partial class ProjectDatabase
         await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    private const string SearchSymbolsQuery = @"
+            SELECT id, file_id, name, kind, namespace, containing_type, line, column, end_line, end_column, accessibility, signature
+            FROM symbols
+            WHERE ($query IS NULL OR name LIKE $query)
+              AND ($kinds IS NULL OR kind IN (SELECT value FROM json_each($kinds)))
+              AND ($namespaces IS NULL OR namespace IN (SELECT value FROM json_each($namespaces)))
+            ORDER BY name LIMIT $limit";
+
+    private static object ToJsonArrayOrNull(IEnumerable<string>? values)
+    {
+        var list = values?.ToList();
+        return list is { Count: > 0 } ? JsonSerializer.Serialize(list) : DBNull.Value;
+    }
+
     /// <summary>
     /// Searches symbols with multiple filters.
     /// </summary>
@@ -201,53 +216,13 @@ public sealed partial class ProjectDatabase
 
         await using var cmd = conn.CreateCommand();
 
-        var conditions = new List<string>();
-
-        if (!string.IsNullOrEmpty(query))
-        {
-            conditions.Add("name LIKE $query");
-            cmd.Parameters.AddWithValue("$query", $"%{query}%");
-        }
-
-        var kindList = kinds?.ToList();
-        if (kindList?.Count > 0)
-        {
-            var kindParams = new List<string>();
-            for (var i = 0; i < kindList.Count; i++)
-            {
-                var paramName = $"$kind{i}";
-                kindParams.Add(paramName);
-                cmd.Parameters.AddWithValue(paramName, kindList[i]);
-            }
-            conditions.Add($"kind IN ({string.Join(", ", kindParams)})");
-        }
-
-        var namespaceList = namespaces?.ToList();
-        if (namespaceList?.Count > 0)
-        {
-            var nsParams = new List<string>();
-            for (var i = 0; i < namespaceList.Count; i++)
-            {
-                var paramName = $"$ns{i}";
-                nsParams.Add(paramName);
-                cmd.Parameters.AddWithValue(paramName, namespaceList[i]);
-            }
-            conditions.Add($"namespace IN ({string.Join(", ", nsParams)})");
-        }
-
-        var sql = @"
-            SELECT id, file_id, name, kind, namespace, containing_type, line, column, end_line, end_column, accessibility, signature
-            FROM symbols";
-
-        if (conditions.Count > 0)
-        {
-            sql += " WHERE " + string.Join(" AND ", conditions);
-        }
-
-        sql += " ORDER BY name LIMIT $limit";
+        // Fixed command text: optional filters are disabled by passing NULL, and the
+        // kind/namespace lists are bound as JSON arrays expanded with json_each.
+        cmd.CommandText = SearchSymbolsQuery;
+        cmd.Parameters.AddWithValue("$query", string.IsNullOrEmpty(query) ? DBNull.Value : $"%{query}%");
+        cmd.Parameters.AddWithValue("$kinds", ToJsonArrayOrNull(kinds));
+        cmd.Parameters.AddWithValue("$namespaces", ToJsonArrayOrNull(namespaces));
         cmd.Parameters.AddWithValue("$limit", limit);
-
-        cmd.CommandText = sql;
 
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))

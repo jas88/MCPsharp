@@ -24,6 +24,9 @@ public class McpToolRegistryToolCatalogTests
     private ProjectContextManager _projectContext = null!;
     private RoslynWorkspace _workspace = null!;
     private BulkEditService _bulkEditService = null!;
+    private ProgressTrackerService _progressTracker = null!;
+    private TempFileManagerService _tempFileManager = null!;
+    private StreamingFileProcessor _streamingProcessor = null!;
     private McpToolRegistry _registry = null!;
 
     [SetUp]
@@ -43,6 +46,9 @@ public class McpToolRegistryToolCatalogTests
     [TearDown]
     public void TearDown()
     {
+        _streamingProcessor.Dispose();
+        _tempFileManager.Dispose();
+        _progressTracker.Dispose();
         _workspace.Dispose();
         _bulkEditService.Dispose();
         if (Directory.Exists(_projectPath))
@@ -53,9 +59,9 @@ public class McpToolRegistryToolCatalogTests
 
     private McpToolRegistry CreateFullRegistry()
     {
-        var progressTracker = new ProgressTrackerService(NullLogger<ProgressTrackerService>.Instance);
-        var tempFileManager = new TempFileManagerService();
-        var streamingProcessor = new StreamingFileProcessor(NullLogger<StreamingFileProcessor>.Instance, progressTracker, tempFileManager);
+        _progressTracker = new ProgressTrackerService(NullLogger<ProgressTrackerService>.Instance);
+        _tempFileManager = new TempFileManagerService();
+        _streamingProcessor = new StreamingFileProcessor(NullLogger<StreamingFileProcessor>.Instance, _progressTracker, _tempFileManager);
         var universalFileOps = new UniversalFileOperations(Path.GetTempPath(), new FileOperationsService(Path.GetTempPath()), _bulkEditService);
         var aiProvider = Substitute.For<IAIProvider>();
         aiProvider.ProviderName.Returns("TestProvider");
@@ -64,14 +70,14 @@ public class McpToolRegistryToolCatalogTests
             _projectContext,
             _workspace,
             bulkEditService: _bulkEditService,
-            streamingProcessor: streamingProcessor,
-            progressTracker: progressTracker,
-            tempFileManager: tempFileManager,
+            streamingProcessor: _streamingProcessor,
+            progressTracker: _progressTracker,
+            tempFileManager: _tempFileManager,
             sqlMigrationAnalyzer: new SqlMigrationAnalyzerService(NullLogger<SqlMigrationAnalyzerService>.Instance, NullLoggerFactory.Instance),
             universalFileOps: universalFileOps,
             unifiedAnalysis: new UnifiedAnalysisService(workspace: _workspace),
             bulkOperationsHub: new BulkOperationsHub(_bulkEditService, universalFileOps),
-            streamController: new StreamProcessingController(streamingProcessor, progressTracker, tempFileManager),
+            streamController: new StreamProcessingController(_streamingProcessor, _progressTracker, _tempFileManager),
             roslynAnalyzerService: Substitute.For<IRoslynAnalyzerService>(),
             codebaseQuery: new CodebaseQueryService(aiProvider, _projectContext, NullLogger<CodebaseQueryService>.Instance),
             aiCodeTransformation: new AICodeTransformationService(aiProvider, _workspace, NullLogger<AICodeTransformationService>.Instance));

@@ -23,30 +23,42 @@ public partial class RoslynWorkspace
                 return;
             }
 
-            // Use MSBuildWorkspace to load the actual project/solution with all references
-            var msbuildWorkspace = MSBuildWorkspace.Create();
-
-            _workspaceFailedRegistration?.Dispose();
-            _workspaceFailedRegistration = msbuildWorkspace.RegisterWorkspaceFailedHandler(e =>
+            // Use MSBuildWorkspace to load the actual project/solution with all references.
+            // The new workspace is disposed here unless ownership passes to _workspace.
+            MSBuildWorkspace? pendingWorkspace = null;
+            MSBuildWorkspace msbuildWorkspace;
+            try
             {
-                Console.Error.WriteLine($"MSBuildWorkspace warning: {e.Diagnostic.Kind} - {e.Diagnostic.Message}");
-            });
+                pendingWorkspace = MSBuildWorkspace.Create();
 
-            if (slnPath != null)
-            {
-                var solution = await msbuildWorkspace.OpenSolutionAsync(slnPath);
-                if (!solution.ProjectIds.Any())
+                _workspaceFailedRegistration?.Dispose();
+                _workspaceFailedRegistration = pendingWorkspace.RegisterWorkspaceFailedHandler(e =>
                 {
-                    throw new InvalidOperationException("Solution contains no projects");
-                }
-            }
-            else
-            {
-                await msbuildWorkspace.OpenProjectAsync(csprojPath!);
-            }
+                    Console.Error.WriteLine($"MSBuildWorkspace warning: {e.Diagnostic.Kind} - {e.Diagnostic.Message}");
+                });
 
-            _workspace?.Dispose();
-            _workspace = msbuildWorkspace;
+                if (slnPath != null)
+                {
+                    var solution = await pendingWorkspace.OpenSolutionAsync(slnPath);
+                    if (!solution.ProjectIds.Any())
+                    {
+                        throw new InvalidOperationException("Solution contains no projects");
+                    }
+                }
+                else
+                {
+                    await pendingWorkspace.OpenProjectAsync(csprojPath!);
+                }
+
+                _workspace?.Dispose();
+                _workspace = pendingWorkspace;
+                msbuildWorkspace = pendingWorkspace;
+                pendingWorkspace = null;
+            }
+            finally
+            {
+                pendingWorkspace?.Dispose();
+            }
             _adhocProjectId = null;
             _state = CompilationState.Empty;
             _semanticModelCache.InvalidateAll();
