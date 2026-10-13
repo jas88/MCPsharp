@@ -176,9 +176,10 @@ public partial class StreamProcessingController
     }
 
     /// <summary>
-    /// Maps an input file to its output path. An existing output file receives every result; otherwise
-    /// the output path is a directory and the input's path relative to <paramref name="inputRoot"/> is
-    /// preserved beneath it, so inputs with the same name in different directories do not collide.
+    /// Maps an input file to its output path. An existing output file is used as-is (request validation
+    /// only allows that for a single input); otherwise the output path is a directory and the input's path
+    /// relative to <paramref name="inputRoot"/> is preserved beneath it, so inputs with the same name in
+    /// different directories do not collide.
     /// </summary>
     private static string GetOutputPath(string? outputPath, string? inputRoot, string inputFile)
     {

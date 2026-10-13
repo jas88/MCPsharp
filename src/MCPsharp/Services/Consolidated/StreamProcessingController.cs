@@ -268,6 +268,18 @@ public partial class StreamProcessingController
             };
         }
 
+        // Several inputs can't share one output file: each result would overwrite the previous one
+        if (request.InputType is StreamInputType.Directory or StreamInputType.MultipleFiles
+            && !string.IsNullOrEmpty(request.OutputPath)
+            && File.Exists(request.OutputPath))
+        {
+            return new StreamValidationResult
+            {
+                IsValid = false,
+                ErrorMessage = $"Output path must be a directory when processing several files: {request.OutputPath}"
+            };
+        }
+
         return new StreamValidationResult { IsValid = true };
     }
 

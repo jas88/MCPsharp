@@ -181,6 +181,28 @@ public class StreamProcessingControllerProcessorTests
     }
 
     [Test]
+    public async Task ProcessDirectory_WithExistingOutputFile_IsRejected()
+    {
+        var inputDir = Path.Combine(_tempDir, "in");
+        Directory.CreateDirectory(inputDir);
+        File.WriteAllText(Path.Combine(inputDir, "a.txt"), "first\n");
+        File.WriteAllText(Path.Combine(inputDir, "b.txt"), "second\n");
+        var outputFile = WriteInput("existing.txt", "keep me\n");
+
+        var response = await _controller.ProcessStreamAsync(new StreamProcessRequest
+        {
+            InputType = StreamInputType.Directory,
+            ProcessorType = "line",
+            InputPath = inputDir,
+            OutputPath = outputFile
+        });
+
+        Assert.That(response.Success, Is.False);
+        Assert.That(response.Error, Does.Contain("Output path must be a directory"));
+        Assert.That(File.ReadAllText(outputFile), Is.EqualTo("keep me\n"));
+    }
+
+    [Test]
     public async Task ProcessFile_WithUnknownProcessor_IsRejected()
     {
         var input = WriteInput("data.txt", "content\n");
