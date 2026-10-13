@@ -22,6 +22,14 @@ public partial class McpToolRegistry
     private static readonly string[] BulkManagementActionValues = { "list", "cancel", "pause", "resume", "cleanup", "status" };
     private static readonly string[] StreamInputTypeValues = { "file", "directory", "multiple_files" };
     private static readonly string[] StreamProcessorValues = { "line", "regex", "csv", "json", "binary", "xml", "log", "transform" };
+
+    private const string ProcessorOptionsDescription =
+        "Processor parameters (keys are case-insensitive). " +
+        "line: LineFilter, LineReplacement, LinePrefix, LineSuffix, IncludeLineNumbers, RemoveEmptyLines, TrimWhitespace, FieldSeparator, SelectedFields, Encoding. " +
+        "regex: Pattern, Replacement, IgnoreCase, Multiline, MatchWholeLine, MaxMatches (0 = unlimited). " +
+        "csv: Delimiter, QuoteCharacter, SelectedColumnIndexes, SkipEmptyRows, TrimFields. " +
+        "json: JsonLines, Indented. xml: Indent. log: MinLevel, Levels, Pattern, IgnoreCase. " +
+        "binary: SearchPattern, ReplacementPattern, CalculateChecksums, ChecksumAlgorithm.";
     private static readonly string[] StreamManagementActionValues = { "list", "cancel", "pause", "resume", "cleanup", "unregister_processor" };
 
     private static readonly string[] FileOperationRequiredProperties = { "path", "operation" };
@@ -339,7 +347,8 @@ public partial class McpToolRegistry
                 Prop("recursive", "boolean", "directory: include subdirectories (default: false)"),
                 Prop("chunk_size", "integer", "Chunk size in bytes (default: 65536)"),
                 Prop("enable_compression", "boolean", "Compress output (default: false)"),
-                Prop("enable_checkpoints", "boolean", "Enable checkpoints for resumable processing (default: false)"))
+                Prop("enable_checkpoints", "boolean", "Enable checkpoints for resumable processing (default: false)"),
+                Prop("processor_options", "object", ProcessorOptionsDescription))
         },
         new McpTool
         {

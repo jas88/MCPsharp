@@ -245,6 +245,34 @@ public partial class McpToolRegistry
         }
 
         var chunkSize = GetIntArgument(arguments, "chunk_size");
+        Dictionary<string, object>? processorParameters = null;
+        if (arguments.RootElement.TryGetProperty("processor_options", out var optionsElement)
+            && optionsElement.ValueKind != JsonValueKind.Null)
+        {
+            if (optionsElement.ValueKind != JsonValueKind.Object)
+            {
+                return ToolError("Parameter 'processor_options' must be an object");
+            }
+
+            // Values stay as JsonElement; the processors convert them when building their options
+            processorParameters = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in optionsElement.EnumerateObject())
+            {
+                processorParameters[property.Name] = property.Value.Clone();
+            }
+        }
+
+        var processorOptions = chunkSize.HasValue || processorParameters != null ? new ProcessorOptions() : null;
+        if (processorOptions != null)
+        {
+            if (chunkSize.HasValue)
+            {
+                processorOptions.ChunkSize = chunkSize.Value;
+            }
+
+            processorOptions.Parameters = processorParameters ?? new Dictionary<string, object>();
+        }
+
         var response = await _streamController.ProcessStreamAsync(new StreamProcessRequest
         {
             InputType = inputType,
@@ -257,7 +285,7 @@ public partial class McpToolRegistry
             ChunkSize = chunkSize,
             EnableCompression = GetBoolArgument(arguments, "enable_compression") ?? false,
             EnableCheckpoints = GetBoolArgument(arguments, "enable_checkpoints") ?? false,
-            ProcessorOptions = chunkSize.HasValue ? new ProcessorOptions { ChunkSize = chunkSize.Value } : null
+            ProcessorOptions = processorOptions
         }, ct);
         return FromServiceResponse(response, response.Error);
     }

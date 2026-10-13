@@ -16,6 +16,8 @@ namespace MCPsharp.Tests.Services;
 [Category("Streaming")]
 public class McpToolRegistryStreamToolsTests
 {
+    private static readonly int[] ReversedColumns = { 2, 0 };
+
     private string _projectPath = null!;
     private RoslynWorkspace _workspace = null!;
     private ProgressTrackerService _progressTracker = null!;
@@ -88,5 +90,59 @@ public class McpToolRegistryStreamToolsTests
 
         Assert.That(result.Success, Is.True, result.Error);
         Assert.That(File.ReadAllText(Path.Combine(_projectPath, "output.txt")), Is.EqualTo("dog and dog\nno match\n"));
+    }
+
+    [Test]
+    public async Task ProcessStream_RegexProcessorOptions_AreAppliedToOutput()
+    {
+        WriteProjectFile("input.txt", "id 1\nid 22\nnone\n");
+
+        var result = await Execute("process_stream", new
+        {
+            processor_type = "regex",
+            input_path = "input.txt",
+            output_path = "output.txt",
+            processor_options = new { pattern = @"(\d+)", replacement = "<$1>" }
+        });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(File.ReadAllText(Path.Combine(_projectPath, "output.txt")),
+            Is.EqualTo(string.Join(Environment.NewLine, "id <1>", "id <22>", "none") + Environment.NewLine));
+    }
+
+    [Test]
+    public async Task ProcessStream_CsvProcessorOptionsWithChunkSize_AreAppliedToOutput()
+    {
+        WriteProjectFile("input.csv", "a;b;c\n1;2;3\n");
+
+        var result = await Execute("process_stream", new
+        {
+            processor_type = "csv",
+            input_path = "input.csv",
+            output_path = "output.csv",
+            chunk_size = 4,
+            processor_options = new { Delimiter = ";", SelectedColumnIndexes = ReversedColumns }
+        });
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(File.ReadAllText(Path.Combine(_projectPath, "output.csv")),
+            Is.EqualTo(string.Join(Environment.NewLine, "c;a", "3;1") + Environment.NewLine));
+    }
+
+    [Test]
+    public async Task ProcessStream_NonObjectProcessorOptions_IsRejected()
+    {
+        WriteProjectFile("input.txt", "text\n");
+
+        var result = await Execute("process_stream", new
+        {
+            processor_type = "regex",
+            input_path = "input.txt",
+            output_path = "output.txt",
+            processor_options = "pattern=x"
+        });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("processor_options"));
     }
 }
