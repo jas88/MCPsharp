@@ -53,7 +53,8 @@ public partial class RegexStreamProcessor : IStreamProcessor
 
             var regex = new Regex(config.Pattern, regexOptions, RegexTimeout);
 
-            if (!string.IsNullOrEmpty(config.Replacement))
+            // An empty replacement deletes the matches; only a missing one means "no replacement"
+            if (config.Replacement != null)
             {
                 // MaxMatches <= 0 means unlimited; Regex.Replace only treats a negative count as unlimited
                 // (a count of 0 replaces nothing)
@@ -62,20 +63,9 @@ public partial class RegexStreamProcessor : IStreamProcessor
             }
             else if (config.MatchWholeLine)
             {
-                var matches = regex.Matches(processedText);
-                var lines = processedText.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
-                var matchingLines = new List<string>();
-
-                foreach (Match match in matches)
-                {
-                    var lineIndex = processedText.Substring(0, match.Index).Count(c => c == '\n');
-                    if (lineIndex < lines.Length)
-                    {
-                        matchingLines.Add(lines[lineIndex]);
-                    }
-                }
-
-                var endsWithLineBreak = processedText.Length > 0 && processedText[^1] is '\n' or '\r';
+                // Keep each line that contains a match, once, in its original order
+                var lines = TextChunkLines.Split(processedText, out var endsWithLineBreak);
+                var matchingLines = lines.Where(line => regex.IsMatch(line)).ToList();
                 processedText = TextChunkLines.Join(matchingLines, endsWithLineBreak);
             }
         }
