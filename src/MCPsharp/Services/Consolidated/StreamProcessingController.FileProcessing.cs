@@ -28,7 +28,7 @@ public partial class StreamProcessingController
             result.BytesProcessed = fileInfo.Length;
 
             using var inputStream = File.OpenRead(request.InputPath);
-            using var outputStream = request.OutputPath != null
+            using var outputStream = !string.IsNullOrEmpty(request.OutputPath)
                 ? File.Create(request.OutputPath)
                 : Stream.Null;
 
@@ -38,14 +38,20 @@ public partial class StreamProcessingController
                 OperationId = context.Id,
                 ChunkSize = request.ChunkSize ?? 65536,
                 EnableCompression = request.EnableCompression,
-                EnableCheckpoints = request.EnableCheckpoints
+                EnableCheckpoints = request.EnableCheckpoints,
+                CancellationToken = ct,
+                Options = request.ProcessorOptions
             }, ct);
 
             result.Success = processResult.Success;
             result.RecordsProcessed = processResult.RecordsProcessed;
+            result.BytesProcessed = processResult.BytesProcessed ?? result.BytesProcessed;
+            result.Warnings = processResult.Warnings;
             result.Error = processResult.Error;
             result.Message = processResult.Message;
             result.Metrics = processResult.Metrics;
+            if (!processResult.Success)
+                context.AddLog($"Processing '{request.InputPath}' failed: {processResult.Error}");
         }
         catch (Exception ex)
         {
@@ -160,10 +166,11 @@ public partial class StreamProcessingController
         if (string.IsNullOrEmpty(outputPath))
             return string.Empty;
 
-        if (File.Exists(outputPath) || Directory.Exists(outputPath))
+        if (File.Exists(outputPath))
             return outputPath;
 
-        // Generate output path based on input
+        // Treat the output path as a directory and generate a per-input file name in it
+        Directory.CreateDirectory(outputPath);
         var fileName = Path.GetFileNameWithoutExtension(inputFile);
         var extension = Path.GetExtension(inputFile);
         return Path.Combine(outputPath, $"{fileName}_processed{extension}");
