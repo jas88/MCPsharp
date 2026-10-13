@@ -26,10 +26,10 @@ public partial class McpToolRegistry
     private const string ProcessorOptionsDescription =
         "Processor parameters (keys are case-insensitive). " +
         "line: LineFilter, LineReplacement, LinePrefix, LineSuffix, IncludeLineNumbers, RemoveEmptyLines, TrimWhitespace, FieldSeparator, SelectedFields, Encoding. " +
-        "regex: Pattern, Replacement, IgnoreCase, Multiline, MatchWholeLine, MaxMatches (0 = unlimited). " +
+        "regex: Pattern, Replacement, IgnoreCase, Multiline, MatchWholeLine, MaxMatches (0 = unlimited), Options (raw System.Text.RegularExpressions.RegexOptions flags as an integer). " +
         "csv: Delimiter, QuoteCharacter, SelectedColumnIndexes, SkipEmptyRows, TrimFields. " +
         "json: JsonLines, Indented. xml: Indent. log: MinLevel, Levels, Pattern, IgnoreCase. " +
-        "binary: SearchPattern, ReplacementPattern, CalculateChecksums, ChecksumAlgorithm.";
+        "binary: SearchPattern and ReplacementPattern (supplied together; a UTF-8 string or an array of byte values 0-255), CalculateChecksums, ChecksumAlgorithm (SHA256, SHA512).";
     private static readonly string[] StreamManagementActionValues = { "list", "cancel", "pause", "resume", "cleanup", "unregister_processor" };
 
     private static readonly string[] FileOperationRequiredProperties = { "path", "operation" };
