@@ -1,12 +1,37 @@
+using System.Text;
 using MCPsharp.Models.Consolidated;
+using StreamingRegexProcessor = MCPsharp.Services.Streaming.RegexStreamProcessor;
 
 namespace MCPsharp.Services.Consolidated;
 
+/// <summary>
+/// Regex processor: applies a pattern/replacement (or keeps matching lines) using
+/// <see cref="StreamingRegexProcessor"/>. Parameters: Pattern, Replacement, IgnoreCase, Multiline,
+/// MatchWholeLine, MaxMatches (applied per chunk; 0 or absent = unlimited), Options.
+/// Chunks end on line boundaries, so matches never span chunks.
+/// </summary>
 public class RegexStreamProcessor : IStreamProcessor
 {
+    private const string MaxMatchesKey = "MaxMatches";
+
+    private readonly StreamingRegexProcessor _processor = new();
+
     public Task InitializeAsync(ProcessorOptions options, CancellationToken ct) => Task.CompletedTask;
+
     public Task<ProcessingResult> ProcessAsync(Stream input, Stream output, ProcessingContext context, CancellationToken ct)
-        => Task.FromResult(new ProcessingResult { Success = true });
+        => StreamProcessorExecution.RunAsync("regex", () =>
+        {
+            var options = StreamProcessorOptionMapper.ToOptionDictionary(context.Options);
+
+            // MaxMatches is documented as "0 = unlimited", but the Streaming processor passes it straight to
+            // Regex.Replace, where only a negative count means unlimited
+            if (!options.TryGetValue(MaxMatchesKey, out var maxMatches) || maxMatches is int and <= 0)
+                options[MaxMatchesKey] = -1;
+
+            var inputEncoding = StreamProcessorOptionMapper.ResolveEncoding(context.Options);
+            return StreamingProcessorAdapter.ProcessLinesAsync(_processor, input, output, context, options, inputEncoding, Encoding.UTF8, ct);
+        });
+
     public Task<ProcessorCapabilities> GetCapabilitiesAsync(CancellationToken ct)
         => Task.FromResult(new ProcessorCapabilities
         {
@@ -14,8 +39,9 @@ public class RegexStreamProcessor : IStreamProcessor
             SupportedOutputFormats = new List<string> { "txt", "log", "text", "json", "xml", "html" },
             SupportsStreaming = true,
             SupportsParallelProcessing = false,
-            SupportsCheckpoints = true,
+            SupportsCheckpoints = false,
             SupportsCompression = false,
-            MaxFileSize = long.MaxValue
+            MaxFileSize = long.MaxValue,
+            OptionalParameters = new List<string> { "Pattern", "Replacement", "IgnoreCase", "Multiline", "MatchWholeLine", MaxMatchesKey, "Options" }
         });
 }
