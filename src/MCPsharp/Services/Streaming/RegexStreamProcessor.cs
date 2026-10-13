@@ -43,16 +43,8 @@ public partial class RegexStreamProcessor : IStreamProcessor
         var text = Encoding.UTF8.GetString(chunk.Data);
         var processedText = text;
 
-        if (!string.IsNullOrEmpty(config.Pattern))
+        if (CreateRegex(config) is { } regex)
         {
-            var regexOptions = config.Options;
-            if (config.Multiline)
-                regexOptions |= RegexOptions.Multiline;
-            if (config.IgnoreCase)
-                regexOptions |= RegexOptions.IgnoreCase;
-
-            var regex = new Regex(config.Pattern, regexOptions, RegexTimeout);
-
             // An empty replacement deletes the matches; only a missing one means "no replacement"
             if (config.Replacement != null)
             {
@@ -89,7 +81,7 @@ public partial class RegexStreamProcessor : IStreamProcessor
     {
         try
         {
-            ParseConfig(options);
+            ValidatePattern(options);
             return Task.FromResult(true);
         }
         catch (Exception ex)
@@ -97,6 +89,27 @@ public partial class RegexStreamProcessor : IStreamProcessor
             LogInvalidOptions(_logger, ex);
             return Task.FromResult(false);
         }
+    }
+
+    /// <summary>
+    /// Parses the options and compiles the configured pattern (if any) exactly as processing does,
+    /// throwing <see cref="ArgumentException"/> for a malformed pattern or invalid options.
+    /// </summary>
+    internal static void ValidatePattern(Dictionary<string, object> options)
+        => CreateRegex(ParseConfig(options));
+
+    private static Regex? CreateRegex(RegexProcessorConfig config)
+    {
+        if (string.IsNullOrEmpty(config.Pattern))
+            return null;
+
+        var regexOptions = config.Options;
+        if (config.Multiline)
+            regexOptions |= RegexOptions.Multiline;
+        if (config.IgnoreCase)
+            regexOptions |= RegexOptions.IgnoreCase;
+
+        return new Regex(config.Pattern, regexOptions, RegexTimeout);
     }
 
     private static RegexProcessorConfig ParseConfig(Dictionary<string, object> options)

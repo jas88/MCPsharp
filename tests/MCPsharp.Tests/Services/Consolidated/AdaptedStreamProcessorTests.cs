@@ -130,6 +130,17 @@ public class AdaptedStreamProcessorTests
     }
 
     [Test]
+    public async Task Regex_InvalidPatternWithEmptyInput_ReportsFailure()
+    {
+        var (result, output) = await RunTextAsync(new RegexStreamProcessor(), string.Empty,
+            new Dictionary<string, object> { ["Pattern"] = "([a-z" });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("regex"));
+        Assert.That(output, Is.Empty);
+    }
+
+    [Test]
     public async Task Csv_SelectAndTrimColumns_RewritesRows()
     {
         var (result, output) = await RunTextAsync(new CsvStreamProcessor(),
@@ -168,6 +179,18 @@ public class AdaptedStreamProcessorTests
         Assert.That(output, Is.EqualTo(Lines("b", "2")));
     }
 
+    [TestCase("Delimiter")]
+    [TestCase("QuoteCharacter")]
+    public async Task Csv_EmptyDelimiterOrQuote_ReportsFailure(string key)
+    {
+        var (result, output) = await RunTextAsync(new CsvStreamProcessor(), "a,b\n",
+            new Dictionary<string, object> { [key] = string.Empty });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("Invalid processor options"));
+        Assert.That(output, Is.Empty);
+    }
+
     [Test]
     public async Task Binary_NoOptions_CopiesInputExactly()
     {
@@ -192,6 +215,47 @@ public class AdaptedStreamProcessorTests
 
         Assert.That(result.Success, Is.True, result.Error);
         Assert.That(Encoding.ASCII.GetString(output), Is.EqualTo("WXYZWXYZxxWXYZab"));
+    }
+
+    [Test]
+    public async Task Binary_PatternsFromJsonByteArrays_AreApplied()
+    {
+        var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(
+            """{ "SearchPattern": [1, 2], "ReplacementPattern": [255, 0, 7] }""")!;
+
+        var (result, output) = await RunBytesAsync(new BinaryStreamProcessor(), new byte[] { 9, 1, 2, 3, 1, 2 }, parameters);
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(output, Is.EqualTo(new byte[] { 9, 255, 0, 7, 3, 255, 0, 7 }));
+    }
+
+    [TestCase("[256]")]
+    [TestCase("[-1]")]
+    [TestCase("[1.5]")]
+    [TestCase("[\"a\"]")]
+    [TestCase("true")]
+    public async Task Binary_InvalidJsonBytePattern_ReportsFailure(string pattern)
+    {
+        var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(
+            $$"""{ "SearchPattern": {{pattern}}, "ReplacementPattern": [0] }""")!;
+
+        var (result, output) = await RunBytesAsync(new BinaryStreamProcessor(), new byte[] { 1, 2, 3 }, parameters);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("SearchPattern"));
+        Assert.That(output, Is.Empty);
+    }
+
+    [TestCase("SearchPattern")]
+    [TestCase("ReplacementPattern")]
+    public async Task Binary_OnlyOnePatternSupplied_ReportsFailure(string key)
+    {
+        var (result, output) = await RunBytesAsync(new BinaryStreamProcessor(), Encoding.ASCII.GetBytes("abc"),
+            new Dictionary<string, object> { [key] = "b" });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("SearchPattern and ReplacementPattern"));
+        Assert.That(output, Is.Empty);
     }
 
     [Test]

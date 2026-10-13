@@ -69,13 +69,34 @@ internal static class StreamProcessorOptionMapper
     }
 
     /// <summary>
-    /// Replaces a string-valued option with its UTF-8 bytes so byte-oriented processors can consume it
+    /// Replaces a byte-pattern option with a <see cref="byte"/> array so byte-oriented processors can
+    /// consume it: strings are taken as UTF-8 and lists (such as JSON arrays) must contain only integers
+    /// in the range 0-255. Absent options are left absent.
     /// </summary>
-    public static void ConvertStringToBytes(Dictionary<string, object> options, string key)
+    /// <exception cref="ArgumentException">The option is present but cannot be converted to bytes.</exception>
+    public static void ConvertToBytes(Dictionary<string, object> options, string key)
     {
-        if (options.TryGetValue(key, out var value) && value is string text)
-            options[key] = Encoding.UTF8.GetBytes(text);
+        if (!options.TryGetValue(key, out var value))
+            return;
+
+        options[key] = value switch
+        {
+            byte[] bytes => bytes,
+            string text => Encoding.UTF8.GetBytes(text),
+            List<object> list => list.Select(element => ToByte(element, key)).ToArray(),
+            _ => throw new ArgumentException(
+                $"{key} must be a string or an array of byte values (integers 0-255).", nameof(options))
+        };
     }
+
+    private static byte ToByte(object element, string key) => element switch
+    {
+        byte b => b,
+        int i and >= byte.MinValue and <= byte.MaxValue => (byte)i,
+        long l and >= byte.MinValue and <= byte.MaxValue => (byte)l,
+        _ => throw new ArgumentException(
+            $"{key} contains '{element}', which is not a byte value (an integer 0-255).", nameof(element))
+    };
 
     private static object? Normalize(object? value) => value switch
     {

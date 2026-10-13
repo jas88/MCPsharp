@@ -65,4 +65,15 @@ public class CsvStreamProcessorTests
     {
         Assert.That(CsvStreamProcessor.QuoteField(field, new CsvProcessorConfig()), Is.EqualTo(expected));
     }
+
+    [TestCase("Delimiter")]
+    [TestCase("QuoteCharacter")]
+    public async Task ValidateOptionsAsync_EmptyDelimiterOrQuote_ReturnsFalse(string key)
+    {
+        var processor = new CsvStreamProcessor();
+
+        var valid = await processor.ValidateOptionsAsync(new Dictionary<string, object> { [key] = string.Empty });
+
+        Assert.That(valid, Is.False);
+    }
 }

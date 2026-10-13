@@ -20,6 +20,9 @@ public class RegexStreamProcessor : IStreamProcessor
         => StreamProcessorExecution.RunAsync("regex", () =>
         {
             var options = StreamProcessorOptionMapper.ToOptionDictionary(context.Options);
+
+            // Compile the pattern up front so a malformed one fails even when the input is empty
+            StreamingRegexProcessor.ValidatePattern(options);
             var inputEncoding = StreamProcessorOptionMapper.ResolveEncoding(context.Options);
             return StreamingProcessorAdapter.ProcessLinesAsync(_processor, input, output, context, options, inputEncoding, Encoding.UTF8, ct);
         });

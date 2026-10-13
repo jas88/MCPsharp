@@ -121,13 +121,13 @@ public partial class CsvStreamProcessor : IStreamProcessor
         var config = new CsvProcessorConfig();
 
         if (options.TryGetValue("Delimiter", out var delimiter) && delimiter is string delimStr)
-            config.Delimiter = delimStr;
+            config.Delimiter = RequireNonEmpty(delimStr, "Delimiter");
 
         if (options.TryGetValue("HasHeader", out var hasHeader) && hasHeader is bool hh)
             config.HasHeader = hh;
 
         if (options.TryGetValue("QuoteCharacter", out var quote) && quote is string quoteStr)
-            config.QuoteCharacter = quoteStr;
+            config.QuoteCharacter = RequireNonEmpty(quoteStr, "QuoteCharacter");
 
         if (options.TryGetValue("EscapeCharacter", out var escape) && escape is string escapeStr)
             config.EscapeCharacter = escapeStr;
@@ -143,6 +143,11 @@ public partial class CsvStreamProcessor : IStreamProcessor
 
         return config;
     }
+
+    private static string RequireNonEmpty(string value, string optionName)
+        => value.Length > 0
+            ? value
+            : throw new ArgumentException($"{optionName} must not be empty.", optionName);
 
     /// <summary>
     /// Quotes a field for output per RFC 4180 when it contains the delimiter, the quote character or a
