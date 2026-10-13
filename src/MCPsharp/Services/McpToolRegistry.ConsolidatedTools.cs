@@ -26,7 +26,7 @@ public partial class McpToolRegistry
     private const string ProcessorOptionsDescription =
         "Processor parameters (keys are case-insensitive). " +
         "line: LineFilter, LineReplacement, LinePrefix, LineSuffix, IncludeLineNumbers, RemoveEmptyLines, TrimWhitespace, FieldSeparator, SelectedFields, Encoding. " +
-        "regex: Pattern, Replacement, IgnoreCase, Multiline, MatchWholeLine, MaxMatches (0 = unlimited), Options (raw System.Text.RegularExpressions.RegexOptions flags as an integer). " +
+        "regex: Pattern, Replacement, IgnoreCase, Multiline, MatchWholeLine, MaxMatches (per chunk; 0 = unlimited), Options (raw System.Text.RegularExpressions.RegexOptions flags as an integer). " +
         "csv: Delimiter, QuoteCharacter, SelectedColumnIndexes, SkipEmptyRows, TrimFields. " +
         "json: JsonLines, Indented. xml: Indent. log: MinLevel, Levels, Pattern, IgnoreCase. " +
         "binary: SearchPattern and ReplacementPattern (supplied together; a UTF-8 string or an array of byte values 0-255), CalculateChecksums, ChecksumAlgorithm (SHA256, SHA512).";
@@ -336,7 +336,7 @@ public partial class McpToolRegistry
         new McpTool
         {
             Name = "process_stream",
-            Description = "Stream-process large files in the open project with a built-in processor (line, regex, csv, json, binary, xml, log) in chunks. Returns an operation_id usable with monitor_stream.",
+            Description = "Stream-process large files in the open project with a built-in processor (line, regex, csv, json, binary, xml, log) in chunks; json loads the whole document into memory unless JsonLines=true, which processes it line by line. Returns an operation_id usable with monitor_stream.",
             InputSchema = JsonSchemaHelper.CreateSchema(
                 Prop("processor_type", "string", "Processor to apply", required: true, enumValues: StreamProcessorValues),
                 Prop("input_type", "string", "Input kind (default: file)", enumValues: StreamInputTypeValues),
