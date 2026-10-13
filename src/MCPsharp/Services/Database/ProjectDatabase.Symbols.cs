@@ -85,7 +85,7 @@ public sealed partial class ProjectDatabase
         var sql = @"
             SELECT id, file_id, name, kind, namespace, containing_type, line, column, end_line, end_column, accessibility, signature
             FROM symbols
-            WHERE name LIKE $pattern";
+            WHERE name LIKE $pattern ESCAPE '\'";
 
         if (kind != null)
         {
@@ -95,7 +95,7 @@ public sealed partial class ProjectDatabase
         sql += " ORDER BY name LIMIT $limit";
 
         cmd.CommandText = sql;
-        cmd.Parameters.AddWithValue("$pattern", $"%{name}%");
+        cmd.Parameters.AddWithValue("$pattern", ToContainsLikePattern(name));
         if (kind != null)
         {
             cmd.Parameters.AddWithValue("$kind", kind);
@@ -189,11 +189,12 @@ public sealed partial class ProjectDatabase
 
     // One fixed query per combination of active list filters, so SQLite can use the kind/namespace
     // indexes (a "$p IS NULL OR ..." guard would prevent that). The name filter is a substring LIKE,
-    // which cannot use an index, so it stays optional via NULL.
+    // which cannot use an index, so it stays optional via NULL. Every variant shares the
+    // ESCAPE '\' clause in SearchSymbolsSelect, matching ToContainsLikePattern.
     private const string SearchSymbolsSelect = @"
             SELECT id, file_id, name, kind, namespace, containing_type, line, column, end_line, end_column, accessibility, signature
             FROM symbols
-            WHERE ($query IS NULL OR name LIKE $query)";
+            WHERE ($query IS NULL OR name LIKE $query ESCAPE '\')";
 
     private const string KindFilter = @"
               AND kind IN (SELECT value FROM json_each($kinds))";
@@ -209,6 +210,19 @@ public sealed partial class ProjectDatabase
     internal const string SearchSymbolsByNamespaceQuery = SearchSymbolsSelect + NamespaceFilter + SearchSymbolsOrder;
     private const string SearchSymbolsByKindAndNamespaceQuery =
         SearchSymbolsSelect + KindFilter + NamespaceFilter + SearchSymbolsOrder;
+
+    /// <summary>
+    /// Builds a substring LIKE pattern for <paramref name="value"/>, escaping LIKE metacharacters
+    /// so <c>%</c>, <c>_</c> (common in identifiers) and <c>\</c> match literally. Use with ESCAPE '\'.
+    /// </summary>
+    private static string ToContainsLikePattern(string value)
+    {
+        var escaped = value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("%", "\\%", StringComparison.Ordinal)
+            .Replace("_", "\\_", StringComparison.Ordinal);
+        return $"%{escaped}%";
+    }
 
     private static string? ToJsonArrayOrNull(IEnumerable<string>? values)
     {
@@ -252,7 +266,7 @@ public sealed partial class ProjectDatabase
             cmd.CommandText = SearchSymbolsQuery;
         }
 
-        cmd.Parameters.AddWithValue("$query", string.IsNullOrEmpty(query) ? DBNull.Value : $"%{query}%");
+        cmd.Parameters.AddWithValue("$query", string.IsNullOrEmpty(query) ? DBNull.Value : ToContainsLikePattern(query));
         if (kindsJson != null)
             cmd.Parameters.AddWithValue("$kinds", kindsJson);
         if (namespacesJson != null)

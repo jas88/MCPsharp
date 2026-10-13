@@ -185,6 +185,33 @@ public partial class ProjectDatabaseTests
     }
 
     [Test]
+    public async Task SearchSymbolsAsync_TreatsLikeWildcardsInQueryLiterally()
+    {
+        // Arrange
+        var projectId = await _db.GetOrCreateProjectAsync("/test/path", "TestProject");
+        var fileId = await _db.UpsertFileAsync(projectId, "Program.cs", "hash1", 100, "csharp");
+
+        await _db.UpsertSymbolAsync(CreateTestSymbol(fileId, "Foo_Bar", "Class", ns: "N1"));
+        await _db.UpsertSymbolAsync(CreateTestSymbol(fileId, "FooXBar", "Class", ns: "N1"));
+        await _db.UpsertSymbolAsync(CreateTestSymbol(fileId, "Pct%Name", "Class", ns: "N1"));
+        await _db.UpsertSymbolAsync(CreateTestSymbol(fileId, "Back\\Slash", "Class", ns: "N1"));
+
+        // Act
+        var underscore = await _db.SearchSymbolsAsync(query: "Foo_Bar");
+        var underscoreFiltered = await _db.SearchSymbolsAsync(query: "Foo_Bar", kinds: ClassKindFilter, namespaces: ["N1"]);
+        var percent = await _db.SearchSymbolsAsync(query: "%");
+        var backslash = await _db.SearchSymbolsAsync(query: "k\\S", kinds: ClassKindFilter);
+        var byName = await _db.FindSymbolsByNameAsync("o_B");
+
+        // Assert
+        Assert.That(underscore.Select(s => s.Name), Is.EqualTo(new[] { "Foo_Bar" }));
+        Assert.That(underscoreFiltered.Select(s => s.Name), Is.EqualTo(new[] { "Foo_Bar" }));
+        Assert.That(percent.Select(s => s.Name), Is.EqualTo(new[] { "Pct%Name" }));
+        Assert.That(backslash.Select(s => s.Name), Is.EqualTo(new[] { "Back\\Slash" }));
+        Assert.That(byName.Select(s => s.Name), Is.EqualTo(new[] { "Foo_Bar" }));
+    }
+
+    [Test]
     public async Task SearchSymbolsByKindQuery_UsesKindIndex()
     {
         var plan = await ExplainSymbolSearchAsync(cmd => cmd.CommandText = "EXPLAIN QUERY PLAN " + ProjectDatabase.SearchSymbolsByKindQuery);
