@@ -6,8 +6,9 @@ namespace MCPsharp.Services.Consolidated;
 /// The text encoding of a processor's input and output: the encoding named by a byte order mark at the
 /// start of the input, or the configured encoding when there is none. Output is written in the same
 /// encoding and starts with the byte order mark only when the input did, so text processors do not
-/// change a file's encoding. Characters that cannot be represented in the encoding fail the write
-/// (<see cref="EncoderFallbackException"/>) rather than being silently replaced.
+/// change a file's encoding. Bytes that are not valid in the encoding fail the read, and characters
+/// that cannot be represented in it fail the write (<see cref="DecoderFallbackException"/> and
+/// <see cref="EncoderFallbackException"/>), rather than being silently replaced.
 /// </summary>
 internal sealed class TextStreamEncoding
 {
@@ -65,6 +66,13 @@ internal sealed class TextStreamEncoding
         => new(Content, Encoding, detectEncodingFromByteOrderMarks: false, bufferSize: 4096, leaveOpen: true);
 
     /// <summary>
+    /// Checks that <paramref name="content"/> is valid in <see cref="Encoding"/>, for input that is not
+    /// decoded through <see cref="CreateReader"/>.
+    /// </summary>
+    /// <exception cref="DecoderFallbackException">The content contains bytes that are not valid in the encoding.</exception>
+    public void Validate(ReadOnlySpan<byte> content) => _ = Encoding.GetCharCount(content);
+
+    /// <summary>
     /// Writes the input's byte order mark to <paramref name="output"/> if the input had one.
     /// </summary>
     /// <returns>The number of bytes written.</returns>
@@ -110,6 +118,7 @@ internal sealed class TextStreamEncoding
 
         var strict = (Encoding)plain.Clone();
         strict.EncoderFallback = EncoderFallback.ExceptionFallback;
+        strict.DecoderFallback = new InvalidInputDecoderFallback(plain.WebName);
         return strict;
     }
 

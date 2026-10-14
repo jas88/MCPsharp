@@ -79,7 +79,15 @@ public class JsonStreamProcessor : IStreamProcessor
     private static async Task<JsonDocument> ParseDocumentAsync(TextStreamEncoding text, CancellationToken ct)
     {
         if (text.IsUtf8)
-            return await JsonDocument.ParseAsync(text.Content, DocumentOptions, ct).ConfigureAwait(false);
+        {
+            // The JSON reader does not validate the UTF-8 inside strings, which would then be copied to the
+            // output as-is: validate the whole input first (it is buffered in full to be parsed anyway)
+            var content = new MemoryStream();
+            await text.Content.CopyToAsync(content, ct).ConfigureAwait(false);
+            var bytes = content.GetBuffer().AsMemory(0, (int)content.Length);
+            text.Validate(bytes.Span);
+            return JsonDocument.Parse(bytes, DocumentOptions);
+        }
 
         using var reader = text.CreateReader();
         return JsonDocument.Parse(await reader.ReadToEndAsync(ct).ConfigureAwait(false), DocumentOptions);
