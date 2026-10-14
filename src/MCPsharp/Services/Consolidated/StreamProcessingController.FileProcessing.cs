@@ -65,12 +65,58 @@ public partial class StreamProcessingController
     }
 
     /// <summary>
-    /// Inputs resolved for a directory or multiple-files request: the files to process, each paired with
-    /// its output path, and the listed paths that do not exist
+    /// One input of a directory or multiple-files request: an existing file paired with its output path
+    /// (empty when there is no output), or a listed path that does not exist
     /// </summary>
-    private sealed record InputSelection(List<(string Input, string Output)> Files, List<string> Missing)
+    private sealed record InputEntry(string Input, string Output, bool Exists)
     {
-        public int Count => Files.Count + Missing.Count;
+        public static InputEntry Present(string input, string output) => new(input, output, true);
+
+        public static InputEntry Missing(string input) => new(input, string.Empty, false);
+    }
+
+    /// <summary>
+    /// Inputs resolved for a directory or multiple-files request, in the order they are processed and
+    /// reported (for a multiple-files request, the order the caller listed them in)
+    /// </summary>
+    private sealed record InputSelection(List<InputEntry> Entries)
+    {
+        public int Count => Entries.Count;
+
+        public IEnumerable<InputEntry> Present => Entries.Where(entry => entry.Exists);
+    }
+
+    /// <summary>
+    /// Checks the output path before anything is written: it must not be one of the input files (creating
+    /// it would truncate that input before it is read), and it must not be an existing file when several
+    /// inputs would be written to it. Returns the error, or null when the output path is acceptable.
+    /// </summary>
+    private static string? ValidateOutputPath(ConsolidatedStream.StreamProcessRequest request, InputSelection? selection)
+    {
+        if (string.IsNullOrEmpty(request.OutputPath))
+            return null;
+
+        var outputPath = Path.GetFullPath(request.OutputPath);
+        if (InputFiles(request, selection).Any(input => PathComparer.Equals(input, outputPath)))
+            return $"Output path must not be one of the input files: {request.OutputPath}";
+
+        if (selection != null && selection.Present.Skip(1).Any() && File.Exists(request.OutputPath))
+            return $"Output path must be a directory when processing several files: {request.OutputPath}";
+
+        return null;
+    }
+
+    /// <summary>
+    /// The full paths of the existing input files of a request
+    /// </summary>
+    private static IEnumerable<string> InputFiles(ConsolidatedStream.StreamProcessRequest request, InputSelection? selection)
+    {
+        if (selection != null)
+            return selection.Present.Select(entry => entry.Input);
+
+        return request.InputType == StreamInputType.File && request.InputPath != null
+            ? new[] { Path.GetFullPath(request.InputPath) }
+            : Enumerable.Empty<string>();
     }
 
     /// <summary>
@@ -86,27 +132,32 @@ public partial class StreamProcessingController
     private static InputSelection SelectDirectoryInputs(ConsolidatedStream.StreamProcessRequest request)
     {
         if (request.InputPath == null)
-            return new InputSelection(new List<(string, string)>(), new List<string>());
+            return new InputSelection(new List<InputEntry>());
 
         var inputRoot = Path.GetFullPath(request.InputPath);
         var searchOption = request.Recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
 
         // Snapshot the inputs before writing anything so outputs created by this run are never picked up
         var files = Directory.EnumerateFiles(inputRoot, request.SearchPattern ?? "*", searchOption).ToList();
-        return new InputSelection(ExcludeGeneratedOutputs(files, request.OutputPath, inputRoot), new List<string>());
+        var entries = ExcludeGeneratedOutputs(files, request.OutputPath, inputRoot)
+            .Select(file => InputEntry.Present(file.Input, file.Output))
+            .ToList();
+        return new InputSelection(entries);
     }
 
     private static InputSelection SelectListedInputs(ConsolidatedStream.StreamProcessRequest request)
     {
-        var listed = request.Files ?? new List<string>();
-        var files = listed.Where(File.Exists).Select(Path.GetFullPath).ToList();
-        var missing = listed.Where(path => !File.Exists(path)).ToList();
-        var inputRoot = CommonDirectory(files);
-        var outputs = files
-            .Select(file => (Input: file, Output: GetOutputPath(request.OutputPath, inputRoot, file)))
+        var listed = (request.Files ?? new List<string>())
+            .Select(path => (Listed: path, FullPath: File.Exists(path) ? Path.GetFullPath(path) : null))
+            .ToList();
+        var inputRoot = CommonDirectory(listed.Select(item => item.FullPath).OfType<string>().ToList());
+        var entries = listed
+            .Select(item => item.FullPath != null
+                ? InputEntry.Present(item.FullPath, GetOutputPath(request.OutputPath, inputRoot, item.FullPath))
+                : InputEntry.Missing(item.Listed))
             .ToList();
 
-        return new InputSelection(outputs, missing);
+        return new InputSelection(entries);
     }
 
     private async Task<List<StreamProcessResult>> ProcessFilesAsync(
@@ -118,37 +169,12 @@ public partial class StreamProcessingController
     {
         var results = new List<StreamProcessResult>();
 
-        foreach (var missing in selection.Missing)
+        foreach (var (file, outputPath, exists) in selection.Entries)
         {
-            context.AddLog($"Input file not found: '{missing}'");
-            results.Add(new StreamProcessResult
-            {
-                InputPath = missing,
-                ProcessorType = request.ProcessorType,
-                Success = false,
-                Error = $"File not found: {missing}"
-            });
-        }
-
-        foreach (var (file, outputPath) in selection.Files)
-        {
-            if (Path.GetDirectoryName(outputPath) is { Length: > 0 } outputDirectory)
-                Directory.CreateDirectory(outputDirectory);
-
-            var fileRequest = new ConsolidatedStream.StreamProcessRequest
-            {
-                InputType = StreamInputType.File,
-                InputPath = file,
-                OutputPath = outputPath,
-                ProcessorType = request.ProcessorType,
-                ProcessorOptions = request.ProcessorOptions,
-                ChunkSize = request.ChunkSize,
-                EnableCompression = request.EnableCompression,
-                EnableCheckpoints = request.EnableCheckpoints
-            };
-
-            var fileResults = await ProcessFileStreamAsync(fileRequest, processor, context, ct);
-            results.AddRange(fileResults);
+            if (exists)
+                results.AddRange(await ProcessSelectedFileAsync(request, processor, context, file, outputPath, ct));
+            else
+                results.Add(MissingInputResult(request, context, file));
 
             // Update progress
             if (_progressTracker != null && context.ProgressId != null)
@@ -159,12 +185,53 @@ public partial class StreamProcessingController
                     TotalSteps = selection.Count,
                     CurrentStep = results.Count,
                     CurrentItem = file,
-                    Message = $"Processing {Path.GetFileName(file)}"
+                    Message = exists ? $"Processing {Path.GetFileName(file)}" : $"Input file not found: {file}"
                 }, ct);
             }
         }
 
         return results;
+    }
+
+    private Task<List<StreamProcessResult>> ProcessSelectedFileAsync(
+        ConsolidatedStream.StreamProcessRequest request,
+        IStreamProcessor processor,
+        StreamOperationContext context,
+        string file,
+        string outputPath,
+        CancellationToken ct)
+    {
+        if (Path.GetDirectoryName(outputPath) is { Length: > 0 } outputDirectory)
+            Directory.CreateDirectory(outputDirectory);
+
+        var fileRequest = new ConsolidatedStream.StreamProcessRequest
+        {
+            InputType = StreamInputType.File,
+            InputPath = file,
+            OutputPath = outputPath,
+            ProcessorType = request.ProcessorType,
+            ProcessorOptions = request.ProcessorOptions,
+            ChunkSize = request.ChunkSize,
+            EnableCompression = request.EnableCompression,
+            EnableCheckpoints = request.EnableCheckpoints
+        };
+
+        return ProcessFileStreamAsync(fileRequest, processor, context, ct);
+    }
+
+    private static StreamProcessResult MissingInputResult(
+        ConsolidatedStream.StreamProcessRequest request,
+        StreamOperationContext context,
+        string path)
+    {
+        context.AddLog($"Input file not found: '{path}'");
+        return new StreamProcessResult
+        {
+            InputPath = path,
+            ProcessorType = request.ProcessorType,
+            Success = false,
+            Error = $"File not found: {path}"
+        };
     }
 
     private static List<StreamProcessResult> ProcessDataStream()
@@ -176,13 +243,17 @@ public partial class StreamProcessingController
     /// <summary>
     /// Pairs each enumerated input with its output path, dropping inputs that are outputs of an earlier
     /// run: files inside an output directory nested in the input tree, and files that another input
-    /// would be written to (which covers an output directory equal to the input directory).
+    /// would be written to (which covers an output directory equal to the input directory). An existing
+    /// output file is not dropped: the request is rejected if it is one of the inputs.
     /// </summary>
     private static List<(string Input, string Output)> ExcludeGeneratedOutputs(
         List<string> files, string? outputPath, string inputRoot)
     {
         if (string.IsNullOrEmpty(outputPath))
             return files.Select(file => (file, string.Empty)).ToList();
+
+        if (File.Exists(outputPath))
+            return files.Select(file => (file, outputPath)).ToList();
 
         var outputRoot = Path.GetFullPath(outputPath);
         var outputNestedInInput = IsUnder(outputRoot, inputRoot);
@@ -197,7 +268,7 @@ public partial class StreamProcessingController
 
     /// <summary>
     /// Maps an input file to its output path. An existing output file is used as-is (the request is
-    /// rejected when more than one input would be written to it); otherwise the output path is a directory and the input's path
+    /// rejected when it is one of the inputs or more than one input would be written to it); otherwise the output path is a directory and the input's path
     /// relative to <paramref name="inputRoot"/> is preserved beneath it, so inputs with the same name in
     /// different directories do not collide.
     /// </summary>

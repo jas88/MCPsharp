@@ -14,6 +14,7 @@ namespace MCPsharp.Tests.Services.Consolidated;
 public class StreamProcessingControllerProcessorTests
 {
     private static readonly string[] OriginalInputNames = ["data.txt", "more.txt"];
+    private static readonly bool[] PresentMissingPresent = [true, false, true];
 
     private string _tempDir = null!;
     private StreamProcessingController _controller = null!;
@@ -287,6 +288,62 @@ public class StreamProcessingControllerProcessorTests
         Assert.That(failed.InputPath, Is.EqualTo(missing));
         Assert.That(failed.Error, Is.EqualTo($"File not found: {missing}"));
         Assert.That(await File.ReadAllTextAsync(Path.Combine(outputDir, "data_processed.txt")), Is.EqualTo(Lines("> here")));
+    }
+
+    [Test]
+    public async Task ProcessMultipleFiles_MissingBetweenPresent_ReportsResultsInListedOrder()
+    {
+        var first = WriteInput("first.txt", "one\n");
+        var missing = Path.Combine(_tempDir, "nope.txt");
+        var second = WriteInput("second.txt", "two\n");
+
+        var request = PrefixRequest(StreamInputType.MultipleFiles, null, Path.Combine(_tempDir, "out"));
+        request.Files = new List<string> { first, missing, second };
+        var response = await _controller.ProcessStreamAsync(request);
+
+        var results = response.Results!;
+        Assert.That(results.Select(r => r.InputPath), Is.EqualTo(new[] { Path.GetFullPath(first), missing, Path.GetFullPath(second) }));
+        Assert.That(results.Select(r => r.Success), Is.EqualTo(PresentMissingPresent));
+    }
+
+    [Test]
+    public async Task ProcessFile_OutputPathIsTheInput_IsRejectedAndInputIsUntouched()
+    {
+        var input = WriteInput("data.txt", "keep me\n");
+
+        var response = await _controller.ProcessStreamAsync(PrefixRequest(StreamInputType.File, input, input));
+
+        Assert.That(response.Success, Is.False);
+        Assert.That(response.Error, Is.EqualTo($"Output path must not be one of the input files: {input}"));
+        Assert.That(await File.ReadAllTextAsync(input), Is.EqualTo("keep me\n"));
+    }
+
+    [Test]
+    public async Task ProcessMultipleFiles_OutputPathIsOneOfTheInputs_IsRejectedAndInputIsUntouched()
+    {
+        var input = WriteInput("data.txt", "keep me\n");
+
+        var request = PrefixRequest(StreamInputType.MultipleFiles, null, input);
+        request.Files = new List<string> { Path.Combine(_tempDir, "nope.txt"), input };
+        var response = await _controller.ProcessStreamAsync(request);
+
+        Assert.That(response.Success, Is.False);
+        Assert.That(response.Error, Is.EqualTo($"Output path must not be one of the input files: {input}"));
+        Assert.That(await File.ReadAllTextAsync(input), Is.EqualTo("keep me\n"));
+    }
+
+    [Test]
+    public async Task ProcessDirectory_OutputPathIsAFileInTheInputDirectory_IsRejectedAndFilesAreUntouched()
+    {
+        var target = WriteInput("a.txt", "keep me\n");
+        var other = WriteInput("b.txt", "other\n");
+
+        var response = await _controller.ProcessStreamAsync(PrefixRequest(StreamInputType.Directory, _tempDir, target));
+
+        Assert.That(response.Success, Is.False);
+        Assert.That(response.Error, Is.EqualTo($"Output path must not be one of the input files: {target}"));
+        Assert.That(await File.ReadAllTextAsync(target), Is.EqualTo("keep me\n"));
+        Assert.That(await File.ReadAllTextAsync(other), Is.EqualTo("other\n"));
     }
 
     [Test]

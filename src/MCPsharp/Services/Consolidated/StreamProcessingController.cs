@@ -78,11 +78,12 @@ public partial class StreamProcessingController
             try
             {
                 // Resolve the inputs before writing anything, so the step count is exact and a request
-                // that would write several inputs to one existing file is rejected up front
+                // that would overwrite an input, or write several inputs to one existing file, is rejected up front
                 var selection = SelectInputs(request);
-                if (selection is { Files.Count: > 1 } && !string.IsNullOrEmpty(request.OutputPath) && File.Exists(request.OutputPath))
+                var outputError = ValidateOutputPath(request, selection);
+                if (outputError != null)
                 {
-                    response.Error = $"Output path must be a directory when processing several files: {request.OutputPath}";
+                    response.Error = outputError;
                     response.Success = false;
                     context.Status = StreamStatus.Failed;
                     context.AddLog(response.Error);
