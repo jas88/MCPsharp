@@ -49,15 +49,16 @@ public class JsonStreamProcessor : IStreamProcessor
 
         using (document)
         {
-            await text.WriteByteOrderMarkAsync(output, ct).ConfigureAwait(false);
+            long bytesWritten = await text.WriteByteOrderMarkAsync(output, ct).ConfigureAwait(false);
 
             // Utf8JsonWriter only writes UTF-8: buffer the output to transcode it unless the input is UTF-8
             using var buffer = text.IsUtf8 ? null : new MemoryStream();
             await using var writer = new Utf8JsonWriter(buffer ?? output, new JsonWriterOptions { Indented = indented });
             document.WriteTo(writer);
             await writer.FlushAsync(ct).ConfigureAwait(false);
-            if (buffer != null)
-                await text.WriteUtf8Async(output, buffer.GetBuffer().AsMemory(0, (int)buffer.Length), ct).ConfigureAwait(false);
+            bytesWritten += buffer != null
+                ? await text.WriteUtf8Async(output, buffer.GetBuffer().AsMemory(0, (int)buffer.Length), ct).ConfigureAwait(false)
+                : writer.BytesCommitted;
 
             var root = document.RootElement;
             var records = root.ValueKind == JsonValueKind.Array ? root.GetArrayLength() : 1;
@@ -65,12 +66,12 @@ public class JsonStreamProcessor : IStreamProcessor
             {
                 Success = true,
                 RecordsProcessed = records,
-                BytesProcessed = input.CanSeek ? input.Length : writer.BytesCommitted,
+                BytesProcessed = input.CanSeek ? input.Length : bytesWritten,
                 Message = $"Validated JSON document ({root.ValueKind}, {records} record(s))",
                 Metrics = new Dictionary<string, object>
                 {
                     ["RootKind"] = root.ValueKind.ToString(),
-                    ["BytesWritten"] = writer.BytesCommitted
+                    ["BytesWritten"] = bytesWritten
                 }
             };
         }

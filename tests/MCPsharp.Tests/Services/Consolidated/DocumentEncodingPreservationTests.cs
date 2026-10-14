@@ -116,4 +116,43 @@ public class DocumentEncodingPreservationTests
         Assert.That(result.Success, Is.True, result.Error);
         Assert.That(output, Is.EqualTo(input));
     }
+
+    [Test]
+    public async Task Json_Document_Utf16LeWithBom_BytesWrittenIsOutputLength()
+    {
+        var input = Encode(Utf16LeWithBom, "{ \"name\": \"café\" }");
+
+        var (result, output) = await RunBytesAsync(new JsonStreamProcessor(), input);
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.Metrics?["BytesWritten"], Is.EqualTo((long)output.Length));
+    }
+
+    [Test]
+    public async Task Json_Document_NonSeekableUtf16Input_BytesProcessedFallbackIsOutputLength()
+    {
+        var input = Encode(Utf16LeWithBom, "[1, 2, 3]");
+        using var inputStream = new NonSeekableStream(input);
+        using var outputStream = new MemoryStream();
+        var options = new ProcessorOptions();
+
+        var result = await new JsonStreamProcessor().ProcessAsync(inputStream, outputStream, new ProcessingContext
+        {
+            FilePath = "memory.json",
+            OperationId = "test",
+            ChunkSize = 65536,
+            EnableCompression = false,
+            EnableCheckpoints = false,
+            Options = options
+        }, CancellationToken.None);
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.BytesProcessed, Is.EqualTo(outputStream.Length));
+        Assert.That(result.Metrics?["BytesWritten"], Is.EqualTo(outputStream.Length));
+    }
+
+    private sealed class NonSeekableStream(byte[] data) : MemoryStream(data)
+    {
+        public override bool CanSeek => false;
+    }
 }
