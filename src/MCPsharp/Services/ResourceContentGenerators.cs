@@ -323,7 +323,8 @@ public sealed class ResourceContentGenerators
     {
         var relativePath = Path.GetRelativePath(rootPath, filePath);
         var firstSep = relativePath.IndexOfAny(['/', '\\']);
-        if (firstSep <= 0) return string.Empty;
+        if (firstSep <= 0)
+            return string.Empty;
         return relativePath[..firstSep];
     }
 }

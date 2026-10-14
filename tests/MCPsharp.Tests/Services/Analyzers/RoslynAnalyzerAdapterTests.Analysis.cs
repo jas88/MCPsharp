@@ -1,7 +1,7 @@
+using MCPsharp.Models.Analyzers;
+using MCPsharp.Services.Analyzers;
 using Microsoft.CodeAnalysis;
 using NUnit.Framework;
-using MCPsharp.Services.Analyzers;
-using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Tests.Services.Analyzers;
 

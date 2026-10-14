@@ -1,13 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
+using MCPsharp.Models.Streaming;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MCPsharp.Models.Streaming;
 
 namespace MCPsharp.Services.Streaming;
 
@@ -47,34 +43,22 @@ public partial class RegexStreamProcessor : IStreamProcessor
         var text = Encoding.UTF8.GetString(chunk.Data);
         var processedText = text;
 
-        if (!string.IsNullOrEmpty(config.Pattern))
+        if (CreateRegex(config) is { } regex)
         {
-            var regexOptions = config.Options;
-            if (config.Multiline) regexOptions |= RegexOptions.Multiline;
-            if (config.IgnoreCase) regexOptions |= RegexOptions.IgnoreCase;
-
-            var regex = new Regex(config.Pattern, regexOptions, RegexTimeout);
-
-            if (!string.IsNullOrEmpty(config.Replacement))
+            // An empty replacement deletes the matches; only a missing one means "no replacement"
+            if (config.Replacement != null)
             {
-                processedText = regex.Replace(processedText, config.Replacement, config.MaxMatches);
+                // MaxMatches <= 0 means unlimited; Regex.Replace only treats a negative count as unlimited
+                // (a count of 0 replaces nothing)
+                var count = config.MaxMatches > 0 ? config.MaxMatches : -1;
+                processedText = regex.Replace(processedText, config.Replacement, count);
             }
             else if (config.MatchWholeLine)
             {
-                var matches = regex.Matches(processedText);
-                var lines = processedText.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
-                var matchingLines = new List<string>();
-
-                foreach (Match match in matches)
-                {
-                    var lineIndex = processedText.Substring(0, match.Index).Count(c => c == '\n');
-                    if (lineIndex < lines.Length)
-                    {
-                        matchingLines.Add(lines[lineIndex]);
-                    }
-                }
-
-                processedText = string.Join(Environment.NewLine, matchingLines);
+                // Keep each line that contains a match, once, in its original order
+                var lines = TextChunkLines.Split(processedText, out var endsWithLineBreak);
+                var matchingLines = lines.Where(line => regex.IsMatch(line)).ToList();
+                processedText = TextChunkLines.Join(matchingLines, endsWithLineBreak);
             }
         }
 
@@ -97,7 +81,7 @@ public partial class RegexStreamProcessor : IStreamProcessor
     {
         try
         {
-            ParseConfig(options);
+            ValidatePattern(options);
             return Task.FromResult(true);
         }
         catch (Exception ex)
@@ -105,6 +89,27 @@ public partial class RegexStreamProcessor : IStreamProcessor
             LogInvalidOptions(_logger, ex);
             return Task.FromResult(false);
         }
+    }
+
+    /// <summary>
+    /// Parses the options and compiles the configured pattern (if any) exactly as processing does,
+    /// throwing <see cref="ArgumentException"/> for a malformed pattern or invalid options.
+    /// </summary>
+    internal static void ValidatePattern(Dictionary<string, object> options)
+        => CreateRegex(ParseConfig(options));
+
+    private static Regex? CreateRegex(RegexProcessorConfig config)
+    {
+        if (string.IsNullOrEmpty(config.Pattern))
+            return null;
+
+        var regexOptions = config.Options;
+        if (config.Multiline)
+            regexOptions |= RegexOptions.Multiline;
+        if (config.IgnoreCase)
+            regexOptions |= RegexOptions.IgnoreCase;
+
+        return new Regex(config.Pattern, regexOptions, RegexTimeout);
     }
 
     private static RegexProcessorConfig ParseConfig(Dictionary<string, object> options)

@@ -1,5 +1,5 @@
-using Microsoft.CodeAnalysis;
 using MCPsharp.Models.Architecture;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Phase3;
 
@@ -126,7 +126,8 @@ public partial class ArchitectureValidatorService
 
     private static List<string> ExtractCycle(List<string> path)
     {
-        if (path.Count < 2) return path;
+        if (path.Count < 2)
+            return path;
 
         // Find the start of the cycle
         var lastNode = path[^1];

@@ -213,7 +213,6 @@ public partial class ProjectDatabaseTests
         };
 
         await _db.UpsertFilesBatchAsync(projectId, files);
-        var countBefore = await _db.GetFileCountAsync(projectId);
 
         // Act & Assert - batch should succeed even with updates
         var filesUpdate = new[]

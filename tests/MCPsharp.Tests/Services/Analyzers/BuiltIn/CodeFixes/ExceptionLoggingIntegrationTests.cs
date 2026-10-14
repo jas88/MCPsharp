@@ -1,9 +1,9 @@
-using NUnit.Framework;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
 using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Base;
 using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.Analyzers.BuiltIn.CodeFixes;
 

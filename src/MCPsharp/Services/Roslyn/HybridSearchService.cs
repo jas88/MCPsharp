@@ -1,9 +1,8 @@
-﻿using Microsoft.CodeAnalysis;
+using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
-using System.Text.RegularExpressions;
-using MCPsharp.Models.Roslyn;
 
 namespace MCPsharp.Services.Roslyn;
 
@@ -124,7 +123,7 @@ public partial class HybridSearchService
         }
 
         // Fallback to syntax-only search
-        if ((effectiveStrategy == SearchStrategy.Syntax || effectiveStrategy == SearchStrategy.Auto || 
+        if ((effectiveStrategy == SearchStrategy.Syntax || effectiveStrategy == SearchStrategy.Auto ||
              effectiveStrategy == SearchStrategy.Semantic) &&
             health.CanDoSyntaxOperations)
         {
@@ -395,7 +394,7 @@ public partial class HybridSearchService
                 return recordDecl.Identifier.Text;
             if (parent is StructDeclarationSyntax structDecl)
                 return structDecl.Identifier.Text;
-                
+
             parent = parent.Parent;
         }
         return null;
@@ -410,7 +409,7 @@ public partial class HybridSearchService
                 return namespaceDecl.Name.ToString();
             if (parent is FileScopedNamespaceDeclarationSyntax fileScopedNs)
                 return fileScopedNs.Name.ToString();
-                
+
             parent = parent.Parent;
         }
         return null;
@@ -418,14 +417,22 @@ public partial class HybridSearchService
 
     private static string InferKind(string line)
     {
-        if (line.Contains(" class ")) return "class";
-        if (line.Contains(" interface ")) return "interface";
-        if (line.Contains(" record ")) return "record";
-        if (line.Contains(" struct ")) return "struct";
-        if (line.Contains(" enum ")) return "enum";
-        if (line.Contains('(')) return "method";
-        if (line.Contains('{')) return "property";
-        if (line.Contains(';') || line.Contains('=')) return "field";
+        if (line.Contains(" class "))
+            return "class";
+        if (line.Contains(" interface "))
+            return "interface";
+        if (line.Contains(" record "))
+            return "record";
+        if (line.Contains(" struct "))
+            return "struct";
+        if (line.Contains(" enum "))
+            return "enum";
+        if (line.Contains('('))
+            return "method";
+        if (line.Contains('{'))
+            return "property";
+        if (line.Contains(';') || line.Contains('='))
+            return "field";
         return "unknown";
     }
 

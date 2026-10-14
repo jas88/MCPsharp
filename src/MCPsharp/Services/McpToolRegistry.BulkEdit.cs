@@ -343,52 +343,52 @@ public partial class McpToolRegistry
             }
 
             // Convert MultiFileOperation to MultiFileEditOperation
-          var editOperations = operations.Select(op => new MultiFileEditOperation
-          {
-              FilePattern = op.FilePattern,
-              Edits = op.Edits.Select<FileEdit, TextEdit>(e =>
-              {
-                  // Determine the type of edit based on the Type property
-                  return e.Type?.ToLowerInvariant() switch
-                  {
-                      "insert" or "insertion" => new InsertEdit
-                      {
-                          NewText = e.NewText ?? string.Empty,
-                          StartLine = e.StartLine ?? 0,
-                          EndLine = e.EndLine ?? 0,
-                          StartColumn = e.StartColumn ?? 0,
-                          EndColumn = e.EndColumn ?? 0
-                      },
-                      "delete" or "deletion" => new DeleteEdit
-                      {
-                          NewText = e.NewText ?? string.Empty,
-                          StartLine = e.StartLine ?? 0,
-                          EndLine = e.EndLine ?? 0,
-                          StartColumn = e.StartColumn ?? 0,
-                          EndColumn = e.EndColumn ?? 0
-                      },
-                      "replace" or "replacement" or _ => new ReplaceEdit
-                      {
-                          NewText = e.NewText ?? string.Empty,
-                          StartLine = e.StartLine ?? 0,
-                          EndLine = e.EndLine ?? 0,
-                          StartColumn = e.StartColumn ?? 0,
-                          EndColumn = e.EndColumn ?? 0
-                      }
-                  };
-              }).ToList(),
-              Priority = op.Priority,
-              DependsOn = op.DependsOn
-          }).ToList();
+            var editOperations = operations.Select(op => new MultiFileEditOperation
+            {
+                FilePattern = op.FilePattern,
+                Edits = op.Edits.Select<FileEdit, TextEdit>(e =>
+                {
+                    // Determine the type of edit based on the Type property
+                    return e.Type?.ToLowerInvariant() switch
+                    {
+                        "insert" or "insertion" => new InsertEdit
+                        {
+                            NewText = e.NewText ?? string.Empty,
+                            StartLine = e.StartLine ?? 0,
+                            EndLine = e.EndLine ?? 0,
+                            StartColumn = e.StartColumn ?? 0,
+                            EndColumn = e.EndColumn ?? 0
+                        },
+                        "delete" or "deletion" => new DeleteEdit
+                        {
+                            NewText = e.NewText ?? string.Empty,
+                            StartLine = e.StartLine ?? 0,
+                            EndLine = e.EndLine ?? 0,
+                            StartColumn = e.StartColumn ?? 0,
+                            EndColumn = e.EndColumn ?? 0
+                        },
+                        "replace" or "replacement" or _ => new ReplaceEdit
+                        {
+                            NewText = e.NewText ?? string.Empty,
+                            StartLine = e.StartLine ?? 0,
+                            EndLine = e.EndLine ?? 0,
+                            StartColumn = e.StartColumn ?? 0,
+                            EndColumn = e.EndColumn ?? 0
+                        }
+                    };
+                }).ToList(),
+                Priority = op.Priority,
+                DependsOn = op.DependsOn
+            }).ToList();
 
-          var options = new BulkEditOptions
-          {
-              CreateBackups = true,
-              PreviewMode = false,
-              MaxParallelism = Environment.ProcessorCount
-          };
+            var options = new BulkEditOptions
+            {
+                CreateBackups = true,
+                PreviewMode = false,
+                MaxParallelism = Environment.ProcessorCount
+            };
 
-          var result = await _bulkEditService.MultiFileEditAsync(editOperations, options, cancellationToken);
+            var result = await _bulkEditService.MultiFileEditAsync(editOperations, options, cancellationToken);
 
             return new ToolCallResult { Success = result.Success, Result = result, Error = result.Error };
         }

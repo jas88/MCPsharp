@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Reflection;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.Extensions.Logging;
 

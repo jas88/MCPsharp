@@ -20,6 +20,7 @@ public class BulkOperationsHubTests
     private string _plainFile = null!;
     private string _todoText = null!;
     private BulkEditService _bulkEditService = null!;
+    private TempFileManagerService _tempFileManager = null!;
     private BulkOperationsHub _hub = null!;
 
     [SetUp]
@@ -35,16 +36,18 @@ public class BulkOperationsHubTests
         File.WriteAllText(_todoText, "TODO list\n");
 
         _bulkEditService = new BulkEditService();
+        _tempFileManager = new TempFileManagerService();
         _hub = new BulkOperationsHub(
             _bulkEditService,
             new UniversalFileOperations(_root, new FileOperationsService(_root)),
-            tempFileManager: new TempFileManagerService());
+            tempFileManager: _tempFileManager);
     }
 
     [TearDown]
     public void TearDown()
     {
         _bulkEditService.Dispose();
+        _tempFileManager.Dispose();
         if (Directory.Exists(_root))
         {
             Directory.Delete(_root, true);

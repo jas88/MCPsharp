@@ -1,5 +1,5 @@
-using MCPsharp.Services.Roslyn;
 using MCPsharp.Models.BulkEdit;
+using MCPsharp.Services.Roslyn;
 using MCPsharp.Tests.TestData;
 using NUnit.Framework;
 
@@ -104,7 +104,7 @@ public partial class McpToolsIntegrationTests
         // Arrange
         var largeContent = TestDataFixtures.PerformanceTestData.GenerateLargeText(50000);
         var largeFile = CreateTestFile(largeContent, ".cs");
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
 
         // Initialize services
         await InitializeServicesAsync();

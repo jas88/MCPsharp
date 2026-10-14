@@ -10,7 +10,8 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             var symbols = await _symbolQuery.FindSymbolsAsync(symbolName, context);
             var definition = symbols.FirstOrDefault();
@@ -48,7 +49,8 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_referenceFinder == null || _workspace == null) return null;
+            if (_referenceFinder == null || _workspace == null)
+                return null;
 
             var references = await _referenceFinder.FindReferencesAsync(symbolName, context);
             if (references == null || references.References == null)
@@ -75,11 +77,13 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             // Get all references to the symbol
             var references = await GetSymbolReferencesAsync(symbolName, context);
-            if (references == null) return null;
+            if (references == null)
+                return null;
 
             var callers = new List<SymbolCaller>();
 
@@ -125,12 +129,14 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             var references = await GetSymbolReferencesAsync(symbolName, context);
             var callers = await GetSymbolCallersAsync(symbolName, context);
 
-            if (references == null || callers == null) return null;
+            if (references == null || callers == null)
+                return null;
 
             var contexts = references
                 .Where(r => !string.IsNullOrEmpty(r.ContainingMember))
@@ -142,9 +148,12 @@ public partial class UnifiedAnalysisService
                 .ToList();
 
             var patterns = new List<string>();
-            if (callers.Count > 10) patterns.Add("Frequently called");
-            if (references.Count > callers.Count) patterns.Add("Multiple references per caller");
-            if (contexts.Any(c => c.Contains("Test") || c.Contains("test"))) patterns.Add("Used in tests");
+            if (callers.Count > 10)
+                patterns.Add("Frequently called");
+            if (references.Count > callers.Count)
+                patterns.Add("Multiple references per caller");
+            if (contexts.Any(c => c.Contains("Test") || c.Contains("test")))
+                patterns.Add("Used in tests");
 
             return new SymbolUsagePatterns
             {
@@ -166,13 +175,15 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             var relatedSymbols = new List<RelatedSymbol>();
 
             // Get the symbol definition to understand its context
             var definition = await GetSymbolDefinitionAsync(symbolName, context);
-            if (definition == null) return null;
+            if (definition == null)
+                return null;
 
             // Find symbols in the same containing type (simplified - would need type symbol info)
             if (!string.IsNullOrEmpty(definition.ContainingType))
@@ -260,10 +271,12 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             var definition = await GetSymbolDefinitionAsync(symbolName, context);
-            if (definition == null) return null;
+            if (definition == null)
+                return null;
 
             var references = await GetSymbolReferencesAsync(symbolName, context);
 

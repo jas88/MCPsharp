@@ -1,14 +1,7 @@
-using System;
-using System.Collections.Immutable;
-using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
+using MCPsharp.Services.Analyzers;
 using Microsoft.Extensions.Logging;
 using NUnit.Framework;
-using MCPsharp.Services.Analyzers;
-using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Tests.Services.Analyzers;
 
@@ -140,7 +133,7 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var assemblyPath = Assembly.GetExecutingAssembly().Location;
 
         // Act
-        var result = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath);
+        _ = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath);
 
         // Assert - Just verify it completes without throwing
         // Result is ImmutableArray, always has value
@@ -188,7 +181,7 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var assemblies = new[] { validAssembly, invalidAssembly };
 
         // Act
-        var result = await _loader.LoadAnalyzersFromAssembliesAsync(assemblies);
+        _ = await _loader.LoadAnalyzersFromAssembliesAsync(assemblies);
 
         // Assert
         // Should not throw, should handle invalid gracefully
@@ -247,7 +240,7 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         File.WriteAllText(nonAnalyzerDll, "not a real dll");
 
         // Act
-        var result = _loader.DiscoverAnalyzerAssemblies(dir);
+        _ = _loader.DiscoverAnalyzerAssemblies(dir);
 
         // Assert
         // Should handle invalid DLLs gracefully
@@ -267,7 +260,7 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         File.Copy(sourceAssembly, targetAssembly, overwrite: true);
 
         // Act
-        var result = _loader.DiscoverAnalyzerAssemblies(rootDir, recursive: true);
+        _ = _loader.DiscoverAnalyzerAssemblies(rootDir, recursive: true);
 
         // Assert
         // Should find assemblies in subdirectories
@@ -457,7 +450,7 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
         var assemblies = _loader.DiscoverAnalyzerAssemblies(dir);
 
         // Act - Load
-        var analyzers = await _loader.LoadAnalyzersFromAssembliesAsync(assemblies);
+        _ = await _loader.LoadAnalyzersFromAssembliesAsync(assemblies);
 
         // Assert
         // Both ImmutableArrays always have values

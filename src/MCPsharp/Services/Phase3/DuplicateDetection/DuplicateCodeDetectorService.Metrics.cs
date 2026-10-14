@@ -1,7 +1,7 @@
+using MCPsharp.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using MCPsharp.Models;
 
 namespace MCPsharp.Services.Phase3;
 
@@ -191,7 +191,8 @@ public partial class DuplicateCodeDetectorService
 
         foreach (var token in node.DescendantTokens())
         {
-            if (token.SyntaxTree == null) continue;
+            if (token.SyntaxTree == null)
+                continue;
             var lineSpan = token.SyntaxTree.GetLineSpan(token.Span);
 
             tokens.Add(new CodeToken

@@ -37,12 +37,17 @@ public partial class AIProviderFactory
             return await AutoDetectProviderAsync();
         }
 
-        return providerType.ToLowerInvariant() switch
+        if (providerType.Equals("ollama", StringComparison.OrdinalIgnoreCase))
         {
-            "ollama" => await CreateOllamaProviderAsync(),
-            "openrouter" => (IAIProvider)CreateOpenRouterProvider(),
-            _ => throw new InvalidOperationException($"Unknown AI provider type: {providerType}")
-        };
+            return await CreateOllamaProviderAsync();
+        }
+
+        if (providerType.Equals("openrouter", StringComparison.OrdinalIgnoreCase))
+        {
+            return CreateOpenRouterProvider();
+        }
+
+        throw new InvalidOperationException($"Unknown AI provider type: {providerType}");
     }
 
     /// <summary>
@@ -63,6 +68,8 @@ public partial class AIProviderFactory
             LogUsingOllama(_logger, detectedUrl);
             return ollamaProvider;
         }
+
+        ollamaProvider?.Dispose();
 
         // Try OpenRouter
         var openRouterKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")

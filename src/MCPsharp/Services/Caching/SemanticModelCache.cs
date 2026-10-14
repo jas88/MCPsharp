@@ -1,5 +1,5 @@
-using Microsoft.CodeAnalysis;
 using System.Collections.Concurrent;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Caching;
 
@@ -86,7 +86,7 @@ public sealed class SemanticModelCache : IDisposable
     public CacheStatistics GetStatistics()
     {
         ThrowIfDisposed();
-        
+
         var totalEntries = _cache.Count;
         var liveEntries = 0;
         var deadEntries = 0;
@@ -119,9 +119,9 @@ public sealed class SemanticModelCache : IDisposable
     public int Cleanup()
     {
         ThrowIfDisposed();
-        
+
         var toRemove = new List<DocumentId>();
-        
+
         foreach (var kvp in _cache)
         {
             if (!kvp.Value.TryGetTarget(out _))
@@ -162,7 +162,8 @@ public sealed class SemanticModelCache : IDisposable
         // This is a simplified implementation
         // In a real scenario, we'd track hits and misses over time
         var totalEntries = _cache.Count;
-        if (totalEntries == 0) return 0.0;
+        if (totalEntries == 0)
+            return 0.0;
 
         var liveEntries = _cache.Values.Count(wr => wr.TryGetTarget(out _));
         return (double)liveEntries / totalEntries;

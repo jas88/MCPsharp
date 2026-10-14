@@ -227,9 +227,14 @@ public sealed partial class ProjectDatabase
         await using var cmd = conn.CreateCommand();
 
         // Use recursive CTE for call chain analysis
-        cmd.CommandText = direction == CallChainDirection.Backward
-            ? BackwardCallChainQuery
-            : ForwardCallChainQuery;
+        if (direction == CallChainDirection.Backward)
+        {
+            cmd.CommandText = BackwardCallChainQuery;
+        }
+        else
+        {
+            cmd.CommandText = ForwardCallChainQuery;
+        }
 
         cmd.Parameters.AddWithValue("$startId", symbolId);
         cmd.Parameters.AddWithValue("$maxDepth", maxDepth);

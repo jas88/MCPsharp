@@ -128,7 +128,8 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
 
     private async Task InitializeSchemaAsync(CancellationToken cancellationToken)
     {
-        if (_connection == null) throw new InvalidOperationException("Database not open");
+        if (_connection == null)
+            throw new InvalidOperationException("Database not open");
 
         // Enable foreign keys
         await using var fkCmd = _connection.CreateCommand();
@@ -145,13 +146,10 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
 
         if (currentVersion < ProjectDatabaseSchema.CurrentSchemaVersion)
         {
-            // Create all tables
-            foreach (var createScript in ProjectDatabaseSchema.GetAllCreateTableScripts())
-            {
-                await using var cmd = _connection.CreateCommand();
-                cmd.CommandText = createScript;
-                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
+            // Create all tables (Microsoft.Data.Sqlite executes every statement in the batch)
+            await using var cmd = _connection.CreateCommand();
+            cmd.CommandText = ProjectDatabaseSchema.CreateAllTables;
+            await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
             // Update version
             await SetSchemaVersionAsync(ProjectDatabaseSchema.CurrentSchemaVersion, cancellationToken)
@@ -163,7 +161,8 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
 
     private async Task<int> GetSchemaVersionAsync(CancellationToken cancellationToken)
     {
-        if (_connection == null) return 0;
+        if (_connection == null)
+            return 0;
 
         try
         {
@@ -173,7 +172,8 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
                 SELECT name FROM sqlite_master
                 WHERE type='table' AND name='schema_version'";
             var exists = await checkCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            if (exists == null) return 0;
+            if (exists == null)
+                return 0;
 
             await using var cmd = _connection.CreateCommand();
             cmd.CommandText = "SELECT MAX(version) FROM schema_version";
@@ -188,7 +188,8 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
 
     private async Task SetSchemaVersionAsync(int version, CancellationToken cancellationToken)
     {
-        if (_connection == null) return;
+        if (_connection == null)
+            return;
 
         await using var cmd = _connection.CreateCommand();
         cmd.CommandText = @"
@@ -277,7 +278,8 @@ public sealed partial class ProjectDatabase : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         await CloseAsync().ConfigureAwait(false);

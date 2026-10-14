@@ -1,4 +1,4 @@
-﻿namespace MCPsharp.Models.BulkEdit;
+namespace MCPsharp.Models.BulkEdit;
 
 /// <summary>
 /// Options for bulk edit operations

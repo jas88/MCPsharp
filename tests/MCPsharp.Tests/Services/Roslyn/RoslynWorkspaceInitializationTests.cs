@@ -1,13 +1,9 @@
-using System;
+using System.Runtime.Loader;
+using System.Security.Cryptography;
 using MCPsharp.Services.Roslyn;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using NUnit.Framework;
-using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Runtime.Loader;
-using System.Threading.Tasks;
 
 namespace MCPsharp.Tests.Services.Roslyn;
 

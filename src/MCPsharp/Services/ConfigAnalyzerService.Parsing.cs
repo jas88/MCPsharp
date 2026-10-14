@@ -271,8 +271,10 @@ public partial class ConfigAnalyzerService
     /// </summary>
     private static bool AreValuesEqual(object value1, object value2)
     {
-        if (value1 == null && value2 == null) return true;
-        if (value1 == null || value2 == null) return false;
+        if (value1 == null && value2 == null)
+            return true;
+        if (value1 == null || value2 == null)
+            return false;
 
         // Convert both to string for comparison to handle type differences
         return string.Equals(value1.ToString(), value2.ToString(), StringComparison.OrdinalIgnoreCase);
@@ -280,9 +282,12 @@ public partial class ConfigAnalyzerService
 
     private static object ConvertJsonNumber(JsonElement element)
     {
-        if (element.TryGetInt32(out var intValue)) return intValue;
-        if (element.TryGetInt64(out var longValue)) return longValue;
-        if (element.TryGetDouble(out var doubleValue)) return doubleValue;
+        if (element.TryGetInt32(out var intValue))
+            return intValue;
+        if (element.TryGetInt64(out var longValue))
+            return longValue;
+        if (element.TryGetDouble(out var doubleValue))
+            return doubleValue;
         return element.GetDecimal();
     }
 

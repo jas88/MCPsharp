@@ -1,6 +1,6 @@
-using Microsoft.CodeAnalysis;
 using System.Text.RegularExpressions;
 using MCPsharp.Models.Architecture;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Phase3;
 
@@ -59,10 +59,12 @@ public partial class ArchitectureValidatorService
         }
 
         var sourceLayer = architecture.Layers.FirstOrDefault(l => l.Name == layer);
-        if (sourceLayer == null) return violations;
+        if (sourceLayer == null)
+            return violations;
 
         // Get all dependencies of this type
-        if (!_workspace.IsInitialized) return violations;
+        if (!_workspace.IsInitialized)
+            return violations;
 
         // Analyze dependencies for violations
         var dependencies = AnalyzeTypeDependencies(symbol, architecture, filePath);
@@ -178,9 +180,12 @@ public partial class ArchitectureValidatorService
 
     private static bool IsDependencyAllowed(string fromLayer, string toLayer)
     {
-        if (string.IsNullOrEmpty(fromLayer) || string.IsNullOrEmpty(toLayer)) return true;
-        if (fromLayer == toLayer) return true;
-        if (fromLayer == "Unknown" || toLayer == "Unknown") return true;
+        if (string.IsNullOrEmpty(fromLayer) || string.IsNullOrEmpty(toLayer))
+            return true;
+        if (fromLayer == toLayer)
+            return true;
+        if (fromLayer == "Unknown" || toLayer == "Unknown")
+            return true;
 
         // Basic rule: higher level numbers (inner layers) can depend on lower level numbers (outer layers)
         // But outer layers should not depend on inner layers
@@ -198,7 +203,8 @@ public partial class ArchitectureValidatorService
         var fromLevel = layerOrder.GetValueOrDefault(fromLayer, -1);
         var toLevel = layerOrder.GetValueOrDefault(toLayer, -1);
 
-        if (fromLevel == -1 || toLevel == -1) return true;
+        if (fromLevel == -1 || toLevel == -1)
+            return true;
 
         // Dependency is allowed if going from outer to inner (lower level number to higher)
         // or within the same level

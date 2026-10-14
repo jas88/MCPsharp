@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
+using MCPsharp.Models.Analyzers;
 using NSubstitute;
 using NUnit.Framework;
-using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Tests.Services.Analyzers;
 

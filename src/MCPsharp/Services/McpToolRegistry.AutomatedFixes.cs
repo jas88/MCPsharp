@@ -147,7 +147,8 @@ public partial class McpToolRegistry
                 foreach (var doc in documentsToAnalyze)
                 {
                     var semanticModel = await doc.GetSemanticModelAsync(ct);
-                    if (semanticModel == null) continue;
+                    if (semanticModel == null)
+                        continue;
 
                     var compilation = semanticModel.Compilation;
                     var analyzers = ImmutableArray.Create(analyzer);

@@ -1,7 +1,7 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using MCPsharp.Services;
 using MCPsharp.Services.Phase2;
 using MCPsharp.Services.Roslyn;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Integration;

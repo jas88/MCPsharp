@@ -1,10 +1,10 @@
+using MCPsharp.Models.LargeFileOptimization;
+using MCPsharp.Services.Phase3.LargeFileOptimization;
+using MCPsharp.Services.Roslyn;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
-using MCPsharp.Models.LargeFileOptimization;
-using MCPsharp.Services.Roslyn;
-using MCPsharp.Services.Phase3.LargeFileOptimization;
 
 namespace MCPsharp.Services.Phase3;
 
@@ -251,7 +251,8 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
         var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (syntaxTree == null || semanticModel == null) return null!;
+        if (syntaxTree == null || semanticModel == null)
+            return null!;
         var root = await syntaxTree.GetRootAsync(cancellationToken);
 
         if (!string.IsNullOrEmpty(methodName))
@@ -362,9 +363,12 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
         foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true) continue;
-            if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath) continue;
-            if (syntaxTree.FilePath == null || !IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
+            if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true)
+                continue;
+            if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath)
+                continue;
+            if (syntaxTree.FilePath == null || !IsFileInProject(syntaxTree.FilePath, projectPath))
+                continue;
 
             var root = await syntaxTree.GetRootAsync(cancellationToken);
             var semanticModel = _workspace.GetSemanticModel(syntaxTree);
@@ -394,9 +398,12 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
 
         foreach (var syntaxTree in _workspace.GetSourceTrees())
         {
-            if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true) continue;
-            if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath) continue;
-            if (syntaxTree.FilePath == null || !IsFileInProject(syntaxTree.FilePath, projectPath)) continue;
+            if (!syntaxTree.FilePath?.EndsWith(".cs", StringComparison.Ordinal) == true)
+                continue;
+            if (!string.IsNullOrEmpty(filePath) && syntaxTree.FilePath != filePath)
+                continue;
+            if (syntaxTree.FilePath == null || !IsFileInProject(syntaxTree.FilePath, projectPath))
+                continue;
 
             var root = await syntaxTree.GetRootAsync(cancellationToken);
             var methodDeclarations = root.DescendantNodes().OfType<MethodDeclarationSyntax>();

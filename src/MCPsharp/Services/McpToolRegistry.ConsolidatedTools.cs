@@ -21,7 +21,15 @@ public partial class McpToolRegistry
     private static readonly string[] BulkOperationTypeValues = { "replace", "conditional", "refactor", "multi_edit", "file_operation" };
     private static readonly string[] BulkManagementActionValues = { "list", "cancel", "pause", "resume", "cleanup", "status" };
     private static readonly string[] StreamInputTypeValues = { "file", "directory", "multiple_files" };
-    private static readonly string[] StreamProcessorValues = { "line", "regex", "csv", "json", "binary", "xml", "log", "transform" };
+    private static readonly string[] StreamProcessorValues = { "line", "regex", "csv", "json", "binary", "xml", "log" };
+
+    private const string ProcessorOptionsDescription =
+        "Processor parameters (keys are case-insensitive). " +
+        "line: LineFilter, LineReplacement, LinePrefix, LineSuffix, IncludeLineNumbers, RemoveEmptyLines, TrimWhitespace, FieldSeparator, SelectedFields, Encoding. " +
+        "regex: Pattern, Replacement, IgnoreCase, Multiline, MatchWholeLine, MaxMatches (per chunk; 0 = unlimited), Options (raw System.Text.RegularExpressions.RegexOptions flags as an integer). " +
+        "csv: Delimiter, QuoteCharacter, SelectedColumnIndexes, SkipEmptyRows, TrimFields. " +
+        "json: JsonLines, Indented. xml: Indent. log: MinLevel, Levels, Pattern, IgnoreCase. " +
+        "binary: SearchPattern and ReplacementPattern (supplied together; a UTF-8 string or an array of byte values 0-255), CalculateChecksums, ChecksumAlgorithm (SHA256, SHA512).";
     private static readonly string[] StreamManagementActionValues = { "list", "cancel", "pause", "resume", "cleanup", "unregister_processor" };
 
     private static readonly string[] FileOperationRequiredProperties = { "path", "operation" };
@@ -57,14 +65,14 @@ public partial class McpToolRegistry
 
     private static PropertyDefinition Prop(string name, string type, string description,
         bool required = false, string[]? enumValues = null, object? items = null) => new()
-    {
-        Name = name,
-        Type = type,
-        Description = description,
-        Required = required,
-        Enum = enumValues,
-        Items = items
-    };
+        {
+            Name = name,
+            Type = type,
+            Description = description,
+            Required = required,
+            Enum = enumValues,
+            Items = items
+        };
 
     private static Dictionary<string, object> EnumItems(string[] values) => new()
     {
@@ -328,7 +336,7 @@ public partial class McpToolRegistry
         new McpTool
         {
             Name = "process_stream",
-            Description = "Stream-process large files in the open project with a built-in processor (line, regex, csv, json, binary, xml, log, transform) in chunks. Returns an operation_id usable with monitor_stream.",
+            Description = "Stream-process large files in the open project with a built-in processor (line, regex, csv, json, binary, xml, log) in chunks; json loads the whole document into memory unless JsonLines=true, which processes it line by line. Returns an operation_id usable with monitor_stream.",
             InputSchema = JsonSchemaHelper.CreateSchema(
                 Prop("processor_type", "string", "Processor to apply", required: true, enumValues: StreamProcessorValues),
                 Prop("input_type", "string", "Input kind (default: file)", enumValues: StreamInputTypeValues),
@@ -339,7 +347,8 @@ public partial class McpToolRegistry
                 Prop("recursive", "boolean", "directory: include subdirectories (default: false)"),
                 Prop("chunk_size", "integer", "Chunk size in bytes (default: 65536)"),
                 Prop("enable_compression", "boolean", "Compress output (default: false)"),
-                Prop("enable_checkpoints", "boolean", "Enable checkpoints for resumable processing (default: false)"))
+                Prop("enable_checkpoints", "boolean", "Enable checkpoints for resumable processing (default: false)"),
+                Prop("processor_options", "object", ProcessorOptionsDescription))
         },
         new McpTool
         {

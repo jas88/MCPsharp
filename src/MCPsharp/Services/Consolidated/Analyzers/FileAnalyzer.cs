@@ -1,6 +1,6 @@
-using Microsoft.Extensions.Logging;
-using MCPsharp.Models.Consolidated;
 using System.Text.RegularExpressions;
+using MCPsharp.Models.Consolidated;
+using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services.Consolidated.Analyzers;
 
@@ -20,7 +20,8 @@ public partial class FileAnalyzer
     {
         try
         {
-            if (!File.Exists(filePath)) return null;
+            if (!File.Exists(filePath))
+                return null;
 
             var fileInfo = new FileInfo(filePath);
             var content = await File.ReadAllTextAsync(filePath, ct);
@@ -78,7 +79,8 @@ public partial class FileAnalyzer
         try
         {
             var basicInfo = await GetFileBasicInfoAsync(filePath, ct);
-            if (basicInfo == null) return null;
+            if (basicInfo == null)
+                return null;
 
             var content = await File.ReadAllTextAsync(filePath, ct);
             var namespaces = new List<string>();
@@ -251,7 +253,8 @@ public partial class FileAnalyzer
             var complexity = await AnalyzeFileComplexityAsync(filePath, ct);
             var dependencies = await AnalyzeFileDependenciesAsync(filePath, ct);
 
-            if (complexity == null || dependencies == null) return null;
+            if (complexity == null || dependencies == null)
+                return null;
 
             var maintainabilityIndex = Math.Max(0, 171 - 5.2 * Math.Log(complexity.LinesOfCode + 1)
                 - 0.23 * complexity.CyclomaticComplexity - 16.2 * Math.Log(complexity.LinesOfCode + 1));

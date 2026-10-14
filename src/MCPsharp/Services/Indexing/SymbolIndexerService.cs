@@ -76,7 +76,8 @@ public sealed partial class SymbolIndexerService
     /// </summary>
     public async Task IndexDocumentAsync(long projectId, Document document, CancellationToken cancellationToken = default)
     {
-        if (document.FilePath == null) return;
+        if (document.FilePath == null)
+            return;
 
         try
         {
@@ -101,7 +102,8 @@ public sealed partial class SymbolIndexerService
             var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken).ConfigureAwait(false);
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
 
-            if (syntaxTree == null || semanticModel == null) return;
+            if (syntaxTree == null || semanticModel == null)
+                return;
 
             var root = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
             var symbols = ExtractSymbols(root, semanticModel, fileId);
@@ -155,7 +157,8 @@ public sealed partial class SymbolIndexerService
         foreach (var typeDecl in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
         {
             var symbol = semanticModel.GetDeclaredSymbol(typeDecl);
-            if (symbol == null) continue;
+            if (symbol == null)
+                continue;
 
             var kind = typeDecl switch
             {
@@ -173,7 +176,8 @@ public sealed partial class SymbolIndexerService
         foreach (var enumDecl in root.DescendantNodes().OfType<EnumDeclarationSyntax>())
         {
             var symbol = semanticModel.GetDeclaredSymbol(enumDecl);
-            if (symbol == null) continue;
+            if (symbol == null)
+                continue;
             symbols.Add(CreateDbSymbol(enumDecl, symbol, "Enum", fileId));
         }
 
@@ -181,7 +185,8 @@ public sealed partial class SymbolIndexerService
         foreach (var methodDecl in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
             var symbol = semanticModel.GetDeclaredSymbol(methodDecl);
-            if (symbol == null) continue;
+            if (symbol == null)
+                continue;
             symbols.Add(CreateDbSymbol(methodDecl, symbol, "Method", fileId, GetMethodSignature(symbol)));
         }
 
@@ -189,7 +194,8 @@ public sealed partial class SymbolIndexerService
         foreach (var ctorDecl in root.DescendantNodes().OfType<ConstructorDeclarationSyntax>())
         {
             var symbol = semanticModel.GetDeclaredSymbol(ctorDecl);
-            if (symbol == null) continue;
+            if (symbol == null)
+                continue;
             symbols.Add(CreateDbSymbol(ctorDecl, symbol, "Constructor", fileId, GetMethodSignature(symbol)));
         }
 
@@ -197,7 +203,8 @@ public sealed partial class SymbolIndexerService
         foreach (var propDecl in root.DescendantNodes().OfType<PropertyDeclarationSyntax>())
         {
             var symbol = semanticModel.GetDeclaredSymbol(propDecl);
-            if (symbol == null) continue;
+            if (symbol == null)
+                continue;
             symbols.Add(CreateDbSymbol(propDecl, symbol, "Property", fileId, symbol.Type.ToDisplayString()));
         }
 
@@ -207,7 +214,8 @@ public sealed partial class SymbolIndexerService
             foreach (var variable in fieldDecl.Declaration.Variables)
             {
                 var symbol = semanticModel.GetDeclaredSymbol(variable);
-                if (symbol is not IFieldSymbol fieldSymbol) continue;
+                if (symbol is not IFieldSymbol fieldSymbol)
+                    continue;
                 symbols.Add(CreateDbSymbol(variable, fieldSymbol, "Field", fileId, fieldSymbol.Type.ToDisplayString()));
             }
         }
@@ -216,7 +224,8 @@ public sealed partial class SymbolIndexerService
         foreach (var eventDecl in root.DescendantNodes().OfType<EventDeclarationSyntax>())
         {
             var symbol = semanticModel.GetDeclaredSymbol(eventDecl);
-            if (symbol == null) continue;
+            if (symbol == null)
+                continue;
             symbols.Add(CreateDbSymbol(eventDecl, symbol, "Event", fileId));
         }
 
@@ -224,7 +233,8 @@ public sealed partial class SymbolIndexerService
         foreach (var delegateDecl in root.DescendantNodes().OfType<DelegateDeclarationSyntax>())
         {
             var symbol = semanticModel.GetDeclaredSymbol(delegateDecl);
-            if (symbol == null) continue;
+            if (symbol == null)
+                continue;
             symbols.Add(CreateDbSymbol(delegateDecl, symbol, "Delegate", fileId));
         }
 

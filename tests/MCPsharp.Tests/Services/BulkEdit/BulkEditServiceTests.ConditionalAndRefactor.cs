@@ -1,6 +1,6 @@
-using NUnit.Framework;
 using MCPsharp.Models;
 using MCPsharp.Models.BulkEdit;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.BulkEdit;
 
@@ -156,7 +156,7 @@ public partial class BulkEditServiceTests
     public async Task MultiFileEditAsync_WithMultipleOperations_ShouldExecuteInPriorityOrder()
     {
         // Arrange
-        var testFile = CreateTestFile("Original content");
+        _ = CreateTestFile("Original content");
         var operations = new List<MultiFileEditOperation>
         {
             new()

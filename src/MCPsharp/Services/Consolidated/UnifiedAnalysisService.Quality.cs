@@ -46,21 +46,21 @@ public partial class UnifiedAnalysisService
                 response.Duplicates = duplicates.DuplicateGroups
                     .Where(d => focusFile == null || d.CodeBlocks.Any(b => string.Equals(Path.GetFullPath(b.FilePath), focusFile, PathContainment.Comparison)))
                     .Select(d => new DuplicateGroup
-                {
-                    Type = d.DuplicationType.ToString(),
-                    Similarity = d.SimilarityScore,
-                    Files = d.CodeBlocks.Select(f => new DuplicateFile
                     {
-                        FilePath = f.FilePath,
-                        Locations = new List<MCPsharp.Models.Consolidated.Location>
+                        Type = d.DuplicationType.ToString(),
+                        Similarity = d.SimilarityScore,
+                        Files = d.CodeBlocks.Select(f => new DuplicateFile
+                        {
+                            FilePath = f.FilePath,
+                            Locations = new List<MCPsharp.Models.Consolidated.Location>
                         {
                             new MCPsharp.Models.Consolidated.Location { FilePath = f.FilePath, Line = f.StartLine, Column = f.StartColumn }
                         },
-                        Lines = f.EndLine - f.StartLine + 1,
-                        MatchPercentage = d.SimilarityScore * 100
-                    }).ToList(),
-                    Description = $"Found {d.CodeBlocks.Count} duplicate blocks with similarity {d.SimilarityScore:P1}"
-                }).ToList();
+                            Lines = f.EndLine - f.StartLine + 1,
+                            MatchPercentage = d.SimilarityScore * 100
+                        }).ToList(),
+                        Description = $"Found {d.CodeBlocks.Count} duplicate blocks with similarity {d.SimilarityScore:P1}"
+                    }).ToList();
             }
 
             // Complexity analysis
@@ -175,7 +175,8 @@ public partial class UnifiedAnalysisService
         try
         {
             var complexity = await AnalyzeComplexityAsync(targetPath, ct);
-            if (complexity == null) return null;
+            if (complexity == null)
+                return null;
 
             // Calculate maintainability index (simplified version)
             var averageMaintainability = Math.Max(0, 171 - 5.2 * Math.Log(complexity.AverageComplexity + 1) - 0.23 * complexity.AverageComplexity);

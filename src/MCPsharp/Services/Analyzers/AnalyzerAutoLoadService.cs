@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
-using Microsoft.Extensions.Logging;
-using MCPsharp.Models.Analyzers;
 using System.Text.Json;
+using MCPsharp.Models.Analyzers;
+using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services.Analyzers;
 

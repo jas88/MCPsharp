@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
+using MCPsharp.Models.Analyzers;
 using NSubstitute;
 using NUnit.Framework;
-using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Tests.Services.Analyzers;
 
@@ -99,7 +99,7 @@ public partial class AnalyzerHostTests
         // Arrange
         var analyzerId = "test-analyzer";
         var targetPath = CreateTestDirectory("target");
-        var testFile = CreateTestFile("public class Test { }", ".cs", targetPath);
+        _ = CreateTestFile("public class Test { }", ".cs", targetPath);
         var analyzer = CreateMockAnalyzer(analyzerId, "Test Analyzer", "1.0.0");
 
         _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(analyzer);
@@ -221,7 +221,7 @@ public partial class AnalyzerHostTests
         var targetPath = CreateTestDirectory("target");
         var testFile = CreateTestFile("public class Test { }", ".cs", targetPath);
         var analyzer = Substitute.For<IAnalyzer>();
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
 
         _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(analyzer);
         analyzer.CanAnalyze(targetPath).Returns(true);
@@ -241,12 +241,6 @@ public partial class AnalyzerHostTests
         var analyzerId = "consistent-analyzer";
         var targetPath = CreateTestDirectory("target");
         var analyzer = Substitute.For<IAnalyzer>();
-        var expectedResult = new AnalyzerResult
-        {
-            Success = true,
-            AnalyzerId = analyzerId,
-            Findings = new List<Finding> { new() { Message = "Consistent finding" } }
-        };
 
         _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(analyzer);
         analyzer.CanAnalyze(targetPath).Returns(true);

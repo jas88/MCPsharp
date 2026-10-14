@@ -278,7 +278,8 @@ public partial class RenameSymbolService
 
             foreach (var iface in methodSymbol.ContainingType.AllInterfaces)
             {
-                if (iface == null) continue;
+                if (iface == null)
+                    continue;
 
                 var matchingMethods = iface.GetMembers(newName)
                     .OfType<IMethodSymbol>()

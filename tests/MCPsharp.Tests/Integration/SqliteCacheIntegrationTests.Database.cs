@@ -1,5 +1,5 @@
-using NUnit.Framework;
 using MCPsharp.Services.Database;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Integration;
 
@@ -80,18 +80,36 @@ public partial class SqliteCacheIntegrationTests
         // Create symbols
         var symbolA = new Models.Database.DbSymbol
         {
-            FileId = fileId, Name = "MethodA", Kind = "Method",
-            Line = 1, Column = 1, EndLine = 5, EndColumn = 1, Accessibility = "public"
+            FileId = fileId,
+            Name = "MethodA",
+            Kind = "Method",
+            Line = 1,
+            Column = 1,
+            EndLine = 5,
+            EndColumn = 1,
+            Accessibility = "public"
         };
         var symbolB = new Models.Database.DbSymbol
         {
-            FileId = fileId, Name = "MethodB", Kind = "Method",
-            Line = 10, Column = 1, EndLine = 15, EndColumn = 1, Accessibility = "public"
+            FileId = fileId,
+            Name = "MethodB",
+            Kind = "Method",
+            Line = 10,
+            Column = 1,
+            EndLine = 15,
+            EndColumn = 1,
+            Accessibility = "public"
         };
         var symbolC = new Models.Database.DbSymbol
         {
-            FileId = fileId, Name = "MethodC", Kind = "Method",
-            Line = 20, Column = 1, EndLine = 25, EndColumn = 1, Accessibility = "public"
+            FileId = fileId,
+            Name = "MethodC",
+            Kind = "Method",
+            Line = 20,
+            Column = 1,
+            EndLine = 25,
+            EndColumn = 1,
+            Accessibility = "public"
         };
 
         await _database.UpsertSymbolsBatchAsync(new[] { symbolA, symbolB, symbolC });

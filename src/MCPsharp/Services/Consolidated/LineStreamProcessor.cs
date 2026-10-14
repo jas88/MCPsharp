@@ -1,15 +1,39 @@
+using System.Text;
 using MCPsharp.Models.Consolidated;
+using StreamingLineProcessor = MCPsharp.Services.Streaming.LineStreamProcessor;
 
 namespace MCPsharp.Services.Consolidated;
 
 /// <summary>
-/// Built-in stream processors
+/// Line processor: filters and rewrites text lines using <see cref="StreamingLineProcessor"/>.
+/// Parameters: LineFilter, LineReplacement, LinePrefix, LineSuffix, RemoveEmptyLines (default false:
+/// empty lines are kept), TrimWhitespace, FieldSeparator, SelectedFields, IncludeLineNumbers (numbered
+/// continuously across chunks), Encoding (the input encoding, overriding <see cref="ProcessorOptions.Encoding"/>;
+/// the output is written in the same encoding).
 /// </summary>
 public class LineStreamProcessor : IStreamProcessor
 {
+    private const string EncodingKey = "Encoding";
+
+    private readonly StreamingLineProcessor _processor = new();
+
     public Task InitializeAsync(ProcessorOptions options, CancellationToken ct) => Task.CompletedTask;
+
     public Task<ProcessingResult> ProcessAsync(Stream input, Stream output, ProcessingContext context, CancellationToken ct)
-        => Task.FromResult(new ProcessingResult { Success = true });
+        => StreamProcessorExecution.RunAsync("line", () =>
+        {
+            var options = StreamProcessorOptionMapper.ToOptionDictionary(context.Options);
+            var encodingName = StreamProcessorOptionMapper.GetString(options, EncodingKey);
+            var encoding = encodingName != null
+                ? Encoding.GetEncoding(encodingName)
+                : StreamProcessorOptionMapper.ResolveEncoding(context.Options);
+
+            // The input is decoded (and the output re-encoded) by the adapter; chunks are exchanged as UTF-8
+            options[EncodingKey] = StreamingProcessorAdapter.ChunkEncoding.WebName;
+
+            return StreamingProcessorAdapter.ProcessLinesAsync(_processor, input, output, context, options, encoding, ct);
+        });
+
     public Task<ProcessorCapabilities> GetCapabilitiesAsync(CancellationToken ct)
         => Task.FromResult(new ProcessorCapabilities
         {
@@ -17,8 +41,13 @@ public class LineStreamProcessor : IStreamProcessor
             SupportedOutputFormats = new List<string> { "txt", "log", "text" },
             SupportsStreaming = true,
             SupportsParallelProcessing = false,
-            SupportsCheckpoints = true,
+            SupportsCheckpoints = false,
             SupportsCompression = false,
-            MaxFileSize = long.MaxValue
+            MaxFileSize = long.MaxValue,
+            OptionalParameters = new List<string>
+            {
+                "LineFilter", "LineReplacement", "LinePrefix", "LineSuffix", "RemoveEmptyLines",
+                "TrimWhitespace", "FieldSeparator", "SelectedFields", "IncludeLineNumbers", EncodingKey
+            }
         });
 }

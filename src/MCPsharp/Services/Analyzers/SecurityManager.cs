@@ -1,10 +1,9 @@
 using System.Collections.Immutable;
-using Microsoft.Extensions.Logging;
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using MCPsharp.Models.Analyzers;
+using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services.Analyzers;
 

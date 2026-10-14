@@ -1,7 +1,5 @@
-using MCPsharp.Models;
-using MCPsharp.Services.AI;
 using System.Text.Json;
-using System.Text.Json.Nodes;
+using MCPsharp.Models;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;

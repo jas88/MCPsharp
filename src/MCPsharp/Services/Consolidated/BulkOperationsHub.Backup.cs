@@ -6,7 +6,8 @@ public partial class BulkOperationsHub
 {
     private async Task<string?> CreateBulkBackupAsync(BulkOperationRequest request, CancellationToken ct)
     {
-        if (_tempFileManager == null) return null;
+        if (_tempFileManager == null)
+            return null;
 
         var backupId = Guid.NewGuid().ToString();
         var backupPath = Path.Combine(Path.GetTempPath(), "mcpsharp_backups", backupId);

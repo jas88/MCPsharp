@@ -98,14 +98,14 @@ public sealed partial class ProjectDatabase
         return null;
     }
 
-    private static readonly (string Table, string CountQuery)[] TableCountQueries =
-    [
-        ("projects", "SELECT COUNT(*) FROM projects"),
-        ("files", "SELECT COUNT(*) FROM files"),
-        ("symbols", "SELECT COUNT(*) FROM symbols"),
-        ("symbol_references", "SELECT COUNT(*) FROM symbol_references"),
-        ("analysis_results", "SELECT COUNT(*) FROM analysis_results"),
-    ];
+    // Each column is aliased with the table it counts; the aliases become the stats dictionary keys
+    private const string TableCountsQuery = @"
+            SELECT
+                (SELECT COUNT(*) FROM projects) AS projects,
+                (SELECT COUNT(*) FROM files) AS files,
+                (SELECT COUNT(*) FROM symbols) AS symbols,
+                (SELECT COUNT(*) FROM symbol_references) AS symbol_references,
+                (SELECT COUNT(*) FROM analysis_results) AS analysis_results";
 
     /// <summary>
     /// Updates project statistics.
@@ -119,7 +119,8 @@ public sealed partial class ProjectDatabase
     {
         var conn = GetConnection();
 
-        if (!solutionCount.HasValue && !projectCount.HasValue && !fileCount.HasValue) return;
+        if (!solutionCount.HasValue && !projectCount.HasValue && !fileCount.HasValue)
+            return;
 
         await using var cmd = conn.CreateCommand();
 
@@ -230,12 +231,15 @@ public sealed partial class ProjectDatabase
         var conn = GetConnection();
         var stats = new Dictionary<string, long>();
 
-        foreach (var (table, countQuery) in TableCountQueries)
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = TableCountsQuery;
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = countQuery;
-            var count = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            stats[table] = Convert.ToInt64(count, CultureInfo.InvariantCulture);
+            for (var i = 0; i < reader.FieldCount; i++)
+            {
+                stats[reader.GetName(i)] = reader.GetInt64(i);
+            }
         }
 
         return stats;

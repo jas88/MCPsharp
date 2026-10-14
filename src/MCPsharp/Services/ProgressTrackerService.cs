@@ -1,12 +1,7 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using MCPsharp.Models.Streaming;
 using MCPsharp.Models.Consolidated;
+using MCPsharp.Models.Streaming;
+using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services;
 
@@ -51,9 +46,12 @@ public partial class ProgressTrackerService : IProgressTracker, IDisposable
             lock (progress)
             {
                 progress.BytesProcessed = bytesProcessed;
-                if (chunksProcessed > 0) progress.ChunksProcessed = chunksProcessed;
-                if (linesProcessed > 0) progress.LinesProcessed = linesProcessed;
-                if (itemsProcessed > 0) progress.ItemsProcessed = itemsProcessed;
+                if (chunksProcessed > 0)
+                    progress.ChunksProcessed = chunksProcessed;
+                if (linesProcessed > 0)
+                    progress.LinesProcessed = linesProcessed;
+                if (itemsProcessed > 0)
+                    progress.ItemsProcessed = itemsProcessed;
 
                 progress.LastUpdated = DateTime.UtcNow;
 
@@ -208,7 +206,8 @@ public partial class ProgressTrackerService : IProgressTracker, IDisposable
 
     public void ReportProgress(FileProcessingProgress progress)
     {
-        if (progress == null) return;
+        if (progress == null)
+            return;
 
         // Update or create progress tracker with file processing progress
         var streamProgress = new StreamProgress

@@ -1,7 +1,7 @@
-using NUnit.Framework;
-using MCPsharp.Services;
 using MCPsharp.Models;
+using MCPsharp.Services;
 using Microsoft.Extensions.Logging;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services;
 

@@ -104,7 +104,8 @@ public partial class ConfigAnalyzerService
     /// </summary>
     private async Task ValidateCrossFileConsistencyAsync(IReadOnlyList<string> configFiles, ConfigValidationResult result, CancellationToken ct)
     {
-        if (configFiles.Count < 2) return;
+        if (configFiles.Count < 2)
+            return;
 
         try
         {

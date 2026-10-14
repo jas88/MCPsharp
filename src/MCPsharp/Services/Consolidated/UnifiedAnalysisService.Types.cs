@@ -10,7 +10,8 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_classStructure == null) return null;
+            if (_classStructure == null)
+                return null;
 
             var structure = await _classStructure.GetClassStructureAsync(typeName, context);
 
@@ -38,10 +39,12 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_classStructure == null) return null;
+            if (_classStructure == null)
+                return null;
 
             var structure = await _classStructure.GetClassStructureAsync(typeName, context);
-            if (structure == null) return null;
+            if (structure == null)
+                return null;
 
             var inheritance = new TypeInheritance
             {
@@ -82,7 +85,8 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_referenceFinder == null || _workspace == null) return null;
+            if (_referenceFinder == null || _workspace == null)
+                return null;
 
             // Find all references to the type using the available method
             var referenceResult = await _referenceFinder.FindReferencesAsync(typeName);
@@ -112,7 +116,8 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_symbolQuery == null || _workspace == null) return null;
+            if (_symbolQuery == null || _workspace == null)
+                return null;
 
             // Check if the type is an interface or abstract class
             var typeSymbols = await _symbolQuery.FindSymbolsAsync(typeName, context);
@@ -153,10 +158,12 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_classStructure == null) return null;
+            if (_classStructure == null)
+                return null;
 
             var structure = await _classStructure.GetClassStructureAsync(typeName, context);
-            if (structure == null) return null;
+            if (structure == null)
+                return null;
 
             // Combine properties, methods, and fields into a members list
             var allMembers = new List<object>();
@@ -251,10 +258,12 @@ public partial class UnifiedAnalysisService
     {
         try
         {
-            if (_classStructure == null) return null;
+            if (_classStructure == null)
+                return null;
 
             var structure = await _classStructure.GetClassStructureAsync(typeName, context);
-            if (structure == null) return null;
+            if (structure == null)
+                return null;
 
             // Combine all members for counting
             var allMembers = new List<object>();

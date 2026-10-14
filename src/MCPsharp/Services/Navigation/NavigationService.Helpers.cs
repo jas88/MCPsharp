@@ -1,5 +1,5 @@
-using Microsoft.CodeAnalysis;
 using MCPsharp.Models.Navigation;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Navigation;
 
@@ -210,7 +210,8 @@ public partial class NavigationService
     {
         public bool Equals(NavigationLocation? x, NavigationLocation? y)
         {
-            if (x == null || y == null) return false;
+            if (x == null || y == null)
+                return false;
             return x.FilePath == y.FilePath && x.Line == y.Line && x.Column == y.Column;
         }
 

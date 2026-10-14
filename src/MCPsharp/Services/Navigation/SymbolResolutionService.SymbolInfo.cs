@@ -1,5 +1,5 @@
-using Microsoft.CodeAnalysis;
 using MCPsharp.Models.Navigation;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Navigation;
 
@@ -89,8 +89,10 @@ public partial class SymbolResolutionService
         else if (symbol is IPropertySymbol property)
         {
             var modifiers = new List<string>();
-            if (property.IsReadOnly) modifiers.Add("readonly");
-            if (property.IsWriteOnly) modifiers.Add("writeonly");
+            if (property.IsReadOnly)
+                modifiers.Add("readonly");
+            if (property.IsWriteOnly)
+                modifiers.Add("writeonly");
 
             return new NavigationSymbolInfo
             {

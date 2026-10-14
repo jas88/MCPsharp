@@ -1,7 +1,7 @@
+using MCPsharp.Models.Roslyn;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using MCPsharp.Models.Roslyn;
 
 namespace MCPsharp.Services.Roslyn;
 
@@ -21,15 +21,15 @@ public partial class TypeUsageService
     {
         if (!_workspace.IsInitialized)
             return new TypeUsagePatternAnalysis
-        {
-            TypeStatistics = new Dictionary<string, TypeUsageStats>(),
-            CommonPatterns = new List<UsagePattern>(),
-            MostUsedTypes = new List<string>(),
-            LeastUsedTypes = new List<string>(),
-            UsageKindDistribution = new Dictionary<TypeUsageKind, int>(),
-            TotalTypesAnalyzed = 0,
-            TotalUsagesFound = 0
-        };
+            {
+                TypeStatistics = new Dictionary<string, TypeUsageStats>(),
+                CommonPatterns = new List<UsagePattern>(),
+                MostUsedTypes = new List<string>(),
+                LeastUsedTypes = new List<string>(),
+                UsageKindDistribution = new Dictionary<TypeUsageKind, int>(),
+                TotalTypesAnalyzed = 0,
+                TotalUsagesFound = 0
+            };
 
         var typeStatistics = new Dictionary<string, TypeUsageStats>();
         var usageKindDistribution = new Dictionary<TypeUsageKind, int>();

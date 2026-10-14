@@ -1,6 +1,6 @@
-using NUnit.Framework;
-using Microsoft.CodeAnalysis;
 using MCPsharp.Services.Roslyn;
+using Microsoft.CodeAnalysis;
+using NUnit.Framework;
 using SymbolKind = MCPsharp.Services.Roslyn.SymbolKind;
 
 namespace MCPsharp.Tests.Services.Roslyn;

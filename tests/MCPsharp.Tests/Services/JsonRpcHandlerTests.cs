@@ -9,6 +9,7 @@ namespace MCPsharp.Tests.Services;
 public class JsonRpcHandlerTests
 {
     private readonly JsonSerializerOptions _jsonOptions;
+    private RoslynWorkspace _workspace = null!;
 
     public JsonRpcHandlerTests()
     {
@@ -16,6 +17,18 @@ public class JsonRpcHandlerTests
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
+    }
+
+    [SetUp]
+    public void SetUp()
+    {
+        _workspace = new RoslynWorkspace();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _workspace.Dispose();
     }
 
     [Test]
@@ -279,14 +292,13 @@ public class JsonRpcHandlerTests
         Assert.That(response.Jsonrpc, Is.EqualTo("2.0"));
     }
 
-    private static JsonRpcHandler CreateHandler(string input, out StringWriter output)
+    private JsonRpcHandler CreateHandler(string input, out StringWriter output)
     {
         var inputReader = new StringReader(input);
         var outputWriter = new StringWriter();
         output = outputWriter;
         var projectManager = new ProjectContextManager();
-        var workspace = new RoslynWorkspace();
-        var registry = new McpToolRegistry(projectManager, workspace);
+        var registry = new McpToolRegistry(projectManager, _workspace);
         var logger = new Microsoft.Extensions.Logging.Abstractions.NullLogger<JsonRpcHandler>();
         return new JsonRpcHandler(inputReader, outputWriter, registry, logger);
     }

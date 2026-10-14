@@ -1,9 +1,9 @@
-using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
 using MCPsharp.Models;
 using MCPsharp.Services;
 using MCPsharp.Services.Phase3;
 using MCPsharp.Services.Roslyn;
+using Microsoft.Extensions.Logging.Abstractions;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.Phase3;
 

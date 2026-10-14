@@ -1,5 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
 using MCPsharp.Models.SqlMigration;
+using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services.Phase3.SqlMigration;
 
@@ -114,7 +114,7 @@ internal sealed partial class SchemaEvolutionTracker
                         newSchema.Remove(operation.TableName);
                     }
                     break;
-                // Handle other operation types...
+                    // Handle other operation types...
             }
         }
 
@@ -304,8 +304,10 @@ internal sealed partial class SchemaEvolutionTracker
 
     private static string DescribeTrend(int initialValue, int finalValue)
     {
-        if (finalValue > initialValue) return "Increasing";
-        if (finalValue < initialValue) return "Decreasing";
+        if (finalValue > initialValue)
+            return "Increasing";
+        if (finalValue < initialValue)
+            return "Decreasing";
         return "Stable";
     }
 

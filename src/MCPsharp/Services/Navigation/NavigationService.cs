@@ -1,9 +1,9 @@
 using System.Diagnostics;
+using MCPsharp.Models.Navigation;
+using MCPsharp.Services.Roslyn;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MCPsharp.Models.Navigation;
-using MCPsharp.Services.Roslyn;
 
 namespace MCPsharp.Services.Navigation;
 

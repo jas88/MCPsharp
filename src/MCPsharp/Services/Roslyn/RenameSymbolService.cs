@@ -1,6 +1,6 @@
+using MCPsharp.Services.Roslyn.SymbolSearch;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
-using MCPsharp.Services.Roslyn.SymbolSearch;
 
 namespace MCPsharp.Services.Roslyn;
 

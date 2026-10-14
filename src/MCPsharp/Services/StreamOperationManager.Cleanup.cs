@@ -1,7 +1,3 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using MCPsharp.Models.Streaming;
 
 namespace MCPsharp.Services;
@@ -73,7 +69,7 @@ public partial class StreamOperationManager
     private static bool ShouldCleanupOperation(StreamOperation operation, DateTime cutoffTime, bool includeFailed)
     {
         // Don't clean up running operations
-        if (operation.Status == StreamOperationStatus.Running || 
+        if (operation.Status == StreamOperationStatus.Running ||
             operation.Status == StreamOperationStatus.Paused)
         {
             return false;
@@ -86,17 +82,17 @@ public partial class StreamOperationManager
         }
 
         // Clean up completed operations older than 1 hour
-        if (operation.Status == StreamOperationStatus.Completed && 
-            operation.CompletedAt.HasValue && 
+        if (operation.Status == StreamOperationStatus.Completed &&
+            operation.CompletedAt.HasValue &&
             operation.CompletedAt.Value < DateTime.UtcNow - TimeSpan.FromHours(1))
         {
             return true;
         }
 
         // Clean up failed operations if requested
-        if (includeFailed && 
+        if (includeFailed &&
             (operation.Status == StreamOperationStatus.Failed || operation.Status == StreamOperationStatus.Cancelled) &&
-            operation.CompletedAt.HasValue && 
+            operation.CompletedAt.HasValue &&
             operation.CompletedAt.Value < DateTime.UtcNow - TimeSpan.FromMinutes(30))
         {
             return true;

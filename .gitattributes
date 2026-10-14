@@ -1,0 +1,2 @@
+# Check out text files with LF on every platform, matching .editorconfig (end_of_line = lf)
+* text=auto eol=lf

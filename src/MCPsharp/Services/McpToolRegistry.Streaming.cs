@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MCPsharp.Models;
 using MCPsharp.Models.Streaming;
+using MCPsharp.Services.Consolidated;
 
 namespace MCPsharp.Services;
 
@@ -9,6 +10,15 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
+    /// <summary>
+    /// Converts the processorOptions argument into the option dictionary the Streaming processors expect:
+    /// keys are matched case-insensitively and JSON values become plain CLR values (string, bool, int, list),
+    /// which is what the processors' option parsing recognises.
+    /// </summary>
+    private static Dictionary<string, object> ParseStreamingProcessorOptions(JsonElement optionsElement)
+        => StreamProcessorOptionMapper.ToOptionDictionary(
+            JsonSerializer.Deserialize<Dictionary<string, object>>(optionsElement.GetRawText()));
+
     /// <summary>
     /// Process a file using streaming operations with configurable chunk size and progress tracking
     /// </summary>
@@ -55,7 +65,7 @@ public partial class McpToolRegistry
             // Parse processor options
             if (arguments.RootElement.TryGetProperty("processorOptions", out var optionsEl))
             {
-                request.ProcessorOptions = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsEl.GetRawText()) ?? new Dictionary<string, object>();
+                request.ProcessorOptions = ParseStreamingProcessorOptions(optionsEl);
             }
 
             var result = await _streamingProcessor.ProcessFileAsync(request, cancellationToken);
@@ -146,7 +156,7 @@ public partial class McpToolRegistry
             // Parse processor options
             if (arguments.RootElement.TryGetProperty("processorOptions", out var optionsEl))
             {
-                request.ProcessorOptions = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsEl.GetRawText()) ?? new Dictionary<string, object>();
+                request.ProcessorOptions = ParseStreamingProcessorOptions(optionsEl);
             }
 
             var results = await _streamingProcessor.BulkTransformAsync(request, null, cancellationToken);
@@ -254,7 +264,7 @@ public partial class McpToolRegistry
             Dictionary<string, object>? processorOptions = null;
             if (arguments.RootElement.TryGetProperty("processorOptions", out var optionsEl))
             {
-                processorOptions = JsonSerializer.Deserialize<Dictionary<string, object>>(optionsEl.GetRawText());
+                processorOptions = ParseStreamingProcessorOptions(optionsEl);
             }
 
             var request = new StreamProcessRequest

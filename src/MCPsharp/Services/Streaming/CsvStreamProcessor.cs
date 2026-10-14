@@ -1,12 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
+using MCPsharp.Models.Streaming;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MCPsharp.Models.Streaming;
 
 namespace MCPsharp.Services.Streaming;
 
@@ -43,7 +39,7 @@ public partial class CsvStreamProcessor : IStreamProcessor
     {
         var config = ParseConfig(options);
         var text = Encoding.UTF8.GetString(chunk.Data);
-        var lines = text.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+        var lines = TextChunkLines.Split(text, out var endsWithLineBreak);
         var processedLines = new List<string>();
 
         foreach (var line in lines)
@@ -87,10 +83,10 @@ public partial class CsvStreamProcessor : IStreamProcessor
                 fields = fields.Select(f => f?.Trim() ?? "").ToArray();
             }
 
-            processedLines.Add(string.Join(config.Delimiter, fields));
+            processedLines.Add(string.Join(config.Delimiter, fields.Select(f => QuoteField(f, config))));
         }
 
-        var processedText = string.Join(Environment.NewLine, processedLines);
+        var processedText = TextChunkLines.Join(processedLines, endsWithLineBreak);
         var processedData = Encoding.UTF8.GetBytes(processedText);
 
         return new StreamChunk
@@ -125,13 +121,13 @@ public partial class CsvStreamProcessor : IStreamProcessor
         var config = new CsvProcessorConfig();
 
         if (options.TryGetValue("Delimiter", out var delimiter) && delimiter is string delimStr)
-            config.Delimiter = delimStr;
+            config.Delimiter = RequireNonEmpty(delimStr, "Delimiter");
 
         if (options.TryGetValue("HasHeader", out var hasHeader) && hasHeader is bool hh)
             config.HasHeader = hh;
 
         if (options.TryGetValue("QuoteCharacter", out var quote) && quote is string quoteStr)
-            config.QuoteCharacter = quoteStr;
+            config.QuoteCharacter = RequireNonEmpty(quoteStr, "QuoteCharacter");
 
         if (options.TryGetValue("EscapeCharacter", out var escape) && escape is string escapeStr)
             config.EscapeCharacter = escapeStr;
@@ -148,9 +144,35 @@ public partial class CsvStreamProcessor : IStreamProcessor
         return config;
     }
 
+    private static string RequireNonEmpty(string value, string optionName)
+        => value.Length > 0
+            ? value
+            : throw new ArgumentException($"{optionName} must not be empty.", optionName);
+
+    /// <summary>
+    /// Quotes a field for output per RFC 4180 when it contains the delimiter, the quote character or a
+    /// line break, doubling any embedded quote characters.
+    /// </summary>
+    internal static string QuoteField(string field, CsvProcessorConfig config)
+    {
+        var quote = config.QuoteCharacter;
+        if (string.IsNullOrEmpty(quote))
+            return field;
+
+        var needsQuoting = field.Contains(config.Delimiter, StringComparison.Ordinal)
+            || field.Contains(quote, StringComparison.Ordinal)
+            || field.AsSpan().IndexOfAny('\r', '\n') >= 0;
+
+        return needsQuoting
+            ? string.Concat(quote, field.Replace(quote, quote + quote, StringComparison.Ordinal), quote)
+            : field;
+    }
+
     private static string[] ParseCsvLine(string line, CsvProcessorConfig config)
     {
-        // Simple CSV parsing - in practice, you might want to use a more robust CSV library
+        // Simple CSV parsing - in practice, you might want to use a more robust CSV library.
+        // Rows are parsed one line at a time, so a quoted field containing a line break that spans
+        // lines (or chunks) is not supported.
         var result = new List<string>();
         var current = new StringBuilder();
         var inQuotes = false;

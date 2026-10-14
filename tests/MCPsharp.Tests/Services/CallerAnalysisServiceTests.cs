@@ -1,15 +1,6 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Text;
 using MCPsharp.Models.Roslyn;
 using MCPsharp.Services.Roslyn;
-using MCPsharp.Tests.TestFixtures;
 using NUnit.Framework;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace MCPsharp.Tests.Services;
 

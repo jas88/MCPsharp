@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using System.Collections.Immutable;
 
 namespace MCPsharp.Models.Analyzers;

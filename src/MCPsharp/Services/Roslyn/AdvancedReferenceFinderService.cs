@@ -1,6 +1,6 @@
+using MCPsharp.Models.Roslyn;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MCPsharp.Models.Roslyn;
 
 namespace MCPsharp.Services.Roslyn;
 

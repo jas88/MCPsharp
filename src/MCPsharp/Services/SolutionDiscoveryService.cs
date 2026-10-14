@@ -117,7 +117,8 @@ public sealed partial class SolutionDiscoveryService
                     continue;
 
                 var parts = line.Split('"');
-                if (parts.Length < 6) continue;
+                if (parts.Length < 6)
+                    continue;
 
                 var projectPath = parts[5]; // The path is in the 6th quoted section
 
@@ -269,7 +270,8 @@ public sealed partial class SolutionDiscoveryService
             {
                 index += startTag.Length;
                 var endIndex = content.IndexOf('"', index);
-                if (endIndex < 0) break;
+                if (endIndex < 0)
+                    break;
 
                 var relativePath = content[index..endIndex];
                 var fullPath = Path.GetFullPath(Path.Combine(projectDir, relativePath));

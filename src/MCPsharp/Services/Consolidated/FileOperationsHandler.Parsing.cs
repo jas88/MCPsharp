@@ -1,6 +1,6 @@
 using System.Text.Json;
-using MCPsharp.Models.Consolidated;
 using MCPsharp.Models;
+using MCPsharp.Models.Consolidated;
 
 namespace MCPsharp.Services.Consolidated;
 

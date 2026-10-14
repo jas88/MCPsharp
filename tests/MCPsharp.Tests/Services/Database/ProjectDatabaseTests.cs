@@ -5,9 +5,13 @@ using NUnit.Framework;
 namespace MCPsharp.Tests.Services.Database;
 
 [TestFixture]
+[Category("Unit")]
 public partial class ProjectDatabaseTests
 {
     private static readonly string[] ClassKindFilter = ["Class"];
+    private static readonly string[] FooBarOnly = ["Foo_Bar"];
+    private static readonly string[] PercentNameOnly = ["Pct%Name"];
+    private static readonly string[] BackslashNameOnly = ["Back\\Slash"];
     private static readonly string[] TestNamespaceFilter = ["Test.Namespace"];
 
     private ProjectDatabase _db = null!;
@@ -318,17 +322,20 @@ public partial class ProjectDatabaseTests
     public async Task GetDatabaseStatsAsync_ReturnsCorrectCounts()
     {
         // Arrange
-        var projectId = await _db.GetOrCreateProjectAsync("/test/path", "TestProject");
+        _ = await _db.GetOrCreateProjectAsync("/test/path", "TestProject");
 
         // Act
         var stats = await _db.GetDatabaseStatsAsync();
 
         // Assert
-        Assert.That(stats, Does.ContainKey("projects"));
-        Assert.That(stats["projects"], Is.EqualTo(1));
-        Assert.That(stats, Does.ContainKey("files"));
-        Assert.That(stats, Does.ContainKey("symbols"));
-        Assert.That(stats, Does.ContainKey("symbol_references"));
+        Assert.That(stats, Is.EquivalentTo(new Dictionary<string, long>
+        {
+            ["projects"] = 1,
+            ["files"] = 0,
+            ["symbols"] = 0,
+            ["symbol_references"] = 0,
+            ["analysis_results"] = 0
+        }));
     }
 
     #endregion

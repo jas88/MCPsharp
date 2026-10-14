@@ -116,6 +116,11 @@ public class ProcessingContext
     public required bool EnableCheckpoints { get; init; }
     public string? CheckpointPath { get; init; }
     public CancellationToken CancellationToken { get; init; }
+
+    /// <summary>
+    /// Processor options for this run (processor-specific settings live in <see cref="ProcessorOptions.Parameters"/>)
+    /// </summary>
+    public ProcessorOptions? Options { get; init; }
 }
 
 /// <summary>

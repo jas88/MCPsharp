@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using MCPsharp.Models.Streaming;
 using MCPsharp.Models.Consolidated;
+using MCPsharp.Models.Streaming;
 
 namespace MCPsharp.Services;
 

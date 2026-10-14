@@ -1,6 +1,6 @@
+using MCPsharp.Services.Analyzers;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
-using MCPsharp.Services.Analyzers;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Integration;
@@ -139,7 +139,7 @@ public class TestClass
         await _analyzerRegistry!.RegisterAnalyzerAsync(adapter);
 
         // Create cancellation token that's already cancelled
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert: Should handle cancellation

@@ -1,11 +1,11 @@
+using MCPsharp.Models.Navigation;
+using MCPsharp.Services.Roslyn;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MCPsharp.Models.Navigation;
-using MCPsharp.Services.Roslyn;
 
 namespace MCPsharp.Services.Navigation;
 

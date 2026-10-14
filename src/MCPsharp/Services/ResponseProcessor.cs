@@ -1,7 +1,7 @@
 using System.Text.Json;
+using MCPsharp.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MCPsharp.Models;
 
 namespace MCPsharp.Services;
 
@@ -108,7 +108,8 @@ public partial class ResponseProcessor
     /// </summary>
     private int EstimateTokenCount(object obj)
     {
-        if (obj == null) return 0;
+        if (obj == null)
+            return 0;
 
         string jsonString;
 

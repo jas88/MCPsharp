@@ -1,8 +1,8 @@
+using MCPsharp.Models.Streaming;
+using MCPsharp.Services;
+using MCPsharp.Tests.TestData;
 using NSubstitute;
 using NUnit.Framework;
-using MCPsharp.Services;
-using MCPsharp.Models.Streaming;
-using MCPsharp.Tests.TestData;
 
 namespace MCPsharp.Tests.Services.Streaming;
 
@@ -52,7 +52,7 @@ public partial class StreamingFileProcessorTests
         await _processor.ProcessFileAsync(testFile);
         await _processor.ProcessMultipleFilesAsync(files, config);
 
-        var statsBefore = await _processor.GetProcessingStatisticsAsync();
+        _ = await _processor.GetProcessingStatisticsAsync();
 
         // Act
         await _processor.ClearStatisticsAsync();
@@ -136,8 +136,7 @@ public partial class StreamingFileProcessorTests
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
-        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(new FileInfo(testFile).Length));
         Assert.That(result.ChunksProcessed, Is.GreaterThan(0));
     }
 
@@ -154,8 +153,7 @@ public partial class StreamingFileProcessorTests
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.BytesProcessed, Is.EqualTo(0));
-        Assert.That(result.BytesProcessed, Is.EqualTo(0));
+        Assert.That(result.BytesProcessed, Is.EqualTo(new FileInfo(testFile).Length));
         // Empty files still process 1 chunk (empty chunk)
         Assert.That(result.ChunksProcessed, Is.GreaterThanOrEqualTo(0));
     }
@@ -180,15 +178,14 @@ public partial class StreamingFileProcessorTests
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
-        Assert.That(result.BytesProcessed, Is.EqualTo(content.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(new FileInfo(testFile).Length));
     }
 
     [Test]
     public async Task Dispose_ShouldCleanupResources()
     {
-        // Arrange
-        var processor = new StreamingFileProcessor(
+        // Arrange - the using also covers failure paths; disposing twice is permitted
+        using var processor = new StreamingFileProcessor(
             CreateNullLogger<StreamingFileProcessor>(),
             Substitute.For<IProgressTracker>(),
             Substitute.For<ITempFileManager>());

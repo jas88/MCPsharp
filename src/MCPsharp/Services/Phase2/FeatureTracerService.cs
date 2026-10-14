@@ -1,6 +1,6 @@
-using Microsoft.Extensions.Logging;
 using MCPsharp.Models;
 using MCPsharp.Services.Roslyn;
+using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services.Phase2;
 

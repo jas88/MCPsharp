@@ -1,7 +1,7 @@
-using NUnit.Framework;
-using MCPsharp.Services;
-using MCPsharp.Models;
 using System.Text.Json;
+using MCPsharp.Models;
+using MCPsharp.Services;
+using NUnit.Framework;
 
 namespace MCPsharp.Tests.Integration;
 
@@ -101,7 +101,8 @@ public partial class SqliteCacheIntegrationTests
         // Arrange
         var projectId = await _database.GetOrCreateProjectAsync(_testProjectPath, "Test");
 
-        var solutionInfo = JsonSerializer.Serialize(new {
+        var solutionInfo = JsonSerializer.Serialize(new
+        {
             name = "Test.sln",
             projects = SampleProjectNames
         });

@@ -1,6 +1,5 @@
-using Microsoft.Extensions.Logging;
 using MCPsharp.Models.Consolidated;
-using MCPsharp.Services;
+using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services.Consolidated;
 
@@ -226,13 +225,13 @@ public partial class BulkOperationsHub
                 TargetPattern = request.TargetPattern,
                 ReplacementPattern = request.ReplacementPattern,
                 Operations = request.Operations?.Select(op => new FileOperationDefinition
-            {
-                Path = op.Path,
-                Type = op.Type,
-                DestinationPath = op.DestinationPath,
-                Edits = op.Edits,
-                Options = op.Options?.WithDryRun(true)
-            }).ToList()
+                {
+                    Path = op.Path,
+                    Type = op.Type,
+                    DestinationPath = op.DestinationPath,
+                    Edits = op.Edits,
+                    Options = op.Options?.WithDryRun(true)
+                }).ToList()
             };
 
             var previewResults = await ExecuteBulkOperationByTypeAsync(dryRunRequest, new BulkOperationContext

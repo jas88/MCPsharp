@@ -1,6 +1,6 @@
+using MCPsharp.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using MCPsharp.Models;
 
 namespace MCPsharp.Services.Phase3;
 
@@ -85,7 +85,8 @@ public partial class DuplicateCodeDetectorService
 
         foreach (var property in properties)
         {
-            if (property.AccessorList == null) continue;
+            if (property.AccessorList == null)
+                continue;
 
             var lineSpan = property.SyntaxTree.GetLineSpan(property.Span);
             var lineCount = lineSpan.EndLinePosition.Line - lineSpan.StartLinePosition.Line + 1;
@@ -148,7 +149,8 @@ public partial class DuplicateCodeDetectorService
 
         foreach (var constructor in constructors)
         {
-            if (constructor.Body == null) continue;
+            if (constructor.Body == null)
+                continue;
 
             var lineSpan = constructor.SyntaxTree.GetLineSpan(constructor.Span);
             var lineCount = lineSpan.EndLinePosition.Line - lineSpan.StartLinePosition.Line + 1;

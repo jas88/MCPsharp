@@ -1,8 +1,8 @@
+using MCPsharp.Models.Streaming;
+using MCPsharp.Services;
+using MCPsharp.Tests.TestData;
 using NSubstitute;
 using NUnit.Framework;
-using MCPsharp.Services;
-using MCPsharp.Models.Streaming;
-using MCPsharp.Tests.TestData;
 
 namespace MCPsharp.Tests.Services.Streaming;
 
@@ -94,8 +94,7 @@ public partial class StreamingFileProcessorTests : FileServiceTestBase
         // Assert
         Assert.That(result.Success);
         Assert.That(result.Success, Is.True);
-        Assert.That(result.BytesProcessed, Is.EqualTo(largeContent.Length));
-        Assert.That(result.BytesProcessed, Is.EqualTo(largeContent.Length));
+        Assert.That(result.BytesProcessed, Is.EqualTo(new FileInfo(testFile).Length));
         Assert.That(result.ChunksProcessed, Is.GreaterThan(10)); // Should have multiple chunks
         Assert.That(result.MemoryUsage, Is.LessThan(largeContent.Length)); // Should use less memory than file size
     }
@@ -186,7 +185,7 @@ public partial class StreamingFileProcessorTests : FileServiceTestBase
             OutputPath = testFile + ".processed",
             ChunkSize = 512
         };
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
 
         // Cancel immediately
         cts.Cancel();

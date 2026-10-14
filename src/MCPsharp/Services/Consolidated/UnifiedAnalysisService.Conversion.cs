@@ -1,6 +1,6 @@
+using MCPsharp.Models.Architecture;
 using MCPsharp.Models.Consolidated;
 using MCPsharp.Models.Roslyn;
-using MCPsharp.Models.Architecture;
 using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Consolidated;

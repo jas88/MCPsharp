@@ -1,9 +1,9 @@
 using System.Collections.Immutable;
+using MCPsharp.Services.Analyzers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.Extensions.Logging;
 using NUnit.Framework;
-using MCPsharp.Services.Analyzers;
 
 namespace MCPsharp.Tests.Services.Analyzers;
 

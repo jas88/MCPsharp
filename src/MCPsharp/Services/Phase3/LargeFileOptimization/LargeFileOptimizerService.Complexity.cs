@@ -95,7 +95,8 @@ public partial class LargeFileOptimizerService
     private static double CalculateMaintainabilityIndex(int cyclomaticComplexity, int linesOfCode, int halsteadVolume)
     {
         // Simplified maintainability index calculation
-        if (halsteadVolume == 0) return 100.0;
+        if (halsteadVolume == 0)
+            return 100.0;
 
         var maintainabilityIndex = 171.0
             - 5.2 * Math.Log(halsteadVolume)
@@ -109,9 +110,12 @@ public partial class LargeFileOptimizerService
     {
         var maxComplexity = Math.Max(cyclomatic, cognitive);
 
-        if (maxComplexity <= 10) return ComplexityLevel.Simple;
-        if (maxComplexity <= 20) return ComplexityLevel.Moderate;
-        if (maxComplexity <= 50) return ComplexityLevel.Complex;
+        if (maxComplexity <= 10)
+            return ComplexityLevel.Simple;
+        if (maxComplexity <= 20)
+            return ComplexityLevel.Moderate;
+        if (maxComplexity <= 50)
+            return ComplexityLevel.Complex;
         return ComplexityLevel.VeryComplex;
     }
 

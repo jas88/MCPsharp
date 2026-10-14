@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using MCPsharp.Models.Database;
 using Microsoft.Data.Sqlite;
 
@@ -84,7 +85,7 @@ public sealed partial class ProjectDatabase
         var sql = @"
             SELECT id, file_id, name, kind, namespace, containing_type, line, column, end_line, end_column, accessibility, signature
             FROM symbols
-            WHERE name LIKE $pattern";
+            WHERE name LIKE $pattern ESCAPE '\'";
 
         if (kind != null)
         {
@@ -94,7 +95,7 @@ public sealed partial class ProjectDatabase
         sql += " ORDER BY name LIMIT $limit";
 
         cmd.CommandText = sql;
-        cmd.Parameters.AddWithValue("$pattern", $"%{name}%");
+        cmd.Parameters.AddWithValue("$pattern", ToContainsLikePattern(name));
         if (kind != null)
         {
             cmd.Parameters.AddWithValue("$kind", kind);
@@ -186,6 +187,49 @@ public sealed partial class ProjectDatabase
         await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    // One fixed query per combination of active list filters, so SQLite can use the kind/namespace
+    // indexes (a "$p IS NULL OR ..." guard would prevent that). The name filter is a substring LIKE,
+    // which cannot use an index, so it stays optional via NULL. Every variant shares the
+    // ESCAPE '\' clause in SearchSymbolsSelect, matching ToContainsLikePattern.
+    private const string SearchSymbolsSelect = @"
+            SELECT id, file_id, name, kind, namespace, containing_type, line, column, end_line, end_column, accessibility, signature
+            FROM symbols
+            WHERE ($query IS NULL OR name LIKE $query ESCAPE '\')";
+
+    private const string KindFilter = @"
+              AND kind IN (SELECT value FROM json_each($kinds))";
+
+    private const string NamespaceFilter = @"
+              AND namespace IN (SELECT value FROM json_each($namespaces))";
+
+    private const string SearchSymbolsOrder = @"
+            ORDER BY name LIMIT $limit";
+
+    private const string SearchSymbolsQuery = SearchSymbolsSelect + SearchSymbolsOrder;
+    internal const string SearchSymbolsByKindQuery = SearchSymbolsSelect + KindFilter + SearchSymbolsOrder;
+    internal const string SearchSymbolsByNamespaceQuery = SearchSymbolsSelect + NamespaceFilter + SearchSymbolsOrder;
+    private const string SearchSymbolsByKindAndNamespaceQuery =
+        SearchSymbolsSelect + KindFilter + NamespaceFilter + SearchSymbolsOrder;
+
+    /// <summary>
+    /// Builds a substring LIKE pattern for <paramref name="value"/>, escaping LIKE metacharacters
+    /// so <c>%</c>, <c>_</c> (common in identifiers) and <c>\</c> match literally. Use with ESCAPE '\'.
+    /// </summary>
+    private static string ToContainsLikePattern(string value)
+    {
+        var escaped = value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("%", "\\%", StringComparison.Ordinal)
+            .Replace("_", "\\_", StringComparison.Ordinal);
+        return $"%{escaped}%";
+    }
+
+    private static string? ToJsonArrayOrNull(IEnumerable<string>? values)
+    {
+        var list = values?.ToList();
+        return list is { Count: > 0 } ? JsonSerializer.Serialize(list) : null;
+    }
+
     /// <summary>
     /// Searches symbols with multiple filters.
     /// </summary>
@@ -201,53 +245,33 @@ public sealed partial class ProjectDatabase
 
         await using var cmd = conn.CreateCommand();
 
-        var conditions = new List<string>();
-
-        if (!string.IsNullOrEmpty(query))
+        // Fixed command text per filter combination; the kind/namespace lists are bound as JSON arrays
+        // expanded with json_each.
+        var kindsJson = ToJsonArrayOrNull(kinds);
+        var namespacesJson = ToJsonArrayOrNull(namespaces);
+        if (kindsJson != null && namespacesJson != null)
         {
-            conditions.Add("name LIKE $query");
-            cmd.Parameters.AddWithValue("$query", $"%{query}%");
+            cmd.CommandText = SearchSymbolsByKindAndNamespaceQuery;
+        }
+        else if (kindsJson != null)
+        {
+            cmd.CommandText = SearchSymbolsByKindQuery;
+        }
+        else if (namespacesJson != null)
+        {
+            cmd.CommandText = SearchSymbolsByNamespaceQuery;
+        }
+        else
+        {
+            cmd.CommandText = SearchSymbolsQuery;
         }
 
-        var kindList = kinds?.ToList();
-        if (kindList?.Count > 0)
-        {
-            var kindParams = new List<string>();
-            for (var i = 0; i < kindList.Count; i++)
-            {
-                var paramName = $"$kind{i}";
-                kindParams.Add(paramName);
-                cmd.Parameters.AddWithValue(paramName, kindList[i]);
-            }
-            conditions.Add($"kind IN ({string.Join(", ", kindParams)})");
-        }
-
-        var namespaceList = namespaces?.ToList();
-        if (namespaceList?.Count > 0)
-        {
-            var nsParams = new List<string>();
-            for (var i = 0; i < namespaceList.Count; i++)
-            {
-                var paramName = $"$ns{i}";
-                nsParams.Add(paramName);
-                cmd.Parameters.AddWithValue(paramName, namespaceList[i]);
-            }
-            conditions.Add($"namespace IN ({string.Join(", ", nsParams)})");
-        }
-
-        var sql = @"
-            SELECT id, file_id, name, kind, namespace, containing_type, line, column, end_line, end_column, accessibility, signature
-            FROM symbols";
-
-        if (conditions.Count > 0)
-        {
-            sql += " WHERE " + string.Join(" AND ", conditions);
-        }
-
-        sql += " ORDER BY name LIMIT $limit";
+        cmd.Parameters.AddWithValue("$query", string.IsNullOrEmpty(query) ? DBNull.Value : ToContainsLikePattern(query));
+        if (kindsJson != null)
+            cmd.Parameters.AddWithValue("$kinds", kindsJson);
+        if (namespacesJson != null)
+            cmd.Parameters.AddWithValue("$namespaces", namespacesJson);
         cmd.Parameters.AddWithValue("$limit", limit);
-
-        cmd.CommandText = sql;
 
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))

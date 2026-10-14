@@ -1,6 +1,6 @@
-using Microsoft.CodeAnalysis;
 using MCPsharp.Models;
 using MCPsharp.Services.Phase3.DuplicateDetection;
+using Microsoft.CodeAnalysis;
 
 namespace MCPsharp.Services.Phase3;
 
@@ -18,7 +18,8 @@ public partial class DuplicateCodeDetectorService
 
         foreach (var hashGroup in hashGroups)
         {
-            if (hashGroup.Count() < 2) continue; // Need at least 2 blocks to be a duplicate
+            if (hashGroup.Count() < 2)
+                continue; // Need at least 2 blocks to be a duplicate
 
             var blocksList = hashGroup.ToList();
             var similarityScore = 1.0; // Exact duplicates have 100% similarity

@@ -1,10 +1,10 @@
 using System.Globalization;
+using MCPsharp.Models.Refactoring;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
-using MCPsharp.Models.Refactoring;
 
 namespace MCPsharp.Services.Roslyn;
 

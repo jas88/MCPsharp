@@ -1,9 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using MCPsharp.Models.Streaming;
 
 namespace MCPsharp.Services;
@@ -49,7 +43,7 @@ public partial class StreamOperationManager
         }
     }
 
-    public async Task<StreamResult?> ResumeFromCheckpointAsync(string operationId, string checkpointId, 
+    public async Task<StreamResult?> ResumeFromCheckpointAsync(string operationId, string checkpointId,
         CancellationToken cancellationToken = default)
     {
         if (!_operations.TryGetValue(operationId, out var operation))
@@ -76,7 +70,7 @@ public partial class StreamOperationManager
         try
         {
             operation.Status = StreamOperationStatus.Resumed;
-            
+
             LogResumingOperationFromCheckpoint(_logger, operationId, checkpointId);
 
             var result = await _streamingProcessor.ResumeOperationAsync(operationId, cancellationToken);

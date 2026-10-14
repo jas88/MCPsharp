@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.IO;
-using System.Text;
 using System.Text.RegularExpressions;
 using MCPsharp.Models.Search;
 using Microsoft.Extensions.FileSystemGlobbing;
@@ -99,7 +97,8 @@ public partial class SearchService : ISearchService
 
             await Parallel.ForEachAsync(files, ct, async (file, token) =>
             {
-                if (token.IsCancellationRequested) return;
+                if (token.IsCancellationRequested)
+                    return;
 
                 try
                 {

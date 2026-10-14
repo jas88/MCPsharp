@@ -22,7 +22,7 @@ public partial class AdvancedReferenceFinderServiceIntegrationTests
     {
         // This test requires actual file locations, which is complex to set up
         // We'll test that the method doesn't throw
-        var result = await _advancedReferenceFinder.FindCallersAtLocationAsync("Service.cs", 10, 5);
+        _ = await _advancedReferenceFinder.FindCallersAtLocationAsync("Service.cs", 10, 5);
 
         // May return null for non-existent location
     }
@@ -72,7 +72,7 @@ public partial class AdvancedReferenceFinderServiceIntegrationTests
             Name = "Run",
             ContainingType = "MCPsharp.Tests.TestFixtures.Manager",
             ReturnType = "void",
-                Accessibility = "public"
+            Accessibility = "public"
         };
 
         var toMethod = new MethodSignature
@@ -80,7 +80,7 @@ public partial class AdvancedReferenceFinderServiceIntegrationTests
             Name = "Execute",
             ContainingType = "MCPsharp.Tests.TestFixtures.Service",
             ReturnType = "void",
-                Accessibility = "public"
+            Accessibility = "public"
         };
 
         // Act
@@ -166,7 +166,7 @@ public partial class AdvancedReferenceFinderServiceIntegrationTests
             Name = "Run",
             ContainingType = "MCPsharp.Tests.TestFixtures.Manager",
             ReturnType = "void",
-                Accessibility = "public"
+            Accessibility = "public"
         };
 
         var toMethod = new MethodSignature
@@ -174,11 +174,11 @@ public partial class AdvancedReferenceFinderServiceIntegrationTests
             Name = "Process",
             ContainingType = "MCPsharp.Tests.TestFixtures.Service",
             ReturnType = "void",
-                Accessibility = "public"
+            Accessibility = "public"
         };
 
         // Act
-        var result = await _advancedReferenceFinder.FindShortestPathAsync(fromMethod, toMethod);
+        _ = await _advancedReferenceFinder.FindShortestPathAsync(fromMethod, toMethod);
 
         // Assert
         // May return null if no path exists

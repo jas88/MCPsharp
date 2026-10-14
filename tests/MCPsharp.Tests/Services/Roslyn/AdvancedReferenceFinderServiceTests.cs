@@ -1,7 +1,7 @@
+using MCPsharp.Models.Roslyn;
+using MCPsharp.Services.Roslyn;
 using NSubstitute;
 using NUnit.Framework;
-using MCPsharp.Services.Roslyn;
-using MCPsharp.Models.Roslyn;
 
 namespace MCPsharp.Tests.Services.Roslyn;
 
@@ -101,16 +101,16 @@ public partial class AdvancedReferenceFinderServiceTests : TestBase
     public async Task Cancellation_ShouldRespectCancellationToken()
     {
         // Arrange
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         var methodName = "TestMethod";
 
         // Act & Assert - Check that cancellation is handled gracefully
         // The exact behavior depends on the underlying implementation
-        var result1 = await _service.FindCallersAsync(methodName, null, true, cts.Token);
-        var result2 = await _service.FindTypeUsagesAsync("TestType", cts.Token);
-        var result3 = await _service.AnalyzeCallPatternsAsync("TestMethod", null, cts.Token);
+        _ = await _service.FindCallersAsync(methodName, null, true, cts.Token);
+        _ = await _service.FindTypeUsagesAsync("TestType", cts.Token);
+        _ = await _service.AnalyzeCallPatternsAsync("TestMethod", null, cts.Token);
 
         // Assert - Should handle cancellation gracefully (may return null or not throw)
         // This tests that the service accepts cancellation tokens without crashing

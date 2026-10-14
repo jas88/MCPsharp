@@ -1,9 +1,9 @@
+using MCPsharp.Models.Roslyn;
+using MCPsharp.Services.Roslyn;
+using MCPsharp.Tests.TestData;
 using Microsoft.CodeAnalysis;
 using NSubstitute;
 using NUnit.Framework;
-using MCPsharp.Services.Roslyn;
-using MCPsharp.Models.Roslyn;
-using MCPsharp.Tests.TestData;
 
 namespace MCPsharp.Tests.Services.Roslyn;
 
@@ -397,7 +397,8 @@ public partial class AdvancedReferenceFinderServiceTests
         var containingType = "WorkflowClass";
         var expected = new ReachabilityAnalysis
         {
-            StartMethod = new MethodSignature {
+            StartMethod = new MethodSignature
+            {
                 Name = methodName,
                 ContainingType = containingType,
                 ReturnType = "void",

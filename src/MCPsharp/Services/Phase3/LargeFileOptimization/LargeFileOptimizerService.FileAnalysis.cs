@@ -1,5 +1,5 @@
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using MCPsharp.Models.LargeFileOptimization;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace MCPsharp.Services.Phase3;
 
@@ -29,10 +29,14 @@ public partial class LargeFileOptimizerService
 
     private static FileSizeCategory CategorizeFileSize(int lineCount)
     {
-        if (lineCount < 200) return FileSizeCategory.Small;
-        if (lineCount < 500) return FileSizeCategory.Medium;
-        if (lineCount < 1000) return FileSizeCategory.Large;
-        if (lineCount < 2000) return FileSizeCategory.VeryLarge;
+        if (lineCount < 200)
+            return FileSizeCategory.Small;
+        if (lineCount < 500)
+            return FileSizeCategory.Medium;
+        if (lineCount < 1000)
+            return FileSizeCategory.Large;
+        if (lineCount < 2000)
+            return FileSizeCategory.VeryLarge;
         return FileSizeCategory.Enormous;
     }
 
@@ -41,11 +45,13 @@ public partial class LargeFileOptimizerService
         try
         {
             var document = _workspace.GetDocument(filePath);
-            if (document == null) return null;
+            if (document == null)
+                return null;
 
             var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken);
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            if (syntaxTree == null || semanticModel == null) return null;
+            if (syntaxTree == null || semanticModel == null)
+                return null;
 
             var root = await syntaxTree.GetRootAsync(cancellationToken);
 
@@ -119,7 +125,8 @@ public partial class LargeFileOptimizerService
         catch (Exception ex)
         {
             // Log error and continue
-            if (_logger is not null) LogFileAnalysisError(_logger, ex, filePath);
+            if (_logger is not null)
+                LogFileAnalysisError(_logger, ex, filePath);
             return null;
         }
     }

@@ -1,9 +1,9 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
+using MCPsharp.Models.SqlMigration;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
-using MCPsharp.Models.SqlMigration;
 
 namespace MCPsharp.Services.Phase3.SqlMigration;
 

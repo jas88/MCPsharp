@@ -1,5 +1,5 @@
-using NUnit.Framework;
 using MCPsharp.Services.Roslyn;
+using NUnit.Framework;
 using SymbolKind = MCPsharp.Services.Roslyn.SymbolKind;
 
 namespace MCPsharp.Tests.Services.Roslyn;
@@ -163,7 +163,7 @@ public class OldName
 }";
 
         await _workspace.InitializeTestWorkspaceAsync();
-        var docId = await _workspace.AddInMemoryDocumentAsync("test.cs", originalCode);
+        _ = await _workspace.AddInMemoryDocumentAsync("test.cs", originalCode);
 
         var request = new RenameRequest
         {

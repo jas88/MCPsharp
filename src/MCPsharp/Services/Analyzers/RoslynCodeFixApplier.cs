@@ -435,15 +435,15 @@ public sealed partial class RoslynCodeFixApplier
             string? message = null,
             string? fixTitle = null,
             string? provider = null) => new()
-        {
-            RuleId = _original.RuleId,
-            Line = _original.Line,
-            Column = _original.Column,
-            Message = message ?? Message,
-            Status = status,
-            FixTitle = fixTitle,
-            Provider = provider,
-            Reason = reason
-        };
+            {
+                RuleId = _original.RuleId,
+                Line = _original.Line,
+                Column = _original.Column,
+                Message = message ?? Message,
+                Status = status,
+                FixTitle = fixTitle,
+                Provider = provider,
+                Reason = reason
+            };
     }
 }
