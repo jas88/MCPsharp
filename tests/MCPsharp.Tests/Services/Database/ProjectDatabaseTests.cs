@@ -8,6 +8,9 @@ namespace MCPsharp.Tests.Services.Database;
 public partial class ProjectDatabaseTests
 {
     private static readonly string[] ClassKindFilter = ["Class"];
+    private static readonly string[] FooBarOnly = ["Foo_Bar"];
+    private static readonly string[] PercentNameOnly = ["Pct%Name"];
+    private static readonly string[] BackslashNameOnly = ["Back\\Slash"];
     private static readonly string[] TestNamespaceFilter = ["Test.Namespace"];
 
     private ProjectDatabase _db = null!;

@@ -204,11 +204,11 @@ public partial class ProjectDatabaseTests
         var byName = await _db.FindSymbolsByNameAsync("o_B");
 
         // Assert
-        Assert.That(underscore.Select(s => s.Name), Is.EqualTo(new[] { "Foo_Bar" }));
-        Assert.That(underscoreFiltered.Select(s => s.Name), Is.EqualTo(new[] { "Foo_Bar" }));
-        Assert.That(percent.Select(s => s.Name), Is.EqualTo(new[] { "Pct%Name" }));
-        Assert.That(backslash.Select(s => s.Name), Is.EqualTo(new[] { "Back\\Slash" }));
-        Assert.That(byName.Select(s => s.Name), Is.EqualTo(new[] { "Foo_Bar" }));
+        Assert.That(underscore.Select(s => s.Name), Is.EqualTo(FooBarOnly));
+        Assert.That(underscoreFiltered.Select(s => s.Name), Is.EqualTo(FooBarOnly));
+        Assert.That(percent.Select(s => s.Name), Is.EqualTo(PercentNameOnly));
+        Assert.That(backslash.Select(s => s.Name), Is.EqualTo(BackslashNameOnly));
+        Assert.That(byName.Select(s => s.Name), Is.EqualTo(FooBarOnly));
     }
 
     [Test]
