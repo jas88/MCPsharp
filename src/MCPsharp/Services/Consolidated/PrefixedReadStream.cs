@@ -37,10 +37,15 @@ internal sealed class PrefixedReadStream : Stream
     }
 
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-        => ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+    }
 
     public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
+        // Honour cancellation even when the read would be served from the buffered prefix
+        cancellationToken.ThrowIfCancellationRequested();
         var fromPrefix = CopyPrefix(buffer.Span);
         return fromPrefix > 0 ? ValueTask.FromResult(fromPrefix) : _inner.ReadAsync(buffer, cancellationToken);
     }
