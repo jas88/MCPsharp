@@ -16,12 +16,20 @@ internal static class StreamingProcessorAdapter
     private const int DefaultChunkSize = 65536;
 
     /// <summary>
+    /// The encoding of the text chunks exchanged with the processor in <see cref="ProcessLinesAsync"/>
+    /// </summary>
+    public static readonly Encoding ChunkEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+    private static readonly byte[] ChunkNewLine = ChunkEncoding.GetBytes(Environment.NewLine);
+
+    /// <summary>
     /// Processes text input line by line. Chunks always end on a line boundary so no line is split
     /// between two chunks; each line in a chunk is terminated with <see cref="Environment.NewLine"/>,
     /// and the chunk's metadata carries the number of its first line
     /// (<see cref="StreamingLineProcessor.StartLineNumberKey"/>) so line numbering continues across
-    /// chunks. Processed chunks are written as returned, terminated with a newline if they are not
-    /// already.
+    /// chunks. Chunks are handed to the processor as UTF-8 (<see cref="ChunkEncoding"/>); processed
+    /// chunks are written in the input's encoding (see <see cref="TextStreamEncoding"/>), terminated
+    /// with a newline if they are not already, after the input's byte order mark if it had one.
     /// </summary>
     public static async Task<ProcessingResult> ProcessLinesAsync(
         ChunkProcessor processor,
@@ -30,36 +38,37 @@ internal static class StreamingProcessorAdapter
         ProcessingContext context,
         Dictionary<string, object> options,
         Encoding inputEncoding,
-        Encoding chunkEncoding,
         CancellationToken ct)
     {
         if (!await processor.ValidateOptionsAsync(options).ConfigureAwait(false))
             return InvalidOptions(processor);
 
         var chunkSize = ResolveChunkSize(context);
-        var newLine = chunkEncoding.GetBytes(Environment.NewLine);
         var state = new RunState();
         var batch = new List<string>();
         long batchBytes = 0;
         long linesRead = 0;
 
-        using var reader = new StreamReader(input, inputEncoding, detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true);
+        var text = await TextStreamEncoding.DetectAsync(input, inputEncoding, ct).ConfigureAwait(false);
+        state.BytesWritten += await text.WriteByteOrderMarkAsync(output, ct).ConfigureAwait(false);
+
+        using var reader = text.CreateReader();
         while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
         {
             linesRead++;
             batch.Add(line);
-            batchBytes += chunkEncoding.GetByteCount(line) + newLine.Length;
+            batchBytes += ChunkEncoding.GetByteCount(line) + ChunkNewLine.Length;
 
             if (batchBytes >= chunkSize)
             {
-                await ProcessTextBatchAsync(processor, output, options, chunkEncoding, batch, linesRead - batch.Count + 1, newLine, state, isLast: false, ct).ConfigureAwait(false);
+                await ProcessTextBatchAsync(processor, output, options, text, batch, linesRead - batch.Count + 1, state, isLast: false, ct).ConfigureAwait(false);
                 batch.Clear();
                 batchBytes = 0;
             }
         }
 
         if (batch.Count > 0)
-            await ProcessTextBatchAsync(processor, output, options, chunkEncoding, batch, linesRead - batch.Count + 1, newLine, state, isLast: true, ct).ConfigureAwait(false);
+            await ProcessTextBatchAsync(processor, output, options, text, batch, linesRead - batch.Count + 1, state, isLast: true, ct).ConfigureAwait(false);
 
         await output.FlushAsync(ct).ConfigureAwait(false);
 
@@ -157,10 +166,9 @@ internal static class StreamingProcessorAdapter
         ChunkProcessor processor,
         Stream output,
         Dictionary<string, object> options,
-        Encoding chunkEncoding,
+        TextStreamEncoding outputEncoding,
         List<string> batch,
         long firstLineNumber,
-        byte[] newLine,
         RunState state,
         bool isLast,
         CancellationToken ct)
@@ -170,19 +178,15 @@ internal static class StreamingProcessorAdapter
             text.Append(line).Append(Environment.NewLine);
 
         var metadata = new Dictionary<string, object> { [StreamingLineProcessor.StartLineNumberKey] = firstLineNumber };
-        var processed = await RunChunkAsync(processor, options, chunkEncoding.GetBytes(text.ToString()), state, isLast, metadata).ConfigureAwait(false);
+        var processed = await RunChunkAsync(processor, options, ChunkEncoding.GetBytes(text.ToString()), state, isLast, metadata).ConfigureAwait(false);
 
         if (processed.Data.Length == 0)
             return;
 
-        await output.WriteAsync(processed.Data, ct).ConfigureAwait(false);
-        state.BytesWritten += processed.Data.Length;
+        state.BytesWritten += await outputEncoding.WriteUtf8Async(output, processed.Data, ct).ConfigureAwait(false);
 
-        if (!processed.Data.AsSpan().EndsWith(newLine))
-        {
-            await output.WriteAsync(newLine, ct).ConfigureAwait(false);
-            state.BytesWritten += newLine.Length;
-        }
+        if (!processed.Data.AsSpan().EndsWith(ChunkNewLine))
+            state.BytesWritten += await outputEncoding.WriteUtf8Async(output, ChunkNewLine, ct).ConfigureAwait(false);
     }
 
     private static async Task ProcessByteChunkAsync(

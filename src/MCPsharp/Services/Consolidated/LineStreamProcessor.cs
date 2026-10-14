@@ -8,7 +8,8 @@ namespace MCPsharp.Services.Consolidated;
 /// Line processor: filters and rewrites text lines using <see cref="StreamingLineProcessor"/>.
 /// Parameters: LineFilter, LineReplacement, LinePrefix, LineSuffix, RemoveEmptyLines (default false:
 /// empty lines are kept), TrimWhitespace, FieldSeparator, SelectedFields, IncludeLineNumbers (numbered
-/// continuously across chunks), Encoding.
+/// continuously across chunks), Encoding (the input encoding, overriding <see cref="ProcessorOptions.Encoding"/>;
+/// the output is written in the same encoding).
 /// </summary>
 public class LineStreamProcessor : IStreamProcessor
 {
@@ -26,9 +27,11 @@ public class LineStreamProcessor : IStreamProcessor
             var encoding = encodingName != null
                 ? Encoding.GetEncoding(encodingName)
                 : StreamProcessorOptionMapper.ResolveEncoding(context.Options);
-            options[EncodingKey] = encoding.WebName;
 
-            return StreamingProcessorAdapter.ProcessLinesAsync(_processor, input, output, context, options, encoding, encoding, ct);
+            // The input is decoded (and the output re-encoded) by the adapter; chunks are exchanged as UTF-8
+            options[EncodingKey] = StreamingProcessorAdapter.ChunkEncoding.WebName;
+
+            return StreamingProcessorAdapter.ProcessLinesAsync(_processor, input, output, context, options, encoding, ct);
         });
 
     public Task<ProcessorCapabilities> GetCapabilitiesAsync(CancellationToken ct)

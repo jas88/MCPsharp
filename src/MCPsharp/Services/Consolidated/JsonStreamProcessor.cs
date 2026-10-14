@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text.Json;
 using MCPsharp.Models.Consolidated;
 
@@ -30,15 +31,16 @@ public class JsonStreamProcessor : IStreamProcessor
             var options = StreamProcessorOptionMapper.ToOptionDictionary(context.Options);
             return StreamProcessorOptionMapper.GetBool(options, JsonLinesKey, false)
                 ? ProcessJsonLinesAsync(input, output, context, ct)
-                : ProcessDocumentAsync(input, output, StreamProcessorOptionMapper.GetBool(options, IndentedKey, true), ct);
+                : ProcessDocumentAsync(input, output, context, StreamProcessorOptionMapper.GetBool(options, IndentedKey, true), ct);
         });
 
-    private static async Task<ProcessingResult> ProcessDocumentAsync(Stream input, Stream output, bool indented, CancellationToken ct)
+    private static async Task<ProcessingResult> ProcessDocumentAsync(Stream input, Stream output, ProcessingContext context, bool indented, CancellationToken ct)
     {
+        var text = await TextStreamEncoding.DetectAsync(input, StreamProcessorOptionMapper.ResolveEncoding(context.Options), ct).ConfigureAwait(false);
         JsonDocument document;
         try
         {
-            document = await JsonDocument.ParseAsync(input, DocumentOptions, ct).ConfigureAwait(false);
+            document = await ParseDocumentAsync(text, ct).ConfigureAwait(false);
         }
         catch (JsonException ex)
         {
@@ -47,9 +49,15 @@ public class JsonStreamProcessor : IStreamProcessor
 
         using (document)
         {
-            await using var writer = new Utf8JsonWriter(output, new JsonWriterOptions { Indented = indented });
+            await text.WriteByteOrderMarkAsync(output, ct).ConfigureAwait(false);
+
+            // Utf8JsonWriter only writes UTF-8: buffer the output to transcode it unless the input is UTF-8
+            using var buffer = text.IsUtf8 ? null : new MemoryStream();
+            await using var writer = new Utf8JsonWriter(buffer ?? output, new JsonWriterOptions { Indented = indented });
             document.WriteTo(writer);
             await writer.FlushAsync(ct).ConfigureAwait(false);
+            if (buffer != null)
+                await text.WriteUtf8Async(output, buffer.GetBuffer().AsMemory(0, (int)buffer.Length), ct).ConfigureAwait(false);
 
             var root = document.RootElement;
             var records = root.ValueKind == JsonValueKind.Array ? root.GetArrayLength() : 1;
@@ -68,17 +76,28 @@ public class JsonStreamProcessor : IStreamProcessor
         }
     }
 
+    private static async Task<JsonDocument> ParseDocumentAsync(TextStreamEncoding text, CancellationToken ct)
+    {
+        if (text.IsUtf8)
+            return await JsonDocument.ParseAsync(text.Content, DocumentOptions, ct).ConfigureAwait(false);
+
+        using var reader = text.CreateReader();
+        return JsonDocument.Parse(await reader.ReadToEndAsync(ct).ConfigureAwait(false), DocumentOptions);
+    }
+
     private static async Task<ProcessingResult> ProcessJsonLinesAsync(Stream input, Stream output, ProcessingContext context, CancellationToken ct)
     {
         var skipErrors = context.Options?.SkipErrors ?? false;
         var maxErrors = context.Options?.MaxErrors ?? 0;
-        var encoding = StreamProcessorOptionMapper.ResolveEncoding(context.Options);
+        var text = await TextStreamEncoding.DetectAsync(input, StreamProcessorOptionMapper.ResolveEncoding(context.Options), ct).ConfigureAwait(false);
         var newLine = "\n"u8.ToArray();
+        var buffer = new ArrayBufferWriter<byte>();
         var warnings = new List<ProcessingWarning>();
         long lineNumber = 0;
         long records = 0;
 
-        using var reader = new StreamReader(input, encoding, detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true);
+        await text.WriteByteOrderMarkAsync(output, ct).ConfigureAwait(false);
+        using var reader = text.CreateReader();
         while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
         {
             lineNumber++;
@@ -110,13 +129,15 @@ public class JsonStreamProcessor : IStreamProcessor
 
             using (document)
             {
-                await using (var writer = new Utf8JsonWriter(output))
+                buffer.ResetWrittenCount();
+                await using (var writer = new Utf8JsonWriter(buffer))
                 {
                     document.WriteTo(writer);
                     await writer.FlushAsync(ct).ConfigureAwait(false);
                 }
 
-                await output.WriteAsync(newLine, ct).ConfigureAwait(false);
+                buffer.Write(newLine);
+                await text.WriteUtf8Async(output, buffer.WrittenMemory, ct).ConfigureAwait(false);
                 records++;
             }
         }

@@ -1,4 +1,3 @@
-using System.Text;
 using MCPsharp.Models.Consolidated;
 using StreamingRegexProcessor = MCPsharp.Services.Streaming.RegexStreamProcessor;
 
@@ -24,7 +23,7 @@ public class RegexStreamProcessor : IStreamProcessor
             // Compile the pattern up front so a malformed one fails even when the input is empty
             StreamingRegexProcessor.ValidatePattern(options);
             var inputEncoding = StreamProcessorOptionMapper.ResolveEncoding(context.Options);
-            return StreamingProcessorAdapter.ProcessLinesAsync(_processor, input, output, context, options, inputEncoding, Encoding.UTF8, ct);
+            return StreamingProcessorAdapter.ProcessLinesAsync(_processor, input, output, context, options, inputEncoding, ct);
         });
 
     public Task<ProcessorCapabilities> GetCapabilitiesAsync(CancellationToken ct)

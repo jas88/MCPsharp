@@ -1,4 +1,3 @@
-using System.Text;
 using MCPsharp.Models.Consolidated;
 using StreamingCsvProcessor = MCPsharp.Services.Streaming.CsvStreamProcessor;
 
@@ -20,7 +19,7 @@ public class CsvStreamProcessor : IStreamProcessor
         {
             var options = StreamProcessorOptionMapper.ToOptionDictionary(context.Options);
             var inputEncoding = StreamProcessorOptionMapper.ResolveEncoding(context.Options);
-            return StreamingProcessorAdapter.ProcessLinesAsync(_processor, input, output, context, options, inputEncoding, Encoding.UTF8, ct);
+            return StreamingProcessorAdapter.ProcessLinesAsync(_processor, input, output, context, options, inputEncoding, ct);
         });
 
     public Task<ProcessorCapabilities> GetCapabilitiesAsync(CancellationToken ct)

@@ -9,6 +9,7 @@ namespace MCPsharp.Services.Consolidated;
 /// of levels to keep), <c>Pattern</c> (regex the entry's first line must match) and <c>IgnoreCase</c>.
 /// The level is the first level token on a line (e.g. INFO, Warning, [ERR]); lines without one are
 /// continuation lines (such as stack traces) and follow the decision for the entry they belong to.
+/// Kept lines are written in the input's encoding, with a byte order mark only when the input had one.
 /// </summary>
 public partial class LogStreamProcessor : IStreamProcessor
 {
@@ -29,7 +30,8 @@ public partial class LogStreamProcessor : IStreamProcessor
             ? new Regex(patternText, regexOptions, RegexTimeout)
             : null;
 
-        var encoding = StreamProcessorOptionMapper.ResolveEncoding(context.Options);
+        var text = await TextStreamEncoding.DetectAsync(input, StreamProcessorOptionMapper.ResolveEncoding(context.Options), ct).ConfigureAwait(false);
+        await text.WriteByteOrderMarkAsync(output, ct).ConfigureAwait(false);
         var levelCounts = LevelNames.ToDictionary(name => name, _ => 0L);
         long linesRead = 0;
         long linesWritten = 0;
@@ -37,8 +39,8 @@ public partial class LogStreamProcessor : IStreamProcessor
         var includeCurrentEntry = false;
         var seenEntry = false;
 
-        using var reader = new StreamReader(input, encoding, detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true);
-        await using var writer = new StreamWriter(output, encoding, bufferSize: 4096, leaveOpen: true) { NewLine = "\n" };
+        using var reader = text.CreateReader();
+        await using var writer = new StreamWriter(output, text.Encoding, bufferSize: 4096, leaveOpen: true) { NewLine = "\n" };
         while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
         {
             linesRead++;
