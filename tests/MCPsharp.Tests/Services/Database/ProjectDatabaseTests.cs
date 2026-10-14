@@ -5,6 +5,7 @@ using NUnit.Framework;
 namespace MCPsharp.Tests.Services.Database;
 
 [TestFixture]
+[Category("Unit")]
 public partial class ProjectDatabaseTests
 {
     private static readonly string[] ClassKindFilter = ["Class"];

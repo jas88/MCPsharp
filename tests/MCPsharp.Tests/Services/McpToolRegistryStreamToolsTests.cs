@@ -13,6 +13,7 @@ namespace MCPsharp.Tests.Services;
 /// reach the processors and change the output written to disk.
 /// </summary>
 [TestFixture]
+[Category("Unit")]
 [Category("Streaming")]
 public class McpToolRegistryStreamToolsTests
 {
