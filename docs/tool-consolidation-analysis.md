@@ -279,7 +279,7 @@ stream_process:
 # Automatic behaviors:
 1. Auto-open project from MCP working directory
 2. Lazy-load Roslyn on first analysis request
-3. Auto-discover analyzers from NuGet cache
+3. Auto-load the analyzers the open project references (not the whole NuGet cache)
 4. Smart defaults for all operations
 
 # Configuration (optional):

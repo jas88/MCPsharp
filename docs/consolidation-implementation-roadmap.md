@@ -113,6 +113,8 @@ public class AutoLoadManager
 }
 ```
 
+Analyzer auto-loading was implemented differently from `DiscoverAndLoadAnalyzers` above: `AnalyzerAutoLoadService` loads only the analyzers the open project references, as an IDE does (see [analyzer-autoload.md](analyzer-autoload.md)). Scanning the NuGet cache or the SDK directory loads every analyzer assembly found there, which on a developer machine can be thousands of assemblies and exhaust memory and file handles.
+
 #### Task 1.2: Update McpToolRegistry Constructor
 ```csharp
 // Modify: src/MCPsharp/Services/McpToolRegistry.cs

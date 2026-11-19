@@ -31,7 +31,6 @@ Extended the MCPsharp Roslyn analyzer integration with production-ready features
 - Discovers CodeFixProvider types in assemblies
 - Loads fix providers from assembly paths
 - Discovers assemblies in directories
-- Loads from NuGet cache
 - Matches fix providers to analyzers by diagnostic IDs
 - Assembly metadata extraction
 
@@ -39,7 +38,8 @@ Extended the MCPsharp Roslyn analyzer integration with production-ready features
 - `LoadCodeFixProvidersFromAssemblyAsync()`
 - `DiscoverCodeFixProviderAssemblies()`
 - `MatchCodeFixProvidersToAnalyzers()`
-- `LoadCodeFixProvidersFromNuGetCacheAsync()`
+
+`apply_roslyn_fixes` loads code fix providers from the assemblies of the analyzers that report the requested diagnostics (and their companion code fix assemblies), which come from the open project's analyzer references; the NuGet cache is never scanned.
 
 ### 2. Configuration Management (Priority 2 - COMPLETE)
 
@@ -223,7 +223,6 @@ new McpTool
 2. **RoslynCodeFixLoaderTests.cs** (~200 lines, 10-15 tests)
    - Test assembly loading
    - Test discovery in directories
-   - Test NuGet cache scanning
    - Test matching to analyzers
 
 3. **AnalyzerConfigurationManagerTests.cs** (~150 lines, 8-10 tests)

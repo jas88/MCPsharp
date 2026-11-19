@@ -16,16 +16,16 @@
     },
     "analyzerSources": {
       "type": "array",
-      "description": "Sources to scan for analyzers",
+      "description": "Sources to load analyzers from: project_references loads the analyzers the open project's projects reference",
       "items": {
         "type": "string",
         "enum": [
-          "nuget_cache",
+          "project_references",
           "builtin_providers"
         ]
       },
       "default": [
-        "nuget_cache",
+        "project_references",
         "builtin_providers"
       ]
     },

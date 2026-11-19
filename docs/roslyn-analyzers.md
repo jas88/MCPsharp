@@ -53,20 +53,27 @@ var result = await adapter.AnalyzeAsync(filePath, content, cancellationToken);
 #### 2. RoslynAnalyzerLoader
 **File**: `src/MCPsharp/Services/Analyzers/RoslynAnalyzerLoader.cs`
 
-Discovers and loads Roslyn analyzer assemblies from:
+Loads Roslyn analyzers from:
+- The analyzer references of the projects being analysed (`Project.AnalyzerReferences`), as an IDE does
 - Individual assembly files
 - Directories (recursive search)
-- NuGet package cache
+
+It never scans the NuGet cache: the analyzers of a project come from that project's references, which are the analyzer assets of the packages it restores (at the restored versions), the SDK's analyzers and any `Analyzer` items. `AnalyzerAutoLoadService` uses this to load the analyzers of the open project automatically (see [analyzer-autoload.md](analyzer-autoload.md)).
 
 **Key Features**:
-- Assembly reflection to find `DiagnosticAnalyzer` types
+- Project analyzer references load through Roslyn, so only the types they export for C# with `[DiagnosticAnalyzer]` are used, and a workspace's already-loaded analyzer instances are reused
+- Assembly reflection to find `DiagnosticAnalyzer` types in explicitly given assemblies
 - Automatic discovery in directories
-- NuGet cache scanning
 - Assembly metadata extraction
 
 **Example Usage**:
 ```csharp
 var loader = new RoslynAnalyzerLoader(logger, loggerFactory);
+
+// Load the analyzers the projects of the open workspace reference
+var projectAnalyzers = loader.LoadAnalyzersFromReferences(
+    roslynWorkspace.GetAnalyzerReferences(),
+    cancellationToken);
 
 // Load from specific assembly
 var analyzers = await loader.LoadAnalyzersFromAssemblyAsync(
@@ -77,10 +84,6 @@ var analyzers = await loader.LoadAnalyzersFromAssemblyAsync(
 var assemblyPaths = loader.DiscoverAnalyzerAssemblies(
     "/path/to/analyzers/",
     recursive: true);
-
-// Load from NuGet cache
-var nugetAnalyzers = await loader.LoadAnalyzersFromNuGetCacheAsync(
-    cancellationToken);
 ```
 
 #### 3. RoslynAnalyzerService
@@ -219,7 +222,7 @@ Load Roslyn analyzers from assembly or directory.
 ```
 
 ### `run_roslyn_analyzers`
-Run loaded Roslyn analyzers on target path.
+Run Roslyn analyzers on target path: the analyzers the open project references, which are loaded automatically, and any loaded with `load_roslyn_analyzers`.
 
 **Parameters**:
 - `target_path` (string, required): File or directory to analyze
