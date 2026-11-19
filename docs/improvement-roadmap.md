@@ -162,9 +162,9 @@ public async Task<bool> UpdateDocumentAsync(string filePath, string newContent, 
 **Current State**:
 ```csharp
 // src/Services/McpToolRegistry.cs (6074 lines!)
-public async Task<ToolCallResult> ExecuteToolAsync(string toolName, ...)
+public async Task<ToolCallResult> ExecuteToolAsync(ToolCallRequest request, CancellationToken ct = default)
 {
-    switch (toolName)
+    switch (request.Name)
     {
         case "project_open": /* 100 lines */ break;
         case "file_read": /* 80 lines */ break;

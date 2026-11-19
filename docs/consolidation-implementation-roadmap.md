@@ -440,18 +440,29 @@ public class ConsolidationTests
         // Measure token usage for old vs new approach
         var oldTokens = await MeasureTokenUsage(async () =>
         {
-            await _registry.ExecuteToolAsync("find_symbol", new { name = "Test" });
-            await _registry.ExecuteToolAsync("find_references", new { symbolName = "Test" });
-            await _registry.ExecuteToolAsync("analyze_impact", new { symbolName = "Test" });
+            await _registry.ExecuteToolAsync(new ToolCallRequest
+            {
+                Name = "find_symbol",
+                Arguments = JsonDocument.Parse("{\"name\": \"Test\"}")
+            });
+            await _registry.ExecuteToolAsync(new ToolCallRequest
+            {
+                Name = "find_references",
+                Arguments = JsonDocument.Parse("{\"symbolName\": \"Test\"}")
+            });
+            await _registry.ExecuteToolAsync(new ToolCallRequest
+            {
+                Name = "analyze_impact",
+                Arguments = JsonDocument.Parse("{\"symbolName\": \"Test\"}")
+            });
         });
 
         var newTokens = await MeasureTokenUsage(async () =>
         {
-            await _registry.ExecuteToolAsync("analyze", new
+            await _registry.ExecuteToolAsync(new ToolCallRequest
             {
-                type = "impact",
-                target = "Test",
-                profile = "detailed"
+                Name = "analyze",
+                Arguments = JsonDocument.Parse("{\"type\": \"impact\", \"target\": \"Test\", \"profile\": \"detailed\"}")
             });
         });
 
