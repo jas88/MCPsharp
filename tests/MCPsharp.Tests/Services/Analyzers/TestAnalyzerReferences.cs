@@ -17,10 +17,10 @@ internal static class TestAnalyzerReferences
     /// </summary>
     public static readonly string[] BuiltInAnalyzerIds =
     [
-        "Roslyn_AsyncAwaitPatternAnalyzer",
-        "Roslyn_ExceptionLoggingAnalyzer",
-        "Roslyn_StaticMethodAnalyzer",
-        "Roslyn_UnusedCodeAnalyzer"
+        RoslynAnalyzerAdapter.GetId(typeof(AsyncAwaitPatternAnalyzer)),
+        RoslynAnalyzerAdapter.GetId(typeof(ExceptionLoggingAnalyzer)),
+        RoslynAnalyzerAdapter.GetId(typeof(StaticMethodAnalyzer)),
+        RoslynAnalyzerAdapter.GetId(typeof(UnusedCodeAnalyzer))
     ];
 
     /// <summary>

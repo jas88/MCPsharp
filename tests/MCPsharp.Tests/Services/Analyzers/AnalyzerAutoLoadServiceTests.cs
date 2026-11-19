@@ -1,4 +1,5 @@
 using MCPsharp.Services.Analyzers;
+using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
 using MCPsharp.Services.Roslyn;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,7 +17,7 @@ namespace MCPsharp.Tests.Services.Analyzers;
 [Category("Analyzers")]
 public class AnalyzerAutoLoadServiceTests : FileServiceTestBase
 {
-    private const string StaticMethodAnalyzerId = "Roslyn_StaticMethodAnalyzer";
+    private static readonly string StaticMethodAnalyzerId = RoslynAnalyzerAdapter.GetId(typeof(StaticMethodAnalyzer));
     private static readonly string[] StaticMethodAnalyzerOnly = [StaticMethodAnalyzerId];
     private static readonly string[] BuiltInProvidersOnly = [AnalyzerAutoLoadConfiguration.BuiltInProvidersSource];
     private static readonly string[] CustomAnalyzerPath = ["/path/to/analyzers"];
@@ -147,6 +148,49 @@ public class AnalyzerAutoLoadServiceTests : FileServiceTestBase
     }
 
     [Test]
+    public async Task EnsureAnalyzersLoadedAsync_WithAnalyzerExcludedWithoutItsVersion_DoesNotLoadIt()
+    {
+        // An exclusion without the assembly version still applies after the analyzer package is upgraded
+        ProjectsReference(TestAnalyzerReferences.BuiltInAnalyzers());
+        using var service = CreateService(new AnalyzerAutoLoadConfiguration
+        {
+            ExcludeAnalyzers = [RoslynAnalyzerAdapter.GetVersionIndependentId(typeof(StaticMethodAnalyzer))]
+        });
+
+        var result = await service.EnsureAnalyzersLoadedAsync();
+
+        Assert.That(result.LoadedAnalyzers.Select(a => a.Id),
+            Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds.Where(id => id != StaticMethodAnalyzerId)));
+    }
+
+    [Test]
+    public async Task EnsureAnalyzersLoadedAsync_WithTwoBuildsOfAnAnalyzer_LoadsBoth()
+    {
+        // e.g. projects that take the code style analyzers from the SDK and from a NuGet package
+        var assemblyName = $"ProbeBuilds_{Guid.NewGuid():N}";
+        ProjectsReference(EmitProbeAnalyzer(assemblyName, "1.0.0.0"), EmitProbeAnalyzer(assemblyName, "2.0.0.0"));
+
+        var result = await _service.EnsureAnalyzersLoadedAsync();
+
+        Assert.That(result.Errors, Is.Empty);
+        Assert.That(result.LoadedAnalyzers.Select(a => a.Name), Is.All.EqualTo("ProbeAnalyzer"));
+        var ids = result.LoadedAnalyzers.Select(a => a.Id).ToList();
+        Assert.That(ids, Has.Count.EqualTo(2));
+        Assert.That(ids, Is.Unique);
+        Assert.That(RegisteredIds(), Is.EquivalentTo(ids));
+    }
+
+    /// <summary>
+    /// A reference to a build of ProbeAnalyzer in <paramref name="assemblyName"/>, in a directory of its own
+    /// </summary>
+    private AnalyzerFileReference EmitProbeAnalyzer(string assemblyName, string assemblyVersion)
+    {
+        var path = Path.Combine(CreateTestDirectory(Guid.NewGuid().ToString("N")), assemblyName + ".dll");
+        AnalyzerAssemblyEmitter.Emit(assemblyName, path, AnalyzerAssemblyEmitter.AnalyzerSource("ProbeAnalyzer", "PROBE003"), assemblyVersion);
+        return TestAnalyzerReferences.Create(path);
+    }
+
+    [Test]
     public async Task EnsureAnalyzersLoadedAsync_WithoutProjectReferencesSource_DoesNotLoadTheProjectsAnalyzers()
     {
         ProjectsReference(TestAnalyzerReferences.BuiltInAnalyzers());
@@ -205,12 +249,12 @@ public class AnalyzerAutoLoadServiceTests : FileServiceTestBase
     public void LoadConfiguration_ReadsTheDocumentedFormat()
     {
         // The format of docs/analyzer-autoload-config.example.json
-        var path = CreateTestFile("""
+        var path = CreateTestFile($$"""
             {
               "$schema": "analyzer-autoload-schema.json",
               "autoLoadEnabled": false,
               "analyzerSources": ["builtin_providers"],
-              "excludeAnalyzers": ["Roslyn_StaticMethodAnalyzer"],
+              "excludeAnalyzers": ["{{StaticMethodAnalyzerId}}"],
               "customAnalyzerPaths": ["/path/to/analyzers"]
             }
             """, ".json");

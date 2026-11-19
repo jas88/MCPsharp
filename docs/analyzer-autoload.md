@@ -37,7 +37,7 @@ The analyzers that the projects of the open workspace reference: the `Project.An
 - The analyzers the .NET SDK and targeting packs add (e.g. the .NET analyzers enabled by `EnableNETAnalyzers`)
 - `<Analyzer Include="..." />` items and analyzer project references
 
-Only the C# analyzers each reference exports with `[DiagnosticAnalyzer]` are loaded. Nothing outside these references is loaded: the NuGet cache is never scanned, so its size doesn't matter. The workspace has already loaded the referenced assemblies when it opened the project, and the auto-load reuses its analyzer instances. When several references hold the same analyzer (e.g. the SDK's and a NuGet package's code style analyzers, or two package versions in different projects), the first one, in solution order, is used.
+Only the C# analyzers each reference exports with `[DiagnosticAnalyzer]` are loaded. Nothing outside these references is loaded: the NuGet cache is never scanned, so its size doesn't matter. The workspace has already loaded the referenced assemblies when it opened the project, and the auto-load reuses its analyzer instances. Each analyzer is identified by its type and the name and version of its assembly (see `excludeAnalyzers` below), so different builds of one analyzer, e.g. the SDK's and a NuGet package's code style analyzers or two versions of a package in different projects, are separate analyzers and are all loaded. They can then report the same diagnostic twice; pass `analyzer_ids` to `run_roslyn_analyzers` to run one of them. A reference to the same assembly identity at two paths is loaded once.
 
 NuGet analyzer packages are only referenced once the projects are restored (`dotnet restore`). When MSBuildWorkspace cannot load the project and MCPsharp falls back to an adhoc workspace, there are no project analyzer references, so none are auto-loaded.
 
@@ -77,8 +77,8 @@ By default, auto-loading is enabled with these settings:
     "builtin_providers"
   ],
   "excludeAnalyzers": [
-    "Roslyn_UnusedCodeAnalyzer",
-    "Roslyn_StaticMethodAnalyzer"
+    "Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers",
+    "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.DoNotDirectlyAwaitATaskAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0"
   ],
   "customAnalyzerPaths": [
     "/path/to/my/custom/analyzers",
@@ -104,7 +104,7 @@ Sources to load analyzers from:
 - `"builtin_providers"` - Register built-in code fix providers
 
 #### `excludeAnalyzers` (array of strings)
-Analyzer IDs to exclude from auto-loading. Useful for disabling specific analyzers you don't want. An analyzer's ID is `Roslyn_` followed by its type name, as `list_roslyn_analyzers` reports it.
+Analyzer IDs to exclude from auto-loading. Useful for disabling specific analyzers you don't want. An analyzer's ID, as `list_roslyn_analyzers` reports it, is `Roslyn_`, its full type name, `@`, then the name and version of its assembly, e.g. `Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.DoNotDirectlyAwaitATaskAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0`. Leave out `-` and the version (`Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers`) to exclude the analyzer in every version of its assembly, so the exclusion still applies after the package is upgraded.
 
 #### `customAnalyzerPaths` (array of strings)
 Custom directories or DLL files to load analyzers from. Supports:
@@ -182,8 +182,8 @@ No configuration file needed - auto-loading works out of the box.
 {
   "autoLoadEnabled": true,
   "excludeAnalyzers": [
-    "Roslyn_ExceptionLoggingAnalyzer",
-    "Roslyn_AsyncAwaitPatternAnalyzer"
+    "Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers",
+    "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.DoNotDirectlyAwaitATaskAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0"
   ]
 }
 ```

@@ -41,6 +41,8 @@ Wraps Roslyn's `DiagnosticAnalyzer` to implement MCPsharp's `IAnalyzer` interfac
 - Maps severity levels and categories
 - Provides metadata about analyzer rules
 
+**Analyzer IDs**: an adapter's ID is `Roslyn_`, the analyzer's full type name, `@`, then the name and version of its assembly, e.g. `Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0` (`RoslynAnalyzerAdapter.GetId`). The ID is the same in every run, and unique across assemblies: same-named analyzers in different assemblies, and different builds of one analyzer (such as the SDK's and a NuGet package's code style analyzers), get different IDs. `VersionIndependentId` is the ID without `-` and the version; `excludeAnalyzers` accepts either form. `name` is the analyzer's type name.
+
 **Example Usage**:
 ```csharp
 var roslynAnalyzer = new SomeRoslynAnalyzer();
@@ -110,7 +112,7 @@ var result = await service.RunAnalyzersAsync("/path/to/project");
 // Run specific analyzers
 var result = await service.RunAnalyzersAsync(
     "/path/to/project",
-    analyzerIds: new[] { "CA1001", "CA2007" });
+    analyzerIds: new[] { "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0" });
 ```
 
 ## Self-Improvement: Analyzers in MCPsharp Build
@@ -208,11 +210,11 @@ Load Roslyn analyzers from assembly or directory.
   "analyzersLoaded": 1,
   "analyzers": [
     {
-      "id": "Roslyn_CA1001",
-      "name": "CA1001",
-      "description": "Types that own disposable fields should be disposable",
-      "version": "1.0.0",
-      "author": "Microsoft",
+      "id": "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0",
+      "name": "TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer",
+      "description": "Roslyn analyzer: TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer",
+      "version": "10.0.403.0",
+      "author": "Microsoft Corporation",
       "supportedExtensions": [".cs"],
       "isEnabled": true,
       "rules": null
@@ -226,18 +228,21 @@ Run Roslyn analyzers on target path: the analyzers the open project references, 
 
 **Parameters**:
 - `target_path` (string, required): File or directory to analyze
-- `analyzer_ids` (string[], optional): Specific analyzers to run (default: all)
+- `analyzer_ids` (string[], optional): Specific analyzers to run, by the IDs `list_roslyn_analyzers` reports (default: all)
 
 **Returns**:
 ```json
 {
-  "analyzersRun": ["Roslyn_CA1001", "Roslyn_CA2007"],
+  "analyzersRun": [
+    "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0",
+    "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.DoNotDirectlyAwaitATaskAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0"
+  ],
   "totalIssuesFound": 42,
   "durationSeconds": 1.84,
   "issues": [
     {
       "ruleId": "CA1001",
-      "analyzerId": "Roslyn_CA1001",
+      "analyzerId": "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0",
       "severity": "Warning",
       "message": "Type owns disposable fields but is not disposable",
       "filePath": "/path/to/file.cs",
@@ -261,11 +266,11 @@ List all loaded Roslyn analyzers.
   "totalAnalyzers": 1,
   "analyzers": [
     {
-      "id": "Roslyn_CA1001",
-      "name": "CA1001",
-      "description": "Types that own disposable fields should be disposable",
-      "version": "1.0.0",
-      "author": "Microsoft",
+      "id": "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0",
+      "name": "TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer",
+      "description": "Roslyn analyzer: TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer",
+      "version": "10.0.403.0",
+      "author": "Microsoft Corporation",
       "supportedExtensions": [".cs"],
       "isEnabled": true,
       "rules": [

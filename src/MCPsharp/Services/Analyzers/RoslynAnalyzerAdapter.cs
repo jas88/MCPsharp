@@ -20,7 +20,16 @@ public partial class RoslynAnalyzerAdapter : IAnalyzer
     private readonly ILogger<RoslynAnalyzerAdapter> _logger;
     private readonly string _analyzerId;
 
+    /// <summary>
+    /// The analyzer's ID, from <see cref="GetId"/>
+    /// </summary>
     public string Id => _analyzerId;
+
+    /// <summary>
+    /// <see cref="Id"/> without the assembly version, from <see cref="GetVersionIndependentId"/>
+    /// </summary>
+    public string VersionIndependentId { get; }
+
     public string Name { get; }
     public string Description { get; }
     public Version Version { get; }
@@ -42,8 +51,8 @@ public partial class RoslynAnalyzerAdapter : IAnalyzer
         _roslynAnalyzer = roslynAnalyzer ?? throw new ArgumentNullException(nameof(roslynAnalyzer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        // Generate unique ID from analyzer type
-        _analyzerId = $"Roslyn_{roslynAnalyzer.GetType().Name}";
+        _analyzerId = GetId(roslynAnalyzer.GetType());
+        VersionIndependentId = GetVersionIndependentId(roslynAnalyzer.GetType());
 
         // Extract metadata from analyzer
         Name = roslynAnalyzer.GetType().Name;
@@ -58,6 +67,26 @@ public partial class RoslynAnalyzerAdapter : IAnalyzer
             .FirstOrDefault() as System.Reflection.AssemblyCompanyAttribute;
         Author = companyAttr?.Company ?? "Unknown";
     }
+
+    /// <summary>
+    /// The ID of the adapter for an analyzer type: <c>Roslyn_</c>, the type's full name, <c>@</c>, then the name and
+    /// version of its assembly, e.g.
+    /// <c>Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0</c>.
+    /// It is the same in every run and unique across assemblies: same-named analyzers in different assemblies, and
+    /// different builds of one analyzer (e.g. the SDK's and a NuGet package's), get different IDs.
+    /// </summary>
+    public static string GetId(Type analyzerType)
+    {
+        var version = analyzerType.Assembly.GetName().Version;
+        var versionIndependentId = GetVersionIndependentId(analyzerType);
+        return version == null ? versionIndependentId : $"{versionIndependentId}-{version}";
+    }
+
+    /// <summary>
+    /// <see cref="GetId"/> without the assembly version, which names an analyzer in every version of its assembly
+    /// </summary>
+    public static string GetVersionIndependentId(Type analyzerType) =>
+        $"Roslyn_{analyzerType.FullName ?? analyzerType.Name}@{analyzerType.Assembly.GetName().Name}";
 
     public bool CanAnalyze(string targetPath)
     {

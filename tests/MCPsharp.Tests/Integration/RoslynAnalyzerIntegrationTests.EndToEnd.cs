@@ -82,7 +82,7 @@ namespace TestNamespace
         Assert.That(loaded, Is.Not.Empty);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Results.Where(r => !r.Success).Select(r => $"{r.AnalyzerId}: {r.ErrorMessage}"), Is.Empty);
-        var staticMethodResult = result.Results.Single(r => r.AnalyzerId == $"Roslyn_{nameof(StaticMethodAnalyzer)}");
+        var staticMethodResult = result.Results.Single(r => r.AnalyzerId == RoslynAnalyzerAdapter.GetId(typeof(StaticMethodAnalyzer)));
         Assert.That(staticMethodResult.Issues.Length, Is.EqualTo(2), "Add and Mul could be static");
     }
 

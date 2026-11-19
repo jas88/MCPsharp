@@ -202,20 +202,29 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     }
 
     /// <summary>
-    /// Drop excluded analyzers and keep one analyzer per ID (the first): projects can reference several builds
-    /// of the same analyzer, e.g. the SDK's code style analyzers and those of a NuGet package
+    /// Drop excluded analyzers, and keep one analyzer per ID: two references to the same assembly identity
+    /// (e.g. copies at two paths) hold the same analyzers
     /// </summary>
     private List<IAnalyzer> SelectAnalyzersToRegister(List<IAnalyzer> analyzers)
     {
         var selected = analyzers;
         if (_configuration.ExcludeAnalyzers.Any())
         {
-            selected = selected.Where(a => !_configuration.ExcludeAnalyzers.Contains(a.Id)).ToList();
+            selected = selected.Where(a => !IsExcluded(a)).ToList();
             LogFilteredExcluded(_logger, analyzers.Count - selected.Count);
         }
 
         return selected.DistinctBy(a => a.Id, StringComparer.Ordinal).ToList();
     }
+
+    /// <summary>
+    /// An analyzer is excluded by its ID or, for a Roslyn analyzer, by its ID without the assembly version,
+    /// which keeps excluding it after its package is upgraded
+    /// </summary>
+    private bool IsExcluded(IAnalyzer analyzer) =>
+        _configuration.ExcludeAnalyzers.Contains(analyzer.Id) ||
+        (analyzer is RoslynAnalyzerAdapter roslynAnalyzer &&
+         _configuration.ExcludeAnalyzers.Contains(roslynAnalyzer.VersionIndependentId));
 
     private async Task RegisterAnalyzersAsync(List<IAnalyzer> analyzers, List<string> errors, CancellationToken cancellationToken)
     {
