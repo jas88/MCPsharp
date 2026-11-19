@@ -1,5 +1,7 @@
 using MCPsharp.Models.Analyzers;
 using MCPsharp.Services.Analyzers;
+using MCPsharp.Services.Analyzers.BuiltIn.CodeFixes;
+using MCPsharp.Tests.Services.Analyzers;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using NUnit.Framework;
@@ -60,6 +62,28 @@ namespace TestNamespace
         Assert.That(findings.All(f => !string.IsNullOrEmpty(f.Message)), Is.True);
         Assert.That(findings.All(f => f.FilePath == testFile), Is.True);
         Assert.That(findings.All(f => f.LineNumber > 0), Is.True);
+    }
+
+    [Test]
+    public async Task EndToEnd_LoadAnalyzerAssemblyThenRun_RunsTheLoadedAnalyzers()
+    {
+        // What load_roslyn_analyzers followed by run_roslyn_analyzers does: the host runs analyzers from its
+        // registry, so the explicitly loaded ones must be registered there
+        var testFile = CreateTestFile(RoslynCodeFixApplierTests.TwoStaticCandidatesSource, ".cs");
+        var service = new RoslynAnalyzerService(
+            _analyzerLoader!,
+            _analyzerHost!,
+            _loggerFactory!.CreateLogger<RoslynAnalyzerService>(),
+            registry: _analyzerRegistry);
+
+        var loaded = await service.LoadAnalyzersAsync(typeof(StaticMethodAnalyzer).Assembly.Location);
+        var result = await service.RunAnalyzersAsync(testFile);
+
+        Assert.That(loaded, Is.Not.Empty);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Results.Where(r => !r.Success).Select(r => $"{r.AnalyzerId}: {r.ErrorMessage}"), Is.Empty);
+        var staticMethodResult = result.Results.Single(r => r.AnalyzerId == $"Roslyn_{nameof(StaticMethodAnalyzer)}");
+        Assert.That(staticMethodResult.Issues.Length, Is.EqualTo(2), "Add and Mul could be static");
     }
 
     [Test]

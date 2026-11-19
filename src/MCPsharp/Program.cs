@@ -100,12 +100,14 @@ internal sealed partial class Program
                 fixEngine,
                 sandboxFactory);
 
-            // Initialize RoslynAnalyzerService with auto-load support
+            // Initialize RoslynAnalyzerService with auto-load support; explicitly loaded analyzers are
+            // registered in the host's registry so the host can run them
             var roslynAnalyzerService = new MCPsharp.Services.Analyzers.RoslynAnalyzerService(
                 analyzerLoader,
                 analyzerHost,
                 loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.RoslynAnalyzerService>(),
-                autoLoadService);
+                autoLoadService,
+                analyzerRegistry);
 
             // Phase 2 services that can be instantiated immediately
             var configAnalyzer = new MCPsharp.Services.ConfigAnalyzerService(

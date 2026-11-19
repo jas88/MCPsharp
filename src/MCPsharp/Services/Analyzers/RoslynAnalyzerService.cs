@@ -28,20 +28,34 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
     private readonly IAnalyzerHost _analyzerHost;
     private readonly ILogger<RoslynAnalyzerService> _logger;
     private readonly AnalyzerAutoLoadService? _autoLoadService;
+    private readonly IAnalyzerRegistry? _registry;
     private readonly Dictionary<string, IAnalyzer> _loadedAnalyzers = new();
     private readonly object _lock = new();
     private ImmutableArray<IAnalyzer> _autoLoadedAnalyzers = ImmutableArray<IAnalyzer>.Empty;
 
+    /// <summary>
+    /// Create a service that runs Roslyn analyzers through <paramref name="analyzerHost"/>.
+    /// </summary>
+    /// <param name="loader">Loads the analyzers of explicitly given assemblies and directories.</param>
+    /// <param name="analyzerHost">Runs the analyzers, taking them from its analyzer registry.</param>
+    /// <param name="logger">Logger.</param>
+    /// <param name="autoLoadService">Auto-loads the analyzers the open project references, if given.</param>
+    /// <param name="registry">
+    /// The analyzer host's registry. Explicitly loaded analyzers are registered there so the host can run them;
+    /// without it they are listed but not run.
+    /// </param>
     public RoslynAnalyzerService(
         RoslynAnalyzerLoader loader,
         IAnalyzerHost analyzerHost,
         ILogger<RoslynAnalyzerService> logger,
-        AnalyzerAutoLoadService? autoLoadService = null)
+        AnalyzerAutoLoadService? autoLoadService = null,
+        IAnalyzerRegistry? registry = null)
     {
         _loader = loader ?? throw new ArgumentNullException(nameof(loader));
         _analyzerHost = analyzerHost ?? throw new ArgumentNullException(nameof(analyzerHost));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _autoLoadService = autoLoadService;
+        _registry = registry;
     }
 
     public async Task<ImmutableArray<IAnalyzer>> LoadAnalyzersAsync(
@@ -62,6 +76,8 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
                     _loadedAnalyzers[analyzer.Id] = analyzer;
                 }
             }
+
+            await RegisterWithHostAsync(analyzers, cancellationToken);
 
             LogLoadedAnalyzers(_logger, analyzers.Length, assemblyPath);
 
@@ -319,6 +335,30 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             LogErrorDuringAutoLoad(_logger, ex);
+        }
+    }
+
+    /// <summary>
+    /// Register explicitly loaded analyzers in the registry the analyzer host runs analyzers from. As in
+    /// <see cref="_loadedAnalyzers"/>, an explicitly loaded analyzer replaces one already registered under its ID
+    /// (e.g. an auto-loaded one).
+    /// </summary>
+    private async Task RegisterWithHostAsync(ImmutableArray<IAnalyzer> analyzers, CancellationToken cancellationToken)
+    {
+        if (_registry == null)
+        {
+            return;
+        }
+
+        foreach (var analyzer in analyzers)
+        {
+            var registered = _registry.GetAnalyzer(analyzer.Id);
+            if (registered != null && !ReferenceEquals(registered, analyzer))
+            {
+                await _registry.UnregisterAnalyzerAsync(analyzer.Id, cancellationToken);
+            }
+
+            await _registry.RegisterAnalyzerAsync(analyzer, cancellationToken);
         }
     }
 

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using MCPsharp.Models.Analyzers;
+using MCPsharp.Services.Analyzers;
 using NSubstitute;
 using NUnit.Framework;
 
@@ -84,6 +85,45 @@ public partial class RoslynAnalyzerServiceTests
 
         // Assert
         Assert.That(result.Length, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task LoadAnalyzersAsync_WithRegistry_RegistersTheAnalyzersSoTheHostCanRunThem()
+    {
+        // Arrange
+        var registry = new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>());
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, registry: registry);
+        var assemblyPath = CreateTestFile("test assembly", ".dll");
+        var analyzer = CreateMockAnalyzer("analyzer1");
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(assemblyPath, Arg.Any<CancellationToken>())
+            .Returns(ImmutableArray.Create(analyzer));
+
+        // Act
+        await service.LoadAnalyzersAsync(assemblyPath);
+
+        // Assert
+        Assert.That(registry.GetAnalyzer("analyzer1"), Is.SameAs(analyzer));
+    }
+
+    [Test]
+    public async Task LoadAnalyzersAsync_WithRegistry_ReplacesAnAnalyzerRegisteredUnderTheSameId()
+    {
+        // Arrange - e.g. an auto-loaded analyzer with the ID of the one loaded explicitly
+        var registry = new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>());
+        var earlier = CreateMockAnalyzer("analyzer1");
+        await registry.RegisterAnalyzerAsync(earlier);
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, registry: registry);
+        var assemblyPath = CreateTestFile("test assembly", ".dll");
+        var analyzer = CreateMockAnalyzer("analyzer1");
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(assemblyPath, Arg.Any<CancellationToken>())
+            .Returns(ImmutableArray.Create(analyzer));
+
+        // Act
+        await service.LoadAnalyzersAsync(assemblyPath);
+
+        // Assert
+        Assert.That(registry.GetAnalyzer("analyzer1"), Is.SameAs(analyzer));
+        Assert.That(service.GetAnalyzer("analyzer1"), Is.SameAs(analyzer));
     }
 
     #endregion
