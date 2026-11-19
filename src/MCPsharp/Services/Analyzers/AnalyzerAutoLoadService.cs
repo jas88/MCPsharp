@@ -20,6 +20,9 @@ namespace MCPsharp.Services.Analyzers;
 /// </remarks>
 public sealed partial class AnalyzerAutoLoadService : IDisposable
 {
+    // Configuration files use camelCase property names (see docs/analyzer-autoload-schema.json)
+    private static readonly JsonSerializerOptions ConfigurationJsonOptions = new() { PropertyNameCaseInsensitive = true };
+
     private readonly ILogger<AnalyzerAutoLoadService> _logger;
     private readonly RoslynAnalyzerLoader _loader;
     private readonly IAnalyzerRegistry _registry;
@@ -306,7 +309,7 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
                 return AnalyzerAutoLoadConfiguration.Default;
 
             var json = File.ReadAllText(configPath);
-            var config = JsonSerializer.Deserialize<AnalyzerAutoLoadConfiguration>(json);
+            var config = JsonSerializer.Deserialize<AnalyzerAutoLoadConfiguration>(json, ConfigurationJsonOptions);
             return config ?? AnalyzerAutoLoadConfiguration.Default;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)

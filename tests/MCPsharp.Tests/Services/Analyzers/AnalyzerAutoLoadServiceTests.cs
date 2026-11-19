@@ -14,9 +14,12 @@ namespace MCPsharp.Tests.Services.Analyzers;
 [TestFixture]
 [Category("Unit")]
 [Category("Analyzers")]
-public class AnalyzerAutoLoadServiceTests : TestBase
+public class AnalyzerAutoLoadServiceTests : FileServiceTestBase
 {
     private const string StaticMethodAnalyzerId = "Roslyn_StaticMethodAnalyzer";
+    private static readonly string[] StaticMethodAnalyzerOnly = [StaticMethodAnalyzerId];
+    private static readonly string[] BuiltInProvidersOnly = [AnalyzerAutoLoadConfiguration.BuiltInProvidersSource];
+    private static readonly string[] CustomAnalyzerPath = ["/path/to/analyzers"];
 
     private RoslynWorkspace _workspace = null!;
     private AnalyzerRegistry _registry = null!;
@@ -196,6 +199,28 @@ public class AnalyzerAutoLoadServiceTests : TestBase
         var status = _service.GetStatus();
         Assert.That(status.HasAutoLoaded, Is.True);
         Assert.That(status.AutoLoadedCount, Is.EqualTo(TestAnalyzerReferences.BuiltInAnalyzerIds.Length));
+    }
+
+    [Test]
+    public void LoadConfiguration_ReadsTheDocumentedFormat()
+    {
+        // The format of docs/analyzer-autoload-config.example.json
+        var path = CreateTestFile("""
+            {
+              "$schema": "analyzer-autoload-schema.json",
+              "autoLoadEnabled": false,
+              "analyzerSources": ["builtin_providers"],
+              "excludeAnalyzers": ["Roslyn_StaticMethodAnalyzer"],
+              "customAnalyzerPaths": ["/path/to/analyzers"]
+            }
+            """, ".json");
+
+        var configuration = AnalyzerAutoLoadService.LoadConfiguration(path);
+
+        Assert.That(configuration.AutoLoadEnabled, Is.False);
+        Assert.That(configuration.AnalyzerSources, Is.EqualTo(BuiltInProvidersOnly));
+        Assert.That(configuration.ExcludeAnalyzers, Is.EqualTo(StaticMethodAnalyzerOnly));
+        Assert.That(configuration.CustomAnalyzerPaths, Is.EqualTo(CustomAnalyzerPath));
     }
 
     [Test]
