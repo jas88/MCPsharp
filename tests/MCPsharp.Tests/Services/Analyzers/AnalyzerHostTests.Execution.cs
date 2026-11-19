@@ -7,6 +7,8 @@ namespace MCPsharp.Tests.Services.Analyzers;
 
 public partial class AnalyzerHostTests
 {
+    private static readonly string[] TestRuleIds = ["TEST042"];
+
     [Test]
     public async Task RunAnalyzerAsync_WithValidParameters_ShouldExecuteSuccessfully()
     {
@@ -269,5 +271,57 @@ public partial class AnalyzerHostTests
         Assert.That(result1.Success, Is.EqualTo(result2.Success));
         Assert.That(result1.AnalyzerId, Is.EqualTo(result2.AnalyzerId));
         Assert.That(result1.Findings.Count, Is.EqualTo(result2.Findings.Count));
+    }
+
+    [Test]
+    public async Task RunAnalyzerAsync_OnAFile_FindingsCarryTheIssuesRuleId()
+    {
+        var testFile = CreateTestFile("public class Test { }", ".cs", CreateTestDirectory("target"));
+
+        var result = await RunAnalyzerReportingTestRuleAsync(testFile, testFile);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Findings.Select(f => f.RuleId), Is.EqualTo(TestRuleIds));
+    }
+
+    [Test]
+    public async Task RunAnalyzerAsync_OnADirectory_FindingsCarryTheIssuesRuleId()
+    {
+        var directory = CreateTestDirectory("target");
+        var testFile = CreateTestFile("public class Test { }", ".cs", directory);
+
+        var result = await RunAnalyzerReportingTestRuleAsync(directory, testFile);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Findings.Select(f => f.RuleId), Is.EqualTo(TestRuleIds));
+    }
+
+    /// <summary>
+    /// Run an analyzer that reports one issue of rule <see cref="TestRuleIds"/> in <paramref name="issueFile"/>
+    /// </summary>
+    private async Task<AnalyzerResult> RunAnalyzerReportingTestRuleAsync(string targetPath, string issueFile)
+    {
+        const string analyzerId = "rule-analyzer";
+        var analyzer = CreateMockAnalyzer(analyzerId, "Rule Analyzer", "1.0.0");
+        analyzer.CanAnalyze(targetPath).Returns(true);
+        analyzer.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new AnalysisResult
+            {
+                Success = true,
+                AnalyzerId = analyzerId,
+                Issues = ImmutableArray.Create(new AnalyzerIssue
+                {
+                    RuleId = TestRuleIds[0],
+                    Title = "Test finding",
+                    Description = "Test finding",
+                    Severity = IssueSeverity.Warning,
+                    FilePath = issueFile,
+                    LineNumber = 1,
+                    ColumnNumber = 1
+                })
+            });
+        _mockAnalyzerRegistry.GetAnalyzer(analyzerId).Returns(analyzer);
+
+        return await _analyzerHost.RunAnalyzerAsync(analyzerId, targetPath);
     }
 }

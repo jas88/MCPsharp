@@ -7,6 +7,8 @@ namespace MCPsharp.Tests.Services.Analyzers;
 
 public partial class RoslynAnalyzerServiceTests
 {
+    private static readonly string[] Ca1822RuleId = ["CA1822"];
+
     #region RunAnalyzersAsync Tests
 
     [Test]
@@ -60,6 +62,35 @@ public partial class RoslynAnalyzerServiceTests
             targetPath,
             Arg.Any<AnalyzerOptions>(),
             Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RunAnalyzersAsync_IssuesCarryTheRuleIdOfTheFindings()
+    {
+        // Arrange
+        var targetPath = CreateTestFile("public class Test {}", ".cs");
+        var analyzer = CreateMockAnalyzer("analyzer1");
+        var assemblyPath = CreateTestFile("test", ".dll");
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(assemblyPath, Arg.Any<CancellationToken>())
+            .Returns(ImmutableArray.Create(analyzer));
+        await _service.LoadAnalyzersAsync(assemblyPath);
+
+        _mockAnalyzerHost.RunAnalyzerAsync(
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<AnalyzerOptions>(),
+            Arg.Any<CancellationToken>())
+            .Returns(new AnalyzerResult
+            {
+                Success = true,
+                Findings = [new Finding { RuleId = Ca1822RuleId[0], Message = "Member can be static", FilePath = targetPath, LineNumber = 3 }]
+            });
+
+        // Act
+        var result = await _service.RunAnalyzersAsync(targetPath);
+
+        // Assert - the diagnostic ID, which apply_roslyn_fixes takes, not the finding's own unique ID
+        Assert.That(result.Results.SelectMany(r => r.Issues).Select(i => i.RuleId), Is.EqualTo(Ca1822RuleId));
     }
 
     [Test]

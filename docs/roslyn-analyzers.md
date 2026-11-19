@@ -248,6 +248,8 @@ Run Roslyn analyzers on target path: the analyzers the open project references, 
 }
 ```
 
+Each issue's `ruleId` is the diagnostic ID that reported it (e.g. `CA1001`), which `apply_roslyn_fixes` takes in `diagnostic_ids`.
+
 A failed run is reported as a tool error rather than in the result.
 
 ### `list_roslyn_analyzers`

@@ -219,6 +219,7 @@ public partial class AnalyzerHost
                     AnalyzerId = analyzerId,
                     Findings = analysisResult.Issues.Select(i => new Finding
                     {
+                        RuleId = i.RuleId,
                         Message = i.Description,
                         Severity = MapSeverity(i.Severity),
                         FilePath = i.FilePath,
@@ -251,6 +252,7 @@ public partial class AnalyzerHost
 
                         allFindings.AddRange(analysisResult.Issues.Select(i => new Finding
                         {
+                            RuleId = i.RuleId,
                             Message = i.Description,
                             Severity = MapSeverity(i.Severity),
                             FilePath = i.FilePath,

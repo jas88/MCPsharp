@@ -189,7 +189,7 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
                         // Convert Findings to AnalyzerIssues
                         var issues = result.Findings.Select(f => new AnalyzerIssue
                         {
-                            RuleId = f.Id,
+                            RuleId = f.RuleId ?? string.Empty,
                             AnalyzerId = analyzerId,
                             Severity = f.Severity switch
                             {
