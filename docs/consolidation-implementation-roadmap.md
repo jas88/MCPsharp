@@ -405,13 +405,13 @@ public class ConsolidationTests
     public async Task UnifiedFind_MaintainsBackwardCompatibility()
     {
         // Test that old tool redirects work
-        var oldResult = await _registry.ExecuteTool(new ToolCallRequest
+        var oldResult = await _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = "find_references",
             Arguments = JsonDocument.Parse("{\"symbolName\": \"TestClass\"}")
         });
 
-        var newResult = await _registry.ExecuteTool(new ToolCallRequest
+        var newResult = await _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = "find",
             Arguments = JsonDocument.Parse("{\"mode\": \"reference\", \"target\": \"TestClass\"}")
@@ -424,7 +424,7 @@ public class ConsolidationTests
     public async Task AutoLoading_WorksWithoutExplicitProjectOpen()
     {
         // Don't call project_open
-        var result = await _registry.ExecuteTool(new ToolCallRequest
+        var result = await _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = "find",
             Arguments = JsonDocument.Parse("{\"mode\": \"symbol\", \"target\": \"Test\"}")
@@ -440,14 +440,14 @@ public class ConsolidationTests
         // Measure token usage for old vs new approach
         var oldTokens = await MeasureTokenUsage(async () =>
         {
-            await _registry.ExecuteTool("find_symbol", new { name = "Test" });
-            await _registry.ExecuteTool("find_references", new { symbolName = "Test" });
-            await _registry.ExecuteTool("analyze_impact", new { symbolName = "Test" });
+            await _registry.ExecuteToolAsync("find_symbol", new { name = "Test" });
+            await _registry.ExecuteToolAsync("find_references", new { symbolName = "Test" });
+            await _registry.ExecuteToolAsync("analyze_impact", new { symbolName = "Test" });
         });
 
         var newTokens = await MeasureTokenUsage(async () =>
         {
-            await _registry.ExecuteTool("analyze", new
+            await _registry.ExecuteToolAsync("analyze", new
             {
                 type = "impact",
                 target = "Test",

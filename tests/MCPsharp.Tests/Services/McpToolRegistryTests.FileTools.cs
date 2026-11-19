@@ -11,7 +11,7 @@ public partial class McpToolRegistryTests
     {
         // Arrange
         // Open project via tool
-        await _registry.ExecuteTool(new ToolCallRequest
+        await _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = "project_open",
             Arguments = JsonDocument.Parse($"{{\"path\": \"{_testProjectPath.Replace("\\", "\\\\")}\"}}")
@@ -30,7 +30,7 @@ public partial class McpToolRegistryTests
         };
 
         // Act
-        var result = await _registry.ExecuteTool(request);
+        var result = await _registry.ExecuteToolAsync(request);
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -42,7 +42,7 @@ public partial class McpToolRegistryTests
     {
         // Arrange
         // Open project via tool
-        await _registry.ExecuteTool(new ToolCallRequest
+        await _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = "project_open",
             Arguments = JsonDocument.Parse($"{{\"path\": \"{_testProjectPath.Replace("\\", "\\\\")}\"}}")
@@ -59,7 +59,7 @@ public partial class McpToolRegistryTests
         };
 
         // Act
-        var result = await _registry.ExecuteTool(request);
+        var result = await _registry.ExecuteToolAsync(request);
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -71,7 +71,7 @@ public partial class McpToolRegistryTests
     {
         // Arrange
         // Open project via tool
-        await _registry.ExecuteTool(new ToolCallRequest
+        await _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = "project_open",
             Arguments = JsonDocument.Parse($"{{\"path\": \"{_testProjectPath.Replace("\\", "\\\\")}\"}}")
@@ -88,7 +88,7 @@ public partial class McpToolRegistryTests
         };
 
         // Act
-        var result = await _registry.ExecuteTool(request);
+        var result = await _registry.ExecuteToolAsync(request);
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -100,7 +100,7 @@ public partial class McpToolRegistryTests
     {
         // Arrange
         // Open project via tool
-        await _registry.ExecuteTool(new ToolCallRequest
+        await _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = "project_open",
             Arguments = JsonDocument.Parse($"{{\"path\": \"{_testProjectPath.Replace("\\", "\\\\")}\"}}")
@@ -113,7 +113,7 @@ public partial class McpToolRegistryTests
         };
 
         // Act
-        var result = await _registry.ExecuteTool(request);
+        var result = await _registry.ExecuteToolAsync(request);
 
         // Assert
         Assert.That(result.Success, Is.False);
@@ -125,7 +125,7 @@ public partial class McpToolRegistryTests
     {
         // Arrange
         // Open project via tool
-        await _registry.ExecuteTool(new ToolCallRequest
+        await _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = "project_open",
             Arguments = JsonDocument.Parse($"{{\"path\": \"{_testProjectPath.Replace("\\", "\\\\")}\"}}")
@@ -139,7 +139,7 @@ public partial class McpToolRegistryTests
         };
 
         // Act
-        var result = await _registry.ExecuteTool(request);
+        var result = await _registry.ExecuteToolAsync(request);
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -156,7 +156,7 @@ public partial class McpToolRegistryTests
     {
         // Arrange
         // Open project via tool
-        await _registry.ExecuteTool(new ToolCallRequest
+        await _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = "project_open",
             Arguments = JsonDocument.Parse($"{{\"path\": \"{_testProjectPath.Replace("\\", "\\\\")}\"}}")
@@ -173,7 +173,7 @@ public partial class McpToolRegistryTests
         };
 
         // Act
-        var result = await _registry.ExecuteTool(request);
+        var result = await _registry.ExecuteToolAsync(request);
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -186,7 +186,7 @@ public partial class McpToolRegistryTests
     {
         // Arrange
         // Open project via tool
-        await _registry.ExecuteTool(new ToolCallRequest
+        await _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = "project_open",
             Arguments = JsonDocument.Parse($"{{\"path\": \"{_testProjectPath.Replace("\\", "\\\\")}\"}}")
@@ -216,7 +216,7 @@ public partial class McpToolRegistryTests
         };
 
         // Act
-        var result = await _registry.ExecuteTool(request);
+        var result = await _registry.ExecuteToolAsync(request);
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -234,7 +234,7 @@ public partial class McpToolRegistryTests
         };
 
         // Act
-        var result = await _registry.ExecuteTool(request);
+        var result = await _registry.ExecuteToolAsync(request);
 
         // Assert
         Assert.That(result.Success, Is.False);
@@ -253,7 +253,7 @@ public partial class McpToolRegistryTests
         };
 
         // Act
-        var result = await _registry.ExecuteTool(request);
+        var result = await _registry.ExecuteToolAsync(request);
 
         // Assert
         Assert.That(result.Success, Is.False);

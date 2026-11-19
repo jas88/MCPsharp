@@ -82,7 +82,7 @@ public static partial class AnalyzerTools
     /// <summary>
     /// Execute analyzer tool
     /// </summary>
-    public static async Task<ToolCallResult> ExecuteAnalyzerTool(
+    public static async Task<ToolCallResult> ExecuteAnalyzerToolAsync(
         string toolName,
         JsonDocument arguments,
         IAnalyzerHost analyzerHost,

@@ -14,7 +14,7 @@ namespace MCPsharp.Tests.Services;
 
 /// <summary>
 /// With every optional service supplied, the tools listed by tools/list must be exactly the tools
-/// ExecuteTool can dispatch, and each listed tool must carry a usable schema. Path arguments of the
+/// ExecuteToolAsync can dispatch, and each listed tool must carry a usable schema. Path arguments of the
 /// raw-path tools must be confined to the open project.
 /// </summary>
 [TestFixture]
@@ -84,7 +84,7 @@ public class McpToolRegistryToolCatalogTests
     }
 
     private async Task<ToolCallResult> Execute(string toolName, object arguments) =>
-        await _registry.ExecuteTool(new ToolCallRequest
+        await _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = toolName,
             Arguments = JsonDocument.Parse(JsonSerializer.Serialize(arguments))

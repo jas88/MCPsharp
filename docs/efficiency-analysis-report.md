@@ -178,7 +178,7 @@ public class McpToolRegistry
         _handlers = handlers.ToDictionary(h => h.ToolName, h => h);
     }
 
-    public async Task<ToolCallResult> ExecuteTool(ToolCallRequest request, CancellationToken ct)
+    public async Task<ToolCallResult> ExecuteToolAsync(ToolCallRequest request, CancellationToken ct)
     {
         if (!_handlers.TryGetValue(request.Name, out var handler))
         {

@@ -102,7 +102,7 @@ public class Calculator
     }
 
     private Task<ToolCallResult> Execute(string toolName, object arguments) =>
-        _registry.ExecuteTool(new ToolCallRequest
+        _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = toolName,
             Arguments = JsonDocument.Parse(JsonSerializer.Serialize(arguments))
@@ -219,7 +219,7 @@ public class Calculator
                      ("find_symbol", new { name = "Calculator" })
                  })
         {
-            var result = await registry.ExecuteTool(new ToolCallRequest
+            var result = await registry.ExecuteToolAsync(new ToolCallRequest
             {
                 Name = tool,
                 Arguments = JsonDocument.Parse(JsonSerializer.Serialize(args))

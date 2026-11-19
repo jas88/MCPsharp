@@ -78,7 +78,7 @@ public partial class JsonRpcHandler
                         continue; // Don't send response for notifications
                     }
 
-                    response = await HandleRequest(request);
+                    response = await HandleRequestAsync(request);
                 }
             }
             catch (JsonException ex)
@@ -100,7 +100,7 @@ public partial class JsonRpcHandler
     /// <summary>
     /// Routes requests to appropriate handlers based on method name
     /// </summary>
-    public async Task<JsonRpcResponse> HandleRequest(JsonRpcRequest request)
+    public async Task<JsonRpcResponse> HandleRequestAsync(JsonRpcRequest request)
     {
         // Validate JSON-RPC version
         if (request.Jsonrpc != "2.0")
@@ -250,7 +250,7 @@ public partial class JsonRpcHandler
             Arguments = JsonDocument.Parse(arguments.GetRawText())
         };
 
-        var result = await _toolRegistry.ExecuteTool(request);
+        var result = await _toolRegistry.ExecuteToolAsync(request);
 
         var response = new
         {
