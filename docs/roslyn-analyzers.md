@@ -201,6 +201,8 @@ The following tools are registered whenever the server is started with a Roslyn 
 ### `load_roslyn_analyzers`
 Load Roslyn analyzers from assembly or directory.
 
+Every DLL in a directory is loaded to look for analyzers, so the directory may hold at most 100 DLLs and 100 MB of DLLs. For a larger one, such as the NuGet cache, the tool returns an error naming the limit and suggesting a specific package's analyzer folder (e.g. `~/.nuget/packages/<package>/<version>/analyzers/dotnet/cs`), a project's analyzer output folder, or a single DLL.
+
 **Parameters**:
 - `path` (string, required): Path to an analyzer assembly or a directory of assemblies (relative paths resolve against the open project)
 

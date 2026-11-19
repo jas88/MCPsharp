@@ -191,6 +191,35 @@ public class AnalyzerAutoLoadServiceTests : FileServiceTestBase
     }
 
     [Test]
+    public async Task EnsureAnalyzersLoadedAsync_WithCustomPathDirectory_LoadsItsAnalyzers()
+    {
+        ProjectsReference();
+        var directory = CreateTestDirectory("custom");
+        File.Copy(typeof(StaticMethodAnalyzer).Assembly.Location, Path.Combine(directory, "MCPsharp.Analyzers.dll"));
+        using var service = CreateService(new AnalyzerAutoLoadConfiguration { CustomAnalyzerPaths = [directory] });
+
+        var result = await service.EnsureAnalyzersLoadedAsync();
+
+        Assert.That(result.Errors, Is.Empty);
+        Assert.That(result.LoadedAnalyzers.Select(a => a.Id), Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds));
+    }
+
+    [Test]
+    public async Task EnsureAnalyzersLoadedAsync_WithCustomPathOverTheScanLimit_ReportsTheLimitAndLoadsNothing()
+    {
+        ProjectsReference();
+        var directory = CreateTestDirectory("custom-large");
+        AnalyzerDirectoryScanLimitsTests.CreateFakeDlls(directory, AnalyzerDirectoryScanLimits.MaxAssemblyCount);
+        File.Copy(typeof(StaticMethodAnalyzer).Assembly.Location, Path.Combine(directory, "MCPsharp.Analyzers.dll"));
+        using var service = CreateService(new AnalyzerAutoLoadConfiguration { CustomAnalyzerPaths = [directory] });
+
+        var result = await service.EnsureAnalyzersLoadedAsync();
+
+        Assert.That(result.LoadedAnalyzers, Is.Empty);
+        Assert.That(result.Errors, Has.Some.Contain($"more than {AnalyzerDirectoryScanLimits.MaxAssemblyCount} DLLs"));
+    }
+
+    [Test]
     public async Task EnsureAnalyzersLoadedAsync_WithoutProjectReferencesSource_DoesNotLoadTheProjectsAnalyzers()
     {
         ProjectsReference(TestAnalyzerReferences.BuiltInAnalyzers());

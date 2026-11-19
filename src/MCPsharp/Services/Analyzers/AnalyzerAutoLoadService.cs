@@ -174,6 +174,15 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
             {
                 if (Directory.Exists(customPath))
                 {
+                    // Every DLL in the directory is loaded to look for analyzers, so refuse one such as the NuGet cache
+                    var limitError = AnalyzerDirectoryScanLimits.Check(customPath);
+                    if (limitError != null)
+                    {
+                        LogCustomPathOverScanLimit(_logger, limitError);
+                        errors.Add(limitError);
+                        continue;
+                    }
+
                     var assemblyPaths = _loader.DiscoverAnalyzerAssemblies(customPath, recursive: true);
                     var pathAnalyzers = await _loader.LoadAnalyzersFromAssembliesAsync(assemblyPaths, cancellationToken);
                     analyzers.AddRange(pathAnalyzers);
@@ -350,6 +359,9 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} analyzers from custom assembly: {Path}")]
     private static partial void LogLoadedFromCustomAssembly(ILogger logger, int count, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Skipping custom analyzer path: {Reason}")]
+    private static partial void LogCustomPathOverScanLimit(ILogger logger, string reason);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Custom analyzer path not found: {Path}")]
     private static partial void LogCustomPathNotFound(ILogger logger, string path);

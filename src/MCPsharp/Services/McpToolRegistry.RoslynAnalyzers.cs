@@ -2,6 +2,7 @@ using System.Text.Json;
 using MCPsharp.Models;
 using MCPsharp.Models.Analyzers;
 using MCPsharp.Models.Refactoring;
+using MCPsharp.Services.Analyzers;
 using MCPsharp.Services.Roslyn;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -28,7 +29,7 @@ public partial class McpToolRegistry
         _tools.Add(new McpTool
         {
             Name = "load_roslyn_analyzers",
-            Description = "Load Roslyn analyzers from an analyzer assembly (.dll) or from every assembly in a directory.",
+            Description = "Load Roslyn analyzers from an analyzer assembly (.dll) or from every assembly in a directory (at most 100 DLLs and 100 MB, so point at a package's analyzer folder rather than the NuGet cache).",
             InputSchema = JsonSchemaHelper.CreateSchema(
                 Prop("path", "string", "Path to an analyzer assembly or a directory containing analyzer assemblies", required: true))
         });
@@ -98,6 +99,13 @@ public partial class McpToolRegistry
         if (!isDirectory && !File.Exists(path))
         {
             return ToolError($"Path does not exist: {rawPath}");
+        }
+
+        // Every DLL in a directory is loaded to look for analyzers, so refuse one such as the NuGet cache
+        var limitError = isDirectory ? AnalyzerDirectoryScanLimits.Check(path) : null;
+        if (limitError != null)
+        {
+            return ToolError(limitError);
         }
 
         var analyzers = isDirectory

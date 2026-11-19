@@ -125,6 +125,14 @@ public partial class RoslynCodeFixLoader
                 return ImmutableArray<string>.Empty;
             }
 
+            // Every DLL found is loaded, so refuse a directory such as the NuGet cache
+            var limitError = AnalyzerDirectoryScanLimits.Check(directory, recursive);
+            if (limitError != null)
+            {
+                LogDirectoryOverScanLimit(_logger, limitError);
+                return ImmutableArray<string>.Empty;
+            }
+
             var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
 
             // Look for DLL files
@@ -284,6 +292,9 @@ public partial class RoslynCodeFixLoader
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Directory not found: {Directory}")]
     private static partial void LogDirectoryNotFound(ILogger logger, string directory);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Not searching for code fix provider assemblies: {Reason}")]
+    private static partial void LogDirectoryOverScanLimit(ILogger logger, string reason);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Discovered code fix provider assembly: {AssemblyPath}")]
     private static partial void LogDiscoveredAssembly(ILogger logger, string assemblyPath);

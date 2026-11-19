@@ -7,6 +7,7 @@ using MCPsharp.Services;
 using MCPsharp.Services.AI;
 using MCPsharp.Services.Analyzers;
 using MCPsharp.Services.Roslyn;
+using MCPsharp.Tests.Services.Analyzers;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NUnit.Framework;
@@ -213,6 +214,20 @@ public class Calculator
 
         await _analyzerService.Received(1).RunAnalyzersAsync(
             Path.Combine(_projectPath, "Calculator.cs"), Arg.Any<IEnumerable<string>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task LoadRoslynAnalyzers_DirectoryWithTooManyDlls_ReturnsAnErrorNamingTheLimit()
+    {
+        AnalyzerDirectoryScanLimitsTests.CreateFakeDlls(
+            Path.Combine(_projectPath, "packages"), AnalyzerDirectoryScanLimits.MaxAssemblyCount + 1);
+
+        var result = await Execute("load_roslyn_analyzers", new { path = "packages" });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain($"more than {AnalyzerDirectoryScanLimits.MaxAssemblyCount} DLLs"));
+        Assert.That(result.Error, Does.Contain("analyzers/dotnet/cs"));
+        await _analyzerService.DidNotReceive().LoadAnalyzersFromDirectoryAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

@@ -111,6 +111,8 @@ Custom directories or DLL files to load analyzers from. Supports:
 - Directory paths: Scans recursively for analyzer DLLs
 - File paths: Loads specific analyzer DLL
 
+Every DLL in a directory is loaded to look for analyzers, so a directory may hold at most 100 DLLs and 100 MB of DLLs (`AnalyzerDirectoryScanLimits`). A larger one, such as the NuGet cache, is skipped, and the auto-load result reports an error naming the limit; point at a specific package's analyzer folder (e.g. `~/.nuget/packages/<package>/<version>/analyzers/dotnet/cs`) or a single DLL instead.
+
 ## Performance
 
 ### Startup Impact

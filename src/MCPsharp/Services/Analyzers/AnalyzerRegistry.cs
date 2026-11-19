@@ -160,6 +160,14 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
                 return Task.FromResult(ImmutableArray<AnalyzerInfo>.Empty);
             }
 
+            // Every DLL found is loaded, so refuse a directory with too many or too large DLLs
+            var limitError = AnalyzerDirectoryScanLimits.Check(directoryPath, recursive: false);
+            if (limitError != null)
+            {
+                LogDirectoryOverScanLimit(_logger, limitError);
+                return Task.FromResult(ImmutableArray<AnalyzerInfo>.Empty);
+            }
+
             var discoveredAnalyzers = new List<AnalyzerInfo>();
 
             foreach (var dllFile in Directory.GetFiles(directoryPath, "*.dll", SearchOption.TopDirectoryOnly))
@@ -431,6 +439,9 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Directory does not exist: {DirectoryPath}")]
     private static partial void LogDirectoryDoesNotExist(ILogger logger, string directoryPath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Not discovering analyzers: {Reason}")]
+    private static partial void LogDirectoryOverScanLimit(ILogger logger, string reason);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzers from assembly: {AssemblyPath}")]
     private static partial void LogErrorLoadingAssembly(ILogger logger, Exception exception, string assemblyPath);
