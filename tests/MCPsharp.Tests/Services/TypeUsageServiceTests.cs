@@ -10,9 +10,9 @@ namespace MCPsharp.Tests.Services;
 [TestFixture]
 public partial class TypeUsageServiceTests
 {
-    private RoslynWorkspace _workspace;
-    private SymbolQueryService _symbolQuery;
-    private TypeUsageService _typeUsage;
+    private RoslynWorkspace _workspace = null!;
+    private SymbolQueryService _symbolQuery = null!;
+    private TypeUsageService _typeUsage = null!;
 
     [SetUp]
     public void SetUp()

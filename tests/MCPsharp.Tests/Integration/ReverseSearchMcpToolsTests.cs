@@ -12,9 +12,9 @@ namespace MCPsharp.Tests.Integration;
 [TestFixture]
 public class ReverseSearchMcpToolsTests
 {
-    private ProjectContextManager _projectContext;
-    private RoslynWorkspace _workspace;
-    private McpToolRegistry _toolRegistry;
+    private ProjectContextManager _projectContext = null!;
+    private RoslynWorkspace _workspace = null!;
+    private McpToolRegistry _toolRegistry = null!;
 
     [SetUp]
     public void SetUp()
