@@ -43,13 +43,29 @@ public partial class RoslynAnalyzerAdapter : IAnalyzer
     /// </summary>
     public DiagnosticAnalyzer DiagnosticAnalyzer => _roslynAnalyzer;
 
+    /// <summary>
+    /// The project analyzer reference the analyzer was loaded from: the analyzer runs on the files of the projects
+    /// that reference it. Null for an analyzer loaded from an assembly path, which runs on any file.
+    /// </summary>
+    public AnalyzerReference? AnalyzerReference { get; }
+
+    /// <summary>
+    /// Wrap <paramref name="roslynAnalyzer"/> as an MCPsharp analyzer
+    /// </summary>
+    /// <param name="roslynAnalyzer">The analyzer</param>
+    /// <param name="logger">Logger</param>
+    /// <param name="analyzerReference">
+    /// The project analyzer reference the analyzer was loaded from, which ties it to the projects that reference
+    /// it; null for an analyzer loaded from an assembly path, which belongs to no project
+    /// </param>
     public RoslynAnalyzerAdapter(
         DiagnosticAnalyzer roslynAnalyzer,
         ILogger<RoslynAnalyzerAdapter> logger,
-        AnalyzerFileReference? analyzerReference = null)
+        AnalyzerReference? analyzerReference = null)
     {
         _roslynAnalyzer = roslynAnalyzer ?? throw new ArgumentNullException(nameof(roslynAnalyzer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        AnalyzerReference = analyzerReference;
 
         _analyzerId = GetId(roslynAnalyzer.GetType());
         VersionIndependentId = GetVersionIndependentId(roslynAnalyzer.GetType());

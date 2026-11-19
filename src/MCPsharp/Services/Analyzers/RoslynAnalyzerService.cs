@@ -11,8 +11,18 @@ public interface IRoslynAnalyzerService
 {
     Task<ImmutableArray<IAnalyzer>> LoadAnalyzersAsync(string assemblyPath, CancellationToken cancellationToken = default);
     Task<ImmutableArray<IAnalyzer>> LoadAnalyzersFromDirectoryAsync(string directory, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Run analyzers on a file, or on the C# files of a directory: each file gets the analyzers that apply to it
+    /// (see <see cref="GetAnalyzersForFile"/>), narrowed to <paramref name="analyzerIds"/> when given.
+    /// </summary>
     Task<AnalyzerRunResult> RunAnalyzersAsync(string targetPath, IEnumerable<string>? analyzerIds = null, CancellationToken cancellationToken = default);
     ImmutableArray<IAnalyzer> GetLoadedAnalyzers();
+
+    /// <summary>
+    /// The loaded analyzers that apply to a file, as in an IDE: those of the projects that compile it, and those
+    /// loaded with load_roslyn_analyzers or from customAnalyzerPaths, which belong to no project.
+    /// </summary>
+    ImmutableArray<IAnalyzer> GetAnalyzersForFile(string filePath);
     IAnalyzer? GetAnalyzer(string analyzerId);
 
     /// <summary>
@@ -115,174 +125,6 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
         {
             LogErrorLoadingFromDirectory(_logger, ex, directory);
             return ImmutableArray<IAnalyzer>.Empty;
-        }
-    }
-
-    public async Task<AnalyzerRunResult> RunAnalyzersAsync(
-        string targetPath,
-        IEnumerable<string>? analyzerIds = null,
-        CancellationToken cancellationToken = default)
-    {
-        var startTime = DateTime.UtcNow;
-
-        try
-        {
-            LogRunningAnalyzersOn(_logger, targetPath);
-
-            // Auto-load analyzers if not already loaded
-            await EnsureAnalyzersAutoLoadedAsync(cancellationToken);
-
-            // Determine which analyzers to run
-            ImmutableArray<IAnalyzer> analyzersToRun;
-
-            lock (_lock)
-            {
-                if (analyzerIds != null && analyzerIds.Any())
-                {
-                    // Run specific analyzers
-                    analyzersToRun = analyzerIds
-                        .Where(id => _loadedAnalyzers.ContainsKey(id))
-                        .Select(id => _loadedAnalyzers[id])
-                        .ToImmutableArray();
-                }
-                else
-                {
-                    // Run all loaded analyzers
-                    analyzersToRun = _loadedAnalyzers.Values.ToImmutableArray();
-                }
-            }
-
-            if (!analyzersToRun.Any())
-            {
-                return new AnalyzerRunResult
-                {
-                    Success = false,
-                    ErrorMessage = "No analyzers loaded or specified. The analyzers the open project references are loaded automatically; load others with load_roslyn_analyzers.",
-                    StartTime = startTime,
-                    EndTime = DateTime.UtcNow
-                };
-            }
-
-            LogRunningAnalyzerCount(_logger, analyzersToRun.Length);
-
-            // Run each analyzer
-            var allIssues = new List<AnalyzerIssue>();
-            var analysisResults = new List<AnalysisResult>();
-
-            foreach (var analyzerId in analyzersToRun.Select(a => a.Id))
-            {
-                try
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    var analysisStartTime = DateTime.UtcNow;
-
-                    // Use the analyzer host to run the analyzer
-                    var result = await _analyzerHost.RunAnalyzerAsync(
-                        analyzerId,
-                        targetPath,
-                        options: null,
-                        cancellationToken);
-
-                    if (result.Success && result.Findings != null)
-                    {
-                        // Convert Findings to AnalyzerIssues
-                        var issues = result.Findings.Select(f => new AnalyzerIssue
-                        {
-                            RuleId = f.RuleId ?? string.Empty,
-                            AnalyzerId = analyzerId,
-                            Severity = f.Severity switch
-                            {
-                                FindingSeverity.Info => IssueSeverity.Info,
-                                FindingSeverity.Warning => IssueSeverity.Warning,
-                                FindingSeverity.Error => IssueSeverity.Error,
-                                FindingSeverity.Critical => IssueSeverity.Error,
-                                _ => IssueSeverity.Info
-                            },
-                            Title = f.Message,
-                            Description = f.Message,
-                            FilePath = f.FilePath ?? targetPath,
-                            LineNumber = f.LineNumber ?? 0,
-                            ColumnNumber = f.ColumnNumber ?? 0
-                        }).ToImmutableArray();
-
-                        allIssues.AddRange(issues);
-
-                        // Create AnalysisResult
-                        analysisResults.Add(new AnalysisResult
-                        {
-                            FilePath = targetPath,
-                            AnalyzerId = analyzerId,
-                            StartTime = analysisStartTime,
-                            EndTime = DateTime.UtcNow,
-                            Success = true,
-                            Issues = issues
-                        });
-
-                        LogAnalyzerFoundIssues(_logger, analyzerId, result.Findings.Count);
-                    }
-                    else
-                    {
-                        // Add failed result
-                        analysisResults.Add(new AnalysisResult
-                        {
-                            FilePath = targetPath,
-                            AnalyzerId = analyzerId,
-                            StartTime = analysisStartTime,
-                            EndTime = DateTime.UtcNow,
-                            Success = false,
-                            ErrorMessage = result.ErrorMessage
-                        });
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    LogAnalyzerRunCancelled(_logger);
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    LogErrorRunningAnalyzer(_logger, ex, analyzerId);
-                }
-            }
-
-            return new AnalyzerRunResult
-            {
-                Success = true,
-                AnalyzersRun = analyzersToRun.Select(a => a.Id).ToImmutableArray(),
-                TotalIssuesFound = allIssues.Count,
-                StartTime = startTime,
-                EndTime = DateTime.UtcNow,
-                Results = analysisResults.ToImmutableArray(),
-                Statistics = new Dictionary<string, object>
-                {
-                    ["AnalyzersRun"] = analyzersToRun.Length,
-                    ["TotalIssuesFound"] = allIssues.Count,
-                    ["Duration"] = DateTime.UtcNow - startTime
-                }.ToImmutableDictionary()
-            };
-        }
-        catch (OperationCanceledException)
-        {
-            return new AnalyzerRunResult
-            {
-                Success = false,
-                ErrorMessage = "Analysis cancelled",
-                StartTime = startTime,
-                EndTime = DateTime.UtcNow
-            };
-        }
-        catch (Exception ex)
-        {
-            LogErrorRunningAnalyzers(_logger, ex, targetPath);
-
-            return new AnalyzerRunResult
-            {
-                Success = false,
-                ErrorMessage = ex.Message,
-                StartTime = startTime,
-                EndTime = DateTime.UtcNow
-            };
         }
     }
 
@@ -412,24 +254,6 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
     [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzers from directory {Directory}")]
     private static partial void LogErrorLoadingFromDirectory(ILogger logger, Exception exception, string directory);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Running analyzers on {TargetPath}")]
-    private static partial void LogRunningAnalyzersOn(ILogger logger, string targetPath);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "Running {Count} analyzers")]
-    private static partial void LogRunningAnalyzerCount(ILogger logger, int count);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Analyzer {AnalyzerId} found {Count} issues")]
-    private static partial void LogAnalyzerFoundIssues(ILogger logger, string analyzerId, int count);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "Analyzer run cancelled")]
-    private static partial void LogAnalyzerRunCancelled(ILogger logger);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Error running analyzer {AnalyzerId}")]
-    private static partial void LogErrorRunningAnalyzer(ILogger logger, Exception exception, string analyzerId);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Error running analyzers on {TargetPath}")]
-    private static partial void LogErrorRunningAnalyzers(ILogger logger, Exception exception, string targetPath);
-
     [LoggerMessage(Level = LogLevel.Debug, Message = "Auto-load service not available, skipping auto-load")]
     private static partial void LogAutoLoadUnavailable(ILogger logger);
 
@@ -441,19 +265,4 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Error during analyzer auto-load")]
     private static partial void LogErrorDuringAutoLoad(ILogger logger, Exception exception);
-}
-
-/// <summary>
-/// Result of running analyzers
-/// </summary>
-public class AnalyzerRunResult
-{
-    public required bool Success { get; init; }
-    public string? ErrorMessage { get; init; }
-    public ImmutableArray<string> AnalyzersRun { get; init; } = ImmutableArray<string>.Empty;
-    public int TotalIssuesFound { get; init; }
-    public DateTime StartTime { get; init; }
-    public DateTime EndTime { get; init; }
-    public ImmutableDictionary<string, object>? Statistics { get; init; }
-    public ImmutableArray<AnalysisResult> Results { get; init; } = ImmutableArray<AnalysisResult>.Empty;
 }

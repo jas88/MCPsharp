@@ -205,7 +205,7 @@ public partial class RoslynAnalyzerLoader
             cancellationToken.ThrowIfCancellationRequested();
 
             var referenceAnalyzers = GetCSharpAnalyzers(reference);
-            analyzers.AddRange(referenceAnalyzers.Select(analyzer => new RoslynAnalyzerAdapter(analyzer, adapterLogger)));
+            analyzers.AddRange(referenceAnalyzers.Select(analyzer => new RoslynAnalyzerAdapter(analyzer, adapterLogger, reference)));
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 var description = Describe(reference);

@@ -37,7 +37,17 @@ The analyzers that the projects of the open workspace reference: the `Project.An
 - The analyzers the .NET SDK and targeting packs add (e.g. the .NET analyzers enabled by `EnableNETAnalyzers`)
 - `<Analyzer Include="..." />` items and analyzer project references
 
-Only the C# analyzers each reference exports with `[DiagnosticAnalyzer]` are loaded. Nothing outside these references is loaded: the NuGet cache is never scanned, so its size doesn't matter. The workspace has already loaded the referenced assemblies when it opened the project, and the auto-load reuses its analyzer instances. Each analyzer is identified by its type and the name and version of its assembly (see `excludeAnalyzers` below), so different builds of one analyzer, e.g. the SDK's and a NuGet package's code style analyzers or two versions of a package in different projects, are separate analyzers and are all loaded. They can then report the same diagnostic twice; pass `analyzer_ids` to `run_roslyn_analyzers` to run one of them. A reference to the same assembly identity at two paths is loaded once.
+Only the C# analyzers each reference exports with `[DiagnosticAnalyzer]` are loaded. Nothing outside these references is loaded: the NuGet cache is never scanned, so its size doesn't matter. The workspace has already loaded the referenced assemblies when it opened the project, and the auto-load reuses its analyzer instances. Each analyzer is identified by its type and the name and version of its assembly (see `excludeAnalyzers` below), so different builds of one analyzer, e.g. the SDK's and a NuGet package's code style analyzers or two versions of a package in different projects, are separate analyzers and are all loaded. Each runs only on the files of the projects that reference it (see [Which Analyzers Run on a File](#which-analyzers-run-on-a-file)), so a file doesn't get the same diagnostic from two builds. A reference to the same assembly identity at two paths is loaded once.
+
+### Which Analyzers Run on a File
+`run_roslyn_analyzers` and `apply_roslyn_fixes` pick the analyzers for each file as an IDE does (`IRoslynAnalyzerService.GetAnalyzersForFile`):
+
+- A file gets the analyzers of the projects that compile it (`RoslynWorkspace.GetFileAnalyzerScope`). Every target framework of a multi-targeted project counts as a project, as does every project a linked file belongs to.
+- Analyzers that belong to no project, those loaded with `load_roslyn_analyzers` or from `customAnalyzerPaths`, run on every file.
+- A file in no project of the open workspace (or when no project is open) gets only the analyzers that belong to no project.
+- A file that several projects compile runs each of their analyzers once, and a diagnostic that more than one of them reports with the same rule, location and message is reported once. In a file of one project, identical diagnostics from different analyzers are all reported.
+- `analyzer_ids` narrows the analyzers to run; it never adds an analyzer that doesn't apply to a file. If none of the requested analyzers applies, the run fails and says why.
+- A directory target runs on its C# files outside build output (`bin`, `obj`) and hidden directories, in path order and at most 100 of them; `filesSkipped` counts the rest. Each file gets the analyzers of its own projects.
 
 NuGet analyzer packages are only referenced once the projects are restored (`dotnet restore`). When MSBuildWorkspace cannot load the project and MCPsharp falls back to an adhoc workspace, there are no project analyzer references, so none are auto-loaded.
 
@@ -222,7 +232,7 @@ await client.call("run_roslyn_analyzers", { target_path: "/my/project" });
 3. The auto-load service gets the workspace's project analyzer references (`RoslynWorkspace.GetAnalyzerReferences()`, each assembly once); if they are the ones it last loaded, nothing more happens
 4. Otherwise it unregisters the analyzers of its previous load, then loads the C# analyzers of the references (`RoslynAnalyzerLoader.LoadAnalyzersFromReferences()`) and any custom paths
 5. Analyzers registered with `AnalyzerRegistry`, replacing the previous auto-loaded analyzers in `RoslynAnalyzerService` (explicitly loaded analyzers stay)
-6. Analysis proceeds normally
+6. Analysis proceeds normally: each file gets the analyzers that apply to it (see [Which Analyzers Run on a File](#which-analyzers-run-on-a-file))
 
 ### Thread Safety
 - Auto-load is thread-safe (uses locking)
@@ -242,6 +252,7 @@ await client.call("run_roslyn_analyzers", { target_path: "/my/project" });
 - `RoslynAnalyzerLoader.LoadAnalyzersFromNuGetCacheAsync()` and `RoslynCodeFixLoader.LoadCodeFixProvidersFromNuGetCacheAsync()` were removed; use `RoslynAnalyzerLoader.LoadAnalyzersFromReferences()` with a project's analyzer references
 - A project's `.mcpsharp/autoload-config.json` is now read (it was documented before but never read), so check an existing one: replace `nuget_cache` with `project_references`, and use the analyzer IDs `list_roslyn_analyzers` reports in `excludeAnalyzers`
 - Analyzer IDs changed from `Roslyn_<type name>` to `Roslyn_<type full name>@<assembly name>-<assembly version>`, so that same-named analyzers from different assemblies no longer share an ID
+- `run_roslyn_analyzers` no longer runs every loaded analyzer on every file: a file gets its own projects' analyzers, plus those loaded with `load_roslyn_analyzers` or from `customAnalyzerPaths`
 
 ### For New Users
 Simply use analyzer tools directly:

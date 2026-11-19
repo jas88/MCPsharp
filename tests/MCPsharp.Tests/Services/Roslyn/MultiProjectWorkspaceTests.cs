@@ -208,6 +208,22 @@ public class MultiProjectWorkspaceTests
     }
 
     [Test]
+    public void GetFileAnalyzerScope_HasEveryProjectThatCompilesTheFile()
+    {
+        var libScope = _workspace.GetFileAnalyzerScope(_solution.LibGreeterPath);
+        var appScope = _workspace.GetFileAnalyzerScope(_solution.AppProgramPath);
+        var outsideScope = _workspace.GetFileAnalyzerScope(Path.Combine(_solution.Root, "NotInAnyProject.cs"));
+
+        Assert.That(libScope.ProjectCount, Is.EqualTo(2), "Lib is compiled once per target framework");
+        Assert.That(appScope.ProjectCount, Is.EqualTo(1));
+        var appProject = _workspace.Solution.Projects.Single(p => p.Name == "App");
+        Assert.That(appScope.AnalyzerReferences.Select(r => r.FullPath),
+            Is.EquivalentTo(appProject.AnalyzerReferences.Select(r => r.FullPath).Distinct()));
+        Assert.That(outsideScope.ProjectCount, Is.Zero);
+        Assert.That(outsideScope.AnalyzerReferences, Is.Empty);
+    }
+
+    [Test]
     public void GetAnalyzerReferences_ReturnsEveryProjectsAnalyzerReferencesOnce()
     {
         var paths = _workspace.GetAnalyzerReferences().Select(r => r.FullPath).ToList();

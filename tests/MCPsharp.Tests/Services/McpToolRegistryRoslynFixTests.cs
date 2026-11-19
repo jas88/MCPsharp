@@ -44,7 +44,7 @@ public class McpToolRegistryRoslynFixTests
         await File.WriteAllTextAsync(_declPath, RoslynCodeFixApplierTests.MultiDeclaratorSource);
 
         var analyzerService = Substitute.For<IRoslynAnalyzerService>();
-        analyzerService.GetLoadedAnalyzers().Returns(ImmutableArray.Create<IAnalyzer>(
+        analyzerService.GetAnalyzersForFile(Arg.Any<string>()).Returns(ImmutableArray.Create<IAnalyzer>(
             Adapter(new StaticMethodAnalyzer()),
             Adapter(new MultiDeclaratorTestAnalyzer())));
 

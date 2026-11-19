@@ -226,11 +226,11 @@ Every DLL in a directory is loaded to look for analyzers, so the directory may h
 ```
 
 ### `run_roslyn_analyzers`
-Run Roslyn analyzers on target path: the analyzers the open project references, which are loaded automatically, and any loaded with `load_roslyn_analyzers`.
+Run Roslyn analyzers on target path. As in an IDE, each file gets the analyzers of the projects that compile it, which are loaded automatically, plus any loaded with `load_roslyn_analyzers` or from `customAnalyzerPaths`, which run on every file; a file in no project gets only the latter. A file several projects compile (linked, or multi-targeted) gets each of their analyzers once, and the same diagnostic from more than one of them is reported once. See [analyzer-autoload.md](analyzer-autoload.md#which-analyzers-run-on-a-file).
 
 **Parameters**:
-- `target_path` (string, required): File or directory to analyze
-- `analyzer_ids` (string[], optional): Specific analyzers to run, by the IDs `list_roslyn_analyzers` reports (default: all)
+- `target_path` (string, required): File or directory to analyze; for a directory, its C# files outside `bin`, `obj` and hidden directories, in path order and at most 100
+- `analyzer_ids` (string[], optional): Specific analyzers to run, by the IDs `list_roslyn_analyzers` reports (default: all); each file still gets only those that apply to it
 
 **Returns**:
 ```json
@@ -239,6 +239,8 @@ Run Roslyn analyzers on target path: the analyzers the open project references, 
     "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0",
     "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.DoNotDirectlyAwaitATaskAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0"
   ],
+  "filesAnalyzed": 12,
+  "filesSkipped": 0,
   "totalIssuesFound": 42,
   "durationSeconds": 1.84,
   "issues": [
@@ -255,7 +257,7 @@ Run Roslyn analyzers on target path: the analyzers the open project references, 
 }
 ```
 
-Each issue's `ruleId` is the diagnostic ID that reported it (e.g. `CA1001`), which `apply_roslyn_fixes` takes in `diagnostic_ids`.
+Each issue's `ruleId` is the diagnostic ID that reported it (e.g. `CA1001`), which `apply_roslyn_fixes` takes in `diagnostic_ids`. `filesAnalyzed` counts the files at least one analyzer ran on, and `filesSkipped` the files of a directory beyond the first 100.
 
 A failed run is reported as a tool error rather than in the result.
 

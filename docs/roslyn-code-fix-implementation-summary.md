@@ -39,7 +39,7 @@ Extended the MCPsharp Roslyn analyzer integration with production-ready features
 - `DiscoverCodeFixProviderAssemblies()`
 - `MatchCodeFixProvidersToAnalyzers()`
 
-`apply_roslyn_fixes` loads code fix providers from the assemblies of the analyzers that report the requested diagnostics (and their companion code fix assemblies), which come from the open project's analyzer references; the NuGet cache is never scanned.
+`apply_roslyn_fixes` computes the diagnostics with the analyzers that apply to the file, as `run_roslyn_analyzers` does: those of the projects that compile it, plus those loaded with `load_roslyn_analyzers`. It loads code fix providers from the assemblies of the analyzers that report the requested diagnostics (and their companion code fix assemblies), which come from the projects' analyzer references; the NuGet cache is never scanned.
 
 ### 2. Configuration Management (Priority 2 - COMPLETE)
 

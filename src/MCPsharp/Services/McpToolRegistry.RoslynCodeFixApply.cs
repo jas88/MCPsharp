@@ -47,8 +47,9 @@ public partial class McpToolRegistry
                 return ToolError(parseError);
             }
 
+            // As in an IDE, the file's diagnostics come from the analyzers of the projects that compile it
             await _roslynAnalyzerService.EnsureAnalyzersLoadedAsync(ct);
-            var analyzerAdapters = _roslynAnalyzerService.GetLoadedAnalyzers()
+            var analyzerAdapters = _roslynAnalyzerService.GetAnalyzersForFile(targetPath)
                 .OfType<RoslynAnalyzerAdapter>()
                 .Where(a => a.IsEnabled && a.DiagnosticAnalyzer.SupportedDiagnostics.Any(d => diagnosticIds.Contains(d.Id)))
                 .ToList();
@@ -60,7 +61,8 @@ public partial class McpToolRegistry
 
             if (analyzers.IsEmpty)
             {
-                return ToolError($"No loaded analyzer reports diagnostic IDs: {string.Join(", ", diagnosticIds)}");
+                return ToolError($"No loaded analyzer reports diagnostic IDs: {string.Join(", ", diagnosticIds)} " +
+                                 $"(only the analyzers of the projects that compile {targetPath}, and those loaded with load_roslyn_analyzers, apply to it)");
             }
 
             await LoadCodeFixProvidersAsync(analyzerAdapters, ct);

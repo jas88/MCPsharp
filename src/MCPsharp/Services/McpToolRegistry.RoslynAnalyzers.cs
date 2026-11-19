@@ -37,10 +37,10 @@ public partial class McpToolRegistry
         _tools.Add(new McpTool
         {
             Name = "run_roslyn_analyzers",
-            Description = "Run Roslyn analyzers against a file or directory and report issues: the analyzers the open project references (loaded automatically) and any loaded with load_roslyn_analyzers.",
+            Description = "Run Roslyn analyzers against a file or directory and report issues. As in an IDE, each file gets the analyzers of the projects that compile it (loaded automatically), plus any loaded with load_roslyn_analyzers; a file in no project gets only the latter.",
             InputSchema = JsonSchemaHelper.CreateSchema(
-                Prop("target_path", "string", "File or directory to analyze (relative to the open project root, or absolute)", required: true),
-                Prop("analyzer_ids", "array", "Specific analyzer IDs to run (default: all loaded analyzers)", items: StringItems))
+                Prop("target_path", "string", "File or directory to analyze (relative to the open project root, or absolute); a directory's C# files outside bin and obj, at most 100", required: true),
+                Prop("analyzer_ids", "array", "Specific analyzer IDs to run, as list_roslyn_analyzers reports them; each file still gets only those that apply to it (default: all that apply)", items: StringItems))
         });
 
         _tools.Add(new McpTool
@@ -160,6 +160,8 @@ public partial class McpToolRegistry
             Result = new
             {
                 analyzersRun = result.AnalyzersRun.ToArray(),
+                filesAnalyzed = result.FilesAnalyzed,
+                filesSkipped = result.FilesSkipped,
                 totalIssuesFound = result.TotalIssuesFound,
                 durationSeconds = (result.EndTime - result.StartTime).TotalSeconds,
                 issues = result.Results.SelectMany(r => r.Issues).Select(i => new

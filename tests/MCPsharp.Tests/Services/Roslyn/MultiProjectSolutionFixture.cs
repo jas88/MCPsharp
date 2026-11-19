@@ -236,7 +236,7 @@ public sealed class MultiProjectSolutionFixture : IDisposable
         return File.WriteAllTextAsync(path, content);
     }
 
-    private static async Task RestoreAsync(string solutionPath, string workingDirectory)
+    internal static async Task RestoreAsync(string solutionPath, string workingDirectory)
     {
         var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
         if (string.IsNullOrEmpty(dotnet) || !File.Exists(dotnet))

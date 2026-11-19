@@ -53,7 +53,7 @@ public partial class RoslynWorkspace
     private static List<string> CollectAnalyzerLoadFailures(Solution solution)
     {
         var failures = new List<string>();
-        foreach (var reference in GetDistinctAnalyzerReferences(solution).OfType<AnalyzerFileReference>())
+        foreach (var reference in GetDistinctAnalyzerReferences(solution.Projects).OfType<AnalyzerFileReference>())
         {
             void OnLoadFailed(object? sender, AnalyzerLoadFailureEventArgs e) =>
                 failures.Add($"{reference.FullPath}: {e.ErrorCode} {e.Message}");

@@ -36,7 +36,32 @@ public partial class RoslynWorkspace
     public virtual IReadOnlyList<AnalyzerReference> GetAnalyzerReferences() =>
         _workspace == null
             ? Array.Empty<AnalyzerReference>()
-            : GetDistinctAnalyzerReferences(_workspace.CurrentSolution);
+            : GetDistinctAnalyzerReferences(_workspace.CurrentSolution.Projects);
+
+    /// <summary>
+    /// The projects that compile a file, and their analyzer references, which are the analyzers an IDE runs on it.
+    /// Every target framework of a multi-targeted project counts, as does every project a linked file belongs to;
+    /// a file in no project has <see cref="FileAnalyzerScope.NoProject"/>.
+    /// </summary>
+    public virtual FileAnalyzerScope GetFileAnalyzerScope(string filePath)
+    {
+        if (_workspace == null)
+        {
+            return FileAnalyzerScope.NoProject;
+        }
+
+        var solution = _workspace.CurrentSolution;
+        var projects = FindDocumentIds(solution, filePath)
+            .Select(id => id.ProjectId)
+            .Distinct()
+            .Select(solution.GetProject)
+            .OfType<Project>()
+            .ToList();
+
+        return projects.Count == 0
+            ? FileAnalyzerScope.NoProject
+            : new FileAnalyzerScope(projects.Count, GetDistinctAnalyzerReferences(projects));
+    }
 
     /// <summary>
     /// Compilations of every primary project, in solution order.
@@ -198,13 +223,13 @@ public partial class RoslynWorkspace
     }
 
     /// <summary>
-    /// Every project's analyzer references, each assembly path once: projects, and the target frameworks
+    /// The projects' analyzer references, each assembly path once: projects, and the target frameworks
     /// of a multi-targeted project, mostly reference the same analyzer assemblies.
     /// </summary>
-    private static List<AnalyzerReference> GetDistinctAnalyzerReferences(Solution solution)
+    private static List<AnalyzerReference> GetDistinctAnalyzerReferences(IEnumerable<Project> projects)
     {
         var seenPaths = new HashSet<string>(StringComparer.FromComparison(PathContainment.Comparison));
-        return solution.Projects
+        return projects
             .SelectMany(project => project.AnalyzerReferences)
             .Where(reference => reference.FullPath == null || seenPaths.Add(reference.FullPath))
             .Distinct()

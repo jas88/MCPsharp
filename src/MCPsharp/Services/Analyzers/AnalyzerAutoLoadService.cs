@@ -319,6 +319,12 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     }
 
     /// <summary>
+    /// The projects of the workspace that compile a file, and their analyzer references: the project analyzers
+    /// that apply to the file
+    /// </summary>
+    public FileAnalyzerScope GetFileAnalyzerScope(string filePath) => _workspace.GetFileAnalyzerScope(filePath);
+
+    /// <summary>
     /// Make the next <see cref="EnsureAnalyzersLoadedAsync"/> load again, replacing the analyzers loaded so far
     /// </summary>
     public void Reset()
