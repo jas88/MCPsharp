@@ -15,7 +15,7 @@ namespace MCPsharp.Tests.Services.Analyzers;
 [TestFixture]
 [Category("Unit")]
 [Category("Analyzers")]
-public class AnalyzerAutoLoadServiceTests : FileServiceTestBase
+public partial class AnalyzerAutoLoadServiceTests : FileServiceTestBase
 {
     private static readonly string StaticMethodAnalyzerId = RoslynAnalyzerAdapter.GetId(typeof(StaticMethodAnalyzer));
     private static readonly string[] StaticMethodAnalyzerOnly = [StaticMethodAnalyzerId];

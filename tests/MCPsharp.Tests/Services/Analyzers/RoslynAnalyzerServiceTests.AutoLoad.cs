@@ -49,6 +49,50 @@ public partial class RoslynAnalyzerServiceTests
         Assert.That(service.GetLoadedAnalyzers().Select(a => a.Id), Is.EqualTo(ExplicitAnalyzerId));
     }
 
+    [Test]
+    public async Task LoadOnStartupAsync_WhenTheProjectConfigurationSetsLoadOnStartup_LoadsTheAnalyzersNow()
+    {
+        using var workspace = OpenProjectReferencingTheBuiltInAnalyzers("""{ "loadOnStartup": true }""");
+        using var autoLoad = CreateAutoLoadService(workspace);
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, autoLoad);
+
+        await service.LoadOnStartupAsync();
+
+        Assert.That(service.GetLoadedAnalyzers().Select(a => a.Id), Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds));
+    }
+
+    [Test]
+    public async Task LoadOnStartupAsync_ByDefault_LeavesLoadingToFirstUse()
+    {
+        using var workspace = OpenProjectReferencingTheBuiltInAnalyzers(configurationJson: null);
+        using var autoLoad = CreateAutoLoadService(workspace);
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, autoLoad);
+
+        await service.LoadOnStartupAsync();
+
+        Assert.That(service.GetLoadedAnalyzers(), Is.Empty);
+        workspace.DidNotReceive().GetAnalyzerReferences();
+    }
+
+    /// <summary>
+    /// A workspace whose project, in <see cref="FileServiceTestBase.TempDirectory"/>, references the built-in
+    /// analyzers and has <paramref name="configurationJson"/> as its auto-load configuration (none when null)
+    /// </summary>
+    private RoslynWorkspace OpenProjectReferencingTheBuiltInAnalyzers(string? configurationJson)
+    {
+        var workspace = Substitute.For<RoslynWorkspace>();
+        workspace.LoadedProjectDirectory.Returns(TempDirectory);
+        workspace.GetAnalyzerReferences().Returns(new AnalyzerReference[] { TestAnalyzerReferences.BuiltInAnalyzers() });
+        if (configurationJson != null)
+        {
+            var path = AnalyzerAutoLoadService.GetConfigurationPath(TempDirectory);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, configurationJson);
+        }
+
+        return workspace;
+    }
+
     private static AnalyzerAutoLoadService CreateAutoLoadService(RoslynWorkspace workspace) =>
         new(CreateNullLogger<AnalyzerAutoLoadService>(),
             new RoslynAnalyzerLoader(CreateNullLogger<RoslynAnalyzerLoader>(), CreateNullLoggerFactory()),

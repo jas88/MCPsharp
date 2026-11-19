@@ -298,6 +298,18 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
     public Task EnsureAnalyzersLoadedAsync(CancellationToken cancellationToken = default) =>
         EnsureAnalyzersAutoLoadedAsync(cancellationToken);
 
+    /// <summary>
+    /// Auto-load the open project's analyzers now when its auto-load configuration sets <c>loadOnStartup</c>;
+    /// otherwise do nothing, and they are loaded on first use
+    /// </summary>
+    public async Task LoadOnStartupAsync(CancellationToken cancellationToken = default)
+    {
+        if (_autoLoadService?.GetConfiguration() is { AutoLoadEnabled: true, LoadOnStartup: true })
+        {
+            await EnsureAnalyzersAutoLoadedAsync(cancellationToken);
+        }
+    }
+
     public IAnalyzer? GetAnalyzer(string analyzerId)
     {
         lock (_lock)

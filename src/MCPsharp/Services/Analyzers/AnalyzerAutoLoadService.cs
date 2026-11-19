@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
-using System.Text.Json;
 using MCPsharp.Models.Analyzers;
 using MCPsharp.Services.Roslyn;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -15,19 +14,17 @@ namespace MCPsharp.Services.Analyzers;
 /// As in an IDE, the analyzers come from the projects' analyzer references
 /// (<see cref="RoslynWorkspace.GetAnalyzerReferences"/>): the analyzer assets of the NuGet packages the projects
 /// restore, at the restored versions, the SDK's analyzers and any Analyzer items. Nothing else is loaded, and the
-/// NuGet cache is never scanned. When the references change (e.g. another project is opened), the next load
-/// replaces the analyzers loaded for the previous references.
+/// NuGet cache is never scanned. The open project's <c>.mcpsharp/autoload-config.json</c> configures the load
+/// (see <see cref="GetConfiguration"/>). When the references or the configuration change (e.g. another project is
+/// opened), the next load replaces the analyzers loaded before.
 /// </remarks>
 public sealed partial class AnalyzerAutoLoadService : IDisposable
 {
-    // Configuration files use camelCase property names (see docs/analyzer-autoload-schema.json)
-    private static readonly JsonSerializerOptions ConfigurationJsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     private readonly ILogger<AnalyzerAutoLoadService> _logger;
     private readonly RoslynAnalyzerLoader _loader;
     private readonly IAnalyzerRegistry _registry;
     private readonly RoslynWorkspace _workspace;
-    private readonly AnalyzerAutoLoadConfiguration _configuration;
+    private readonly AnalyzerAutoLoadConfiguration _defaultConfiguration;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly object _lock = new();
 
@@ -35,9 +32,21 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     private readonly List<IAnalyzer> _registeredAnalyzers = new();
 
     private bool _hasAutoLoaded;
+    private AnalyzerAutoLoadConfiguration? _loadedConfiguration;
     private IReadOnlyList<AnalyzerReference> _loadedReferences = Array.Empty<AnalyzerReference>();
     private ImmutableArray<IAnalyzer> _autoLoadedAnalyzers = ImmutableArray<IAnalyzer>.Empty;
 
+    /// <summary>
+    /// Create the service for the projects of <paramref name="workspace"/>
+    /// </summary>
+    /// <param name="logger">Logger</param>
+    /// <param name="loader">Loads the analyzers</param>
+    /// <param name="registry">The registry the analyzers are registered in</param>
+    /// <param name="workspace">The workspace whose projects' analyzers are loaded</param>
+    /// <param name="configuration">
+    /// The configuration used when the open project has no readable <c>.mcpsharp/autoload-config.json</c>
+    /// (default: <see cref="AnalyzerAutoLoadConfiguration.Default"/>)
+    /// </param>
     public AnalyzerAutoLoadService(
         ILogger<AnalyzerAutoLoadService> logger,
         RoslynAnalyzerLoader loader,
@@ -49,49 +58,40 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
         _loader = loader ?? throw new ArgumentNullException(nameof(loader));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
-        _configuration = configuration ?? AnalyzerAutoLoadConfiguration.Default;
+        _defaultConfiguration = configuration ?? AnalyzerAutoLoadConfiguration.Default;
     }
 
     /// <summary>
-    /// Auto-load the analyzers of the workspace's current analyzer references, unless they are already loaded
+    /// Auto-load the analyzers of the workspace's current analyzer references, as the open project's configuration
+    /// says, unless they are already loaded
     /// </summary>
     public async Task<AnalyzerAutoLoadResult> EnsureAnalyzersLoadedAsync(CancellationToken cancellationToken = default)
     {
-        if (!_configuration.AutoLoadEnabled)
-        {
-            LogAutoLoadDisabled(_logger);
-            return new AnalyzerAutoLoadResult
-            {
-                Success = true,
-                AlreadyLoaded = true,
-                LoadedAnalyzers = ImmutableArray<IAnalyzer>.Empty,
-                Message = "Auto-loading is disabled"
-            };
-        }
-
         // One load at a time, so concurrent callers don't load and register the same analyzers twice
         await _loadLock.WaitAsync(cancellationToken);
         try
         {
-            var references = _configuration.AnalyzerSources.Contains(AnalyzerAutoLoadConfiguration.ProjectReferencesSource)
+            var (configuration, configurationError) = ResolveConfiguration();
+            var references = configuration.AutoLoadEnabled &&
+                             configuration.AnalyzerSources.Contains(AnalyzerAutoLoadConfiguration.ProjectReferencesSource)
                 ? _workspace.GetAnalyzerReferences()
                 : Array.Empty<AnalyzerReference>();
 
             lock (_lock)
             {
-                if (_hasAutoLoaded && references.SequenceEqual(_loadedReferences))
+                if (_hasAutoLoaded && ReferenceEquals(configuration, _loadedConfiguration) && references.SequenceEqual(_loadedReferences))
                 {
                     return new AnalyzerAutoLoadResult
                     {
                         Success = true,
                         AlreadyLoaded = true,
                         LoadedAnalyzers = _autoLoadedAnalyzers,
-                        Message = "Analyzers already auto-loaded"
+                        Message = configuration.AutoLoadEnabled ? "Analyzers already auto-loaded" : "Auto-loading is disabled"
                     };
                 }
             }
 
-            return await LoadAnalyzersAsync(references, cancellationToken);
+            return await LoadAnalyzersAsync(configuration, configurationError, references, cancellationToken);
         }
         finally
         {
@@ -103,21 +103,37 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     /// Load analyzers from the configured sources, replacing the analyzers of the previous load
     /// </summary>
     private async Task<AnalyzerAutoLoadResult> LoadAnalyzersAsync(
+        AnalyzerAutoLoadConfiguration configuration,
+        string? configurationError,
         IReadOnlyList<AnalyzerReference> references,
         CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         var loadedAnalyzers = new List<IAnalyzer>();
-        var errors = new List<string>();
+        var errors = configurationError == null ? new List<string>() : [configurationError];
 
         try
         {
-            LogStartingAutoLoad(_logger, references.Count);
-
             // The previous load's analyzers (e.g. those of a project that is no longer open) are replaced, not kept
             await UnregisterAutoLoadedAnalyzersAsync(cancellationToken);
 
-            if (_configuration.AnalyzerSources.Contains(AnalyzerAutoLoadConfiguration.ProjectReferencesSource))
+            if (!configuration.AutoLoadEnabled)
+            {
+                LogAutoLoadDisabled(_logger);
+                return new AnalyzerAutoLoadResult
+                {
+                    Success = true,
+                    LoadedAnalyzers = Publish(configuration, references, loadedAnalyzers, loaded: true),
+                    LoadDuration = stopwatch.Elapsed,
+                    Errors = errors.ToImmutableArray(),
+                    Message = "Auto-loading is disabled"
+                };
+            }
+
+            LogStartingAutoLoad(_logger, references.Count);
+            ReportUnknownSources(configuration, errors);
+
+            if (configuration.AnalyzerSources.Contains(AnalyzerAutoLoadConfiguration.ProjectReferencesSource))
             {
                 var projectAnalyzers = _loader.LoadAnalyzersFromReferences(references, cancellationToken);
                 loadedAnalyzers.AddRange(projectAnalyzers);
@@ -125,22 +141,22 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
             }
 
             // Built-in providers are already registered in BuiltInCodeFixRegistry
-            if (_configuration.AnalyzerSources.Contains(AnalyzerAutoLoadConfiguration.BuiltInProvidersSource))
+            if (configuration.AnalyzerSources.Contains(AnalyzerAutoLoadConfiguration.BuiltInProvidersSource))
             {
                 LogBuiltInProvidersAutoRegistered(_logger);
             }
 
-            loadedAnalyzers.AddRange(await LoadFromCustomPathsAsync(errors, cancellationToken));
-            loadedAnalyzers = SelectAnalyzersToRegister(loadedAnalyzers);
+            loadedAnalyzers.AddRange(await LoadFromCustomPathsAsync(configuration, errors, cancellationToken));
+            loadedAnalyzers = SelectAnalyzersToRegister(configuration, loadedAnalyzers);
             await RegisterAnalyzersAsync(loadedAnalyzers, errors, cancellationToken);
 
-            Publish(references, loadedAnalyzers, loaded: true);
+            var published = Publish(configuration, references, loadedAnalyzers, loaded: true);
             LogAutoLoadCompleted(_logger, loadedAnalyzers.Count, stopwatch.Elapsed.TotalMilliseconds);
 
             return new AnalyzerAutoLoadResult
             {
                 Success = true,
-                LoadedAnalyzers = loadedAnalyzers.ToImmutableArray(),
+                LoadedAnalyzers = published,
                 LoadDuration = stopwatch.Elapsed,
                 Errors = errors.ToImmutableArray(),
                 Message = $"Successfully auto-loaded {loadedAnalyzers.Count} analyzers"
@@ -149,11 +165,10 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             LogFatalAutoLoadError(_logger, ex);
-            Publish(references, loadedAnalyzers, loaded: false);
             return new AnalyzerAutoLoadResult
             {
                 Success = false,
-                LoadedAnalyzers = loadedAnalyzers.ToImmutableArray(),
+                LoadedAnalyzers = Publish(configuration, references, loadedAnalyzers, loaded: false),
                 LoadDuration = stopwatch.Elapsed,
                 Errors = errors.Append($"Fatal error: {ex.Message}").ToImmutableArray(),
                 Message = $"Auto-load failed: {ex.Message}"
@@ -164,11 +179,14 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     /// <summary>
     /// Load analyzers from the configured custom directories and assembly files
     /// </summary>
-    private async Task<List<IAnalyzer>> LoadFromCustomPathsAsync(List<string> errors, CancellationToken cancellationToken)
+    private async Task<List<IAnalyzer>> LoadFromCustomPathsAsync(
+        AnalyzerAutoLoadConfiguration configuration,
+        List<string> errors,
+        CancellationToken cancellationToken)
     {
         var analyzers = new List<IAnalyzer>();
 
-        foreach (var customPath in _configuration.CustomAnalyzerPaths)
+        foreach (var customPath in configuration.CustomAnalyzerPaths)
         {
             try
             {
@@ -214,12 +232,12 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     /// Drop excluded analyzers, and keep one analyzer per ID: two references to the same assembly identity
     /// (e.g. copies at two paths) hold the same analyzers
     /// </summary>
-    private List<IAnalyzer> SelectAnalyzersToRegister(List<IAnalyzer> analyzers)
+    private List<IAnalyzer> SelectAnalyzersToRegister(AnalyzerAutoLoadConfiguration configuration, List<IAnalyzer> analyzers)
     {
         var selected = analyzers;
-        if (_configuration.ExcludeAnalyzers.Any())
+        if (configuration.ExcludeAnalyzers.Any())
         {
-            selected = selected.Where(a => !IsExcluded(a)).ToList();
+            selected = selected.Where(a => !IsExcluded(configuration, a)).ToList();
             LogFilteredExcluded(_logger, analyzers.Count - selected.Count);
         }
 
@@ -230,10 +248,10 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     /// An analyzer is excluded by its ID or, for a Roslyn analyzer, by its ID without the assembly version,
     /// which keeps excluding it after its package is upgraded
     /// </summary>
-    private bool IsExcluded(IAnalyzer analyzer) =>
-        _configuration.ExcludeAnalyzers.Contains(analyzer.Id) ||
+    private static bool IsExcluded(AnalyzerAutoLoadConfiguration configuration, IAnalyzer analyzer) =>
+        configuration.ExcludeAnalyzers.Contains(analyzer.Id) ||
         (analyzer is RoslynAnalyzerAdapter roslynAnalyzer &&
-         _configuration.ExcludeAnalyzers.Contains(roslynAnalyzer.VersionIndependentId));
+         configuration.ExcludeAnalyzers.Contains(roslynAnalyzer.VersionIndependentId));
 
     private async Task RegisterAnalyzersAsync(List<IAnalyzer> analyzers, List<string> errors, CancellationToken cancellationToken)
     {
@@ -259,7 +277,7 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     /// </summary>
     private async Task UnregisterAutoLoadedAnalyzersAsync(CancellationToken cancellationToken)
     {
-        Publish([], [], loaded: false);
+        Publish(null, [], [], loaded: false);
 
         var unregistered = 0;
         foreach (var analyzer in _registeredAnalyzers)
@@ -279,14 +297,25 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
         }
     }
 
-    private void Publish(IReadOnlyList<AnalyzerReference> references, List<IAnalyzer> analyzers, bool loaded)
+    /// <summary>
+    /// Record the outcome of a load, returning the loaded analyzers as published
+    /// </summary>
+    private ImmutableArray<IAnalyzer> Publish(
+        AnalyzerAutoLoadConfiguration? configuration,
+        IReadOnlyList<AnalyzerReference> references,
+        List<IAnalyzer> analyzers,
+        bool loaded)
     {
+        var published = analyzers.ToImmutableArray();
         lock (_lock)
         {
             _hasAutoLoaded = loaded;
+            _loadedConfiguration = configuration;
             _loadedReferences = references;
-            _autoLoadedAnalyzers = analyzers.ToImmutableArray();
+            _autoLoadedAnalyzers = published;
         }
+
+        return published;
     }
 
     /// <summary>
@@ -301,7 +330,7 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     }
 
     /// <summary>
-    /// Get auto-load status
+    /// Get auto-load status: the configuration of the last load (the default configuration before the first one)
     /// </summary>
     public AnalyzerAutoLoadStatus GetStatus()
     {
@@ -311,29 +340,8 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
             {
                 HasAutoLoaded = _hasAutoLoaded,
                 AutoLoadedCount = _autoLoadedAnalyzers.Length,
-                Configuration = _configuration
+                Configuration = _loadedConfiguration ?? _defaultConfiguration
             };
-        }
-    }
-
-    /// <summary>
-    /// Load configuration from file
-    /// </summary>
-    public static AnalyzerAutoLoadConfiguration LoadConfiguration(string configPath)
-    {
-        try
-        {
-            if (!File.Exists(configPath))
-                return AnalyzerAutoLoadConfiguration.Default;
-
-            var json = File.ReadAllText(configPath);
-            var config = JsonSerializer.Deserialize<AnalyzerAutoLoadConfiguration>(json, ConfigurationJsonOptions);
-            return config ?? AnalyzerAutoLoadConfiguration.Default;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
-        {
-            // An unreadable or malformed configuration file falls back to the default configuration
-            return AnalyzerAutoLoadConfiguration.Default;
         }
     }
 
@@ -383,7 +391,7 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
 }
 
 /// <summary>
-/// Configuration for analyzer auto-loading
+/// Configuration for analyzer auto-loading, read from a project's <c>.mcpsharp/autoload-config.json</c>
 /// </summary>
 public record AnalyzerAutoLoadConfiguration
 {
@@ -398,7 +406,12 @@ public record AnalyzerAutoLoadConfiguration
     public const string BuiltInProvidersSource = "builtin_providers";
 
     public bool AutoLoadEnabled { get; init; } = true;
-    public bool LoadOnStartup { get; init; } // false (default) = lazy load on first use
+
+    /// <summary>
+    /// Start loading the analyzers as soon as MCPsharp has loaded the project at startup, instead of on first use
+    /// </summary>
+    public bool LoadOnStartup { get; init; }
+
     public ImmutableArray<string> AnalyzerSources { get; init; } = ImmutableArray.Create(ProjectReferencesSource, BuiltInProvidersSource);
     public ImmutableArray<string> ExcludeAnalyzers { get; init; } = ImmutableArray<string>.Empty;
     public ImmutableArray<string> CustomAnalyzerPaths { get; init; } = ImmutableArray<string>.Empty;

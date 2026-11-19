@@ -22,10 +22,10 @@ MCPsharp: [returns analysis results immediately]
 
 ## How It Works
 
-1. **Lazy Initialization**: Analyzers are auto-loaded on first use, not at startup
+1. **Lazy Initialization**: Analyzers are auto-loaded on first use, not at startup (unless the project's configuration sets `loadOnStartup`)
 2. **Project Analyzers Only**: Loads the analyzers the open project's projects reference, and nothing else
 3. **Automatic Registration**: Registers the loaded analyzers with the analyzer host
-4. **Follows the Open Project**: Auto-load runs once per set of project analyzer references; after another project is opened, the next use replaces the previous project's analyzers
+4. **Follows the Open Project**: Auto-load runs once per set of project analyzer references and configuration; after another project is opened, or its configuration file changes, the next use replaces the previous analyzers
 5. **Non-Blocking**: Failures in auto-load are logged but don't break MCPsharp
 
 ## Analyzer Sources
@@ -66,7 +66,12 @@ By default, auto-loading is enabled with these settings:
 ```
 
 ### Custom Configuration
-`AnalyzerAutoLoadService` takes an `AnalyzerAutoLoadConfiguration`, and `AnalyzerAutoLoadService.LoadConfiguration(path)` reads one from a JSON file in this format (see `analyzer-autoload-schema.json`). The MCPsharp server currently starts the service with the default configuration and does not read a configuration file.
+Create `.mcpsharp/autoload-config.json` in the project root: the directory of the solution or project file MCPsharp opened, or the folder given to `project_open` (`AnalyzerAutoLoadService.GetConfigurationPath`). The format is in `analyzer-autoload-schema.json`; properties you leave out keep their defaults.
+
+- MCPsharp reads the file when it next auto-loads analyzers, and again whenever the file changes, so no restart is needed; each project has its own configuration.
+- Without the file, the default configuration applies. A file that cannot be read or parsed is ignored in favour of the default configuration, with a warning in the log (stderr) and in the auto-load errors.
+- Relative `customAnalyzerPaths` are resolved against the project root.
+- Unknown `analyzerSources` (such as `nuget_cache`, which MCPsharp no longer has) are reported and ignored.
 
 ```json
 {
@@ -93,10 +98,10 @@ By default, auto-loading is enabled with these settings:
 Enable or disable auto-loading entirely. When `false`, users must manually call `load_roslyn_analyzers`.
 
 #### `loadOnStartup` (boolean, default: false)
-- `false` (recommended): Lazy load on first analyzer request (faster startup)
-- `true`: Load all analyzers when MCPsharp starts (slower startup, instant first use)
+- `false` (recommended): Lazy load on first analyzer request
+- `true`: Load the project's analyzers as soon as MCPsharp has loaded the project at startup. The load runs in the background, so MCPsharp answers the MCP handshake at once; an analyzer request that arrives before the load finishes waits for it
 
-The service does not act on this setting yet: analyzers are always loaded on first use.
+The setting applies to the project MCPsharp opens when it starts. A project opened later with `project_open` loads its analyzers on first use.
 
 #### `analyzerSources` (array of strings)
 Sources to load analyzers from:
@@ -117,6 +122,7 @@ Every DLL in a directory is loaded to look for analyzers, so a directory may hol
 
 ### Startup Impact
 - **Lazy Loading (default)**: No impact on startup time
+- **`loadOnStartup: true`**: No impact either: the analyzers load in the background after the project, while the server already answers requests
 
 ### First Use Latency
 - **Without auto-load**: Requires manual load call + analysis time
@@ -145,8 +151,9 @@ After updating a project's analyzer packages, open the project again (`project_o
 2. Disable auto-load and use manual loading for specific analyzers
 
 ### Configuration Not Applied
-1. The MCPsharp server uses the default configuration; a configuration only applies when it is passed to `AnalyzerAutoLoadService`
-2. Check JSON syntax validity
+1. Verify file location: `.mcpsharp/autoload-config.json` in the project root (the directory of the solution or project file MCPsharp opened)
+2. Check the log (stderr) or the auto-load errors for a file that could not be read, and check JSON syntax validity
+3. Check the source names: `project_references` and `builtin_providers`
 
 ## Examples
 
@@ -233,6 +240,8 @@ await client.call("run_roslyn_analyzers", { target_path: "/my/project" });
 - Manual `load_roslyn_analyzers` calls still work
 - The `nuget_cache` analyzer source was removed: MCPsharp no longer scans the NuGet cache (loading every analyzer there could exhaust memory and file handles). Use `project_references`, the default, which loads the analyzers the open project references
 - `RoslynAnalyzerLoader.LoadAnalyzersFromNuGetCacheAsync()` and `RoslynCodeFixLoader.LoadCodeFixProvidersFromNuGetCacheAsync()` were removed; use `RoslynAnalyzerLoader.LoadAnalyzersFromReferences()` with a project's analyzer references
+- A project's `.mcpsharp/autoload-config.json` is now read (it was documented before but never read), so check an existing one: replace `nuget_cache` with `project_references`, and use the analyzer IDs `list_roslyn_analyzers` reports in `excludeAnalyzers`
+- Analyzer IDs changed from `Roslyn_<type name>` to `Roslyn_<type full name>@<assembly name>-<assembly version>`, so that same-named analyzers from different assemblies no longer share an ID
 
 ### For New Users
 Simply use analyzer tools directly:

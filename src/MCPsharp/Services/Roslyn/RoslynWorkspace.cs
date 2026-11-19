@@ -45,6 +45,15 @@ public partial class RoslynWorkspace : IDisposable
     public string? LoadedProjectPath { get; private set; }
 
     /// <summary>
+    /// The project root: the directory of the solution or project file, or the folder, that the workspace was loaded
+    /// from by <see cref="InitializeAsync"/>; null when it was not loaded from a project path.
+    /// </summary>
+    public virtual string? LoadedProjectDirectory =>
+        LoadedProjectPath == null || Directory.Exists(LoadedProjectPath)
+            ? LoadedProjectPath
+            : Path.GetDirectoryName(LoadedProjectPath);
+
+    /// <summary>
     /// True when the workspace is initialised and was loaded by <see cref="InitializeAsync"/> from
     /// <paramref name="projectPath"/> (compared as normalised full paths).
     /// </summary>

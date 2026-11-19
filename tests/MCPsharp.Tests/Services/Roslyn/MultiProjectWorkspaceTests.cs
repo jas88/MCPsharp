@@ -201,6 +201,13 @@ public class MultiProjectWorkspaceTests
     }
 
     [Test]
+    public void LoadedProjectDirectory_IsTheDirectoryOfTheSolutionFile()
+    {
+        Assert.That(_workspace.LoadedProjectPath, Is.EqualTo(Path.GetFullPath(_solution.SolutionPath)));
+        Assert.That(_workspace.LoadedProjectDirectory, Is.EqualTo(Path.GetFullPath(_solution.Root)));
+    }
+
+    [Test]
     public void GetAnalyzerReferences_ReturnsEveryProjectsAnalyzerReferencesOnce()
     {
         var paths = _workspace.GetAnalyzerReferences().Select(r => r.FullPath).ToList();

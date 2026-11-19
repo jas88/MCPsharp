@@ -66,7 +66,8 @@ internal sealed partial class Program
             var analyzerRegistry = new MCPsharp.Services.Analyzers.AnalyzerRegistry(
                 loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerRegistry>());
 
-            // Auto-load service (default configuration): loads the analyzers the workspace's projects reference
+            // Auto-load service: loads the analyzers the workspace's projects reference, configured by the open
+            // project's .mcpsharp/autoload-config.json (the default configuration without one)
             using var autoLoadService = new MCPsharp.Services.Analyzers.AnalyzerAutoLoadService(
                 loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerAutoLoadService>(),
                 analyzerLoader,
@@ -258,8 +259,14 @@ internal sealed partial class Program
                 LogMCPsharpShuttingDown(logger);
             };
 
+            // loadOnStartup in the project's auto-load configuration: load its analyzers now, in the background, so
+            // the MCP handshake isn't delayed; an analyzer request made before the load finishes waits for it
+            var analyzerPreload = Task.Run(() => roslynAnalyzerService.LoadOnStartupAsync(cts.Token), cts.Token);
+
             // Run MCP server loop
             await handler.RunAsync(cts.Token);
+
+            await StopAnalyzerPreloadAsync(analyzerPreload, cts);
 
             // projectDatabase will be disposed automatically via await using
 
@@ -270,6 +277,22 @@ internal sealed partial class Program
         {
             await Console.Error.WriteLineAsync($"Fatal error: {ex}");
             return 1;
+        }
+    }
+
+    /// <summary>
+    /// Stop an analyzer load started at startup that is still running, and wait for it to end.
+    /// </summary>
+    private static async Task StopAnalyzerPreloadAsync(Task analyzerPreload, CancellationTokenSource cts)
+    {
+        await cts.CancelAsync();
+        try
+        {
+            await analyzerPreload;
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopped by the shutdown
         }
     }
 
