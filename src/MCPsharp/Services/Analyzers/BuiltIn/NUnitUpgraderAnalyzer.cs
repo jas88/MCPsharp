@@ -13,7 +13,7 @@ namespace MCPsharp.Services.Analyzers.BuiltIn;
 public partial class NUnitUpgraderAnalyzer : IAnalyzer
 {
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
-    private static readonly ImmutableArray<string> _supportedExtensions = ImmutableArray.Create(".cs");
+    private static readonly ImmutableArray<string> SupportedFileExtensions = ImmutableArray.Create(".cs");
     private static readonly ImmutableArray<AnalyzerRule> Rules = ImmutableArray.Create(
         new AnalyzerRule
         {
@@ -86,7 +86,7 @@ public partial class NUnitUpgraderAnalyzer : IAnalyzer
     public string Description => "Analyzes C# code for NUnit v2/v3 patterns and suggests v4 upgrades";
     public Version Version => new(1, 0, 0, 0);
     public string Author => "MCPsharp";
-    public ImmutableArray<string> SupportedExtensions => _supportedExtensions;
+    public ImmutableArray<string> SupportedExtensions => SupportedFileExtensions;
     public bool IsEnabled { get; set; } = true;
     public AnalyzerConfiguration Configuration { get; set; } = new();
 
@@ -99,14 +99,14 @@ public partial class NUnitUpgraderAnalyzer : IAnalyzer
         if (File.Exists(targetPath))
         {
             var extension = Path.GetExtension(targetPath);
-            return _supportedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
+            return SupportedFileExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
         }
 
         // Check if the target path is a directory containing C# files
         if (Directory.Exists(targetPath))
         {
             return Directory.GetFiles(targetPath, "*.cs", SearchOption.AllDirectories)
-                .Any(path => _supportedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase));
+                .Any(path => SupportedFileExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase));
         }
 
         return false;

@@ -14,7 +14,7 @@ public partial class AnalyzerConfigurationManager
     private readonly string _configFilePath;
     private AnalyzerConfigurationFile _currentConfiguration;
 
-    private static readonly JsonSerializerOptions _jsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -232,7 +232,7 @@ public partial class AnalyzerConfigurationManager
                 Directory.CreateDirectory(directory);
             }
 
-            var json = JsonSerializer.Serialize(_currentConfiguration, _jsonOptions);
+            var json = JsonSerializer.Serialize(_currentConfiguration, JsonOptions);
             await File.WriteAllTextAsync(filePath, json, cancellationToken);
 
             LogConfigurationExported(_logger);
@@ -263,7 +263,7 @@ public partial class AnalyzerConfigurationManager
             }
 
             var json = await File.ReadAllTextAsync(filePath, cancellationToken);
-            var configuration = JsonSerializer.Deserialize<AnalyzerConfigurationFile>(json, _jsonOptions);
+            var configuration = JsonSerializer.Deserialize<AnalyzerConfigurationFile>(json, JsonOptions);
 
             if (configuration == null)
             {
@@ -295,7 +295,7 @@ public partial class AnalyzerConfigurationManager
             }
 
             var json = File.ReadAllText(_configFilePath);
-            var configuration = JsonSerializer.Deserialize<AnalyzerConfigurationFile>(json, _jsonOptions);
+            var configuration = JsonSerializer.Deserialize<AnalyzerConfigurationFile>(json, JsonOptions);
 
             LogLoadedConfiguration(_logger, _configFilePath);
             return configuration;
@@ -313,7 +313,7 @@ public partial class AnalyzerConfigurationManager
     {
         try
         {
-            var json = JsonSerializer.Serialize(configuration, _jsonOptions);
+            var json = JsonSerializer.Serialize(configuration, JsonOptions);
             await File.WriteAllTextAsync(_configFilePath, json, cancellationToken);
 
             LogSavedConfiguration(_logger, _configFilePath);

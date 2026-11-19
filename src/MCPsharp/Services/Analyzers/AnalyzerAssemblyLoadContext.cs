@@ -17,7 +17,7 @@ namespace MCPsharp.Services.Analyzers;
 /// </remarks>
 internal sealed class AnalyzerAssemblyLoadContext : AssemblyLoadContext
 {
-    private static readonly ConcurrentDictionary<string, AnalyzerAssemblyLoadContext> s_contexts =
+    private static readonly ConcurrentDictionary<string, AnalyzerAssemblyLoadContext> Contexts =
         new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
     private readonly string _directory;
@@ -38,7 +38,7 @@ internal sealed class AnalyzerAssemblyLoadContext : AssemblyLoadContext
         var directory = Path.GetDirectoryName(fullPath)
             ?? throw new ArgumentException($"Assembly path has no directory: {assemblyPath}", nameof(assemblyPath));
 
-        var context = s_contexts.GetOrAdd(directory, d => new AnalyzerAssemblyLoadContext(d));
+        var context = Contexts.GetOrAdd(directory, d => new AnalyzerAssemblyLoadContext(d));
         return context.LoadFromPath(fullPath);
     }
 
