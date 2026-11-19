@@ -61,42 +61,57 @@ public partial class PerformanceTests
     public async Task Stress_RapidSequentialOperations_ShouldMaintainPerformance()
     {
         // Arrange
+        const int warmupOperations = 5;
+        const int measuredOperations = 50;
         var testFile = CreateTempFile("Test content for stress testing", ".cs");
-        var operationTimes = new List<TimeSpan>();
+        var operationTimes = new List<double>();
+
+        Task<BulkEditResult> ReplaceAsync(int i) => _bulkEdit.BulkReplaceAsync(
+            new[] { testFile },
+            $"content {i % 10}", // Vary the pattern slightly
+            $"replaced {i}",
+            new BulkEditOptions { CreateBackups = false });
+
+        // The first calls pay for JIT compilation and first-use initialisation, so they are not measured
+        for (int i = 0; i < warmupOperations; i++)
+        {
+            Assert.That((await ReplaceAsync(i)).Success, Is.True, $"Warm-up operation {i} should succeed");
+        }
 
         // Act - Perform many rapid operations
-        for (int i = 0; i < 50; i++)
+        for (int i = 0; i < measuredOperations; i++)
         {
             var stopwatch = Stopwatch.StartNew();
-
-            var result = await _bulkEdit.BulkReplaceAsync(
-                new[] { testFile },
-                $"content {i % 10}", // Vary the pattern slightly
-                $"replaced {i}",
-                new BulkEditOptions { CreateBackups = false });
-
+            var result = await ReplaceAsync(i);
             stopwatch.Stop();
-            operationTimes.Add(stopwatch.Elapsed);
+            operationTimes.Add(stopwatch.Elapsed.TotalMilliseconds);
 
             Assert.That(result.Success, Is.True, $"Operation {i} should succeed");
         }
 
         // Assert
-        var averageTime = TimeSpan.FromTicks((long)operationTimes.Average(t => t.Ticks));
-        var maxTime = operationTimes.Max();
-        var minTime = operationTimes.Min();
+        operationTimes.Sort();
+        var median = Percentile(operationTimes, 0.5);
+        var p95 = Percentile(operationTimes, 0.95);
+        var max = operationTimes[^1];
 
-        Console.WriteLine($"Average operation time: {averageTime.TotalMilliseconds:F2}ms");
-        Console.WriteLine($"Min operation time: {minTime.TotalMilliseconds:F2}ms");
-        Console.WriteLine($"Max operation time: {maxTime.TotalMilliseconds:F2}ms");
+        Console.WriteLine($"Median operation time: {median:F2}ms");
+        Console.WriteLine($"95th percentile operation time: {p95:F2}ms");
+        Console.WriteLine($"Min operation time: {operationTimes[0]:F2}ms");
+        Console.WriteLine($"Max operation time: {max:F2}ms");
 
-        // Performance should remain consistent
-        Assert.That(averageTime.TotalMilliseconds, Is.LessThan(100), "Average operation should be fast");
-        Assert.That(maxTime.TotalMilliseconds, Is.LessThan(500), "No operation should be too slow");
-
-        // Variance should be reasonable (within 5x of average to allow for system variations)
-        Assert.That(maxTime.TotalMilliseconds, Is.LessThan(averageTime.TotalMilliseconds * 5), "Performance variance should be reasonable");
+        // The median and 95th percentile ignore a couple of stalls (a GC pause, a descheduled thread),
+        // which the mean and maximum don't, while a slowdown of more than a few operations still fails
+        Assert.That(median, Is.LessThan(100), "A typical operation should be fast");
+        Assert.That(max, Is.LessThan(500), "No operation should be too slow");
+        Assert.That(p95, Is.LessThan(median * 5), "Nearly all operations should take about as long as a typical one");
     }
+
+    /// <summary>
+    /// Nearest-rank percentile of values sorted in ascending order
+    /// </summary>
+    private static double Percentile(List<double> sortedValues, double fraction) =>
+        sortedValues[Math.Max(0, (int)Math.Ceiling(fraction * sortedValues.Count) - 1)];
 
     [Test]
     [Category("Regression")]
