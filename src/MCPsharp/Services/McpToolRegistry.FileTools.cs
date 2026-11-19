@@ -52,7 +52,7 @@ public partial class McpToolRegistry
         };
     }
 
-    private async Task<ToolCallResult> ExecuteFileRead(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteFileReadAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_fileOperations == null)
         {
@@ -89,7 +89,7 @@ public partial class McpToolRegistry
         };
     }
 
-    private async Task<ToolCallResult> ExecuteFileWrite(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteFileWriteAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_fileOperations == null)
         {
@@ -141,7 +141,7 @@ public partial class McpToolRegistry
         };
     }
 
-    private async Task<ToolCallResult> ExecuteFileEdit(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteFileEditAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_fileOperations == null)
         {
@@ -178,7 +178,7 @@ public partial class McpToolRegistry
         };
     }
 
-    private async Task<ToolCallResult> ExecuteSearchText(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteSearchTextAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_searchService == null)
         {

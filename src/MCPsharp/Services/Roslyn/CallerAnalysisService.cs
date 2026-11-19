@@ -25,7 +25,7 @@ public partial class CallerAnalysisService : ICallerAnalysisService
         var startTime = DateTime.UtcNow;
 
         // Find the target method
-        var targetSymbol = await FindMethodSymbol(methodName, containingType, cancellationToken);
+        var targetSymbol = await FindMethodSymbolAsync(methodName, containingType, cancellationToken);
         if (targetSymbol == null)
             return null;
 
@@ -48,7 +48,7 @@ public partial class CallerAnalysisService : ICallerAnalysisService
             return null;
 
         // Convert to method symbol if possible
-        var methodSymbol = await ConvertToMethodSymbol(symbolInfo.Symbol, filePath, line, column, cancellationToken);
+        var methodSymbol = await ConvertToMethodSymbolAsync(symbolInfo.Symbol, filePath, line, column, cancellationToken);
         if (methodSymbol == null)
             return null;
 

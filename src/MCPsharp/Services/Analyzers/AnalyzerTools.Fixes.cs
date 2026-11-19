@@ -7,7 +7,7 @@ namespace MCPsharp.Services.Analyzers;
 
 public static partial class AnalyzerTools
 {
-    private static async Task<ToolCallResult> ExecuteGetFixes(
+    private static async Task<ToolCallResult> ExecuteGetFixesAsync(
         JsonDocument arguments,
         IAnalyzerHost analyzerHost,
         CancellationToken cancellationToken)
@@ -58,7 +58,7 @@ public static partial class AnalyzerTools
         }
     }
 
-    private static async Task<ToolCallResult> ExecuteApplyFixes(
+    private static async Task<ToolCallResult> ExecuteApplyFixesAsync(
         JsonDocument arguments,
         IAnalyzerHost analyzerHost,
         CancellationToken cancellationToken)
@@ -132,7 +132,7 @@ public static partial class AnalyzerTools
         }
     }
 
-    private static async Task<ToolCallResult> ExecuteGetFixHistory(
+    private static async Task<ToolCallResult> ExecuteGetFixHistoryAsync(
         JsonDocument arguments,
         IFixEngine fixEngine,
         CancellationToken cancellationToken)
@@ -170,7 +170,7 @@ public static partial class AnalyzerTools
         }
     }
 
-    private static async Task<ToolCallResult> ExecuteRollbackFixes(
+    private static async Task<ToolCallResult> ExecuteRollbackFixesAsync(
         JsonDocument arguments,
         IFixEngine fixEngine,
         CancellationToken cancellationToken)

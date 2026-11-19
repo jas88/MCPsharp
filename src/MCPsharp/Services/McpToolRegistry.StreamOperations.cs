@@ -13,7 +13,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing operationId</param>
     /// <returns>Tool execution result with progress information</returns>
-    private async Task<ToolCallResult> ExecuteGetStreamProgress(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteGetStreamProgressAsync(JsonDocument arguments)
     {
         if (_progressTracker == null)
         {
@@ -60,7 +60,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetStreamProgress));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetStreamProgressAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -70,7 +70,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing operationId</param>
     /// <returns>Tool execution result indicating success or failure</returns>
-    private async Task<ToolCallResult> ExecuteCancelStreamOperation(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteCancelStreamOperationAsync(JsonDocument arguments)
     {
         if (_streamingProcessor == null)
         {
@@ -101,7 +101,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteCancelStreamOperation));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCancelStreamOperationAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -112,7 +112,7 @@ public partial class McpToolRegistry
     /// <param name="arguments">Tool arguments containing operationId</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
     /// <returns>Tool execution result with resumption details</returns>
-    private async Task<ToolCallResult> ExecuteResumeStreamOperation(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteResumeStreamOperationAsync(JsonDocument arguments, CancellationToken cancellationToken)
     {
         if (_streamingProcessor == null)
         {
@@ -151,7 +151,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteResumeStreamOperation));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteResumeStreamOperationAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -161,7 +161,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing optional maxCount parameter</param>
     /// <returns>Tool execution result with list of operations</returns>
-    private async Task<ToolCallResult> ExecuteListStreamOperations(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteListStreamOperationsAsync(JsonDocument arguments)
     {
         if (_progressTracker == null)
         {
@@ -209,7 +209,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteListStreamOperations));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteListStreamOperationsAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -219,7 +219,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing optional olderThanHours parameter</param>
     /// <returns>Tool execution result with cleanup details</returns>
-    private async Task<ToolCallResult> ExecuteCleanupStreamOperations(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteCleanupStreamOperationsAsync(JsonDocument arguments)
     {
         if (_tempFileManager == null)
         {
@@ -255,7 +255,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteCleanupStreamOperations));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCleanupStreamOperationsAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }

@@ -13,7 +13,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing configPath parameter</param>
     /// <returns>Tool execution result with configuration schema information</returns>
-    private async Task<ToolCallResult> ExecuteGetConfigSchema(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteGetConfigSchemaAsync(JsonDocument arguments)
     {
         if (_configAnalyzer == null)
         {
@@ -88,7 +88,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetConfigSchema));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetConfigSchemaAsync));
             return new ToolCallResult { Success = false, Error = $"Error analyzing configuration schema: {ex.Message}" };
         }
     }
@@ -98,7 +98,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing configPaths array</param>
     /// <returns>Tool execution result with merged configuration</returns>
-    private async Task<ToolCallResult> ExecuteMergeConfigs(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteMergeConfigsAsync(JsonDocument arguments)
     {
         if (_configAnalyzer == null)
         {
@@ -232,7 +232,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteMergeConfigs));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteMergeConfigsAsync));
             return new ToolCallResult { Success = false, Error = $"Error merging configuration files: {ex.Message}" };
         }
     }

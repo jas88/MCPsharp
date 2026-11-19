@@ -30,7 +30,7 @@ public partial class ArchitectureValidatorService : IArchitectureValidatorServic
         var startTime = DateTime.UtcNow;
 
         // Use provided definition or detect best fit
-        var architecture = definition ?? await DetectBestFitArchitecture(cancellationToken);
+        var architecture = definition ?? await DetectBestFitArchitectureAsync(cancellationToken);
 
         var violations = new List<LayerViolation>();
         var warnings = new List<ArchitectureWarning>();
@@ -125,7 +125,7 @@ public partial class ArchitectureValidatorService : IArchitectureValidatorServic
     public async Task<DependencyAnalysisResult> AnalyzeDependenciesAsync(string projectPath, ArchitectureDefinition? definition = null, CancellationToken cancellationToken = default)
     {
         var startTime = DateTime.UtcNow;
-        var architecture = definition ?? await DetectBestFitArchitecture(cancellationToken);
+        var architecture = definition ?? await DetectBestFitArchitectureAsync(cancellationToken);
 
         var nodes = new List<DependencyNode>();
         var edges = new List<DependencyEdge>();
@@ -210,7 +210,7 @@ public partial class ArchitectureValidatorService : IArchitectureValidatorServic
 
     public async Task<ArchitectureReport> GetArchitectureReportAsync(string projectPath, ArchitectureDefinition? definition = null, CancellationToken cancellationToken = default)
     {
-        var architecture = definition ?? await DetectBestFitArchitecture(cancellationToken);
+        var architecture = definition ?? await DetectBestFitArchitectureAsync(cancellationToken);
 
         // Run all analyses
         var validationResult = await ValidateArchitectureAsync(projectPath, architecture, cancellationToken);
@@ -261,7 +261,7 @@ public partial class ArchitectureValidatorService : IArchitectureValidatorServic
 
     public async Task<ArchitectureDiagram> GenerateArchitectureDiagramAsync(string projectPath, ArchitectureDefinition? definition = null, CancellationToken cancellationToken = default)
     {
-        var architecture = definition ?? await DetectBestFitArchitecture(cancellationToken);
+        var architecture = definition ?? await DetectBestFitArchitectureAsync(cancellationToken);
         var dependencyAnalysis = await AnalyzeDependenciesAsync(projectPath, architecture, cancellationToken);
 
         return CreateArchitectureDiagram(dependencyAnalysis, architecture);

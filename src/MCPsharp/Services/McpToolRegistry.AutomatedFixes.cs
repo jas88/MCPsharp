@@ -19,7 +19,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// Analyze code for quality issues using built-in diagnostic analyzers
     /// </summary>
-    private async Task<ToolCallResult> ExecuteCodeQualityAnalyze(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteCodeQualityAnalyzeAsync(JsonDocument arguments, CancellationToken ct)
     {
         try
         {
@@ -205,7 +205,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteCodeQualityAnalyze));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCodeQualityAnalyzeAsync));
             return new ToolCallResult
             {
                 Success = false,

@@ -41,7 +41,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         try
         {
             // Initialize workspace if needed
-            await EnsureWorkspaceInitialized(projectPath);
+            await EnsureWorkspaceInitializedAsync(projectPath);
 
             // Extract code blocks from all files
             var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
@@ -123,7 +123,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         CancellationToken cancellationToken = default)
     {
         options ??= new DuplicateDetectionOptions();
-        await EnsureWorkspaceInitialized(projectPath);
+        await EnsureWorkspaceInitializedAsync(projectPath);
 
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
         var groups = FindExactDuplicatesInternal(allCodeBlocks, options);
@@ -139,7 +139,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
     {
         options ??= new DuplicateDetectionOptions();
         options = options with { SimilarityThreshold = similarityThreshold };
-        await EnsureWorkspaceInitialized(projectPath);
+        await EnsureWorkspaceInitializedAsync(projectPath);
 
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
         var groups = FindNearDuplicatesInternal(allCodeBlocks, similarityThreshold, options, cancellationToken);
@@ -153,7 +153,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         CancellationToken cancellationToken = default)
     {
         options ??= new DuplicateDetectionOptions();
-        await EnsureWorkspaceInitialized(projectPath);
+        await EnsureWorkspaceInitializedAsync(projectPath);
 
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
         var exactDuplicates = FindExactDuplicatesInternal(allCodeBlocks, options);
@@ -174,7 +174,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
     {
         ArgumentNullException.ThrowIfNull(duplicates);
         options ??= new RefactoringOptions();
-        await EnsureWorkspaceInitialized(projectPath);
+        await EnsureWorkspaceInitializedAsync(projectPath);
 
         RegisterGroups(duplicates);
         return GenerateRefactoringSuggestions(duplicates.ToList(), options, cancellationToken);
@@ -276,7 +276,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         CancellationToken cancellationToken = default)
     {
         options ??= new DuplicateDetectionOptions();
-        await EnsureWorkspaceInitialized(projectPath);
+        await EnsureWorkspaceInitializedAsync(projectPath);
 
         var allCodeBlocks = await ExtractAllCodeBlocksAsync(projectPath, options, cancellationToken);
         var duplicates = await DetectDuplicatesAsync(projectPath, options, cancellationToken);
@@ -290,7 +290,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(suggestion);
-        await EnsureWorkspaceInitialized(projectPath);
+        await EnsureWorkspaceInitializedAsync(projectPath);
 
         var issues = new List<ValidationIssue>();
         var dependencyImpacts = new List<DependencyImpact>();
@@ -341,7 +341,7 @@ public partial class DuplicateCodeDetectorService : IDuplicateCodeDetectorServic
     /// Load <paramref name="projectPath"/> into the shared workspace unless it already holds that project:
     /// reloading a real solution is expensive and discards state other tools rely on.
     /// </summary>
-    private async Task EnsureWorkspaceInitialized(string projectPath)
+    private async Task EnsureWorkspaceInitializedAsync(string projectPath)
     {
         if (_workspace.IsLoadedFrom(projectPath))
         {

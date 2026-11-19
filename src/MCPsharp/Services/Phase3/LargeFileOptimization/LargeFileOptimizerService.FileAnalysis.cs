@@ -40,7 +40,7 @@ public partial class LargeFileOptimizerService
         return FileSizeCategory.Enormous;
     }
 
-    private async Task<LargeFileInfo?> AnalyzeLargeFile(string filePath, int lineCount, int characterCount, CancellationToken cancellationToken)
+    private async Task<LargeFileInfo?> AnalyzeLargeFileAsync(string filePath, int lineCount, int characterCount, CancellationToken cancellationToken)
     {
         try
         {

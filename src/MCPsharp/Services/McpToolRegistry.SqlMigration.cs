@@ -8,7 +8,7 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
-    private async Task<ToolCallResult> ExecuteAnalyzeMigrations(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeMigrationsAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_sqlMigrationAnalyzer == null)
         {
@@ -55,12 +55,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeMigrations));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeMigrationsAsync));
             return new ToolCallResult { Success = false, Error = $"Error analyzing migrations: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteDetectBreakingChanges(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteDetectBreakingChangesAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_sqlMigrationAnalyzer == null)
         {
@@ -104,12 +104,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectBreakingChanges));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectBreakingChangesAsync));
             return new ToolCallResult { Success = false, Error = $"Error detecting breaking changes: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetMigrationHistory(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetMigrationHistoryAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_sqlMigrationAnalyzer == null)
         {
@@ -145,12 +145,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetMigrationHistory));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetMigrationHistoryAsync));
             return new ToolCallResult { Success = false, Error = $"Error getting migration history: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetMigrationDependencies(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetMigrationDependenciesAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_sqlMigrationAnalyzer == null)
         {
@@ -185,12 +185,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetMigrationDependencies));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetMigrationDependenciesAsync));
             return new ToolCallResult { Success = false, Error = $"Error getting migration dependencies: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGenerateMigrationReport(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGenerateMigrationReportAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_sqlMigrationAnalyzer == null)
         {
@@ -230,12 +230,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateMigrationReport));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateMigrationReportAsync));
             return new ToolCallResult { Success = false, Error = $"Error generating migration report: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteValidateMigrations(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteValidateMigrationsAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_sqlMigrationAnalyzer == null)
         {
@@ -271,7 +271,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateMigrations));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateMigrationsAsync));
             return new ToolCallResult { Success = false, Error = $"Error validating migrations: {ex.Message}" };
         }
     }

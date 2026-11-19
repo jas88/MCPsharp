@@ -10,7 +10,7 @@ public partial class McpToolRegistry
 {
     #region Duplicate Code Detection Tool Execution
 
-    private async Task<ToolCallResult> ExecuteDetectDuplicates(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteDetectDuplicatesAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -47,7 +47,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectDuplicates));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectDuplicatesAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -56,7 +56,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteFindExactDuplicates(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteFindExactDuplicatesAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -89,7 +89,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteFindExactDuplicates));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteFindExactDuplicatesAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -98,7 +98,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteFindNearDuplicates(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteFindNearDuplicatesAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -134,7 +134,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteFindNearDuplicates));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteFindNearDuplicatesAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -143,7 +143,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeDuplicationMetrics(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeDuplicationMetricsAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -185,7 +185,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeDuplicationMetrics));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeDuplicationMetricsAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -194,7 +194,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetRefactoringSuggestions(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetRefactoringSuggestionsAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -245,7 +245,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetRefactoringSuggestions));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetRefactoringSuggestionsAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -254,7 +254,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetDuplicateHotspots(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetDuplicateHotspotsAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -294,7 +294,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetDuplicateHotspots));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetDuplicateHotspotsAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -303,7 +303,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteCompareCodeBlocks(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteCompareCodeBlocksAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -373,7 +373,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteCompareCodeBlocks));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCompareCodeBlocksAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -382,7 +382,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteValidateRefactoring(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteValidateRefactoringAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -444,7 +444,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateRefactoring));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateRefactoringAsync));
             return new ToolCallResult
             {
                 Success = false,

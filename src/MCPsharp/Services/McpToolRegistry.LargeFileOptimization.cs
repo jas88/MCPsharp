@@ -9,7 +9,7 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
-    private async Task<ToolCallResult> ExecuteAnalyzeLargeFiles(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeLargeFilesAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_largeFileOptimizer == null)
         {
@@ -57,12 +57,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeLargeFiles));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeLargeFilesAsync));
             return new ToolCallResult { Success = false, Error = $"Error analyzing large files: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteOptimizeLargeClass(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteOptimizeLargeClassAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_largeFileOptimizer == null)
         {
@@ -117,12 +117,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteOptimizeLargeClass));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteOptimizeLargeClassAsync));
             return new ToolCallResult { Success = false, Error = $"Error optimizing large class: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteOptimizeLargeMethod(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteOptimizeLargeMethodAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_largeFileOptimizer == null)
         {
@@ -179,12 +179,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteOptimizeLargeMethod));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteOptimizeLargeMethodAsync));
             return new ToolCallResult { Success = false, Error = $"Error optimizing large method: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetComplexityMetrics(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetComplexityMetricsAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_largeFileOptimizer == null)
         {
@@ -230,12 +230,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetComplexityMetrics));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetComplexityMetricsAsync));
             return new ToolCallResult { Success = false, Error = $"Error getting complexity metrics: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGenerateOptimizationPlan(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGenerateOptimizationPlanAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_largeFileOptimizer == null)
         {
@@ -280,12 +280,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateOptimizationPlan));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateOptimizationPlanAsync));
             return new ToolCallResult { Success = false, Error = $"Error generating optimization plan: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteDetectGodClasses(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteDetectGodClassesAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_largeFileOptimizer == null)
         {
@@ -327,12 +327,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectGodClasses));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectGodClassesAsync));
             return new ToolCallResult { Success = false, Error = $"Error detecting god classes: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteDetectGodMethods(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteDetectGodMethodsAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_largeFileOptimizer == null)
         {
@@ -374,12 +374,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectGodMethods));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectGodMethodsAsync));
             return new ToolCallResult { Success = false, Error = $"Error detecting god methods: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeCodeSmells(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeCodeSmellsAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_largeFileOptimizer == null)
         {
@@ -426,12 +426,12 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeCodeSmells));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeCodeSmellsAsync));
             return new ToolCallResult { Success = false, Error = $"Error analyzing code smells: {ex.Message}" };
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetOptimizationRecommendations(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetOptimizationRecommendationsAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_largeFileOptimizer == null)
         {
@@ -478,7 +478,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetOptimizationRecommendations));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetOptimizationRecommendationsAsync));
             return new ToolCallResult { Success = false, Error = $"Error getting optimization recommendations: {ex.Message}" };
         }
     }

@@ -9,7 +9,7 @@ namespace MCPsharp.Services;
 /// </summary>
 public sealed partial class BulkEditService
 {
-    private async Task<FileBulkEditResult> ProcessFileForBulkReplace(
+    private async Task<FileBulkEditResult> ProcessFileForBulkReplaceAsync(
         string filePath,
         Regex regex,
         string replacement,
@@ -140,7 +140,7 @@ public sealed partial class BulkEditService
         }
     }
 
-    private async Task<FileBulkEditResult> ProcessFileForConditionalEdit(
+    private async Task<FileBulkEditResult> ProcessFileForConditionalEditAsync(
         string filePath,
         BulkEditCondition condition,
         IReadOnlyList<TextEdit> edits,
@@ -244,7 +244,7 @@ public sealed partial class BulkEditService
         }
     }
 
-    private async Task<FileBulkEditResult> ProcessFileForBatchRefactor(
+    private async Task<FileBulkEditResult> ProcessFileForBatchRefactorAsync(
         string filePath,
         BulkRefactorPattern refactorPattern,
         BulkEditOptions options,
@@ -351,7 +351,7 @@ public sealed partial class BulkEditService
         }
     }
 
-    private async Task<FileBulkEditResult> ProcessFileForMultiFileEdit(
+    private async Task<FileBulkEditResult> ProcessFileForMultiFileEditAsync(
         string filePath,
         MultiFileEditOperation operation,
         BulkEditOptions options,

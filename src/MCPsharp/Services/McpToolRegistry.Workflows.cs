@@ -8,7 +8,7 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
-    private async Task<ToolCallResult> ExecuteGetWorkflows(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteGetWorkflowsAsync(JsonDocument arguments)
     {
         if (_workflowAnalyzer == null)
         {
@@ -40,7 +40,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteParseWorkflow(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteParseWorkflowAsync(JsonDocument arguments)
     {
         if (_workflowAnalyzer == null)
         {

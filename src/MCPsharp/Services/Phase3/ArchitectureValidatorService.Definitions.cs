@@ -56,7 +56,7 @@ public partial class ArchitectureValidatorService
         };
     }
 
-    private async Task<ArchitectureDefinition> DetectBestFitArchitecture(CancellationToken cancellationToken)
+    private async Task<ArchitectureDefinition> DetectBestFitArchitectureAsync(CancellationToken cancellationToken)
     {
         // Simple heuristic-based detection based on namespace patterns
         if (!_workspace.IsInitialized)

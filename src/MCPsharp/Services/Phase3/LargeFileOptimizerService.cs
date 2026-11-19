@@ -98,7 +98,7 @@ public partial class LargeFileOptimizerService : ILargeFileOptimizerService
                 filesAboveThreshold++;
 
                 // Analyze the large file
-                var largeFile = await AnalyzeLargeFile(syntaxTree.FilePath, lineCount, characterCount, cancellationToken);
+                var largeFile = await AnalyzeLargeFileAsync(syntaxTree.FilePath, lineCount, characterCount, cancellationToken);
                 if (largeFile != null)
                 {
                     largeFiles.Add(largeFile);

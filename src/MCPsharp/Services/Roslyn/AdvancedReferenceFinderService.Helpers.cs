@@ -63,7 +63,7 @@ public partial class AdvancedReferenceFinderService
         return types;
     }
 
-    private async Task<IMethodSymbol?> GetMethodSymbol(string? filePath, int line)
+    private async Task<IMethodSymbol?> GetMethodSymbolAsync(string? filePath, int line)
     {
         if (string.IsNullOrEmpty(filePath))
             return null;

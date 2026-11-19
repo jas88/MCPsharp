@@ -90,7 +90,7 @@ public sealed partial class BulkEditService
                 await _processingSemaphore.WaitAsync(cancellationToken);
                 try
                 {
-                    return await ProcessRollbackForFile(rollbackFile, cancellationToken);
+                    return await ProcessRollbackForFileAsync(rollbackFile, cancellationToken);
                 }
                 finally
                 {
@@ -242,10 +242,10 @@ public sealed partial class BulkEditService
     {
         ArgumentException.ThrowIfNullOrEmpty(operationType);
         ArgumentNullException.ThrowIfNull(files);
-        return CreateRollbackSession(Guid.NewGuid().ToString(), files, operationType, cancellationToken);
+        return CreateRollbackSessionCoreAsync(Guid.NewGuid().ToString(), files, operationType, cancellationToken);
     }
 
-    private async Task<RollbackInfo> CreateRollbackSession(
+    private async Task<RollbackInfo> CreateRollbackSessionCoreAsync(
         string operationId,
         IReadOnlyList<string> files,
         string operationType,
@@ -267,12 +267,12 @@ public sealed partial class BulkEditService
                 if (!File.Exists(filePath))
                     continue;
 
-                var originalChecksum = await ComputeFileChecksum(filePath, cancellationToken);
+                var originalChecksum = await ComputeFileChecksumAsync(filePath, cancellationToken);
                 var backupPath = Path.Combine(rollbackDirectory, Guid.NewGuid().ToString() + Path.GetExtension(filePath));
 
                 // Create backup
                 File.Copy(filePath, backupPath);
-                var backupChecksum = await ComputeFileChecksum(backupPath, cancellationToken);
+                var backupChecksum = await ComputeFileChecksumAsync(backupPath, cancellationToken);
 
                 var backupFileInfo = new System.IO.FileInfo(backupPath);
                 rollbackFiles.Add(new RollbackFileInfo
@@ -313,7 +313,7 @@ public sealed partial class BulkEditService
         return rollbackInfo;
     }
 
-    private static async Task<string> ComputeFileChecksum(string filePath, CancellationToken cancellationToken)
+    private static async Task<string> ComputeFileChecksumAsync(string filePath, CancellationToken cancellationToken)
     {
         using var sha256 = SHA256.Create();
         await using var stream = File.OpenRead(filePath);
@@ -321,7 +321,7 @@ public sealed partial class BulkEditService
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
-    private async Task<FileBulkEditResult> ProcessRollbackForFile(
+    private async Task<FileBulkEditResult> ProcessRollbackForFileAsync(
         RollbackFileInfo rollbackFile,
         CancellationToken cancellationToken)
     {
@@ -352,7 +352,7 @@ public sealed partial class BulkEditService
             }
 
             // Verify backup integrity
-            var backupChecksum = await ComputeFileChecksum(rollbackFile.BackupPath, cancellationToken);
+            var backupChecksum = await ComputeFileChecksumAsync(rollbackFile.BackupPath, cancellationToken);
             if (backupChecksum != rollbackFile.BackupChecksum)
             {
                 return new FileBulkEditResult

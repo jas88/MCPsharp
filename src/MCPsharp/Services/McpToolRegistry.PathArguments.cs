@@ -43,7 +43,7 @@ public partial class McpToolRegistry
     /// Resolve the declared path arguments within the open project and invoke the handler with the
     /// rewritten arguments. Arguments that are absent are left for the handler's own defaults.
     /// </summary>
-    private async Task<ToolCallResult> WithProjectPaths(
+    private async Task<ToolCallResult> WithProjectPathsAsync(
         JsonDocument arguments,
         PathArgument[] pathArguments,
         Func<JsonDocument, Task<ToolCallResult>> handler)

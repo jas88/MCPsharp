@@ -85,7 +85,7 @@ public partial class AdvancedReferenceFinderService
 
         foreach (var symbol in symbols)
         {
-            var methodSymbol = await GetMethodSymbol(symbol.File, symbol.Line);
+            var methodSymbol = await GetMethodSymbolAsync(symbol.File, symbol.Line);
             if (methodSymbol != null)
             {
                 var methodSignature = CreateMethodSignature(methodSymbol);

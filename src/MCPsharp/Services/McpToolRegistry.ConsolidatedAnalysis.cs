@@ -25,7 +25,7 @@ public partial class McpToolRegistry
         return _projectContext.GetProjectContext()?.RootPath == null ? ToolError(NoProjectOpenError) : null;
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeSymbol(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeSymbolAsync(JsonDocument arguments, CancellationToken ct)
     {
         var unavailable = CheckUnifiedAnalysisAvailable();
         if (unavailable != null)
@@ -55,7 +55,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeType(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeTypeAsync(JsonDocument arguments, CancellationToken ct)
     {
         var unavailable = CheckUnifiedAnalysisAvailable();
         if (unavailable != null)
@@ -85,7 +85,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeFile(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeFileAsync(JsonDocument arguments, CancellationToken ct)
     {
         var unavailable = CheckUnifiedAnalysisAvailable();
         if (unavailable != null)
@@ -109,7 +109,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeProject(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeProjectAsync(JsonDocument arguments, CancellationToken ct)
     {
         var unavailable = CheckUnifiedAnalysisAvailable();
         if (unavailable != null)
@@ -137,7 +137,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeArchitecture(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeArchitectureAsync(JsonDocument arguments, CancellationToken ct)
     {
         var unavailable = CheckUnifiedAnalysisAvailable();
         if (unavailable != null)
@@ -160,7 +160,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeDependenciesUnified(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeDependenciesUnifiedAsync(JsonDocument arguments, CancellationToken ct)
     {
         var unavailable = CheckUnifiedAnalysisAvailable();
         if (unavailable != null)
@@ -186,7 +186,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeQuality(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeQualityAsync(JsonDocument arguments, CancellationToken ct)
     {
         var unavailable = CheckUnifiedAnalysisAvailable();
         if (unavailable != null)

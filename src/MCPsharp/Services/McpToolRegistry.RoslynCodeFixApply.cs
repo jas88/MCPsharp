@@ -32,7 +32,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// Execute apply_roslyn_fixes tool
     /// </summary>
-    private async Task<ToolCallResult> ExecuteApplyRoslynFixes(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteApplyRoslynFixesAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_roslynAnalyzerService == null)
         {
@@ -118,7 +118,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteApplyRoslynFixes));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteApplyRoslynFixesAsync));
             return ToolError($"Failed to apply Roslyn fixes: {ex.Message}");
         }
     }

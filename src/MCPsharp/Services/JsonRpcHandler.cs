@@ -114,7 +114,7 @@ public partial class JsonRpcHandler
             {
                 "initialize" => await HandleInitialize(),
                 "tools/list" => await HandleToolsList(),
-                "tools/call" => await HandleToolsCall(request.Params),
+                "tools/call" => await HandleToolsCallAsync(request.Params),
                 "resources/list" => await HandleResourcesListAsync(),
                 "resources/read" => await HandleResourcesReadAsync(request.Params),
                 "prompts/list" => await HandlePromptsListAsync(),
@@ -227,7 +227,7 @@ public partial class JsonRpcHandler
         return Task.FromResult<object>(response);
     }
 
-    private async Task<object> HandleToolsCall(object? parameters)
+    private async Task<object> HandleToolsCallAsync(object? parameters)
     {
         // Execute a tool via the registry
         if (parameters == null)

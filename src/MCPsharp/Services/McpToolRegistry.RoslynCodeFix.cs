@@ -16,7 +16,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// Execute configure_analyzer tool
     /// </summary>
-    private async Task<ToolCallResult> ExecuteConfigureAnalyzer(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteConfigureAnalyzerAsync(JsonDocument arguments, CancellationToken ct)
     {
         try
         {
@@ -112,7 +112,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteConfigureAnalyzer));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteConfigureAnalyzerAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -172,7 +172,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// Execute reset_analyzer_config tool
     /// </summary>
-    private async Task<ToolCallResult> ExecuteResetAnalyzerConfig(CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteResetAnalyzerConfigAsync(CancellationToken ct)
     {
         try
         {
@@ -193,7 +193,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteResetAnalyzerConfig));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteResetAnalyzerConfigAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -205,7 +205,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// Execute generate_analysis_report tool
     /// </summary>
-    private async Task<ToolCallResult> ExecuteGenerateAnalysisReport(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGenerateAnalysisReportAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_roslynAnalyzerService == null)
         {
@@ -306,7 +306,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateAnalysisReport));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateAnalysisReportAsync));
             return new ToolCallResult
             {
                 Success = false,

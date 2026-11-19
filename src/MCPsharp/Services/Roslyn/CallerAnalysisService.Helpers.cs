@@ -9,7 +9,7 @@ namespace MCPsharp.Services.Roslyn;
 /// </summary>
 public partial class CallerAnalysisService
 {
-    private async Task<IMethodSymbol?> FindMethodSymbol(string methodName, string? containingType, CancellationToken cancellationToken)
+    private async Task<IMethodSymbol?> FindMethodSymbolAsync(string methodName, string? containingType, CancellationToken cancellationToken)
     {
         // Try the symbol query approach first
         var symbols = await _symbolQuery.FindSymbolsAsync(methodName, "method");
@@ -57,10 +57,10 @@ public partial class CallerAnalysisService
         if (symbolInfo?.Symbol == null)
             return null;
 
-        return await ConvertToMethodSymbol(symbolInfo.Symbol, filePath, line, 0, cancellationToken);
+        return await ConvertToMethodSymbolAsync(symbolInfo.Symbol, filePath, line, 0, cancellationToken);
     }
 
-    private async Task<IMethodSymbol?> ConvertToMethodSymbol(ISymbol symbol, string filePath, int line, int column, CancellationToken cancellationToken)
+    private async Task<IMethodSymbol?> ConvertToMethodSymbolAsync(ISymbol symbol, string filePath, int line, int column, CancellationToken cancellationToken)
     {
         if (symbol is IMethodSymbol methodSymbol)
             return methodSymbol;
