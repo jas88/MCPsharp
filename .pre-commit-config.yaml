@@ -1,6 +1,8 @@
 # Pre-commit hooks for jas88 .NET projects
 # Install: pip install pre-commit && pre-commit install
 
+default_install_hook_types: [pre-commit, pre-push, commit-msg]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
@@ -46,6 +48,7 @@ repos:
         language: system
         types: [c#]
         pass_filenames: false
+        always_run: true
         stages: [pre-push]
 
 # Commit message format (conventional commits)
