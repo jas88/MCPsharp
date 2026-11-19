@@ -9,6 +9,8 @@ repos:
         exclude: '\.md$'
       - id: end-of-file-fixer
       - id: check-yaml
+        # Deliberately malformed: the fixture for WorkflowAnalyzerService's invalid-YAML tests
+        exclude: '^tests/MCPsharp\.Tests/TestData/Workflows/invalid\.yml$'
       - id: check-json
       - id: check-xml
       - id: check-added-large-files
