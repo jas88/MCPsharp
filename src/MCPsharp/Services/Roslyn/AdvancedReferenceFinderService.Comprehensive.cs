@@ -111,14 +111,6 @@ public partial class AdvancedReferenceFinderService
     }
 
     /// <summary>
-    /// Find methods with similar names (synchronous wrapper for tests)
-    /// </summary>
-    public async Task<List<MethodSignature>> FindSimilarMethods(string methodName, double threshold = 0.8)
-    {
-        return await FindSimilarMethodsAsync(methodName, threshold);
-    }
-
-    /// <summary>
     /// Get overview of reverse search capabilities for the current workspace
     /// </summary>
     public async Task<ReverseSearchCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default)

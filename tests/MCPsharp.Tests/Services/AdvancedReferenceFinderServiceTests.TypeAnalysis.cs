@@ -91,7 +91,7 @@ public partial class AdvancedReferenceFinderServiceIntegrationTests
     public async Task FindSimilarMethods_ShouldFindSimilarMethods()
     {
         // Act
-        var result = await _advancedReferenceFinder.FindSimilarMethods("Execute", 0.7);
+        var result = await _advancedReferenceFinder.FindSimilarMethodsAsync("Execute", 0.7);
 
         // Assert
         Assert.That(result, Is.Not.Null);
