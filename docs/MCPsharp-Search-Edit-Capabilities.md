@@ -703,4 +703,3 @@ Would need:
 - Bulk editing is mature
 - Text search is critical missing piece
 - Refactoring tools would complete the picture
-

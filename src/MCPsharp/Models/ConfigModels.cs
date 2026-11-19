@@ -199,4 +199,3 @@ public class ConfigValidationIssue
     /// </summary>
     public IReadOnlyList<string>? Details { get; init; }
 }
-
