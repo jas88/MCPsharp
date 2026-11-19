@@ -453,7 +453,7 @@ public class ConsolidationTests
             await _registry.ExecuteToolAsync(new ToolCallRequest
             {
                 Name = "analyze_impact",
-                Arguments = JsonDocument.Parse("{\"symbolName\": \"Test\"}")
+                Arguments = JsonDocument.Parse("{\"filePath\": \"src/Test.cs\", \"changeType\": \"modify\", \"symbolName\": \"Test\"}")
             });
         });
 
