@@ -1,5 +1,7 @@
+using MCPsharp.Services.Analyzers;
 using MCPsharp.Services.Roslyn;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NUnit.Framework;
@@ -196,6 +198,37 @@ public class MultiProjectWorkspaceTests
         Assert.That(workspace.GetProjects().Select(p => p.Name.Split('(')[0]),
             Is.EquivalentTo(ProjectNames));
         Assert.That(workspace.GetHealth().ErrorCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void GetAnalyzerReferences_ReturnsEveryProjectsAnalyzerReferencesOnce()
+    {
+        var paths = _workspace.GetAnalyzerReferences().Select(r => r.FullPath).ToList();
+
+        // Every project, and each target framework of Lib, references the SDK's analyzers: each is listed once
+        var projectPaths = _workspace.Solution.Projects.SelectMany(p => p.AnalyzerReferences).Select(r => r.FullPath);
+        Assert.That(paths, Is.Not.Empty);
+        Assert.That(paths, Is.Unique);
+        Assert.That(paths, Is.EquivalentTo(projectPaths.Distinct()));
+    }
+
+    [Test]
+    public async Task AnalyzerAutoLoad_LoadsOnlyTheAnalyzersOfTheProjectsReferences()
+    {
+        using var autoLoad = new AnalyzerAutoLoadService(
+            NullLogger<AnalyzerAutoLoadService>.Instance,
+            new RoslynAnalyzerLoader(NullLogger<RoslynAnalyzerLoader>.Instance, NullLoggerFactory.Instance),
+            new AnalyzerRegistry(NullLogger<AnalyzerRegistry>.Instance),
+            _workspace);
+
+        var result = await autoLoad.EnsureAnalyzersLoadedAsync();
+
+        // The analyzers are the instances the workspace's own references created, so nothing else was loaded
+        var referenced = _workspace.GetAnalyzerReferences().SelectMany(r => r.GetAnalyzers(LanguageNames.CSharp));
+        var loaded = result.LoadedAnalyzers.Cast<RoslynAnalyzerAdapter>().Select(a => a.DiagnosticAnalyzer).ToList();
+        Assert.That(result.Success, Is.True, result.Message);
+        Assert.That(loaded, Is.Not.Empty);
+        Assert.That(loaded, Is.SubsetOf(referenced).Using<DiagnosticAnalyzer>(ReferenceEqualityComparer.Instance));
     }
 
     internal static RenameSymbolService CreateRenameService(RoslynWorkspace workspace)

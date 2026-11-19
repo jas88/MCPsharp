@@ -66,11 +66,12 @@ internal sealed partial class Program
             var analyzerRegistry = new MCPsharp.Services.Analyzers.AnalyzerRegistry(
                 loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerRegistry>());
 
-            // Initialize auto-load service with default configuration
-            var autoLoadService = new MCPsharp.Services.Analyzers.AnalyzerAutoLoadService(
+            // Auto-load service (default configuration): loads the analyzers the workspace's projects reference
+            using var autoLoadService = new MCPsharp.Services.Analyzers.AnalyzerAutoLoadService(
                 loggerFactory.CreateLogger<MCPsharp.Services.Analyzers.AnalyzerAutoLoadService>(),
                 analyzerLoader,
-                analyzerRegistry);
+                analyzerRegistry,
+                roslynWorkspace);
 
             // Initialize built-in code fix registry (auto-registers built-in providers)
             var codeFixRegistry = new MCPsharp.Services.Analyzers.BuiltIn.CodeFixes.Registry.BuiltInCodeFixRegistry(

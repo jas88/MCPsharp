@@ -30,6 +30,7 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
     private readonly AnalyzerAutoLoadService? _autoLoadService;
     private readonly Dictionary<string, IAnalyzer> _loadedAnalyzers = new();
     private readonly object _lock = new();
+    private ImmutableArray<IAnalyzer> _autoLoadedAnalyzers = ImmutableArray<IAnalyzer>.Empty;
 
     public RoslynAnalyzerService(
         RoslynAnalyzerLoader loader,
@@ -140,7 +141,7 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
                 return new AnalyzerRunResult
                 {
                     Success = false,
-                    ErrorMessage = "No analyzers loaded or specified. Auto-load may have failed - check logs.",
+                    ErrorMessage = "No analyzers loaded or specified. The analyzers the open project references are loaded automatically; load others with load_roslyn_analyzers.",
                     StartTime = startTime,
                     EndTime = DateTime.UtcNow
                 };
@@ -304,27 +305,40 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
         {
             var result = await _autoLoadService.EnsureAnalyzersLoadedAsync(cancellationToken);
 
-            if (result.Success && !result.AlreadyLoaded)
+            if (!result.AlreadyLoaded)
             {
-                // Register auto-loaded analyzers with this service
-                lock (_lock)
-                {
-                    foreach (var analyzer in result.LoadedAnalyzers)
-                    {
-                        _loadedAnalyzers.TryAdd(analyzer.Id, analyzer);
-                    }
-                }
-
+                ReplaceAutoLoadedAnalyzers(result.LoadedAnalyzers);
                 LogAutoLoaded(_logger, result.LoadedAnalyzers.Length, result.LoadDuration.TotalMilliseconds);
             }
-            else if (!result.Success && _logger.IsEnabled(LogLevel.Warning))
+
+            if (!result.Success && _logger.IsEnabled(LogLevel.Warning))
             {
                 LogAutoLoadFailed(_logger, result.Message, string.Join("; ", result.Errors));
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             LogErrorDuringAutoLoad(_logger, ex);
+        }
+    }
+
+    /// <summary>
+    /// A new auto-load replaces the analyzers of the previous one (e.g. those of a project that is no longer
+    /// open); analyzers loaded explicitly stay
+    /// </summary>
+    private void ReplaceAutoLoadedAnalyzers(ImmutableArray<IAnalyzer> analyzers)
+    {
+        lock (_lock)
+        {
+            foreach (var previous in _autoLoadedAnalyzers)
+            {
+                if (_loadedAnalyzers.TryGetValue(previous.Id, out var current) && ReferenceEquals(current, previous))
+                {
+                    _loadedAnalyzers.Remove(previous.Id);
+                }
+            }
+
+            _autoLoadedAnalyzers = analyzers.Where(analyzer => _loadedAnalyzers.TryAdd(analyzer.Id, analyzer)).ToImmutableArray();
         }
     }
 

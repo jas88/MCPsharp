@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace MCPsharp.Services.Roslyn;
 
@@ -25,6 +26,17 @@ public partial class RoslynWorkspace
             .OfType<Project>()
             .ToList();
     }
+
+    /// <summary>
+    /// The analyzer references (analyzer and source generator assemblies) of every project in the solution,
+    /// each assembly once, in solution order. These are the analyzers the compiler and an IDE use for the
+    /// projects: the analyzer assets of the NuGet packages the projects restore, the SDK's analyzers and any
+    /// Analyzer items. Empty when nothing is loaded; an adhoc workspace (no project file) has none.
+    /// </summary>
+    public virtual IReadOnlyList<AnalyzerReference> GetAnalyzerReferences() =>
+        _workspace == null
+            ? Array.Empty<AnalyzerReference>()
+            : GetDistinctAnalyzerReferences(_workspace.CurrentSolution);
 
     /// <summary>
     /// Compilations of every primary project, in solution order.
@@ -182,6 +194,20 @@ public partial class RoslynWorkspace
         return GetProjects()
             .SelectMany(project => project.Documents)
             .Where(document => document.FilePath == null || seenPaths.Add(document.FilePath))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Every project's analyzer references, each assembly path once: projects, and the target frameworks
+    /// of a multi-targeted project, mostly reference the same analyzer assemblies.
+    /// </summary>
+    private static List<AnalyzerReference> GetDistinctAnalyzerReferences(Solution solution)
+    {
+        var seenPaths = new HashSet<string>(StringComparer.FromComparison(PathContainment.Comparison));
+        return solution.Projects
+            .SelectMany(project => project.AnalyzerReferences)
+            .Where(reference => reference.FullPath == null || seenPaths.Add(reference.FullPath))
+            .Distinct()
             .ToList();
     }
 

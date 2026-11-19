@@ -36,7 +36,7 @@ public partial class McpToolRegistry
         _tools.Add(new McpTool
         {
             Name = "run_roslyn_analyzers",
-            Description = "Run loaded Roslyn analyzers (auto-loading defaults if none are loaded) against a file or directory and report issues.",
+            Description = "Run Roslyn analyzers against a file or directory and report issues: the analyzers the open project references (loaded automatically) and any loaded with load_roslyn_analyzers.",
             InputSchema = JsonSchemaHelper.CreateSchema(
                 Prop("target_path", "string", "File or directory to analyze (relative to the open project root, or absolute)", required: true),
                 Prop("analyzer_ids", "array", "Specific analyzer IDs to run (default: all loaded analyzers)", items: StringItems))

@@ -9,7 +9,7 @@ namespace MCPsharp.Tests.Services.Analyzers;
 [Category("Unit")]
 [Category("Analyzers")]
 [Category("Roslyn")]
-public class RoslynAnalyzerLoaderTests : FileServiceTestBase
+public partial class RoslynAnalyzerLoaderTests : FileServiceTestBase
 {
     private ILogger<RoslynAnalyzerLoader> _mockLogger = null!;
     private ILoggerFactory _mockLoggerFactory = null!;
@@ -304,41 +304,6 @@ public class RoslynAnalyzerLoaderTests : FileServiceTestBase
             Assert.That(Path.IsPathRooted(path), Is.True);
             Assert.That(File.Exists(path), Is.True);
         }
-    }
-
-    #endregion
-
-    #region LoadAnalyzersFromNuGetCacheAsync Tests
-
-    [Test]
-    public async Task LoadAnalyzersFromNuGetCacheAsync_ShouldNotThrow()
-    {
-        // Act & Assert - Should handle missing NuGet cache gracefully
-        await Assert.DoesNotThrowAsync(async () =>
-            await _loader.LoadAnalyzersFromNuGetCacheAsync());
-    }
-
-    [Test]
-    public async Task LoadAnalyzersFromNuGetCacheAsync_ShouldReturnAnalyzers()
-    {
-        // Act
-        var result = await _loader.LoadAnalyzersFromNuGetCacheAsync();
-
-        // Assert
-        // May be empty if no NuGet cache exists, that's ok
-        Assert.That(result.Length, Is.GreaterThanOrEqualTo(0));
-    }
-
-    [Test]
-    public async Task LoadAnalyzersFromNuGetCacheAsync_WithCancellation_ShouldThrowOperationCanceledException()
-    {
-        // Arrange
-        using var cts = new CancellationTokenSource();
-        cts.Cancel();
-
-        // Act & Assert
-        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
-            await _loader.LoadAnalyzersFromNuGetCacheAsync(cts.Token));
     }
 
     #endregion

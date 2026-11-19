@@ -1,54 +1,59 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Text.Json;
 using MCPsharp.Models.Analyzers;
+using MCPsharp.Services.Roslyn;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services.Analyzers;
 
 /// <summary>
-/// Service for automatically discovering and loading Roslyn analyzers from standard locations
+/// Service for automatically loading the Roslyn analyzers that the projects of the open workspace reference
 /// </summary>
-public partial class AnalyzerAutoLoadService
+/// <remarks>
+/// As in an IDE, the analyzers come from the projects' analyzer references
+/// (<see cref="RoslynWorkspace.GetAnalyzerReferences"/>): the analyzer assets of the NuGet packages the projects
+/// restore, at the restored versions, the SDK's analyzers and any Analyzer items. Nothing else is loaded, and the
+/// NuGet cache is never scanned. When the references change (e.g. another project is opened), the next load
+/// replaces the analyzers loaded for the previous references.
+/// </remarks>
+public sealed partial class AnalyzerAutoLoadService : IDisposable
 {
     private readonly ILogger<AnalyzerAutoLoadService> _logger;
     private readonly RoslynAnalyzerLoader _loader;
     private readonly IAnalyzerRegistry _registry;
+    private readonly RoslynWorkspace _workspace;
     private readonly AnalyzerAutoLoadConfiguration _configuration;
-    private bool _hasAutoLoaded;
+    private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly object _lock = new();
+
+    // Analyzers this service registered and has not unregistered yet; only used while holding _loadLock
+    private readonly List<IAnalyzer> _registeredAnalyzers = new();
+
+    private bool _hasAutoLoaded;
+    private IReadOnlyList<AnalyzerReference> _loadedReferences = Array.Empty<AnalyzerReference>();
     private ImmutableArray<IAnalyzer> _autoLoadedAnalyzers = ImmutableArray<IAnalyzer>.Empty;
 
     public AnalyzerAutoLoadService(
         ILogger<AnalyzerAutoLoadService> logger,
         RoslynAnalyzerLoader loader,
         IAnalyzerRegistry registry,
+        RoslynWorkspace workspace,
         AnalyzerAutoLoadConfiguration? configuration = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _loader = loader ?? throw new ArgumentNullException(nameof(loader));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _configuration = configuration ?? AnalyzerAutoLoadConfiguration.Default;
     }
 
     /// <summary>
-    /// Auto-load analyzers if not already loaded
+    /// Auto-load the analyzers of the workspace's current analyzer references, unless they are already loaded
     /// </summary>
     public async Task<AnalyzerAutoLoadResult> EnsureAnalyzersLoadedAsync(CancellationToken cancellationToken = default)
     {
-        lock (_lock)
-        {
-            if (_hasAutoLoaded)
-            {
-                return new AnalyzerAutoLoadResult
-                {
-                    Success = true,
-                    AlreadyLoaded = true,
-                    LoadedAnalyzers = _autoLoadedAnalyzers,
-                    Message = "Analyzers already auto-loaded"
-                };
-            }
-        }
-
         if (!_configuration.AutoLoadEnabled)
         {
             LogAutoLoadDisabled(_logger);
@@ -61,217 +66,216 @@ public partial class AnalyzerAutoLoadService
             };
         }
 
-        return await LoadAnalyzersAsync(cancellationToken);
+        // One load at a time, so concurrent callers don't load and register the same analyzers twice
+        await _loadLock.WaitAsync(cancellationToken);
+        try
+        {
+            var references = _configuration.AnalyzerSources.Contains(AnalyzerAutoLoadConfiguration.ProjectReferencesSource)
+                ? _workspace.GetAnalyzerReferences()
+                : Array.Empty<AnalyzerReference>();
+
+            lock (_lock)
+            {
+                if (_hasAutoLoaded && references.SequenceEqual(_loadedReferences))
+                {
+                    return new AnalyzerAutoLoadResult
+                    {
+                        Success = true,
+                        AlreadyLoaded = true,
+                        LoadedAnalyzers = _autoLoadedAnalyzers,
+                        Message = "Analyzers already auto-loaded"
+                    };
+                }
+            }
+
+            return await LoadAnalyzersAsync(references, cancellationToken);
+        }
+        finally
+        {
+            _loadLock.Release();
+        }
     }
 
     /// <summary>
-    /// Load analyzers from configured sources
+    /// Load analyzers from the configured sources, replacing the analyzers of the previous load
     /// </summary>
-    private async Task<AnalyzerAutoLoadResult> LoadAnalyzersAsync(CancellationToken cancellationToken = default)
+    private async Task<AnalyzerAutoLoadResult> LoadAnalyzersAsync(
+        IReadOnlyList<AnalyzerReference> references,
+        CancellationToken cancellationToken)
     {
-        var startTime = DateTime.UtcNow;
+        var stopwatch = Stopwatch.StartNew();
         var loadedAnalyzers = new List<IAnalyzer>();
         var errors = new List<string>();
 
         try
         {
-            LogStartingAutoLoad(_logger);
+            LogStartingAutoLoad(_logger, references.Count);
 
-            // Load from NuGet cache
-            if (_configuration.AnalyzerSources.Contains("nuget_cache"))
+            // The previous load's analyzers (e.g. those of a project that is no longer open) are replaced, not kept
+            await UnregisterAutoLoadedAnalyzersAsync(cancellationToken);
+
+            if (_configuration.AnalyzerSources.Contains(AnalyzerAutoLoadConfiguration.ProjectReferencesSource))
             {
-                try
-                {
-                    var nugetAnalyzers = await LoadFromNuGetCacheAsync(cancellationToken);
-                    loadedAnalyzers.AddRange(nugetAnalyzers);
-                    LogLoadedFromNuGetCache(_logger, nugetAnalyzers.Length);
-                }
-                catch (Exception ex)
-                {
-                    LogErrorLoadingFromNuGetCache(_logger, ex, ex.Message);
-                    errors.Add($"Error loading from NuGet cache: {ex.Message}");
-                }
+                var projectAnalyzers = _loader.LoadAnalyzersFromReferences(references, cancellationToken);
+                loadedAnalyzers.AddRange(projectAnalyzers);
+                LogLoadedFromProjectReferences(_logger, projectAnalyzers.Length, references.Count);
             }
 
-            // Load built-in providers (already registered in BuiltInCodeFixRegistry)
-            if (_configuration.AnalyzerSources.Contains("builtin_providers"))
+            // Built-in providers are already registered in BuiltInCodeFixRegistry
+            if (_configuration.AnalyzerSources.Contains(AnalyzerAutoLoadConfiguration.BuiltInProvidersSource))
             {
                 LogBuiltInProvidersAutoRegistered(_logger);
             }
 
-            // Load from custom paths
-            foreach (var customPath in _configuration.CustomAnalyzerPaths)
-            {
-                try
-                {
-                    if (Directory.Exists(customPath))
-                    {
-                        var assemblyPaths = _loader.DiscoverAnalyzerAssemblies(customPath, recursive: true);
-                        foreach (var assemblyPath in assemblyPaths)
-                        {
-                            var customAnalyzers = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath, cancellationToken);
-                            loadedAnalyzers.AddRange(customAnalyzers);
-                        }
-                        LogLoadedFromCustomPath(_logger, loadedAnalyzers.Count, customPath);
-                    }
-                    else if (File.Exists(customPath))
-                    {
-                        var customAnalyzers = await _loader.LoadAnalyzersFromAssemblyAsync(customPath, cancellationToken);
-                        loadedAnalyzers.AddRange(customAnalyzers);
-                        LogLoadedFromCustomAssembly(_logger, customAnalyzers.Length, customPath);
-                    }
-                    else
-                    {
-                        LogCustomPathNotFound(_logger, customPath);
-                        errors.Add($"Custom analyzer path not found: {customPath}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogErrorLoadingFromCustomPath(_logger, ex, customPath, ex.Message);
-                    errors.Add($"Error loading from custom path '{customPath}': {ex.Message}");
-                }
-            }
+            loadedAnalyzers.AddRange(await LoadFromCustomPathsAsync(errors, cancellationToken));
+            loadedAnalyzers = SelectAnalyzersToRegister(loadedAnalyzers);
+            await RegisterAnalyzersAsync(loadedAnalyzers, errors, cancellationToken);
 
-            // Filter excluded analyzers
-            if (_configuration.ExcludeAnalyzers.Any())
-            {
-                var beforeCount = loadedAnalyzers.Count;
-                loadedAnalyzers = loadedAnalyzers
-                    .Where(a => !_configuration.ExcludeAnalyzers.Contains(a.Id))
-                    .ToList();
-                LogFilteredExcluded(_logger, beforeCount - loadedAnalyzers.Count);
-            }
-
-            // Register all loaded analyzers
-            foreach (var analyzer in loadedAnalyzers)
-            {
-                try
-                {
-                    await _registry.RegisterAnalyzerAsync(analyzer, cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    LogErrorRegisteringAnalyzer(_logger, ex, analyzer.Id);
-                    errors.Add($"Failed to register analyzer '{analyzer.Id}': {ex.Message}");
-                }
-            }
-
-            lock (_lock)
-            {
-                _hasAutoLoaded = true;
-                _autoLoadedAnalyzers = loadedAnalyzers.ToImmutableArray();
-            }
-
-            var duration = DateTime.UtcNow - startTime;
-            LogAutoLoadCompleted(_logger, loadedAnalyzers.Count, duration.TotalMilliseconds);
+            Publish(references, loadedAnalyzers, loaded: true);
+            LogAutoLoadCompleted(_logger, loadedAnalyzers.Count, stopwatch.Elapsed.TotalMilliseconds);
 
             return new AnalyzerAutoLoadResult
             {
                 Success = true,
                 LoadedAnalyzers = loadedAnalyzers.ToImmutableArray(),
-                LoadDuration = duration,
+                LoadDuration = stopwatch.Elapsed,
                 Errors = errors.ToImmutableArray(),
                 Message = $"Successfully auto-loaded {loadedAnalyzers.Count} analyzers"
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             LogFatalAutoLoadError(_logger, ex);
+            Publish(references, loadedAnalyzers, loaded: false);
             return new AnalyzerAutoLoadResult
             {
                 Success = false,
                 LoadedAnalyzers = loadedAnalyzers.ToImmutableArray(),
-                LoadDuration = DateTime.UtcNow - startTime,
-                Errors = errors.Concat(new[] { $"Fatal error: {ex.Message}" }).ToImmutableArray(),
+                LoadDuration = stopwatch.Elapsed,
+                Errors = errors.Append($"Fatal error: {ex.Message}").ToImmutableArray(),
                 Message = $"Auto-load failed: {ex.Message}"
             };
         }
     }
 
     /// <summary>
-    /// Load analyzers from NuGet package cache
+    /// Load analyzers from the configured custom directories and assembly files
     /// </summary>
-    private async Task<ImmutableArray<IAnalyzer>> LoadFromNuGetCacheAsync(CancellationToken cancellationToken)
+    private async Task<List<IAnalyzer>> LoadFromCustomPathsAsync(List<string> errors, CancellationToken cancellationToken)
     {
-        var nugetCachePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".nuget", "packages");
-
-        if (!Directory.Exists(nugetCachePath))
-        {
-            LogNuGetCacheNotFound(_logger, nugetCachePath);
-            return ImmutableArray<IAnalyzer>.Empty;
-        }
-
         var analyzers = new List<IAnalyzer>();
 
-        // Known analyzer packages with their standard paths
-        var knownPackages = new Dictionary<string, string[]>
-        {
-            ["microsoft.codeanalysis.netanalyzers"] = new[] { "analyzers/dotnet/cs" },
-            ["roslynator.analyzers"] = new[] { "analyzers/dotnet/cs" },
-            ["sonaranalyzer.csharp"] = new[] { "analyzers" },
-            ["errorprone.net.codefixes"] = new[] { "analyzers/dotnet/cs" },
-            ["errorprone.net.structs"] = new[] { "analyzers/dotnet/cs" },
-            ["asyncfixer"] = new[] { "analyzers/dotnet/cs" },
-            ["meziantou.analyzer"] = new[] { "analyzers/dotnet/cs" }
-        };
-
-        foreach (var (packageName, relativePaths) in knownPackages)
+        foreach (var customPath in _configuration.CustomAnalyzerPaths)
         {
             try
             {
-                var packagePath = Path.Combine(nugetCachePath, packageName);
-                if (!Directory.Exists(packagePath))
-                    continue;
-
-                // Find latest version directory
-                var versions = Directory.GetDirectories(packagePath)
-                    .Select(d => new DirectoryInfo(d).Name)
-                    .OrderByDescending(v => v)
-                    .ToList();
-
-                if (versions.Count == 0)
-                    continue;
-
-                var latestVersion = versions[0];
-                var versionPath = Path.Combine(packagePath, latestVersion);
-
-                // Try each relative path
-                foreach (var relativePath in relativePaths)
+                if (Directory.Exists(customPath))
                 {
-                    var analyzerPath = Path.Combine(versionPath, relativePath);
-                    if (!Directory.Exists(analyzerPath))
-                        continue;
-
-                    var assemblyPaths = _loader.DiscoverAnalyzerAssemblies(analyzerPath, recursive: true);
-                    foreach (var assemblyPath in assemblyPaths)
-                    {
-                        var packageAnalyzers = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath, cancellationToken);
-                        analyzers.AddRange(packageAnalyzers);
-                    }
-                    LogLoadedFromPackage(_logger, analyzers.Count, packageName, latestVersion);
+                    var assemblyPaths = _loader.DiscoverAnalyzerAssemblies(customPath, recursive: true);
+                    var pathAnalyzers = await _loader.LoadAnalyzersFromAssembliesAsync(assemblyPaths, cancellationToken);
+                    analyzers.AddRange(pathAnalyzers);
+                    LogLoadedFromCustomPath(_logger, pathAnalyzers.Length, customPath);
+                }
+                else if (File.Exists(customPath))
+                {
+                    var customAnalyzers = await _loader.LoadAnalyzersFromAssemblyAsync(customPath, cancellationToken);
+                    analyzers.AddRange(customAnalyzers);
+                    LogLoadedFromCustomAssembly(_logger, customAnalyzers.Length, customPath);
+                }
+                else
+                {
+                    LogCustomPathNotFound(_logger, customPath);
+                    errors.Add($"Custom analyzer path not found: {customPath}");
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                LogErrorLoadingFromPackage(_logger, ex, packageName);
+                LogErrorLoadingFromCustomPath(_logger, ex, customPath, ex.Message);
+                errors.Add($"Error loading from custom path '{customPath}': {ex.Message}");
             }
         }
 
-        return analyzers.ToImmutableArray();
+        return analyzers;
     }
 
     /// <summary>
-    /// Reset auto-load state (for testing)
+    /// Drop excluded analyzers and keep one analyzer per ID (the first): projects can reference several builds
+    /// of the same analyzer, e.g. the SDK's code style analyzers and those of a NuGet package
+    /// </summary>
+    private List<IAnalyzer> SelectAnalyzersToRegister(List<IAnalyzer> analyzers)
+    {
+        var selected = analyzers;
+        if (_configuration.ExcludeAnalyzers.Any())
+        {
+            selected = selected.Where(a => !_configuration.ExcludeAnalyzers.Contains(a.Id)).ToList();
+            LogFilteredExcluded(_logger, analyzers.Count - selected.Count);
+        }
+
+        return selected.DistinctBy(a => a.Id, StringComparer.Ordinal).ToList();
+    }
+
+    private async Task RegisterAnalyzersAsync(List<IAnalyzer> analyzers, List<string> errors, CancellationToken cancellationToken)
+    {
+        foreach (var analyzer in analyzers)
+        {
+            try
+            {
+                if (await _registry.RegisterAnalyzerAsync(analyzer, cancellationToken))
+                {
+                    _registeredAnalyzers.Add(analyzer);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                LogErrorRegisteringAnalyzer(_logger, ex, analyzer.Id);
+                errors.Add($"Failed to register analyzer '{analyzer.Id}': {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Unregister the analyzers this service registered, and forget the previous load
+    /// </summary>
+    private async Task UnregisterAutoLoadedAnalyzersAsync(CancellationToken cancellationToken)
+    {
+        Publish([], [], loaded: false);
+
+        var unregistered = 0;
+        foreach (var analyzer in _registeredAnalyzers)
+        {
+            // Leave the ID alone if something else has registered its own analyzer under it since
+            if (ReferenceEquals(_registry.GetAnalyzer(analyzer.Id), analyzer) &&
+                await _registry.UnregisterAnalyzerAsync(analyzer.Id, cancellationToken))
+            {
+                unregistered++;
+            }
+        }
+
+        _registeredAnalyzers.Clear();
+        if (unregistered > 0)
+        {
+            LogUnregisteredPreviousAnalyzers(_logger, unregistered);
+        }
+    }
+
+    private void Publish(IReadOnlyList<AnalyzerReference> references, List<IAnalyzer> analyzers, bool loaded)
+    {
+        lock (_lock)
+        {
+            _hasAutoLoaded = loaded;
+            _loadedReferences = references;
+            _autoLoadedAnalyzers = analyzers.ToImmutableArray();
+        }
+    }
+
+    /// <summary>
+    /// Make the next <see cref="EnsureAnalyzersLoadedAsync"/> load again, replacing the analyzers loaded so far
     /// </summary>
     public void Reset()
     {
         lock (_lock)
         {
             _hasAutoLoaded = false;
-            _autoLoadedAnalyzers = ImmutableArray<IAnalyzer>.Empty;
         }
     }
 
@@ -312,17 +316,19 @@ public partial class AnalyzerAutoLoadService
         }
     }
 
+    public void Dispose() => _loadLock.Dispose();
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Auto-loading is disabled in configuration")]
     private static partial void LogAutoLoadDisabled(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Starting auto-load of Roslyn analyzers...")]
-    private static partial void LogStartingAutoLoad(ILogger logger);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting auto-load of Roslyn analyzers from {ReferenceCount} project analyzer references...")]
+    private static partial void LogStartingAutoLoad(ILogger logger, int referenceCount);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} analyzers from NuGet cache")]
-    private static partial void LogLoadedFromNuGetCache(ILogger logger, int count);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} analyzers from {ReferenceCount} project analyzer references")]
+    private static partial void LogLoadedFromProjectReferences(ILogger logger, int count, int referenceCount);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Error loading from NuGet cache: {ErrorMessage}")]
-    private static partial void LogErrorLoadingFromNuGetCache(ILogger logger, Exception exception, string errorMessage);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Unregistered {Count} analyzers of the previous auto-load")]
+    private static partial void LogUnregisteredPreviousAnalyzers(ILogger logger, int count);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Built-in code fix providers are automatically registered via BuiltInCodeFixRegistry")]
     private static partial void LogBuiltInProvidersAutoRegistered(ILogger logger);
@@ -350,15 +356,6 @@ public partial class AnalyzerAutoLoadService
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Fatal error during analyzer auto-load")]
     private static partial void LogFatalAutoLoadError(ILogger logger, Exception exception);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "NuGet cache directory not found: {Path}")]
-    private static partial void LogNuGetCacheNotFound(ILogger logger, string path);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Loaded {Count} analyzers from {Package} v{Version}")]
-    private static partial void LogLoadedFromPackage(ILogger logger, int count, string package, string version);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Error loading analyzers from package: {Package}")]
-    private static partial void LogErrorLoadingFromPackage(ILogger logger, Exception exception, string package);
 }
 
 /// <summary>
@@ -366,9 +363,19 @@ public partial class AnalyzerAutoLoadService
 /// </summary>
 public record AnalyzerAutoLoadConfiguration
 {
+    /// <summary>
+    /// Analyzer source: the analyzer references of the workspace's projects
+    /// </summary>
+    public const string ProjectReferencesSource = "project_references";
+
+    /// <summary>
+    /// Analyzer source: the built-in code fix providers (registered by BuiltInCodeFixRegistry)
+    /// </summary>
+    public const string BuiltInProvidersSource = "builtin_providers";
+
     public bool AutoLoadEnabled { get; init; } = true;
     public bool LoadOnStartup { get; init; } // false (default) = lazy load on first use
-    public ImmutableArray<string> AnalyzerSources { get; init; } = ImmutableArray.Create("nuget_cache", "builtin_providers");
+    public ImmutableArray<string> AnalyzerSources { get; init; } = ImmutableArray.Create(ProjectReferencesSource, BuiltInProvidersSource);
     public ImmutableArray<string> ExcludeAnalyzers { get; init; } = ImmutableArray<string>.Empty;
     public ImmutableArray<string> CustomAnalyzerPaths { get; init; } = ImmutableArray<string>.Empty;
 
@@ -376,7 +383,7 @@ public record AnalyzerAutoLoadConfiguration
     {
         AutoLoadEnabled = true,
         LoadOnStartup = false,
-        AnalyzerSources = ImmutableArray.Create("nuget_cache", "builtin_providers"),
+        AnalyzerSources = ImmutableArray.Create(ProjectReferencesSource, BuiltInProvidersSource),
         ExcludeAnalyzers = ImmutableArray<string>.Empty,
         CustomAnalyzerPaths = ImmutableArray<string>.Empty
     };
