@@ -26,8 +26,9 @@ public partial class McpToolRegistry
     private const string RoslynFixOperationType = "RoslynCodeFix";
 
     private RoslynCodeFixLoader? _codeFixLoader;
-    private readonly List<RoslynCodeFixAdapter> _loadedCodeFixProviders = new();
-    private readonly HashSet<string> _loadedCodeFixAssemblies = new(StringComparer.Ordinal);
+
+    // The code fix providers of each assembly loaded for apply_roslyn_fixes, by assembly path
+    private readonly Dictionary<string, ImmutableArray<RoslynCodeFixAdapter>> _codeFixProvidersByAssembly = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Execute apply_roslyn_fixes tool
@@ -65,8 +66,8 @@ public partial class McpToolRegistry
                                  $"(only the analyzers of the projects that compile {targetPath}, and those loaded with load_roslyn_analyzers, apply to it)");
             }
 
-            await LoadCodeFixProvidersAsync(analyzerAdapters, ct);
-            var providers = _loadedCodeFixProviders.Where(p => diagnosticIds.Any(p.CanFix)).ToList();
+            // The providers of the same analyzers: those of other projects' builds of an analyzer don't apply
+            var providers = (await GetCodeFixProvidersAsync(analyzerAdapters, ct)).Where(p => diagnosticIds.Any(p.CanFix)).ToList();
             if (providers.Count == 0)
             {
                 return ToolError($"No code fix providers found for diagnostic IDs: {string.Join(", ", diagnosticIds)}");
@@ -180,10 +181,11 @@ public partial class McpToolRegistry
     }
 
     /// <summary>
-    /// Load code fix providers from the analyzer assemblies and their companion code fix assemblies
-    /// (e.g. "X.Analyzers.CodeFixes.dll" next to "X.Analyzers.dll"). Each assembly is loaded once.
+    /// The code fix providers of the analyzers' assemblies and their companion code fix assemblies
+    /// (e.g. "X.Analyzers.CodeFixes.dll" next to "X.Analyzers.dll"), and of no other assembly. Each assembly is
+    /// loaded once.
     /// </summary>
-    private async Task LoadCodeFixProvidersAsync(IEnumerable<RoslynAnalyzerAdapter> analyzers, CancellationToken ct)
+    private async Task<List<RoslynCodeFixAdapter>> GetCodeFixProvidersAsync(IEnumerable<RoslynAnalyzerAdapter> analyzers, CancellationToken ct)
     {
         var loggerFactory = _loggerFactory ?? NullLoggerFactory.Instance;
         _codeFixLoader ??= new RoslynCodeFixLoader(loggerFactory.CreateLogger<RoslynCodeFixLoader>(), loggerFactory);
@@ -196,16 +198,19 @@ public partial class McpToolRegistry
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
+        var providers = new List<RoslynCodeFixAdapter>();
         foreach (var assemblyPath in candidates)
         {
-            if (!_loadedCodeFixAssemblies.Add(assemblyPath))
+            if (!_codeFixProvidersByAssembly.TryGetValue(assemblyPath, out var assemblyProviders))
             {
-                continue;
+                assemblyProviders = await _codeFixLoader.LoadCodeFixProvidersFromAssemblyAsync(assemblyPath, ct);
+                _codeFixProvidersByAssembly[assemblyPath] = assemblyProviders;
             }
 
-            var providers = await _codeFixLoader.LoadCodeFixProvidersFromAssemblyAsync(assemblyPath, ct);
-            _loadedCodeFixProviders.AddRange(providers);
+            providers.AddRange(assemblyProviders);
         }
+
+        return providers;
     }
 
     private static IEnumerable<string> GetCodeFixAssemblyCandidates(string analyzerAssemblyPath)
