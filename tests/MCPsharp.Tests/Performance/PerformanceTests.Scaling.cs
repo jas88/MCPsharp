@@ -8,52 +8,56 @@ public partial class PerformanceTests
 {
     [Test]
     [Category("Concurrency")]
-    [Category("Manual")]
-    [Explicit("Performance test - run manually, not reliable on shared CI runners")]
-    public async Task Performance_ConcurrentBulkEdits_ShouldScaleWithParallelism()
+    public async Task Performance_ConcurrentBulkEdits_ShouldProcessFilesInParallelUpToProcessorCount()
     {
         // Arrange
+        const int filesPerEdit = 100;
+        var options = new BulkEditOptions { CreateBackups = false };
         var fileSets = Enumerable.Range(0, 4)
-            .Select(setIndex => Enumerable.Range(0, 100)
-                .Select(i => CreateTempFile($"Set{setIndex} File{i} content", ".cs"))
-                .ToList())
+            .Select(setIndex => CreateTestFiles(filesPerEdit, i => $"Set{setIndex} File{i} content"))
             .ToList();
+        var leastInParallel = Math.Min(2, Environment.ProcessorCount);
 
-        // Act - Sequential execution
-        var sequentialTime = await MeasurePerformanceAsync(async () =>
+        // Act - One bulk edit, then four at once
+        var single = await _bulkEdit.BulkReplaceAsync(fileSets[0], "content", "SINGLE", options);
+        var concurrent = await Task.WhenAll(fileSets.Select(fileSet =>
+            _bulkEdit.BulkReplaceAsync(fileSet, "content|SINGLE", "PARALLEL", options)));
+
+        // Assert - Every edit is applied to all of its files
+        Assert.That(single.ModifiedFiles, Is.EqualTo(filesPerEdit), "The bulk edit should edit all of its files");
+        Assert.That(concurrent.Select(r => r.ModifiedFiles), Has.All.EqualTo(filesPerEdit), "Each concurrent bulk edit should edit all of its files");
+        Assert.That(fileSets.SelectMany(fileSet => fileSet).Select(File.ReadAllText), Has.All.EndsWith("PARALLEL"));
+
+        // The service processes the files of all its bulk edits in parallel, one per processor at most. As one edit of
+        // 100 files keeps every processor busy, four edits at once aren't faster than four in a row by any margin a
+        // test can rely on; check the parallelism itself, from when each file's processing started and ended.
+        var singleInProgress = MostFilesInProgress(single.FileResults);
+        var concurrentInProgress = MostFilesInProgress(concurrent.SelectMany(r => r.FileResults));
+        Console.WriteLine($"Most files in progress at once: {singleInProgress} in one edit, {concurrentInProgress} in four ({Environment.ProcessorCount} processors)");
+        Assert.That(singleInProgress, Is.InRange(leastInParallel, Environment.ProcessorCount), "A bulk edit should process its files in parallel, one per processor at most");
+        Assert.That(concurrentInProgress, Is.InRange(leastInParallel, Environment.ProcessorCount), "Concurrent bulk edits should share the limit of one file per processor");
+    }
+
+    /// <summary>
+    /// The most files whose processing was in progress at the same moment
+    /// </summary>
+    private static int MostFilesInProgress(IEnumerable<FileBulkEditResult> files)
+    {
+        // A file that started as another ended did not overlap it, so at the same time ends come before starts
+        var events = files
+            .SelectMany(file => new[] { (Time: file.ProcessStartTime, Change: 1), (Time: file.ProcessEndTime, Change: -1) })
+            .OrderBy(e => e.Time)
+            .ThenBy(e => e.Change);
+
+        var inProgress = 0;
+        var most = 0;
+        foreach (var (_, change) in events)
         {
-            foreach (var fileSet in fileSets)
-            {
-                await _bulkEdit.BulkReplaceAsync(
-                    fileSet,
-                    "content",
-                    "SEQUENTIAL",
-                    new BulkEditOptions { CreateBackups = false });
-            }
-        }, iterations: 1, warmup: 0);
+            inProgress += change;
+            most = Math.Max(most, inProgress);
+        }
 
-        // Act - Parallel execution
-        var parallelTime = await MeasurePerformanceAsync(async () =>
-        {
-            var tasks = fileSets.Select(fileSet =>
-                _bulkEdit.BulkReplaceAsync(
-                    fileSet,
-                    "content",
-                    "PARALLEL",
-                    new BulkEditOptions { CreateBackups = false }));
-
-            await Task.WhenAll(tasks);
-        }, iterations: 1, warmup: 0);
-
-        // Assert
-        Console.WriteLine($"Sequential time: {sequentialTime}");
-        Console.WriteLine($"Parallel time: {parallelTime}");
-
-        var speedup = sequentialTime.AverageTime.TotalSeconds / parallelTime.AverageTime.TotalSeconds;
-        Console.WriteLine($"Parallel speedup: {speedup:F2}x");
-
-        // Should achieve reasonable parallel speedup (at least 1.5x on multi-core systems)
-        Assert.That(speedup, Is.GreaterThan(1.5), "Parallel execution should be significantly faster");
+        return most;
     }
 
     [Test]
