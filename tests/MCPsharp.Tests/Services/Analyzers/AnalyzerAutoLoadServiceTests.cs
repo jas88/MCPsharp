@@ -70,6 +70,21 @@ public partial class AnalyzerAutoLoadServiceTests : FileServiceTestBase
     }
 
     [Test]
+    public async Task EnsureAnalyzersLoadedAsync_WithAnAnalyzerTheRegistryRejects_ReportsItInsteadOfLoadingIt()
+    {
+        // e.g. an analyzer loaded with load_roslyn_analyzers already holds the ID
+        var holder = new RoslynAnalyzerAdapter(new StaticMethodAnalyzer(), NullLogger<RoslynAnalyzerAdapter>.Instance);
+        Assert.That(await _registry.RegisterAnalyzerAsync(holder), Is.True);
+        ProjectsReference(TestAnalyzerReferences.BuiltInAnalyzers());
+
+        var result = await _service.EnsureAnalyzersLoadedAsync();
+
+        Assert.That(result.LoadedAnalyzers.Select(a => a.Id), Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds.Except(StaticMethodAnalyzerOnly)));
+        Assert.That(result.Errors, Has.One.Contain(StaticMethodAnalyzerId).And.Contain("rejected"));
+        Assert.That(_registry.GetAnalyzer(StaticMethodAnalyzerId), Is.SameAs(holder));
+    }
+
+    [Test]
     public async Task EnsureAnalyzersLoadedAsync_WithoutProjectReferences_LoadsNothing()
     {
         // No project open, or one that references no analyzers: nothing is loaded from anywhere else
