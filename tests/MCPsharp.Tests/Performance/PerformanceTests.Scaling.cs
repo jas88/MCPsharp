@@ -149,31 +149,40 @@ public partial class PerformanceTests
 
     [Test]
     [Category("Scaling")]
-    [Category("Manual")]
-    [Explicit("Performance test - run manually, not reliable on shared CI runners")]
     public async Task Scaling_FileCountScaling_ShouldScaleLinearly()
     {
         // Arrange
-        var fileCounts = new[] { 10, 50, 100, 200 };
-        var results = new List<(int fileCount, TimeSpan time)>();
+        const int warmupRounds = 2;
+        const int measuredRounds = 13;
+        var fileCounts = new[] { 50, 100, 200, 400 };
+        var fileSets = fileCounts.Select(count => CreateTestFiles(count, i => $"Scaling test content {i}")).ToList();
+        var times = fileCounts.Select(_ => new List<TimeSpan>()).ToList();
+        var options = new BulkEditOptions { CreateBackups = false };
 
-        foreach (var fileCount in fileCounts)
+        // Act - Each round edits every set once, alternately replacing the word and putting it back, so every run
+        // reads, edits and writes every file, and a stall slows one run of each count rather than every run of one
+        for (var round = 0; round < warmupRounds + measuredRounds; round++)
         {
-            var files = Enumerable.Range(0, fileCount)
-                .Select(i => CreateTempFile($"Scaling test content {i}", ".cs"))
-                .ToList();
-
-            var time = await MeasurePerformanceAsync(async () =>
+            var (pattern, replacement) = round % 2 == 0 ? ("content", "SCALED") : ("SCALED", "content");
+            for (var index = 0; index < fileSets.Count; index++)
             {
-                await _bulkEdit.BulkReplaceAsync(
-                    files,
-                    "content",
-                    "SCALED",
-                    new BulkEditOptions { CreateBackups = false });
-            }, iterations: 3, warmup: 1);
+                var stopwatch = Stopwatch.StartNew();
+                var result = await _bulkEdit.BulkReplaceAsync(fileSets[index], pattern, replacement, options);
+                stopwatch.Stop();
 
-            results.Add((fileCount, time.AverageTime));
-            Console.WriteLine($"File count: {fileCount}, Time: {time.AverageTime.TotalMilliseconds:F2}ms");
+                Assert.That(result.ModifiedFiles, Is.EqualTo(fileCounts[index]), $"Round {round} should edit all {fileCounts[index]} files");
+                if (round >= warmupRounds)
+                {
+                    times[index].Add(stopwatch.Elapsed);
+                }
+            }
+        }
+
+        // The fastest run of each count is the one least slowed by anything else running
+        var results = fileCounts.Select((fileCount, index) => (fileCount, time: times[index].Min())).ToList();
+        foreach (var (fileCount, time) in results)
+        {
+            Console.WriteLine($"File count: {fileCount}, Time: {time.TotalMilliseconds:F2}ms");
         }
 
         // Assert - Scaling should be roughly linear
