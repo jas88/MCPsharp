@@ -95,11 +95,13 @@ public partial class RoslynAnalyzerAdapter : IAnalyzer
     }
 
     /// <summary>
-    /// The ID of the adapter for an analyzer type: <c>Roslyn_</c>, the type's full name, <c>@</c>, then the name and
+    /// The ID of the adapter for an analyzer type: <see cref="GetVersionIndependentId"/>, then <c>-</c> and the
     /// version of its assembly, e.g.
-    /// <c>Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0</c>.
-    /// It is the same in every run and unique across assemblies: same-named analyzers in different assemblies, and
-    /// different builds of one analyzer (e.g. the SDK's and a NuGet package's), get different IDs.
+    /// <c>Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0</c>.
+    /// It is the same in every run, and it names the type and the whole identity of its assembly (name, culture,
+    /// public key token and version): analyzers in assemblies of different identities, such as same-named analyzers
+    /// in different assemblies or different builds of one analyzer (e.g. the SDK's and a NuGet package's), get
+    /// different IDs. Assemblies of the same identity (e.g. two unsigned builds of one version) give the same IDs.
     /// </summary>
     public static string GetId(Type analyzerType)
     {
@@ -117,10 +119,17 @@ public partial class RoslynAnalyzerAdapter : IAnalyzer
         new(_roslynAnalyzer, _logger, analyzerReferences);
 
     /// <summary>
-    /// <see cref="GetId"/> without the assembly version, which names an analyzer in every version of its assembly
+    /// <see cref="GetId"/> without the assembly version, which names an analyzer in every version of its assembly:
+    /// <c>Roslyn_</c>, the type's full name, <c>@</c> and its assembly's name, then <c>+</c> and its culture unless
+    /// it is neutral, and <c>+</c> and its public key token if it is strong-named
     /// </summary>
-    public static string GetVersionIndependentId(Type analyzerType) =>
-        $"Roslyn_{analyzerType.FullName ?? analyzerType.Name}@{analyzerType.Assembly.GetName().Name}";
+    public static string GetVersionIndependentId(Type analyzerType)
+    {
+        var assembly = analyzerType.Assembly.GetName();
+        var culture = string.IsNullOrEmpty(assembly.CultureName) ? string.Empty : "+" + assembly.CultureName;
+        var publicKeyToken = assembly.GetPublicKeyToken() is { Length: > 0 } token ? "+" + Convert.ToHexStringLower(token) : string.Empty;
+        return $"Roslyn_{analyzerType.FullName ?? analyzerType.Name}@{assembly.Name}{culture}{publicKeyToken}";
+    }
 
     public bool CanAnalyze(string targetPath)
     {

@@ -59,7 +59,7 @@ Extended the MCPsharp Roslyn analyzer integration with production-ready features
 {
   "version": "1.0",
   "analyzers": {
-    "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0": {
+    "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0": {
       "enabled": true,
       "ruleSeverityOverrides": {
         "CA1001": "Warning"
@@ -398,7 +398,7 @@ Used partial class `McpToolRegistry.RoslynCodeFix.cs` to keep analyzer fix code 
 {
   "tool": "configure_analyzer",
   "arguments": {
-    "analyzer_id": "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers-10.0.403.0",
+    "analyzer_id": "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0",
     "enabled": true,
     "rule_id": "CA1001",
     "severity": "Error"

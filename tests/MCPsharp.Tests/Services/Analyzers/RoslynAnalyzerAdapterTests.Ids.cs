@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using MCPsharp.Models.Analyzers;
 using MCPsharp.Services.Analyzers;
 using NUnit.Framework;
@@ -54,14 +55,31 @@ public partial class RoslynAnalyzerAdapterTests
         Assert.That(((RoslynAnalyzerAdapter)newer).VersionIndependentId, Is.EqualTo(((RoslynAnalyzerAdapter)older).VersionIndependentId));
     }
 
+    [Test]
+    public async Task Id_OfOneAnalyzerInAssembliesOfOneNameAndVersionWithDifferentKeys_Differ()
+    {
+        // e.g. a package's signed build of an analyzer and an unsigned local build of the same version
+        var assemblyName = $"ProbeKeys_{Guid.NewGuid():N}";
+        var unsigned = (RoslynAnalyzerAdapter)await LoadEmittedAnalyzerAsync(assemblyName, "1.0.0.0");
+        var signed = (RoslynAnalyzerAdapter)await LoadEmittedAnalyzerAsync(assemblyName, "1.0.0.0", AnalyzerAssemblyEmitter.CreatePublicKey());
+        var otherKey = (RoslynAnalyzerAdapter)await LoadEmittedAnalyzerAsync(assemblyName, "1.0.0.0", AnalyzerAssemblyEmitter.CreatePublicKey());
+
+        Assert.That(new[] { unsigned.Id, signed.Id, otherKey.Id }, Is.Unique);
+        Assert.That(new[] { unsigned.VersionIndependentId, signed.VersionIndependentId, otherKey.VersionIndependentId }, Is.Unique);
+        var token = signed.DiagnosticAnalyzer.GetType().Assembly.GetName().GetPublicKeyToken()!;
+        Assert.That(signed.Id, Is.EqualTo($"Roslyn_{SameNameAnalyzer}@{assemblyName}+{Convert.ToHexStringLower(token)}-1.0.0.0"));
+        Assert.That(unsigned.Id, Is.EqualTo($"Roslyn_{SameNameAnalyzer}@{assemblyName}-1.0.0.0"));
+    }
+
     /// <summary>
     /// Compile <see cref="SameNameAnalyzer"/> into <paramref name="assemblyName"/> in a directory of its own,
-    /// so each build loads into its own analyzer load context, and load it
+    /// so each build loads into its own analyzer load context, public-signed with <paramref name="publicKey"/> when
+    /// given, and load it
     /// </summary>
-    private async Task<IAnalyzer> LoadEmittedAnalyzerAsync(string assemblyName, string assemblyVersion)
+    private async Task<IAnalyzer> LoadEmittedAnalyzerAsync(string assemblyName, string assemblyVersion, ImmutableArray<byte> publicKey = default)
     {
         var path = Path.Combine(CreateTestDirectory(Guid.NewGuid().ToString("N")), assemblyName + ".dll");
-        AnalyzerAssemblyEmitter.Emit(assemblyName, path, AnalyzerAssemblyEmitter.AnalyzerSource(SameNameAnalyzer, "PROBE002"), assemblyVersion);
+        AnalyzerAssemblyEmitter.Emit(assemblyName, path, AnalyzerAssemblyEmitter.AnalyzerSource(SameNameAnalyzer, "PROBE002"), assemblyVersion, publicKey);
         var loader = new RoslynAnalyzerLoader(CreateNullLogger<RoslynAnalyzerLoader>(), CreateNullLoggerFactory());
 
         var analyzers = await loader.LoadAnalyzersFromAssemblyAsync(path);
