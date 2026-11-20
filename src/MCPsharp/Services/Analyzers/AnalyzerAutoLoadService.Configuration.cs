@@ -42,35 +42,52 @@ public sealed partial class AnalyzerAutoLoadService
             return (_defaultConfiguration, null);
         }
 
-        var file = new FileInfo(GetConfigurationPath(projectDirectory));
-        if (!file.Exists)
+        var path = Path.GetFullPath(GetConfigurationPath(projectDirectory));
+        string? text = null;
+        string? readError = null;
+        try
         {
+            text = File.ReadAllText(path);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            // Without the file, the defaults; and nothing is kept for a file that may come back
+            lock (_lock)
+            {
+                _configurationFile = null;
+            }
+
             return (_defaultConfiguration, null);
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            readError = ex.Message;
+        }
 
+        // Only the content tells whether the file changed: a file can be replaced keeping its time and length
         lock (_lock)
         {
-            if (_configurationFile is { } cached && cached.IsCurrent(file))
+            if (text != null && _configurationFile is { } cached && cached.IsCurrent(path, text))
             {
                 return (cached.Configuration, cached.Error);
             }
         }
 
-        var configuration = ReadConfiguration(file.FullName, out var readError);
+        var configuration = text == null ? null : ParseConfiguration(text, out readError);
         string? error;
         if (configuration == null)
         {
-            error = $"Ignored the analyzer auto-load configuration {file.FullName}, which could not be read ({readError}); using the default configuration";
-            LogInvalidConfiguration(_logger, file.FullName, readError);
+            error = $"Ignored the analyzer auto-load configuration {path}, which could not be read ({readError}); using the default configuration";
+            LogInvalidConfiguration(_logger, path, readError);
             configuration = _defaultConfiguration;
         }
         else
         {
-            LogReadConfiguration(_logger, file.FullName);
+            LogReadConfiguration(_logger, path);
             configuration = ResolveCustomPaths(configuration, projectDirectory, out error);
         }
 
-        var state = new ConfigurationFile(file.FullName, file.LastWriteTimeUtc, file.Length, configuration, error);
+        var state = new ConfigurationFile(path, text, configuration, error);
         lock (_lock)
         {
             _configurationFile = state;
@@ -87,12 +104,27 @@ public sealed partial class AnalyzerAutoLoadService
     {
         try
         {
-            var json = File.ReadAllText(configPath);
+            return ParseConfiguration(File.ReadAllText(configPath), out error);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = ex.Message;
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Parse an auto-load configuration: null when it cannot be parsed, with the reason in <paramref name="error"/>
+    /// </summary>
+    private static AnalyzerAutoLoadConfiguration? ParseConfiguration(string json, out string? error)
+    {
+        try
+        {
             var configuration = JsonSerializer.Deserialize<AnalyzerAutoLoadConfiguration>(json, ConfigurationJsonOptions);
             error = configuration == null ? "it holds no configuration object" : null;
             return configuration == null ? null : WithoutBlankEntries(configuration);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
         {
             error = ex.Message;
             return null;
@@ -161,19 +193,19 @@ public sealed partial class AnalyzerAutoLoadService
     }
 
     /// <summary>
-    /// A configuration file as read, current while its path, time and length are unchanged
+    /// A configuration file as read, current while it is at the same path with the same content. Text is null for a
+    /// file that could not be read, which is never current, so it is read again.
     /// </summary>
     private sealed record ConfigurationFile(
         string Path,
-        DateTime LastWriteTimeUtc,
-        long Length,
+        string? Text,
         AnalyzerAutoLoadConfiguration Configuration,
         string? Error)
     {
-        public bool IsCurrent(FileInfo file) =>
-            string.Equals(Path, file.FullName, PathContainment.Comparison) &&
-            LastWriteTimeUtc == file.LastWriteTimeUtc &&
-            Length == file.Length;
+        public bool IsCurrent(string path, string text) =>
+            Text != null &&
+            string.Equals(Path, path, PathContainment.Comparison) &&
+            string.Equals(Text, text, StringComparison.Ordinal);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Read the analyzer auto-load configuration {Path}")]

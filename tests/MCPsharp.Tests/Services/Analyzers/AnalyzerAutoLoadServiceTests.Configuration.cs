@@ -114,6 +114,39 @@ public partial class AnalyzerAutoLoadServiceTests
         Assert.That(second.AlreadyLoaded, Is.True);
     }
 
+    // Two configurations of the same length, so that replacing one with the other keeps the file's length
+    private const string LoadOnStartupJson = """{"loadOnStartup":true }""";
+    private const string LoadOnFirstUseJson = """{"loadOnStartup":false}""";
+
+    [Test]
+    public void GetConfiguration_WhenTheFileIsReplacedKeepingItsLengthAndTime_ReadsTheNewConfiguration()
+    {
+        var path = OpenProjectWithConfiguration(LoadOnStartupJson);
+        var written = File.GetLastWriteTimeUtc(path);
+        Assert.That(_service.GetConfiguration().LoadOnStartup, Is.True);
+
+        // e.g. a tool that restores the time of the files it writes
+        File.WriteAllText(path, LoadOnFirstUseJson);
+        File.SetLastWriteTimeUtc(path, written);
+
+        Assert.That(_service.GetConfiguration().LoadOnStartup, Is.False);
+    }
+
+    [Test]
+    public void GetConfiguration_WhenTheFileIsDeletedAndWrittenAgain_ReadsTheNewConfiguration()
+    {
+        var path = OpenProjectWithConfiguration(LoadOnStartupJson);
+        var written = File.GetLastWriteTimeUtc(path);
+        Assert.That(_service.GetConfiguration().LoadOnStartup, Is.True);
+
+        File.Delete(path);
+        Assert.That(_service.GetConfiguration().LoadOnStartup, Is.False, "Without the file, the configuration is the default");
+        File.WriteAllText(path, LoadOnFirstUseJson);
+        File.SetLastWriteTimeUtc(path, written);
+
+        Assert.That(_service.GetConfiguration().LoadOnStartup, Is.False);
+    }
+
     [Test]
     public async Task EnsureAnalyzersLoadedAsync_ResolvesRelativeCustomAnalyzerPathsAgainstTheProject()
     {
