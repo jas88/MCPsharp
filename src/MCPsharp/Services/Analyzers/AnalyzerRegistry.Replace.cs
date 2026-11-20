@@ -23,17 +23,9 @@ public partial class AnalyzerRegistry
             return true;
         }
 
-        // Until the replacement has initialized, the analyzer registered under the ID stays, and runs
-        AnalyzerInfo info;
-        try
-        {
-            info = await InitializeForRegistrationAsync(analyzer, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            LogErrorRegistering(_logger, ex, analyzer.Id);
-            return false;
-        }
+        // Until the replacement has initialized, the analyzer registered under the ID stays, and runs; and it stays
+        // if the replacement's initialization fails or is cancelled, which propagates
+        var info = await InitializeForRegistrationAsync(analyzer, cancellationToken);
 
         // Whichever analyzer holds the ID now is replaced: while the replacement initialized, the one it was to
         // replace may have been unregistered, or another registered
@@ -82,6 +74,8 @@ public partial class AnalyzerRegistry
     /// </summary>
     private async Task<AnalyzerInfo> InitializeForRegistrationAsync(IAnalyzer analyzer, CancellationToken cancellationToken)
     {
+        // An analyzer's initialization may ignore the token, and a caller that has cancelled registers nothing more
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             await analyzer.InitializeAsync(cancellationToken);

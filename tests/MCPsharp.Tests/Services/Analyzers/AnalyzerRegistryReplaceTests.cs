@@ -58,15 +58,15 @@ public class AnalyzerRegistryReplaceTests : TestBase
     }
 
     [Test]
-    public async Task ReplaceAnalyzerAsync_WithAnAnalyzerThatFailsToInitialize_KeepsTheOneItWasToReplaceAndDisposesIt()
+    public async Task ReplaceAnalyzerAsync_WithAnAnalyzerThatFailsToInitialize_ThrowsKeepsTheOneItWasToReplaceAndDisposesIt()
     {
         var previous = new TestAnalyzer(AnalyzerId);
         var failing = new TestAnalyzer(AnalyzerId, initializationError: new InvalidOperationException("Cannot initialize"));
         await _registry.RegisterAnalyzerAsync(previous);
 
-        var replaced = await _registry.ReplaceAnalyzerAsync(failing);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _registry.ReplaceAnalyzerAsync(failing));
 
-        Assert.That(replaced, Is.False);
+        Assert.That(error.Message, Is.EqualTo("Cannot initialize"));
         Assert.That(_registry.GetAnalyzer(AnalyzerId), Is.SameAs(previous));
         await failing.WaitUntilDisposedAsync();
         Assert.That(previous.IsDisposed, Is.False);

@@ -43,9 +43,9 @@ public partial class AnalyzerAutoLoadServiceTests : FileServiceTestBase
         base.TearDown();
     }
 
-    private AnalyzerAutoLoadService CreateService(AnalyzerAutoLoadConfiguration? configuration = null) =>
+    private AnalyzerAutoLoadService CreateService(AnalyzerAutoLoadConfiguration? configuration = null, RoslynAnalyzerLoader? loader = null) =>
         new(CreateNullLogger<AnalyzerAutoLoadService>(),
-            new RoslynAnalyzerLoader(CreateNullLogger<RoslynAnalyzerLoader>(), CreateNullLoggerFactory()),
+            loader ?? new RoslynAnalyzerLoader(CreateNullLogger<RoslynAnalyzerLoader>(), CreateNullLoggerFactory()),
             _registry,
             _workspace,
             configuration);
@@ -80,7 +80,7 @@ public partial class AnalyzerAutoLoadServiceTests : FileServiceTestBase
         var result = await _service.EnsureAnalyzersLoadedAsync();
 
         Assert.That(result.LoadedAnalyzers.Select(a => a.Id), Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds.Except(StaticMethodAnalyzerOnly)));
-        Assert.That(result.Errors, Has.One.Contain(StaticMethodAnalyzerId).And.Contain("rejected"));
+        Assert.That(result.Errors, Has.One.Contain(StaticMethodAnalyzerId).And.Contain("already registered"));
         Assert.That(_registry.GetAnalyzer(StaticMethodAnalyzerId), Is.SameAs(holder));
     }
 

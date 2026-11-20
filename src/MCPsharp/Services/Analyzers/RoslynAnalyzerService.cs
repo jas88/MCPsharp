@@ -207,13 +207,21 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
         var registered = ImmutableArray.CreateBuilder<IAnalyzer>(analyzers.Length);
         foreach (var analyzer in analyzers)
         {
-            if (await _registry.ReplaceAnalyzerAsync(analyzer, cancellationToken))
+            try
             {
-                registered.Add(analyzer);
+                if (await _registry.ReplaceAnalyzerAsync(analyzer, cancellationToken))
+                {
+                    registered.Add(analyzer);
+                }
+                else
+                {
+                    LogAnalyzerNotRegistered(_logger, analyzer.Id);
+                }
             }
-            else
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
-                LogAnalyzerNotRegistered(_logger, analyzer.Id);
+                // The analyzer it was to replace stays registered
+                LogAnalyzerFailedToInitialize(_logger, ex, analyzer.Id);
             }
         }
 
@@ -251,6 +259,9 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "The analyzer host could not register analyzer {AnalyzerId}, so it was not loaded")]
     private static partial void LogAnalyzerNotRegistered(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Analyzer {AnalyzerId} failed to initialize, so it was not loaded")]
+    private static partial void LogAnalyzerFailedToInitialize(ILogger logger, Exception exception, string analyzerId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Discovering analyzer assemblies in {Directory}")]
     private static partial void LogDiscoveringAssemblies(ILogger logger, string directory);

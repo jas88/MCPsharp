@@ -161,7 +161,14 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
                 Message = $"Successfully auto-loaded {loadedAnalyzers.Count} analyzers"
             };
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            // Nothing of a cancelled load stays registered, and as nothing is recorded as loaded, the next load
+            // starts again
+            await UnregisterAutoLoadedAnalyzersAsync(CancellationToken.None);
+            throw;
+        }
+        catch (Exception ex)
         {
             LogFatalAutoLoadError(_logger, ex);
             return new AnalyzerAutoLoadResult
@@ -276,62 +283,6 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
          configuration.ExcludeAnalyzers.Contains(roslynAnalyzer.VersionIndependentId));
 
     /// <summary>
-    /// Register the analyzers, returning those the registry accepted: only those can run. One it rejects, e.g.
-    /// because an analyzer loaded with load_roslyn_analyzers holds its ID, is reported in <paramref name="errors"/>.
-    /// </summary>
-    private async Task<List<IAnalyzer>> RegisterAnalyzersAsync(List<IAnalyzer> analyzers, List<string> errors, CancellationToken cancellationToken)
-    {
-        var registered = new List<IAnalyzer>();
-        foreach (var analyzer in analyzers)
-        {
-            try
-            {
-                if (await _registry.RegisterAnalyzerAsync(analyzer, cancellationToken))
-                {
-                    _registeredAnalyzers.Add(analyzer);
-                    registered.Add(analyzer);
-                }
-                else
-                {
-                    LogAnalyzerNotRegistered(_logger, analyzer.Id);
-                    errors.Add($"Did not load analyzer '{analyzer.Id}': the analyzer registry rejected it (an analyzer with its ID may already be registered)");
-                }
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                LogErrorRegisteringAnalyzer(_logger, ex, analyzer.Id);
-                errors.Add($"Failed to register analyzer '{analyzer.Id}': {ex.Message}");
-            }
-        }
-
-        return registered;
-    }
-
-    /// <summary>
-    /// Unregister the analyzers this service registered, and forget the previous load
-    /// </summary>
-    private async Task UnregisterAutoLoadedAnalyzersAsync(CancellationToken cancellationToken)
-    {
-        Publish(null, [], [], loaded: false);
-
-        var unregistered = 0;
-        foreach (var analyzer in _registeredAnalyzers)
-        {
-            // Leave the ID alone if something else has registered its own analyzer under it since
-            if (await _registry.UnregisterAnalyzerInstanceAsync(analyzer, cancellationToken))
-            {
-                unregistered++;
-            }
-        }
-
-        _registeredAnalyzers.Clear();
-        if (unregistered > 0)
-        {
-            LogUnregisteredPreviousAnalyzers(_logger, unregistered);
-        }
-    }
-
-    /// <summary>
     /// Record the outcome of a load, returning the loaded analyzers as published
     /// </summary>
     private ImmutableArray<IAnalyzer> Publish(
@@ -396,9 +347,6 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} analyzers from {ReferenceCount} project analyzer references")]
     private static partial void LogLoadedFromProjectReferences(ILogger logger, int count, int referenceCount);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Unregistered {Count} analyzers of the previous auto-load")]
-    private static partial void LogUnregisteredPreviousAnalyzers(ILogger logger, int count);
-
     [LoggerMessage(Level = LogLevel.Information, Message = "Built-in code fix providers are automatically registered via BuiltInCodeFixRegistry")]
     private static partial void LogBuiltInProvidersAutoRegistered(ILogger logger);
 
@@ -419,12 +367,6 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Filtered out {Count} excluded analyzers")]
     private static partial void LogFilteredExcluded(ILogger logger, int count);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Error registering analyzer: {AnalyzerId}")]
-    private static partial void LogErrorRegisteringAnalyzer(ILogger logger, Exception exception, string analyzerId);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "The analyzer registry rejected analyzer {AnalyzerId}")]
-    private static partial void LogAnalyzerNotRegistered(ILogger logger, string analyzerId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Auto-load completed: {Count} analyzers loaded in {Duration}ms")]
     private static partial void LogAutoLoadCompleted(ILogger logger, int count, double duration);

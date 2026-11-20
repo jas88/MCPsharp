@@ -26,52 +26,45 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
     public event EventHandler<AnalyzerRegisteredEventArgs>? AnalyzerRegistered;
     public event EventHandler<AnalyzerUnregisteredEventArgs>? AnalyzerUnregistered;
 
+    /// <inheritdoc />
     public async Task<bool> RegisterAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default)
     {
-        try
+        if (string.IsNullOrEmpty(analyzer.Id))
         {
-            if (string.IsNullOrEmpty(analyzer.Id))
-            {
-                LogEmptyAnalyzerId(_logger);
-                return false;
-            }
-
-            if (GetAnalyzer(analyzer.Id) != null)
-            {
-                LogAlreadyRegistered(_logger, analyzer.Id);
-                return false;
-            }
-
-            // Registered only once it has initialized, so nothing can get and run it before
-            var info = await InitializeForRegistrationAsync(analyzer, cancellationToken);
-            bool added;
-            lock (_lock)
-            {
-                // Another analyzer may have been registered under the ID while this one initialized
-                added = _analyzers.TryAdd(analyzer.Id, analyzer);
-                if (added)
-                {
-                    _analyzerInfos[analyzer.Id] = info;
-                }
-            }
-
-            if (!added)
-            {
-                LogAlreadyRegistered(_logger, analyzer.Id);
-                DisposeInBackground(analyzer);
-                return false;
-            }
-
-            LogRegistered(_logger, analyzer.Id, analyzer.Version);
-            AnalyzerRegistered?.Invoke(this, new AnalyzerRegisteredEventArgs(analyzer.Id, info));
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LogErrorRegistering(_logger, ex, analyzer.Id);
+            LogEmptyAnalyzerId(_logger);
             return false;
         }
+
+        if (GetAnalyzer(analyzer.Id) != null)
+        {
+            LogAlreadyRegistered(_logger, analyzer.Id);
+            return false;
+        }
+
+        // Registered only once it has initialized, so nothing can get and run it before; a failure or cancellation
+        // propagates, so the caller can tell it from a rejection
+        var info = await InitializeForRegistrationAsync(analyzer, cancellationToken);
+        bool added;
+        lock (_lock)
+        {
+            // Another analyzer may have been registered under the ID while this one initialized
+            added = _analyzers.TryAdd(analyzer.Id, analyzer);
+            if (added)
+            {
+                _analyzerInfos[analyzer.Id] = info;
+            }
+        }
+
+        if (!added)
+        {
+            LogAlreadyRegistered(_logger, analyzer.Id);
+            DisposeInBackground(analyzer);
+            return false;
+        }
+
+        LogRegistered(_logger, analyzer.Id, analyzer.Version);
+        AnalyzerRegistered?.Invoke(this, new AnalyzerRegisteredEventArgs(analyzer.Id, info));
+        return true;
     }
 
     public Task<bool> UnregisterAnalyzerAsync(string analyzerId, CancellationToken cancellationToken = default)
@@ -404,9 +397,6 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Registered analyzer: {AnalyzerId} v{Version}")]
     private static partial void LogRegistered(ILogger logger, string analyzerId, Version version);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Error registering analyzer: {AnalyzerId}")]
-    private static partial void LogErrorRegistering(ILogger logger, Exception exception, string analyzerId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Analyzer {AnalyzerId} is not registered")]
     private static partial void LogNotRegistered(ILogger logger, string analyzerId);
