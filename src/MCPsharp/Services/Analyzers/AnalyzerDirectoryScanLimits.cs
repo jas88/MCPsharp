@@ -35,34 +35,57 @@ public static class AnalyzerDirectoryScanLimits
         int maxAssemblyCount = MaxAssemblyCount,
         long maxTotalBytes = MaxTotalBytes)
     {
-        var count = 0;
-        long totalBytes = 0;
-        var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-
         try
         {
-            foreach (var file in Directory.EnumerateFiles(directory, "*.dll", searchOption))
-            {
-                count++;
-                if (count > maxAssemblyCount)
-                {
-                    return $"'{directory}' holds more than {maxAssemblyCount} DLLs, the most a directory searched for analyzers " +
-                           $"may hold, since every DLL found is loaded to look for analyzers. {Suggestion}";
-                }
-
-                totalBytes += new FileInfo(file).Length;
-                if (totalBytes > maxTotalBytes)
-                {
-                    return $"'{directory}' holds more than {FormatSize(maxTotalBytes)} of DLLs, the most a directory searched for " +
-                           $"analyzers may hold, since every DLL found is loaded to look for analyzers. {Suggestion}";
-                }
-            }
+            return ListAssemblies(directory, recursive, out _, maxAssemblyCount, maxTotalBytes);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // An unreadable directory is reported by the search itself
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The DLLs of <paramref name="directory"/> to search for analyzers, in <paramref name="assemblies"/>, listed in
+    /// the pass that checks the limits: a search loads these and only these, so a directory that grows afterwards
+    /// (e.g. during a restore) can't make it load more than was counted
+    /// </summary>
+    /// <returns>Null when the directory can be searched, otherwise an error naming the limit it exceeds, with no
+    /// assemblies listed</returns>
+    /// <exception cref="IOException">The directory can't be read</exception>
+    /// <exception cref="UnauthorizedAccessException">The directory can't be read</exception>
+    public static string? ListAssemblies(
+        string directory,
+        bool recursive,
+        out IReadOnlyList<string> assemblies,
+        int maxAssemblyCount = MaxAssemblyCount,
+        long maxTotalBytes = MaxTotalBytes)
+    {
+        var found = new List<string>();
+        long totalBytes = 0;
+        var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        assemblies = Array.Empty<string>();
+
+        foreach (var file in Directory.EnumerateFiles(directory, "*.dll", searchOption))
+        {
+            if (found.Count == maxAssemblyCount)
+            {
+                return $"'{directory}' holds more than {maxAssemblyCount} DLLs, the most a directory searched for analyzers " +
+                       $"may hold, since every DLL found is loaded to look for analyzers. {Suggestion}";
+            }
+
+            totalBytes += new FileInfo(file).Length;
+            if (totalBytes > maxTotalBytes)
+            {
+                return $"'{directory}' holds more than {FormatSize(maxTotalBytes)} of DLLs, the most a directory searched for " +
+                       $"analyzers may hold, since every DLL found is loaded to look for analyzers. {Suggestion}";
+            }
+
+            found.Add(file);
         }
 
+        assemblies = found;
         return null;
     }
 

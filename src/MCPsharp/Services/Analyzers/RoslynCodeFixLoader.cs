@@ -125,18 +125,13 @@ public partial class RoslynCodeFixLoader
                 return ImmutableArray<string>.Empty;
             }
 
-            // Every DLL found is loaded, so refuse a directory such as the NuGet cache
-            var limitError = AnalyzerDirectoryScanLimits.Check(directory, recursive);
+            // Every DLL found is loaded, so refuse a directory such as the NuGet cache, and load only the DLLs counted
+            var limitError = AnalyzerDirectoryScanLimits.ListAssemblies(directory, recursive, out var dllFiles);
             if (limitError != null)
             {
                 LogDirectoryOverScanLimit(_logger, limitError);
                 return ImmutableArray<string>.Empty;
             }
-
-            var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-
-            // Look for DLL files
-            var dllFiles = Directory.GetFiles(directory, "*.dll", searchOption);
 
             var codeFixProviderAssemblies = new List<string>();
 

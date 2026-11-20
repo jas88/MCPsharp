@@ -134,8 +134,8 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
                 return Task.FromResult(ImmutableArray<AnalyzerInfo>.Empty);
             }
 
-            // Every DLL found is loaded, so refuse a directory with too many or too large DLLs
-            var limitError = AnalyzerDirectoryScanLimits.Check(directoryPath, recursive: false);
+            // Every DLL found is loaded, so refuse a directory with too many or too large DLLs, and load only those counted
+            var limitError = AnalyzerDirectoryScanLimits.ListAssemblies(directoryPath, recursive: false, out var dllFiles);
             if (limitError != null)
             {
                 LogDirectoryOverScanLimit(_logger, limitError);
@@ -144,7 +144,7 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
 
             var discoveredAnalyzers = new List<AnalyzerInfo>();
 
-            foreach (var dllFile in Directory.GetFiles(directoryPath, "*.dll", SearchOption.TopDirectoryOnly))
+            foreach (var dllFile in dllFiles)
             {
                 try
                 {

@@ -13,6 +13,8 @@ namespace MCPsharp.Tests.Services.Analyzers;
 [Category("Analyzers")]
 public class AnalyzerDirectoryScanLimitsTests : FileServiceTestBase
 {
+    private static readonly string[] ThreeFakeDlls = ["Fake0.dll", "Fake1.dll", "Fake2.dll"];
+
     /// <summary>
     /// Create <paramref name="count"/> placeholder DLLs of <paramref name="bytesEach"/> bytes under
     /// <paramref name="directory"/>, spread over package-like subdirectories
@@ -45,6 +47,32 @@ public class AnalyzerDirectoryScanLimitsTests : FileServiceTestBase
         CreateFakeDlls(directory, 3);
 
         Assert.That(AnalyzerDirectoryScanLimits.Check(directory), Is.Null);
+    }
+
+    [Test]
+    public void ListAssemblies_DirectoryWithinTheLimits_ListsTheDllsItCounted()
+    {
+        // The search loads this list rather than looking again, so a directory that grows can't exceed the limits
+        var directory = CreateTestDirectory("listed");
+        CreateFakeDlls(directory, 3);
+        File.WriteAllText(Path.Combine(directory, "readme.txt"), "not an assembly");
+
+        var error = AnalyzerDirectoryScanLimits.ListAssemblies(directory, recursive: true, out var assemblies);
+
+        Assert.That(error, Is.Null);
+        Assert.That(assemblies.Select(Path.GetFileName), Is.EquivalentTo(ThreeFakeDlls));
+    }
+
+    [Test]
+    public void ListAssemblies_DirectoryOverALimit_ListsNothing()
+    {
+        var directory = CreateTestDirectory("over");
+        CreateFakeDlls(directory, AnalyzerDirectoryScanLimits.MaxAssemblyCount + 1);
+
+        var error = AnalyzerDirectoryScanLimits.ListAssemblies(directory, recursive: true, out var assemblies);
+
+        Assert.That(error, Does.Contain($"more than {AnalyzerDirectoryScanLimits.MaxAssemblyCount} DLLs"));
+        Assert.That(assemblies, Is.Empty);
     }
 
     [Test]
