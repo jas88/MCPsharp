@@ -62,6 +62,11 @@ public record Finding
     public int? ColumnNumber { get; init; }
 
     /// <summary>
+    /// Identifier of the rule that reported the finding (for a Roslyn analyzer, the diagnostic ID such as CA1822)
+    /// </summary>
+    public string? RuleId { get; init; }
+
+    /// <summary>
     /// Unique identifier for this finding
     /// </summary>
     public string Id { get; init; } = Guid.NewGuid().ToString();

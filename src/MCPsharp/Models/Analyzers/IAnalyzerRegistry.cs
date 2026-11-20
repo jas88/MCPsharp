@@ -18,6 +18,18 @@ public interface IAnalyzerRegistry
     Task<bool> UnregisterAnalyzerAsync(string analyzerId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Register <paramref name="analyzer"/> in place of any analyzer registered under its ID, in one step. When it
+    /// fails to initialize, the analyzer it was to replace stays registered, and false is returned.
+    /// </summary>
+    Task<bool> ReplaceAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Unregister <paramref name="analyzer"/> if it is the analyzer registered under its ID, in one step, leaving an
+    /// analyzer that has replaced it registered
+    /// </summary>
+    Task<bool> UnregisterAnalyzerInstanceAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get all registered analyzers
     /// </summary>
     ImmutableArray<AnalyzerInfo> GetRegisteredAnalyzers();

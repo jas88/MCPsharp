@@ -125,10 +125,13 @@ public partial class RoslynCodeFixLoader
                 return ImmutableArray<string>.Empty;
             }
 
-            var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-
-            // Look for DLL files
-            var dllFiles = Directory.GetFiles(directory, "*.dll", searchOption);
+            // Every DLL found is loaded, so refuse a directory such as the NuGet cache, and load only the DLLs counted
+            var limitError = AnalyzerDirectoryScanLimits.ListAssemblies(directory, recursive, out var dllFiles);
+            if (limitError != null)
+            {
+                LogDirectoryOverScanLimit(_logger, limitError);
+                return ImmutableArray<string>.Empty;
+            }
 
             var codeFixProviderAssemblies = new List<string>();
 
@@ -165,49 +168,6 @@ public partial class RoslynCodeFixLoader
         {
             LogErrorDiscoveringAssemblies(_logger, ex, directory);
             return ImmutableArray<string>.Empty;
-        }
-    }
-
-    /// <summary>
-    /// Load all Roslyn code fix providers from NuGet packages cache
-    /// </summary>
-    public async Task<ImmutableArray<RoslynCodeFixAdapter>> LoadCodeFixProvidersFromNuGetCacheAsync(
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            // Common NuGet cache locations
-            var nugetCachePaths = new[]
-            {
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".nuget", "packages"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "NuGet", "Cache")
-            };
-
-            var allCodeFixProviders = new List<RoslynCodeFixAdapter>();
-
-            foreach (var cachePath in nugetCachePaths)
-            {
-                if (!Directory.Exists(cachePath))
-                    continue;
-
-                LogScanningNuGetCache(_logger, cachePath);
-
-                var assemblyPaths = DiscoverCodeFixProviderAssemblies(cachePath, recursive: true);
-                var codeFixProviders = await LoadCodeFixProvidersFromAssembliesAsync(assemblyPaths, cancellationToken);
-
-                allCodeFixProviders.AddRange(codeFixProviders);
-            }
-
-            LogLoadedFromNuGetCache(_logger, allCodeFixProviders.Count);
-
-            return allCodeFixProviders.ToImmutableArray();
-        }
-        catch (Exception ex)
-        {
-            LogErrorLoadingFromNuGetCache(_logger, ex);
-            return ImmutableArray<RoslynCodeFixAdapter>.Empty;
         }
     }
 
@@ -328,6 +288,9 @@ public partial class RoslynCodeFixLoader
     [LoggerMessage(Level = LogLevel.Error, Message = "Directory not found: {Directory}")]
     private static partial void LogDirectoryNotFound(ILogger logger, string directory);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Not searching for code fix provider assemblies: {Reason}")]
+    private static partial void LogDirectoryOverScanLimit(ILogger logger, string reason);
+
     [LoggerMessage(Level = LogLevel.Debug, Message = "Discovered code fix provider assembly: {AssemblyPath}")]
     private static partial void LogDiscoveredAssembly(ILogger logger, string assemblyPath);
 
@@ -339,15 +302,6 @@ public partial class RoslynCodeFixLoader
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Error discovering code fix provider assemblies in {Directory}")]
     private static partial void LogErrorDiscoveringAssemblies(ILogger logger, Exception exception, string directory);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "Scanning NuGet cache for code fix providers: {CachePath}")]
-    private static partial void LogScanningNuGetCache(ILogger logger, string cachePath);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} code fix providers from NuGet cache")]
-    private static partial void LogLoadedFromNuGetCache(ILogger logger, int count);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading code fix providers from NuGet cache")]
-    private static partial void LogErrorLoadingFromNuGetCache(ILogger logger, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Trace, Message = "Could not instantiate code fix provider {CodeFixType}")]
     private static partial void LogCouldNotInstantiateProvider(ILogger logger, Exception exception, string codeFixType);

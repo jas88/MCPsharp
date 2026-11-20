@@ -1,6 +1,6 @@
 # Analyzer Auto-Loading
 
-MCPsharp automatically discovers and loads Roslyn analyzers without requiring explicit initialization. This eliminates the need for users to manually call `load_roslyn_analyzers` before using analysis features.
+MCPsharp automatically loads the Roslyn analyzers that the projects of the open solution or project reference, as an IDE does, without requiring explicit initialization. This eliminates the need for users to manually call `load_roslyn_analyzers` before using analysis features.
 
 ## Overview
 
@@ -22,24 +22,34 @@ MCPsharp: [returns analysis results immediately]
 
 ## How It Works
 
-1. **Lazy Initialization**: Analyzers are auto-loaded on first use, not at startup
-2. **Smart Discovery**: Scans standard locations for installed analyzer packages
-3. **Automatic Registration**: Registers discovered analyzers with the analyzer host
-4. **One-Time Operation**: Auto-load runs once and caches results
+1. **Lazy Initialization**: Analyzers are auto-loaded on first use, not at startup (unless the project's configuration sets `loadOnStartup`)
+2. **The Project's Analyzers**: The default source, `project_references`, loads the analyzers that the projects of the open workspace reference; nothing is loaded from the NuGet cache or other locations unless configured. The configuration's `customAnalyzerPaths` are auto-loaded too, and analyzers loaded with `load_roslyn_analyzers` stay available alongside
+3. **Automatic Registration**: Registers the loaded analyzers with the analyzer host
+4. **Follows the Open Project**: Auto-load runs once per set of project analyzer references and configuration; after another project is opened, or its configuration file changes, the next use replaces the previous analyzers
 5. **Non-Blocking**: Failures in auto-load are logged but don't break MCPsharp
 
 ## Analyzer Sources
 
-### 1. NuGet Package Cache
-Auto-discovers analyzers from `~/.nuget/packages/`, including:
+### 1. Project Analyzer References
+The analyzers that the projects of the open workspace reference: the `Project.AnalyzerReferences` of each project loaded by MSBuildWorkspace, which are also what the compiler and an IDE use. These are:
 
-- **Microsoft.CodeAnalysis.NetAnalyzers** - Official .NET analyzers
-- **Roslynator.Analyzers** - Roslynator code quality analyzers
-- **SonarAnalyzer.CSharp** - SonarQube C# analyzers
-- **ErrorProne.NET.CodeFixes** - ErrorProne.NET analyzers
-- **ErrorProne.NET.Structs** - Struct-specific analyzers
-- **AsyncFixer** - Async/await pattern analyzers
-- **Meziantou.Analyzer** - Meziantou's code quality analyzers
+- The analyzer assets of the NuGet packages the projects reference, at the versions the projects restore (e.g. **Microsoft.CodeAnalysis.NetAnalyzers**, **Roslynator.Analyzers**, **SonarAnalyzer.CSharp**)
+- The analyzers the .NET SDK and targeting packs add (e.g. the .NET analyzers enabled by `EnableNETAnalyzers`)
+- `<Analyzer Include="..." />` items and analyzer project references
+
+Only the C# analyzers each reference exports with `[DiagnosticAnalyzer]` are loaded. Nothing outside these references is loaded: the NuGet cache is never scanned, so its size doesn't matter. The workspace has already loaded the referenced assemblies when it opened the project, and the auto-load reuses its analyzer instances. Each analyzer is identified by its type and its assembly's identity: name, culture, public key token and version (see `excludeAnalyzers` below), so different builds of one analyzer, e.g. the SDK's and a NuGet package's code style analyzers or two versions of a package in different projects, are separate analyzers and are all loaded. Each runs only on the files of the projects that reference it (see [Which Analyzers Run on a File](#which-analyzers-run-on-a-file)), so a file doesn't get the same diagnostic from two builds. When projects reference copies of one assembly at different paths (e.g. two restores of a package), each copy is loaded, and their analyzers, which have the same IDs, are registered once: each runs on the files of every project that references one of the copies. An analyzer from `customAnalyzerPaths` with the ID of a project's analyzer is the one registered, since it runs on every file.
+
+### Which Analyzers Run on a File
+`run_roslyn_analyzers` and `apply_roslyn_fixes` pick the analyzers for each file as an IDE does (`IRoslynAnalyzerService.GetAnalyzersForFile`):
+
+- A file gets the analyzers of the projects that compile it (`RoslynWorkspace.GetFileAnalyzerScope`). Every target framework of a multi-targeted project counts as a project, as does every project a linked file belongs to.
+- Analyzers that belong to no project, those loaded with `load_roslyn_analyzers` or from `customAnalyzerPaths`, run on every file.
+- A file in no project of the open workspace (or when no project is open) gets only the analyzers that belong to no project.
+- A file that several projects compile runs each of their analyzers once, and a diagnostic that more than one of them reports with the same rule, location and message is reported once. In a file of one project, identical diagnostics from different analyzers are all reported.
+- `analyzer_ids` narrows the analyzers to run; it never adds an analyzer that doesn't apply to a file. If none of the requested analyzers applies, the run fails and says why.
+- A directory target runs on its C# files outside build output (`bin`, `obj`) and hidden directories, in path order and at most 100 of them; `filesSkipped` counts the rest. Each file gets the analyzers of its own projects.
+
+NuGet analyzer packages are only referenced once the projects are restored (`dotnet restore`). When MSBuildWorkspace cannot load the project and MCPsharp falls back to an adhoc workspace, there are no project analyzer references, so none are auto-loaded.
 
 ### 2. Built-In Providers
 Auto-registers built-in code fix providers:
@@ -59,26 +69,32 @@ By default, auto-loading is enabled with these settings:
 {
   "autoLoadEnabled": true,
   "loadOnStartup": false,
-  "analyzerSources": ["nuget_cache", "builtin_providers"],
+  "analyzerSources": ["project_references", "builtin_providers"],
   "excludeAnalyzers": [],
   "customAnalyzerPaths": []
 }
 ```
 
 ### Custom Configuration
-Create `.mcpsharp/autoload-config.json` in your project root:
+Create `.mcpsharp/autoload-config.json` in the project root: the directory of the solution or project file MCPsharp opened, or the folder given to `project_open` (`AnalyzerAutoLoadService.GetConfigurationPath`). The format is in `analyzer-autoload-schema.json`; properties you leave out keep their defaults.
+
+- MCPsharp reads the file when it next auto-loads analyzers, and again whenever the file's content changes, so no restart is needed.
+- There is one configuration for the open workspace: the file in the root of the solution, project or folder MCPsharp opened. The projects of a solution don't have configurations of their own, and opening another solution or project switches to its configuration.
+- Without the file, the default configuration applies. A file that cannot be read or parsed is ignored in favour of the default configuration, with a warning in the log (stderr) and in the auto-load errors.
+- Relative `customAnalyzerPaths` are resolved against the project root.
+- Unknown `analyzerSources` (such as `nuget_cache`, which MCPsharp no longer has) are reported and ignored.
 
 ```json
 {
   "autoLoadEnabled": true,
   "loadOnStartup": false,
   "analyzerSources": [
-    "nuget_cache",
+    "project_references",
     "builtin_providers"
   ],
   "excludeAnalyzers": [
-    "Roslynator.RCS1001",
-    "SonarAnalyzer.S1234"
+    "Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35",
+    "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.DoNotDirectlyAwaitATaskAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0"
   ],
   "customAnalyzerPaths": [
     "/path/to/my/custom/analyzers",
@@ -93,61 +109,62 @@ Create `.mcpsharp/autoload-config.json` in your project root:
 Enable or disable auto-loading entirely. When `false`, users must manually call `load_roslyn_analyzers`.
 
 #### `loadOnStartup` (boolean, default: false)
-- `false` (recommended): Lazy load on first analyzer request (faster startup)
-- `true`: Load all analyzers when MCPsharp starts (slower startup, instant first use)
+- `false` (recommended): Lazy load on first analyzer request
+- `true`: Load the project's analyzers as soon as MCPsharp has loaded the project at startup. The load runs in the background, so MCPsharp answers the MCP handshake at once; an analyzer request that arrives before the load finishes waits for it
+
+The setting applies to the project MCPsharp opens when it starts. A project opened later with `project_open` loads its analyzers on first use.
 
 #### `analyzerSources` (array of strings)
-Sources to scan for analyzers:
-- `"nuget_cache"` - Scan NuGet package cache
+Sources to load analyzers from:
+- `"project_references"` - The analyzers that the projects of the open workspace reference
 - `"builtin_providers"` - Register built-in code fix providers
 
 #### `excludeAnalyzers` (array of strings)
-Analyzer IDs to exclude from auto-loading. Useful for disabling specific analyzers you don't want.
+Analyzer IDs to exclude from auto-loading. Useful for disabling specific analyzers you don't want. An analyzer's ID, as `list_roslyn_analyzers` reports it, is `Roslyn_`, its full type name, `@` and its assembly's name, then `+` and the assembly's culture unless it is neutral, `+` and its public key token if it is strong-named, and `-` and its version, e.g. `Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.DoNotDirectlyAwaitATaskAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0`. Leave out `-` and the version (`Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35`) to exclude the analyzer in every version of its assembly, so the exclusion still applies after the package is upgraded.
 
 #### `customAnalyzerPaths` (array of strings)
 Custom directories or DLL files to load analyzers from. Supports:
 - Directory paths: Scans recursively for analyzer DLLs
 - File paths: Loads specific analyzer DLL
 
+Every DLL in a directory is loaded to look for analyzers, so a directory may hold at most 100 DLLs and 100 MB of DLLs (`AnalyzerDirectoryScanLimits`). A larger one, such as the NuGet cache, is skipped, and the auto-load result reports an error naming the limit; point at a specific package's analyzer folder (e.g. `~/.nuget/packages/<package>/<version>/analyzers/dotnet/cs`) or a single DLL instead.
+
 ## Performance
 
 ### Startup Impact
 - **Lazy Loading (default)**: No impact on startup time
-- **Eager Loading**: Adds ~1-2 seconds for typical setups with 3-5 analyzer packages
+- **`loadOnStartup: true`**: The server answers requests as soon as the project is loaded, without waiting for the analyzers, which load in the background meanwhile. That background load still takes processor time and memory at startup, and a request that needs the analyzers waits for it to finish
 
 ### First Use Latency
 - **Without auto-load**: Requires manual load call + analysis time
-- **With auto-load**: Auto-load (1-2s) + analysis time on first request
-- **Subsequent requests**: No auto-load overhead (cached)
-
-### Recommendations
-- Use default lazy loading for best startup performance
-- Enable `loadOnStartup: true` only if you need immediate analyzer availability
+- **With auto-load**: Auto-load + analysis time on first request. The workspace has already loaded the referenced analyzer assemblies, so the auto-load only wraps and registers their analyzers; its cost depends on what the projects reference, not on the size of the NuGet cache
+- **Subsequent requests**: No auto-load overhead (cached until the project analyzer references change)
 
 ## Manual Loading Still Available
 
 Auto-loading doesn't replace manual loading - you can still use `load_roslyn_analyzers` to:
-- Load custom analyzers not in standard locations
-- Reload analyzers after updating packages
+- Load analyzers the open project doesn't reference
 - Load analyzers from specific paths
+
+After updating a project's analyzer packages, open the project again (`project_open`): the next analyzer request loads the new references.
 
 ## Troubleshooting
 
 ### Analyzers Not Loading
 1. Check logs for auto-load errors (stderr)
-2. Verify NuGet packages are installed: `ls ~/.nuget/packages/`
-3. Try manual load: call `load_roslyn_analyzers` with explicit path
-4. Check configuration: ensure `autoLoadEnabled: true`
+2. Check that a project is open (`project_open`) and restored (`dotnet restore`): only the analyzers its projects reference are loaded
+3. Check the workspace health for analyzer load failures (e.g. an analyzer built against a newer Roslyn than MCPsharp's)
+4. Try manual load: call `load_roslyn_analyzers` with explicit path
+5. Check configuration: ensure `autoLoadEnabled: true` and that `analyzerSources` contains `"project_references"`
 
 ### Performance Issues
-1. Disable eager loading: set `loadOnStartup: false`
-2. Exclude large analyzer packages via `excludeAnalyzers`
-3. Disable auto-load and use manual loading for specific analyzers
+1. Exclude analyzers you don't need via `excludeAnalyzers`
+2. Disable auto-load and use manual loading for specific analyzers
 
 ### Configuration Not Applied
-1. Verify file location: `.mcpsharp/autoload-config.json` in project root
-2. Check JSON syntax validity
-3. Restart MCPsharp after configuration changes
+1. Verify file location: `.mcpsharp/autoload-config.json` in the project root (the directory of the solution or project file MCPsharp opened)
+2. Check the log (stderr) or the auto-load errors for a file that could not be read, and check JSON syntax validity
+3. Check the source names: `project_references` and `builtin_providers`
 
 ## Examples
 
@@ -185,8 +202,8 @@ No configuration file needed - auto-loading works out of the box.
 {
   "autoLoadEnabled": true,
   "excludeAnalyzers": [
-    "Microsoft.CodeAnalysis.CSharp.NetAnalyzers.CA1014",
-    "Roslynator.RCS1001"
+    "Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35",
+    "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.DoNotDirectlyAwaitATaskAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0"
   ]
 }
 ```
@@ -211,12 +228,12 @@ await client.call("run_roslyn_analyzers", { target_path: "/my/project" });
 ## Implementation Details
 
 ### Auto-Load Workflow
-1. User calls `run_roslyn_analyzers` (or any analyzer tool)
-2. `RoslynAnalyzerService.RunAnalyzersAsync()` checks if analyzers loaded
-3. If not loaded, calls `AnalyzerAutoLoadService.EnsureAnalyzersLoadedAsync()`
-4. Auto-load service discovers and loads analyzers from configured sources
-5. Analyzers registered with `AnalyzerRegistry`
-6. Analysis proceeds normally
+1. User calls `run_roslyn_analyzers` or `apply_roslyn_fixes`
+2. `RoslynAnalyzerService` calls `AnalyzerAutoLoadService.EnsureAnalyzersLoadedAsync()`
+3. The auto-load service gets the workspace's project analyzer references (`RoslynWorkspace.GetAnalyzerReferences()`, each assembly once); if they are the ones it last loaded, nothing more happens
+4. Otherwise it unregisters the analyzers of its previous load, then loads the C# analyzers of the references (`RoslynAnalyzerLoader.LoadAnalyzersFromReferences()`) and any custom paths
+5. Analyzers registered with `AnalyzerRegistry`, replacing the previous auto-loaded analyzers in `RoslynAnalyzerService` (explicitly loaded analyzers stay)
+6. Analysis proceeds normally: each file gets the analyzers that apply to it (see [Which Analyzers Run on a File](#which-analyzers-run-on-a-file))
 
 ### Thread Safety
 - Auto-load is thread-safe (uses locking)
@@ -225,16 +242,18 @@ await client.call("run_roslyn_analyzers", { target_path: "/my/project" });
 
 ### Error Handling
 - Individual analyzer load failures are logged but don't fail auto-load
-- NuGet package scan failures are logged as warnings
+- Analyzer references that fail to load are logged as warnings (the workspace also reports them as analyzer load failures in its health)
 - Auto-load failure doesn't crash MCPsharp - falls back to empty analyzer list
 
 ## Migration Guide
 
 ### For Existing Users
-No action required. Existing workflows continue to work:
 - Manual `load_roslyn_analyzers` calls still work
-- No breaking changes to API
-- Auto-loading is additive functionality
+- The `nuget_cache` analyzer source was removed: MCPsharp no longer scans the NuGet cache (loading every analyzer there could exhaust memory and file handles). Use `project_references`, the default, which loads the analyzers that the projects of the open workspace reference
+- `RoslynAnalyzerLoader.LoadAnalyzersFromNuGetCacheAsync()` and `RoslynCodeFixLoader.LoadCodeFixProvidersFromNuGetCacheAsync()` were removed; use `RoslynAnalyzerLoader.LoadAnalyzersFromReferences()` with a project's analyzer references
+- A project's `.mcpsharp/autoload-config.json` is now read (it was documented before but never read), so check an existing one: replace `nuget_cache` with `project_references`, and use the analyzer IDs `list_roslyn_analyzers` reports in `excludeAnalyzers`
+- Analyzer IDs changed from `Roslyn_<type name>` to `Roslyn_<type full name>@<assembly name>[+<culture>][+<public key token>]-<assembly version>`, the culture only when it isn't neutral and the token only for a strong-named assembly, so that analyzers in different assemblies no longer share an ID
+- `run_roslyn_analyzers` no longer runs every loaded analyzer on every file: a file gets its own projects' analyzers, plus those loaded with `load_roslyn_analyzers` or from `customAnalyzerPaths`
 
 ### For New Users
 Simply use analyzer tools directly:
@@ -248,5 +267,4 @@ mcpsharp run_roslyn_analyzers --target ./src
 Planned improvements:
 - **Incremental loading**: Load analyzers in background after startup
 - **Persistent cache**: Save discovered analyzers to disk for faster reload
-- **Package manager integration**: Auto-detect new analyzer packages installed via NuGet
 - **Smart defaults**: Machine learning to predict which analyzers you'll use

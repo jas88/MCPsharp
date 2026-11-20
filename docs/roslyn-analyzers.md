@@ -41,6 +41,8 @@ Wraps Roslyn's `DiagnosticAnalyzer` to implement MCPsharp's `IAnalyzer` interfac
 - Maps severity levels and categories
 - Provides metadata about analyzer rules
 
+**Analyzer IDs**: an adapter's ID is `Roslyn_`, the analyzer's full type name, `@` and its assembly's name, then `+` and the assembly's culture unless it is neutral, `+` and its public key token if it is strong-named, and `-` and its version, e.g. `Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0` (`RoslynAnalyzerAdapter.GetId`). The ID is the same in every run and names the whole identity of the analyzer's assembly, so analyzers in assemblies of different identities get different IDs: same-named analyzers in different assemblies, different builds of one analyzer (such as the SDK's and a NuGet package's code style analyzers), and builds signed with different keys. Assemblies of the same identity, such as two unsigned builds with the same name and version, give the same IDs, and their analyzers count as one. `VersionIndependentId` is the ID without `-` and the version; `excludeAnalyzers` accepts either form. `name` is the analyzer's type name.
+
 **Example Usage**:
 ```csharp
 var roslynAnalyzer = new SomeRoslynAnalyzer();
@@ -53,20 +55,27 @@ var result = await adapter.AnalyzeAsync(filePath, content, cancellationToken);
 #### 2. RoslynAnalyzerLoader
 **File**: `src/MCPsharp/Services/Analyzers/RoslynAnalyzerLoader.cs`
 
-Discovers and loads Roslyn analyzer assemblies from:
+Loads Roslyn analyzers from:
+- The analyzer references of the projects being analysed (`Project.AnalyzerReferences`), as an IDE does
 - Individual assembly files
 - Directories (recursive search)
-- NuGet package cache
+
+It never scans the NuGet cache: the analyzers of a project come from that project's references, which are the analyzer assets of the packages it restores (at the restored versions), the SDK's analyzers and any `Analyzer` items. `AnalyzerAutoLoadService` uses this to load the analyzers of the open project automatically (see [analyzer-autoload.md](analyzer-autoload.md)).
 
 **Key Features**:
-- Assembly reflection to find `DiagnosticAnalyzer` types
+- Project analyzer references load through Roslyn, so only the types they export for C# with `[DiagnosticAnalyzer]` are used, and a workspace's already-loaded analyzer instances are reused
+- Assembly reflection to find `DiagnosticAnalyzer` types in explicitly given assemblies
 - Automatic discovery in directories
-- NuGet cache scanning
 - Assembly metadata extraction
 
 **Example Usage**:
 ```csharp
 var loader = new RoslynAnalyzerLoader(logger, loggerFactory);
+
+// Load the analyzers the projects of the open workspace reference
+var projectAnalyzers = loader.LoadAnalyzersFromReferences(
+    roslynWorkspace.GetAnalyzerReferences(),
+    cancellationToken);
 
 // Load from specific assembly
 var analyzers = await loader.LoadAnalyzersFromAssemblyAsync(
@@ -77,10 +86,6 @@ var analyzers = await loader.LoadAnalyzersFromAssemblyAsync(
 var assemblyPaths = loader.DiscoverAnalyzerAssemblies(
     "/path/to/analyzers/",
     recursive: true);
-
-// Load from NuGet cache
-var nugetAnalyzers = await loader.LoadAnalyzersFromNuGetCacheAsync(
-    cancellationToken);
 ```
 
 #### 3. RoslynAnalyzerService
@@ -107,7 +112,7 @@ var result = await service.RunAnalyzersAsync("/path/to/project");
 // Run specific analyzers
 var result = await service.RunAnalyzersAsync(
     "/path/to/project",
-    analyzerIds: new[] { "CA1001", "CA2007" });
+    analyzerIds: new[] { "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0" });
 ```
 
 ## Self-Improvement: Analyzers in MCPsharp Build
@@ -196,6 +201,8 @@ The following tools are registered whenever the server is started with a Roslyn 
 ### `load_roslyn_analyzers`
 Load Roslyn analyzers from assembly or directory.
 
+Every DLL in a directory is loaded to look for analyzers, so the directory may hold at most 100 DLLs and 100 MB of DLLs. For a larger one, such as the NuGet cache, the tool returns an error naming the limit and suggesting a specific package's analyzer folder (e.g. `~/.nuget/packages/<package>/<version>/analyzers/dotnet/cs`), a project's analyzer output folder, or a single DLL.
+
 **Parameters**:
 - `path` (string, required): Path to an analyzer assembly or a directory of assemblies (relative paths resolve against the open project)
 
@@ -205,11 +212,11 @@ Load Roslyn analyzers from assembly or directory.
   "analyzersLoaded": 1,
   "analyzers": [
     {
-      "id": "Roslyn_CA1001",
-      "name": "CA1001",
-      "description": "Types that own disposable fields should be disposable",
-      "version": "1.0.0",
-      "author": "Microsoft",
+      "id": "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0",
+      "name": "TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer",
+      "description": "Roslyn analyzer: TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer",
+      "version": "10.0.403.0",
+      "author": "Microsoft Corporation",
       "supportedExtensions": [".cs"],
       "isEnabled": true,
       "rules": null
@@ -219,22 +226,27 @@ Load Roslyn analyzers from assembly or directory.
 ```
 
 ### `run_roslyn_analyzers`
-Run loaded Roslyn analyzers on target path.
+Run Roslyn analyzers on target path. As in an IDE, each file gets the analyzers of the projects that compile it, which are loaded automatically, plus any loaded with `load_roslyn_analyzers` or from `customAnalyzerPaths`, which run on every file; a file in no project gets only the latter. A file several projects compile (linked, or multi-targeted) gets each of their analyzers once, and the same diagnostic from more than one of them is reported once. See [analyzer-autoload.md](analyzer-autoload.md#which-analyzers-run-on-a-file).
 
 **Parameters**:
-- `target_path` (string, required): File or directory to analyze
-- `analyzer_ids` (string[], optional): Specific analyzers to run (default: all)
+- `target_path` (string, required): File or directory to analyze; for a directory, its C# files outside `bin`, `obj` and hidden directories, in path order and at most 100
+- `analyzer_ids` (string[], optional): Specific analyzers to run, by the IDs `list_roslyn_analyzers` reports (default: all); each file still gets only those that apply to it
 
 **Returns**:
 ```json
 {
-  "analyzersRun": ["Roslyn_CA1001", "Roslyn_CA2007"],
+  "analyzersRun": [
+    "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0",
+    "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.DoNotDirectlyAwaitATaskAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0"
+  ],
+  "filesAnalyzed": 12,
+  "filesSkipped": 0,
   "totalIssuesFound": 42,
   "durationSeconds": 1.84,
   "issues": [
     {
       "ruleId": "CA1001",
-      "analyzerId": "Roslyn_CA1001",
+      "analyzerId": "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0",
       "severity": "Warning",
       "message": "Type owns disposable fields but is not disposable",
       "filePath": "/path/to/file.cs",
@@ -244,6 +256,8 @@ Run loaded Roslyn analyzers on target path.
   ]
 }
 ```
+
+Each issue's `ruleId` is the diagnostic ID that reported it (e.g. `CA1001`), which `apply_roslyn_fixes` takes in `diagnostic_ids`. `filesAnalyzed` counts the files at least one analyzer ran on, and `filesSkipped` the files of a directory beyond the first 100.
 
 A failed run is reported as a tool error rather than in the result.
 
@@ -256,11 +270,11 @@ List all loaded Roslyn analyzers.
   "totalAnalyzers": 1,
   "analyzers": [
     {
-      "id": "Roslyn_CA1001",
-      "name": "CA1001",
-      "description": "Types that own disposable fields should be disposable",
-      "version": "1.0.0",
-      "author": "Microsoft",
+      "id": "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0",
+      "name": "TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer",
+      "description": "Roslyn analyzer: TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer",
+      "version": "10.0.403.0",
+      "author": "Microsoft Corporation",
       "supportedExtensions": [".cs"],
       "isEnabled": true,
       "rules": [

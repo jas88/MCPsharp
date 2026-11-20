@@ -2,6 +2,7 @@ using System.Text.Json;
 using MCPsharp.Models;
 using MCPsharp.Models.Analyzers;
 using MCPsharp.Models.Refactoring;
+using MCPsharp.Services.Analyzers;
 using MCPsharp.Services.Roslyn;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -28,7 +29,7 @@ public partial class McpToolRegistry
         _tools.Add(new McpTool
         {
             Name = "load_roslyn_analyzers",
-            Description = "Load Roslyn analyzers from an analyzer assembly (.dll) or from every assembly in a directory.",
+            Description = "Load Roslyn analyzers from an analyzer assembly (.dll) or from every assembly in a directory (at most 100 DLLs and 100 MB, so point at a package's analyzer folder rather than the NuGet cache).",
             InputSchema = JsonSchemaHelper.CreateSchema(
                 Prop("path", "string", "Path to an analyzer assembly or a directory containing analyzer assemblies", required: true))
         });
@@ -36,10 +37,10 @@ public partial class McpToolRegistry
         _tools.Add(new McpTool
         {
             Name = "run_roslyn_analyzers",
-            Description = "Run loaded Roslyn analyzers (auto-loading defaults if none are loaded) against a file or directory and report issues.",
+            Description = "Run Roslyn analyzers against a file or directory and report issues. As in an IDE, each file gets the analyzers of the projects that compile it (loaded automatically), plus any loaded with load_roslyn_analyzers; a file in no project gets only the latter.",
             InputSchema = JsonSchemaHelper.CreateSchema(
-                Prop("target_path", "string", "File or directory to analyze (relative to the open project root, or absolute)", required: true),
-                Prop("analyzer_ids", "array", "Specific analyzer IDs to run (default: all loaded analyzers)", items: StringItems))
+                Prop("target_path", "string", "File or directory to analyze (relative to the open project root, or absolute); a directory's C# files outside bin and obj, at most 100", required: true),
+                Prop("analyzer_ids", "array", "Specific analyzer IDs to run, as list_roslyn_analyzers reports them; each file still gets only those that apply to it (default: all that apply)", items: StringItems))
         });
 
         _tools.Add(new McpTool
@@ -100,6 +101,13 @@ public partial class McpToolRegistry
             return ToolError($"Path does not exist: {rawPath}");
         }
 
+        // Every DLL in a directory is loaded to look for analyzers, so refuse one such as the NuGet cache
+        var limitError = isDirectory ? AnalyzerDirectoryScanLimits.Check(path) : null;
+        if (limitError != null)
+        {
+            return ToolError(limitError);
+        }
+
         var analyzers = isDirectory
             ? await _roslynAnalyzerService.LoadAnalyzersFromDirectoryAsync(path, ct)
             : await _roslynAnalyzerService.LoadAnalyzersAsync(path, ct);
@@ -152,6 +160,8 @@ public partial class McpToolRegistry
             Result = new
             {
                 analyzersRun = result.AnalyzersRun.ToArray(),
+                filesAnalyzed = result.FilesAnalyzed,
+                filesSkipped = result.FilesSkipped,
                 totalIssuesFound = result.TotalIssuesFound,
                 durationSeconds = (result.EndTime - result.StartTime).TotalSeconds,
                 issues = result.Results.SelectMany(r => r.Issues).Select(i => new

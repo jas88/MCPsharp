@@ -31,7 +31,6 @@ Extended the MCPsharp Roslyn analyzer integration with production-ready features
 - Discovers CodeFixProvider types in assemblies
 - Loads fix providers from assembly paths
 - Discovers assemblies in directories
-- Loads from NuGet cache
 - Matches fix providers to analyzers by diagnostic IDs
 - Assembly metadata extraction
 
@@ -39,7 +38,8 @@ Extended the MCPsharp Roslyn analyzer integration with production-ready features
 - `LoadCodeFixProvidersFromAssemblyAsync()`
 - `DiscoverCodeFixProviderAssemblies()`
 - `MatchCodeFixProvidersToAnalyzers()`
-- `LoadCodeFixProvidersFromNuGetCacheAsync()`
+
+`apply_roslyn_fixes` computes the diagnostics with the analyzers that apply to the file, as `run_roslyn_analyzers` does: those of the projects that compile it, plus those that belong to no project, loaded with `load_roslyn_analyzers` or from `customAnalyzerPaths`. Of these, it uses the analyzers that support the requested diagnostic IDs, whether or not they report any, and takes code fix providers only from their assemblies and companion code fix assemblies (e.g. `X.CodeFixes.dll` beside `X.dll`), so a file is fixed by the providers of its own analyzers. The NuGet cache is never scanned.
 
 ### 2. Configuration Management (Priority 2 - COMPLETE)
 
@@ -59,7 +59,7 @@ Extended the MCPsharp Roslyn analyzer integration with production-ready features
 {
   "version": "1.0",
   "analyzers": {
-    "Roslyn_CA1001": {
+    "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0": {
       "enabled": true,
       "ruleSeverityOverrides": {
         "CA1001": "Warning"
@@ -223,7 +223,6 @@ new McpTool
 2. **RoslynCodeFixLoaderTests.cs** (~200 lines, 10-15 tests)
    - Test assembly loading
    - Test discovery in directories
-   - Test NuGet cache scanning
    - Test matching to analyzers
 
 3. **AnalyzerConfigurationManagerTests.cs** (~150 lines, 8-10 tests)
@@ -399,7 +398,7 @@ Used partial class `McpToolRegistry.RoslynCodeFix.cs` to keep analyzer fix code 
 {
   "tool": "configure_analyzer",
   "arguments": {
-    "analyzer_id": "Roslyn_CA1001",
+    "analyzer_id": "Roslyn_Microsoft.CodeQuality.Analyzers.ApiDesignGuidelines.TypesThatOwnDisposableFieldsShouldBeDisposableAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0",
     "enabled": true,
     "rule_id": "CA1001",
     "severity": "Error"

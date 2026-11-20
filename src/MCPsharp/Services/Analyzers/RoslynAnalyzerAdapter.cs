@@ -20,7 +20,16 @@ public partial class RoslynAnalyzerAdapter : IAnalyzer
     private readonly ILogger<RoslynAnalyzerAdapter> _logger;
     private readonly string _analyzerId;
 
+    /// <summary>
+    /// The analyzer's ID, from <see cref="GetId"/>
+    /// </summary>
     public string Id => _analyzerId;
+
+    /// <summary>
+    /// <see cref="Id"/> without the assembly version, from <see cref="GetVersionIndependentId"/>
+    /// </summary>
+    public string VersionIndependentId { get; }
+
     public string Name { get; }
     public string Description { get; }
     public Version Version { get; }
@@ -34,16 +43,42 @@ public partial class RoslynAnalyzerAdapter : IAnalyzer
     /// </summary>
     public DiagnosticAnalyzer DiagnosticAnalyzer => _roslynAnalyzer;
 
+    /// <summary>
+    /// The project analyzer references the analyzer was loaded from: the analyzer runs on the files of the projects
+    /// that reference any of them. Several when copies of its assembly at different paths are referenced (see
+    /// <see cref="WithAnalyzerReferences"/>); empty for an analyzer loaded from an assembly path, which runs on any
+    /// file.
+    /// </summary>
+    public IReadOnlyList<AnalyzerReference> AnalyzerReferences { get; }
+
+    /// <summary>
+    /// Wrap <paramref name="roslynAnalyzer"/> as an MCPsharp analyzer
+    /// </summary>
+    /// <param name="roslynAnalyzer">The analyzer</param>
+    /// <param name="logger">Logger</param>
+    /// <param name="analyzerReference">
+    /// The project analyzer reference the analyzer was loaded from, which ties it to the projects that reference
+    /// it; null for an analyzer loaded from an assembly path, which belongs to no project
+    /// </param>
     public RoslynAnalyzerAdapter(
         DiagnosticAnalyzer roslynAnalyzer,
         ILogger<RoslynAnalyzerAdapter> logger,
-        AnalyzerFileReference? analyzerReference = null)
+        AnalyzerReference? analyzerReference = null)
+        : this(roslynAnalyzer, logger, analyzerReference == null ? Array.Empty<AnalyzerReference>() : [analyzerReference])
+    {
+    }
+
+    private RoslynAnalyzerAdapter(
+        DiagnosticAnalyzer roslynAnalyzer,
+        ILogger<RoslynAnalyzerAdapter> logger,
+        IReadOnlyList<AnalyzerReference> analyzerReferences)
     {
         _roslynAnalyzer = roslynAnalyzer ?? throw new ArgumentNullException(nameof(roslynAnalyzer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        AnalyzerReferences = analyzerReferences;
 
-        // Generate unique ID from analyzer type
-        _analyzerId = $"Roslyn_{roslynAnalyzer.GetType().Name}";
+        _analyzerId = GetId(roslynAnalyzer.GetType());
+        VersionIndependentId = GetVersionIndependentId(roslynAnalyzer.GetType());
 
         // Extract metadata from analyzer
         Name = roslynAnalyzer.GetType().Name;
@@ -57,6 +92,43 @@ public partial class RoslynAnalyzerAdapter : IAnalyzer
         var companyAttr = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyCompanyAttribute), false)
             .FirstOrDefault() as System.Reflection.AssemblyCompanyAttribute;
         Author = companyAttr?.Company ?? "Unknown";
+    }
+
+    /// <summary>
+    /// The ID of the adapter for an analyzer type: <see cref="GetVersionIndependentId"/>, then <c>-</c> and the
+    /// version of its assembly, e.g.
+    /// <c>Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0</c>.
+    /// It is the same in every run, and it names the type and the whole identity of its assembly (name, culture,
+    /// public key token and version): analyzers in assemblies of different identities, such as same-named analyzers
+    /// in different assemblies or different builds of one analyzer (e.g. the SDK's and a NuGet package's), get
+    /// different IDs. Assemblies of the same identity (e.g. two unsigned builds of one version) give the same IDs.
+    /// </summary>
+    public static string GetId(Type analyzerType)
+    {
+        var version = analyzerType.Assembly.GetName().Version;
+        var versionIndependentId = GetVersionIndependentId(analyzerType);
+        return version == null ? versionIndependentId : $"{versionIndependentId}-{version}";
+    }
+
+    /// <summary>
+    /// An adapter for the same analyzer that belongs to the projects referencing any of
+    /// <paramref name="analyzerReferences"/> (to no project when empty): one analyzer for the copies of its assembly
+    /// that projects reference at different paths
+    /// </summary>
+    public RoslynAnalyzerAdapter WithAnalyzerReferences(IReadOnlyList<AnalyzerReference> analyzerReferences) =>
+        new(_roslynAnalyzer, _logger, analyzerReferences);
+
+    /// <summary>
+    /// <see cref="GetId"/> without the assembly version, which names an analyzer in every version of its assembly:
+    /// <c>Roslyn_</c>, the type's full name, <c>@</c> and its assembly's name, then <c>+</c> and its culture unless
+    /// it is neutral, and <c>+</c> and its public key token if it is strong-named
+    /// </summary>
+    public static string GetVersionIndependentId(Type analyzerType)
+    {
+        var assembly = analyzerType.Assembly.GetName();
+        var culture = string.IsNullOrEmpty(assembly.CultureName) ? string.Empty : "+" + assembly.CultureName;
+        var publicKeyToken = assembly.GetPublicKeyToken() is { Length: > 0 } token ? "+" + Convert.ToHexStringLower(token) : string.Empty;
+        return $"Roslyn_{analyzerType.FullName ?? analyzerType.Name}@{assembly.Name}{culture}{publicKeyToken}";
     }
 
     public bool CanAnalyze(string targetPath)
