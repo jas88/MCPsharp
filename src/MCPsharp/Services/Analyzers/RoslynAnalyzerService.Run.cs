@@ -16,6 +16,9 @@ public partial class RoslynAnalyzerService
     /// </summary>
     public const int MaxDirectoryFiles = 100;
 
+    // The most distinct analyzer errors a run that no analyzer completed reports
+    private const int MaxReportedFailures = 5;
+
     private const string NoAnalyzersMessage =
         "No analyzers loaded or specified. The analyzers the open project references are loaded automatically; " +
         "load others with load_roslyn_analyzers.";
@@ -66,7 +69,10 @@ public partial class RoslynAnalyzerService
 
             if (run.AnalyzersRun.Count == 0)
             {
-                return Failed(startTime, NoApplicableAnalyzersMessage);
+                // Analyzers that applied but all failed found nothing, so the run is no successful analysis
+                return Failed(startTime, run.Failures.Count == 0
+                    ? NoApplicableAnalyzersMessage
+                    : $"No analyzer ran successfully: {string.Join("; ", run.Failures.Distinct(StringComparer.Ordinal).Take(MaxReportedFailures))}");
             }
 
             var totalIssues = run.Results.Sum(r => r.Issues.Length);
@@ -129,12 +135,14 @@ public partial class RoslynAnalyzerService
         foreach (var analyzerId in fileAnalyzers.Select(analyzer => analyzer.Id))
         {
             var result = await RunAnalyzerOnFileAsync(analyzerId, file, reported, cancellationToken);
-            if (result != null)
-            {
-                run.Results.Add(result);
-            }
+            run.Results.Add(result);
 
-            if (run.AnalyzerIds.Add(analyzerId))
+            // An analyzer counts as run once it has run successfully on a file
+            if (!result.Success)
+            {
+                run.Failures.Add($"{analyzerId}: {result.ErrorMessage}");
+            }
+            else if (run.AnalyzerIds.Add(analyzerId))
             {
                 run.AnalyzersRun.Add(analyzerId);
             }
@@ -142,31 +150,24 @@ public partial class RoslynAnalyzerService
     }
 
     /// <summary>
-    /// Run one analyzer on one file through the analyzer host; null when running it failed unexpectedly
+    /// Run one analyzer on one file through the analyzer host
     /// </summary>
-    private async Task<AnalysisResult?> RunAnalyzerOnFileAsync(
+    private async Task<AnalysisResult> RunAnalyzerOnFileAsync(
         string analyzerId,
         string file,
         HashSet<IssueIdentity>? reported,
         CancellationToken cancellationToken)
     {
+        var startTime = DateTime.UtcNow;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var startTime = DateTime.UtcNow;
 
             var result = await _analyzerHost.RunAnalyzerAsync(analyzerId, file, options: null, cancellationToken);
             if (!result.Success || result.Findings == null)
             {
-                return new AnalysisResult
-                {
-                    FilePath = file,
-                    AnalyzerId = analyzerId,
-                    StartTime = startTime,
-                    EndTime = DateTime.UtcNow,
-                    Success = false,
-                    ErrorMessage = result.ErrorMessage
-                };
+                var error = result.ErrorMessage ?? (result.Success ? "the analyzer host returned no findings" : "the analyzer failed");
+                return FailedAnalysis(analyzerId, file, startTime, error);
             }
 
             var issues = result.Findings
@@ -193,9 +194,19 @@ public partial class RoslynAnalyzerService
         catch (Exception ex)
         {
             LogErrorRunningAnalyzer(_logger, ex, analyzerId);
-            return null;
+            return FailedAnalysis(analyzerId, file, startTime, ex.Message);
         }
     }
+
+    private static AnalysisResult FailedAnalysis(string analyzerId, string file, DateTime startTime, string error) => new()
+    {
+        FilePath = file,
+        AnalyzerId = analyzerId,
+        StartTime = startTime,
+        EndTime = DateTime.UtcNow,
+        Success = false,
+        ErrorMessage = error
+    };
 
     private static AnalyzerIssue ToIssue(Finding finding, string analyzerId, string file) => new()
     {
@@ -307,6 +318,11 @@ public partial class RoslynAnalyzerService
         public List<string> AnalyzersRun { get; } = new();
 
         public HashSet<string> AnalyzerIds { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Each failed run of an analyzer on a file: the analyzer's ID and the error
+        /// </summary>
+        public List<string> Failures { get; } = new();
 
         public int FilesAnalyzed { get; set; }
     }

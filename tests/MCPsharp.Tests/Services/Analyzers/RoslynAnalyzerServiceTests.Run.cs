@@ -8,6 +8,7 @@ namespace MCPsharp.Tests.Services.Analyzers;
 public partial class RoslynAnalyzerServiceTests
 {
     private static readonly string[] Ca1822RuleId = ["CA1822"];
+    private static readonly string[] SecondAnalyzerId = ["analyzer2"];
 
     #region RunAnalyzersAsync Tests
 
@@ -222,6 +223,47 @@ public partial class RoslynAnalyzerServiceTests
             Arg.Any<string>(),
             Arg.Any<AnalyzerOptions>(),
             Arg.Any<CancellationToken>());
+    }
+
+    private async Task LoadFailingAndRunningAnalyzersAsync(bool secondRuns)
+    {
+        var assemblyPath = CreateTestFile("test", ".dll");
+        var analyzers = ImmutableArray.Create(CreateMockAnalyzer("analyzer1"), CreateMockAnalyzer("analyzer2"));
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(assemblyPath, Arg.Any<CancellationToken>()).Returns(analyzers);
+        await _service.LoadAnalyzersAsync(assemblyPath);
+
+        // e.g. an analyzer the host doesn't have, as once made a run report success and no issues
+        _mockAnalyzerHost.RunAnalyzerAsync("analyzer1", Arg.Any<string>(), Arg.Any<AnalyzerOptions>(), Arg.Any<CancellationToken>())
+            .Returns(new AnalyzerResult { Success = false, ErrorMessage = "Analyzer not loaded" });
+        _mockAnalyzerHost.RunAnalyzerAsync("analyzer2", Arg.Any<string>(), Arg.Any<AnalyzerOptions>(), Arg.Any<CancellationToken>())
+            .Returns(secondRuns
+                ? Task.FromResult(new AnalyzerResult { Success = true, Findings = [] })
+                : Task.FromException<AnalyzerResult>(new InvalidOperationException("Test error")));
+    }
+
+    [Test]
+    public async Task RunAnalyzersAsync_WhenEveryAnalyzerFails_ShouldReturnFailureWithTheirErrors()
+    {
+        var targetPath = CreateTestFile("public class Test {}", ".cs");
+        await LoadFailingAndRunningAnalyzersAsync(secondRuns: false);
+
+        var result = await _service.RunAnalyzersAsync(targetPath);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.AnalyzersRun, Is.Empty);
+        Assert.That(result.ErrorMessage, Does.Contain("analyzer1: Analyzer not loaded").And.Contain("analyzer2: Test error"));
+    }
+
+    [Test]
+    public async Task RunAnalyzersAsync_WhenAnAnalyzerFails_ListsOnlyTheAnalyzersThatRan()
+    {
+        var targetPath = CreateTestFile("public class Test {}", ".cs");
+        await LoadFailingAndRunningAnalyzersAsync(secondRuns: true);
+
+        var result = await _service.RunAnalyzersAsync(targetPath);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.AnalyzersRun, Is.EqualTo(SecondAnalyzerId));
     }
 
     [Test]
