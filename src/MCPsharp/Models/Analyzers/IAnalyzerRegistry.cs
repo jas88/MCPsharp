@@ -8,7 +8,9 @@ namespace MCPsharp.Models.Analyzers;
 public interface IAnalyzerRegistry
 {
     /// <summary>
-    /// Register an analyzer
+    /// Register an analyzer, unless one is registered under its ID. It is registered once it has initialized, so it
+    /// can't be got before; if it fails to initialize, or another analyzer is registered under its ID meanwhile, it
+    /// is disposed, and false is returned.
     /// </summary>
     Task<bool> RegisterAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default);
 
@@ -18,8 +20,10 @@ public interface IAnalyzerRegistry
     Task<bool> UnregisterAnalyzerAsync(string analyzerId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Register <paramref name="analyzer"/> in place of any analyzer registered under its ID, in one step. When it
-    /// fails to initialize, the analyzer it was to replace stays registered, and false is returned.
+    /// Register <paramref name="analyzer"/> in place of any analyzer registered under its ID, in one step, once it
+    /// has initialized: until then, the analyzer registered under the ID stays. When it fails to initialize, that
+    /// analyzer stays registered, the replacement is disposed, and false is returned; when its initialization is
+    /// cancelled, it is disposed, and the cancellation propagates.
     /// </summary>
     Task<bool> ReplaceAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default);
 

@@ -36,22 +36,34 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
                 return false;
             }
 
-            lock (_lock)
+            if (GetAnalyzer(analyzer.Id) != null)
             {
-                if (_analyzers.ContainsKey(analyzer.Id))
-                {
-                    LogAlreadyRegistered(_logger, analyzer.Id);
-                    return false;
-                }
-
-                _analyzers[analyzer.Id] = analyzer;
-                _analyzerInfos[analyzer.Id] = CreateAnalyzerInfo(analyzer);
+                LogAlreadyRegistered(_logger, analyzer.Id);
+                return false;
             }
 
-            await analyzer.InitializeAsync(cancellationToken);
+            // Registered only once it has initialized, so nothing can get and run it before
+            var info = await InitializeForRegistrationAsync(analyzer, cancellationToken);
+            bool added;
+            lock (_lock)
+            {
+                // Another analyzer may have been registered under the ID while this one initialized
+                added = _analyzers.TryAdd(analyzer.Id, analyzer);
+                if (added)
+                {
+                    _analyzerInfos[analyzer.Id] = info;
+                }
+            }
+
+            if (!added)
+            {
+                LogAlreadyRegistered(_logger, analyzer.Id);
+                DisposeInBackground(analyzer);
+                return false;
+            }
 
             LogRegistered(_logger, analyzer.Id, analyzer.Version);
-            AnalyzerRegistered?.Invoke(this, new AnalyzerRegisteredEventArgs(analyzer.Id, _analyzerInfos[analyzer.Id]));
+            AnalyzerRegistered?.Invoke(this, new AnalyzerRegisteredEventArgs(analyzer.Id, info));
 
             return true;
         }

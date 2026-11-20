@@ -4,7 +4,8 @@ namespace MCPsharp.Services.Analyzers;
 
 /// <summary>
 /// Replacing an analyzer, and unregistering a particular one, each in one step, so that two callers registering
-/// analyzers under one ID (an explicit load and the auto-load) can't leave it with an analyzer neither expects
+/// analyzers under one ID (an explicit load and the auto-load) can't leave it with an analyzer neither expects. An
+/// analyzer is registered only once it has initialized, so nothing can get and run it before.
 /// </summary>
 public partial class AnalyzerRegistry
 {
@@ -17,39 +18,34 @@ public partial class AnalyzerRegistry
             return false;
         }
 
-        IAnalyzer? previous;
-        AnalyzerInfo? previousInfo;
-        AnalyzerInfo info;
-        lock (_lock)
+        if (ReferenceEquals(GetAnalyzer(analyzer.Id), analyzer))
         {
-            if (_analyzers.TryGetValue(analyzer.Id, out previous) && ReferenceEquals(previous, analyzer))
-            {
-                return true;
-            }
-
-            _analyzerInfos.TryGetValue(analyzer.Id, out previousInfo);
-            info = CreateAnalyzerInfo(analyzer);
-            _analyzers[analyzer.Id] = analyzer;
-            _analyzerInfos[analyzer.Id] = info;
+            return true;
         }
 
+        // Until the replacement has initialized, the analyzer registered under the ID stays, and runs
+        AnalyzerInfo info;
         try
         {
-            await analyzer.InitializeAsync(cancellationToken);
+            info = await InitializeForRegistrationAsync(analyzer, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            RestoreAfterFailedReplace(analyzer, previous, previousInfo);
-            if (ex is OperationCanceledException)
-            {
-                throw;
-            }
-
             LogErrorRegistering(_logger, ex, analyzer.Id);
             return false;
         }
 
-        if (previous != null)
+        // Whichever analyzer holds the ID now is replaced: while the replacement initialized, the one it was to
+        // replace may have been unregistered, or another registered
+        IAnalyzer? previous;
+        lock (_lock)
+        {
+            _analyzers.TryGetValue(analyzer.Id, out previous);
+            _analyzers[analyzer.Id] = analyzer;
+            _analyzerInfos[analyzer.Id] = info;
+        }
+
+        if (previous != null && !ReferenceEquals(previous, analyzer))
         {
             DisposeInBackground(previous);
         }
@@ -80,28 +76,21 @@ public partial class AnalyzerRegistry
     }
 
     /// <summary>
-    /// Put back the analyzer that a replacement whose initialization failed displaced, unless the ID has been
-    /// replaced again since
+    /// Initialize an analyzer that is to be registered, and describe it. One that fails to initialize, or whose
+    /// initialization is cancelled, is disposed before the exception propagates, since it won't be registered and
+    /// its caller handed it over to be.
     /// </summary>
-    private void RestoreAfterFailedReplace(IAnalyzer failed, IAnalyzer? previous, AnalyzerInfo? previousInfo)
+    private async Task<AnalyzerInfo> InitializeForRegistrationAsync(IAnalyzer analyzer, CancellationToken cancellationToken)
     {
-        lock (_lock)
+        try
         {
-            if (!_analyzers.TryGetValue(failed.Id, out var current) || !ReferenceEquals(current, failed))
-            {
-                return;
-            }
-
-            if (previous != null && previousInfo != null)
-            {
-                _analyzers[failed.Id] = previous;
-                _analyzerInfos[failed.Id] = previousInfo;
-            }
-            else
-            {
-                _analyzers.Remove(failed.Id);
-                _analyzerInfos.Remove(failed.Id);
-            }
+            await analyzer.InitializeAsync(cancellationToken);
+            return CreateAnalyzerInfo(analyzer);
+        }
+        catch
+        {
+            DisposeInBackground(analyzer);
+            throw;
         }
     }
 
