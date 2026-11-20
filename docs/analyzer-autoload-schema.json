@@ -16,7 +16,7 @@
     },
     "analyzerSources": {
       "type": "array",
-      "description": "Sources to load analyzers from: project_references loads the analyzers the open project's projects reference",
+      "description": "Sources to load analyzers from: project_references loads the analyzers that the projects of the open workspace reference",
       "items": {
         "type": "string",
         "enum": [
@@ -31,7 +31,7 @@
     },
     "excludeAnalyzers": {
       "type": "array",
-      "description": "Analyzer IDs to exclude from auto-loading",
+      "description": "Analyzer IDs to exclude from auto-loading, as list_roslyn_analyzers reports them, or without their -version suffix to exclude every version",
       "items": {
         "type": "string"
       },
