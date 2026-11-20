@@ -40,7 +40,7 @@ public sealed class MultiProjectSolutionFixture : IDisposable
 
     public static async Task<MultiProjectSolutionFixture> CreateAsync()
     {
-        var root = Path.Combine(Path.GetTempPath(), "MCPsharp_MultiProject", Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(Path.GetTempPath(), $"MCPsharp_MultiProject_{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
         var fixture = new MultiProjectSolutionFixture(root);
 

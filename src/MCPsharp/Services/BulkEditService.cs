@@ -29,10 +29,12 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
     }
 
     /// <summary>
-    /// Releases the semaphore used to throttle parallel file processing.
+    /// Deletes the backups of the rollback sessions still open, which only this service could roll back, and
+    /// releases the semaphore used to throttle parallel file processing.
     /// </summary>
     public void Dispose()
     {
+        DeleteRollbackSessions();
         _processingSemaphore.Dispose();
     }
 

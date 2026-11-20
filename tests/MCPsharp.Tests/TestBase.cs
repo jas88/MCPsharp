@@ -10,29 +10,34 @@ namespace MCPsharp.Tests;
 [TestFixture]
 public abstract class TestBase
 {
+    // The directories CreateTempDirectory has created for the current test, deleted after it
+    private readonly List<string> _tempDirectories = new();
+
     protected static ILogger<T> CreateNullLogger<T>() => NullLogger<T>.Instance;
     protected static ILogger CreateNullLogger() => NullLogger.Instance;
     protected static ILoggerFactory CreateNullLoggerFactory() => NullLoggerFactory.Instance;
 
     /// <summary>
-    /// Creates a temporary directory for test operations
+    /// Creates a temporary directory for the current test, deleted after it
     /// </summary>
     /// <returns>Path to temporary directory</returns>
-    protected static string CreateTempDirectory()
+    protected string CreateTempDirectory()
     {
         var tempPath = Path.Combine(Path.GetTempPath(), "MCPsharp_Tests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempPath);
+        _tempDirectories.Add(tempPath);
         return tempPath;
     }
 
     /// <summary>
-    /// Creates a temporary file with the specified content
+    /// Creates a temporary file with the specified content, in a new directory deleted after the current test unless
+    /// <paramref name="directory"/> is given
     /// </summary>
     /// <param name="content">File content</param>
     /// <param name="extension">File extension (including dot)</param>
     /// <param name="directory">Directory to create file in (optional)</param>
     /// <returns>Path to temporary file</returns>
-    protected static string CreateTempFile(string content, string extension = ".cs", string? directory = null)
+    protected string CreateTempFile(string content, string extension = ".cs", string? directory = null)
     {
         var dir = directory ?? CreateTempDirectory();
         var filePath = Path.Combine(dir, $"{Guid.NewGuid()}{extension}");
@@ -87,7 +92,12 @@ public abstract class TestBase
     [TearDown]
     protected virtual void TearDown()
     {
-        // Common cleanup for all tests
+        foreach (var directory in _tempDirectories)
+        {
+            CleanupDirectory(directory);
+        }
+
+        _tempDirectories.Clear();
     }
 }
 

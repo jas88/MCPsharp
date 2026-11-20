@@ -243,4 +243,20 @@ public class BulkEditServiceSummaryAndRollbackTests : FileServiceTestBase
         Assert.That(result.RollbackInfo, Is.Null);
         Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo("int NewName;"));
     }
+
+    [Test]
+    public async Task Dispose_DeletesTheBackupsOfOpenRollbackSessions()
+    {
+        var file = CreateTestFile("original content");
+        var result = await _service.BulkReplaceAsync(new[] { file }, "original", "edited", new BulkEditOptions { CreateBackups = true });
+        var rollbackDirectory = result.RollbackInfo?.RollbackDirectory
+            ?? throw new AssertionException("The edit should record a rollback session");
+        Assert.That(Directory.EnumerateFiles(rollbackDirectory, "*", SearchOption.AllDirectories), Is.Not.Empty, "The edit should back the file up");
+
+        // Rollback sessions exist only in the service, so once it is disposed nothing could use the backups
+        _service.Dispose();
+
+        Assert.That(Directory.Exists(rollbackDirectory), Is.False, "Disposing the service should delete its rollback backups");
+        Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo("edited content"), "Deleting the backups should leave the edited file as it is");
+    }
 }

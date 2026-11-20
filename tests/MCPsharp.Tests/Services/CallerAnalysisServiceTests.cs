@@ -14,6 +14,9 @@ public class CallerAnalysisServiceTests
     private SymbolQueryService _symbolQuery = null!;
     private CallerAnalysisService _callerAnalysis = null!;
 
+    // The test project, deleted after each test
+    private string _testDirectory = null!;
+
     [SetUp]
     public void SetUp()
     {
@@ -28,8 +31,8 @@ public class CallerAnalysisServiceTests
     private void InitializeWorkspace()
     {
         // Initialize workspace with a temporary directory
-        var tempDir = Path.Combine(Path.GetTempPath(), "MCPsharpTests", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(tempDir);
+        _testDirectory = Path.Combine(Path.GetTempPath(), $"mcpsharp_callers_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_testDirectory);
 
         // Add test fixture files to workspace
         var testFiles = new[]
@@ -112,21 +115,22 @@ public class DerivedService : IService
         // Write test files to temporary directory
         foreach (var (fileName, content) in testFiles)
         {
-            var filePath = Path.Combine(tempDir, fileName);
+            var filePath = Path.Combine(_testDirectory, fileName);
             File.WriteAllText(filePath, content);
         }
 
         // Initialize workspace with the temporary directory
-        _workspace.InitializeAsync(tempDir).Wait();
-
-        // Note: The workspace is now initialized with test files
-        // Cleanup of tempDir would happen in a Dispose method if we had one
+        _workspace.InitializeAsync(_testDirectory).Wait();
     }
 
     [TearDown]
     public void TearDown()
     {
         _workspace?.Dispose();
+        if (Directory.Exists(_testDirectory))
+        {
+            Directory.Delete(_testDirectory, true);
+        }
     }
 
     [Test]

@@ -17,9 +17,6 @@ public partial class PerformanceTests : PerformanceTestBase
     private AdvancedReferenceFinderService _referenceFinder = null!;
     private BulkEditService _bulkEdit = null!;
 
-    // The directory of the files CreateTestFiles creates, deleted after each test
-    private string? _testFileDirectory;
-
     [SetUp]
     protected override void Setup()
     {
@@ -39,12 +36,6 @@ public partial class PerformanceTests : PerformanceTestBase
     {
         _workspace?.Dispose();
         _bulkEdit?.Dispose();
-        if (_testFileDirectory != null)
-        {
-            CleanupDirectory(_testFileDirectory);
-            _testFileDirectory = null;
-        }
-
         base.TearDown();
     }
 
@@ -124,17 +115,17 @@ public partial class PerformanceTests : PerformanceTestBase
     #region Helper Methods
 
     /// <summary>
-    /// Create C# files in a directory that is deleted after the test
+    /// Create C# files in one directory, which is deleted after the test
     /// </summary>
     private List<string> CreateTestFiles(int count, Func<int, string> content)
     {
-        var directory = _testFileDirectory ??= CreateTempDirectory();
+        var directory = CreateTempDirectory();
         return Enumerable.Range(0, count)
             .Select(i => CreateTempFile(content(i), ".cs", directory))
             .ToList();
     }
 
-    private static List<string> GenerateTestFiles(int count)
+    private List<string> GenerateTestFiles(int count)
     {
         return Enumerable.Range(0, count)
             .Select(i => CreateTempFile($@"
@@ -159,7 +150,7 @@ namespace TestProject{i}
             .ToList();
     }
 
-    private static List<string> GenerateComplexCallChainFiles(int count)
+    private List<string> GenerateComplexCallChainFiles(int count)
     {
         return Enumerable.Range(0, count)
             .Select(i => CreateTempFile($@"
