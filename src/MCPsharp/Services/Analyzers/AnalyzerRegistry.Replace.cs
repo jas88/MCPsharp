@@ -51,7 +51,7 @@ public partial class AnalyzerRegistry
 
         if (previous != null)
         {
-            DisposeInBackground(previous, cancellationToken);
+            DisposeInBackground(previous);
         }
 
         LogRegistered(_logger, analyzer.Id, analyzer.Version);
@@ -71,7 +71,7 @@ public partial class AnalyzerRegistry
 
             _analyzers.Remove(analyzer.Id);
             _analyzerInfos.Remove(analyzer.Id);
-            DisposeInBackground(analyzer, cancellationToken);
+            DisposeInBackground(analyzer);
         }
 
         LogUnregistered(_logger, analyzer.Id);
@@ -119,9 +119,11 @@ public partial class AnalyzerRegistry
     };
 
     /// <summary>
-    /// Dispose an analyzer that is no longer registered, without making the caller wait
+    /// Dispose an analyzer that is no longer registered, without making the caller wait. The disposal doesn't take
+    /// the caller's cancellation token: a task whose token is cancelled before it starts never runs, which would
+    /// leave the analyzer undisposed.
     /// </summary>
-    private void DisposeInBackground(IAnalyzer analyzer, CancellationToken cancellationToken) =>
+    private void DisposeInBackground(IAnalyzer analyzer) =>
         _ = Task.Run(async () =>
         {
             try
@@ -132,5 +134,5 @@ public partial class AnalyzerRegistry
             {
                 LogErrorDisposing(_logger, ex, analyzer.Id);
             }
-        }, cancellationToken);
+        }, CancellationToken.None);
 }

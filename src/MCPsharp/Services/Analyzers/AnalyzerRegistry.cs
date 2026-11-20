@@ -75,7 +75,7 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
                 }
 
                 _analyzerInfos.Remove(analyzerId);
-                DisposeInBackground(analyzer, cancellationToken);
+                DisposeInBackground(analyzer);
             }
 
             LogUnregistered(_logger, analyzerId);
