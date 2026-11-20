@@ -204,7 +204,9 @@ public partial class RoslynAnalyzerLoader
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            // Loading a reference can take a while, and the caller may cancel meanwhile (e.g. during the last one)
             var referenceAnalyzers = GetCSharpAnalyzers(reference);
+            cancellationToken.ThrowIfCancellationRequested();
             analyzers.AddRange(referenceAnalyzers.Select(analyzer => new RoslynAnalyzerAdapter(analyzer, adapterLogger, reference)));
             if (_logger.IsEnabled(LogLevel.Debug))
             {

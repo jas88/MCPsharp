@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using MCPsharp.Services.Analyzers;
 using Microsoft.CodeAnalysis.Diagnostics;
 using NUnit.Framework;
@@ -61,5 +62,39 @@ public partial class RoslynAnalyzerLoaderTests
 
         Assert.Throws<OperationCanceledException>(() =>
             _loader.LoadAnalyzersFromReferences([TestAnalyzerReferences.BuiltInAnalyzers()], cts.Token));
+    }
+
+    [Test]
+    public void LoadAnalyzersFromReferences_CancelledWhileTheLastReferenceLoads_ShouldThrowOperationCanceledException()
+    {
+        using var cts = new CancellationTokenSource();
+        var reference = new CancellingAnalyzerReference(cts, TestAnalyzerReferences.BuiltInAnalyzers());
+
+        Assert.Throws<OperationCanceledException>(() => _loader.LoadAnalyzersFromReferences([reference], cts.Token));
+    }
+
+    /// <summary>
+    /// A reference that cancels <paramref name="cts"/> as its analyzers load, as a cancellation that arrives during
+    /// a slow load does
+    /// </summary>
+    private sealed class CancellingAnalyzerReference(CancellationTokenSource cts, AnalyzerReference loaded) : AnalyzerReference
+    {
+        public override string? FullPath => loaded.FullPath;
+
+        public override string Display => loaded.Display;
+
+        public override object Id => loaded.Id;
+
+        public override ImmutableArray<DiagnosticAnalyzer> GetAnalyzers(string language)
+        {
+            cts.Cancel();
+            return loaded.GetAnalyzers(language);
+        }
+
+        public override ImmutableArray<DiagnosticAnalyzer> GetAnalyzersForAllLanguages()
+        {
+            cts.Cancel();
+            return loaded.GetAnalyzersForAllLanguages();
+        }
     }
 }
