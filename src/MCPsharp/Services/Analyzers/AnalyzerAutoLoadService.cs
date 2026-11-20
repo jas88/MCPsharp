@@ -229,8 +229,8 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     }
 
     /// <summary>
-    /// Drop excluded analyzers, and keep one analyzer per ID: two references to the same assembly identity
-    /// (e.g. copies at two paths) hold the same analyzers
+    /// Drop excluded analyzers, and keep one analyzer per ID: references to the same assembly identity (e.g. copies
+    /// at two paths) hold the same analyzers, so they become one analyzer for the projects of all those references
     /// </summary>
     private List<IAnalyzer> SelectAnalyzersToRegister(AnalyzerAutoLoadConfiguration configuration, List<IAnalyzer> analyzers)
     {
@@ -241,7 +241,30 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
             LogFilteredExcluded(_logger, analyzers.Count - selected.Count);
         }
 
-        return selected.DistinctBy(a => a.Id, StringComparer.Ordinal).ToList();
+        return selected.GroupBy(a => a.Id, StringComparer.Ordinal).Select(MergeAnalyzersWithOneId).ToList();
+    }
+
+    /// <summary>
+    /// One analyzer for the analyzers loaded under one ID: when one of them belongs to no project (e.g. from
+    /// customAnalyzerPaths) it runs on every file, so it is kept; otherwise they belong to different projects' copies
+    /// of the assembly, and one of them is kept for the projects of every copy
+    /// </summary>
+    private static IAnalyzer MergeAnalyzersWithOneId(IGrouping<string, IAnalyzer> analyzers)
+    {
+        var all = analyzers.ToList();
+        if (all.Count == 1)
+        {
+            return all[0];
+        }
+
+        var noProject = all.Find(a => a is not RoslynAnalyzerAdapter { AnalyzerReferences.Count: > 0 });
+        if (noProject != null)
+        {
+            return noProject;
+        }
+
+        var adapters = all.Cast<RoslynAnalyzerAdapter>().ToList();
+        return adapters[0].WithAnalyzerReferences(adapters.SelectMany(a => a.AnalyzerReferences).Distinct().ToList());
     }
 
     /// <summary>

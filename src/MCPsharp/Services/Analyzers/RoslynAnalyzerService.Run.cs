@@ -251,7 +251,8 @@ public partial class RoslynAnalyzerService
         scope == null
             ? analyzers
             : analyzers.Where(analyzer =>
-                analyzer is not RoslynAnalyzerAdapter { AnalyzerReference: { } reference } || scope.Includes(reference));
+                analyzer is not RoslynAnalyzerAdapter { AnalyzerReferences.Count: > 0 } adapter ||
+                adapter.AnalyzerReferences.Any(scope.Includes));
 
     private FileAnalyzerScope? GetFileAnalyzerScope(string file) => _autoLoadService?.GetFileAnalyzerScope(file);
 

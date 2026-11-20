@@ -201,6 +201,63 @@ public partial class RoslynAnalyzerServiceTests
         Assert.That(result.FilesSkipped, Is.EqualTo(1));
     }
 
+    /// <summary>
+    /// A copy of MCPsharp.Analyzers.dll in a directory of its own: the same assembly at another path, as two package
+    /// restores or two output folders give
+    /// </summary>
+    private string CopyBuiltInAnalyzers(string directoryName)
+    {
+        var source = typeof(StaticMethodAnalyzer).Assembly.Location;
+        var copy = Path.Combine(CreateTestDirectory(directoryName), Path.GetFileName(source));
+        File.Copy(source, copy);
+        return copy;
+    }
+
+    [Test]
+    public async Task RunAnalyzersAsync_WithOneAnalyzerAssemblyReferencedFromTwoPaths_RunsItOnTheFilesOfBothProjects()
+    {
+        // The projects' copies of the assembly give analyzers with the same IDs; the one kept per ID must still run
+        // on the files of both projects
+        var first = TestAnalyzerReferences.Create(CopyBuiltInAnalyzers("first-analyzers"));
+        var second = TestAnalyzerReferences.Create(CopyBuiltInAnalyzers("second-analyzers"));
+        var firstFile = CreateTestFile("public class First { }", ".cs", "first");
+        var secondFile = CreateTestFile("public class Second { }", ".cs", "second");
+        using var workspace = CreateTwoProjectWorkspace(first, second);
+        workspace.GetFileAnalyzerScope(firstFile).Returns(new FileAnalyzerScope(1, [first]));
+        workspace.GetFileAnalyzerScope(secondFile).Returns(new FileAnalyzerScope(1, [second]));
+        using var autoLoad = CreateAutoLoadService(workspace);
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, autoLoad);
+        HostReports((_, _) => []);
+
+        var firstRun = await service.RunAnalyzersAsync(firstFile);
+        var secondRun = await service.RunAnalyzersAsync(secondFile);
+
+        Assert.That(firstRun.AnalyzersRun, Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds), firstRun.ErrorMessage);
+        Assert.That(secondRun.AnalyzersRun, Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds), secondRun.ErrorMessage);
+    }
+
+    [Test]
+    public async Task RunAnalyzersAsync_WithACustomPathCopyOfAProjectsAnalyzers_RunsThemOnFilesInNoProject()
+    {
+        // Analyzers from customAnalyzerPaths belong to no project and run on every file, even when a project
+        // references the same analyzers, which have the same IDs
+        var custom = CopyBuiltInAnalyzers("custom-analyzers");
+        var script = CreateTestFile("public class Script { }", ".cs");
+        using var workspace = CreateTwoProjectWorkspace(TestAnalyzerReferences.BuiltInAnalyzers(), EmitTestsProjectAnalyzer());
+        using var autoLoad = new AnalyzerAutoLoadService(
+            CreateNullLogger<AnalyzerAutoLoadService>(),
+            new RoslynAnalyzerLoader(CreateNullLogger<RoslynAnalyzerLoader>(), CreateNullLoggerFactory()),
+            new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>()),
+            workspace,
+            new AnalyzerAutoLoadConfiguration { CustomAnalyzerPaths = [custom] });
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, autoLoad);
+        HostReports((_, _) => []);
+
+        var result = await service.RunAnalyzersAsync(script);
+
+        Assert.That(result.AnalyzersRun, Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds), result.ErrorMessage);
+    }
+
     [Test]
     public async Task GetAnalyzersForFile_ReturnsTheAnalyzersOfTheFilesProjects()
     {
