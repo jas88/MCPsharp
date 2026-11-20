@@ -264,9 +264,7 @@ internal sealed partial class Program
             var analyzerPreload = Task.Run(() => roslynAnalyzerService.LoadOnStartupAsync(cts.Token), cts.Token);
 
             // Run MCP server loop
-            await handler.RunAsync(cts.Token);
-
-            await StopAnalyzerPreloadAsync(analyzerPreload, cts);
+            await RunUntilStoppedAsync(() => handler.RunAsync(cts.Token), analyzerPreload, cts, logger);
 
             // projectDatabase will be disposed automatically via await using
 
@@ -281,9 +279,30 @@ internal sealed partial class Program
     }
 
     /// <summary>
-    /// Stop an analyzer load started at startup that is still running, and wait for it to end.
+    /// Run the server loop, then stop the analyzer load started at startup and wait for it, however the loop ends
+    /// (Ctrl+C makes it throw), so that the load has ended before the services it uses are disposed
     /// </summary>
-    private static async Task StopAnalyzerPreloadAsync(Task analyzerPreload, CancellationTokenSource cts)
+    internal static async Task RunUntilStoppedAsync(
+        Func<Task> runServerAsync,
+        Task analyzerPreload,
+        CancellationTokenSource cts,
+        ILogger logger)
+    {
+        try
+        {
+            await runServerAsync();
+        }
+        finally
+        {
+            await StopAnalyzerPreloadAsync(analyzerPreload, cts, logger);
+        }
+    }
+
+    /// <summary>
+    /// Stop an analyzer load started at startup that is still running, and wait for it to end. A load that failed
+    /// is logged rather than rethrown: it ran in the background, so it is no reason for the server to fail.
+    /// </summary>
+    internal static async Task StopAnalyzerPreloadAsync(Task analyzerPreload, CancellationTokenSource cts, ILogger logger)
     {
         await cts.CancelAsync();
         try
@@ -293,6 +312,10 @@ internal sealed partial class Program
         catch (OperationCanceledException)
         {
             // Stopped by the shutdown
+        }
+        catch (Exception ex)
+        {
+            LogAnalyzerPreloadFailed(logger, ex);
         }
     }
 
@@ -420,4 +443,7 @@ internal sealed partial class Program
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to auto-load project, continuing without pre-loaded project")]
     private static partial void LogFailedToAutoLoadProject(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Loading the project's analyzers at startup (loadOnStartup) failed")]
+    private static partial void LogAnalyzerPreloadFailed(ILogger logger, Exception exception);
 }
