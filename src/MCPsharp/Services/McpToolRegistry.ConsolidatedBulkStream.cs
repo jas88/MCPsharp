@@ -71,7 +71,7 @@ public partial class McpToolRegistry
             ? ParseTextEdits(edits)
             : null;
 
-    private async Task<ToolCallResult> ExecuteBulkOperation(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteBulkOperationAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_bulkOperationsHub == null)
         {
@@ -107,7 +107,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecutePreviewBulkOperation(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecutePreviewBulkOperationAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_bulkOperationsHub == null)
         {
@@ -138,7 +138,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteGetBulkProgress(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetBulkProgressAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_bulkOperationsHub == null)
         {
@@ -155,7 +155,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteManageBulkOperation(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteManageBulkOperationAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_bulkOperationsHub == null)
         {
@@ -181,7 +181,7 @@ public partial class McpToolRegistry
 
     // ===== Stream Processing Controller =====
 
-    private async Task<ToolCallResult> ExecuteProcessStream(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteProcessStreamAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_streamController == null)
         {
@@ -290,7 +290,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteMonitorStream(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteMonitorStreamAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_streamController == null)
         {
@@ -313,7 +313,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteManageStream(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteManageStreamAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_streamController == null)
         {

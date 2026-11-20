@@ -128,7 +128,7 @@ public partial class AdvancedReferenceFinderServiceIntegrationTests
     public async Task FindTestOnlyMethods_ShouldFindTestOnlyMethods()
     {
         // Act
-        var result = await _advancedReferenceFinder.FindTestOnlyMethods();
+        var result = await _advancedReferenceFinder.FindTestOnlyMethodsAsync();
 
         // Assert
         Assert.That(result, Is.Not.Null);

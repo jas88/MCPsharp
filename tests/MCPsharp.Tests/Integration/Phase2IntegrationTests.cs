@@ -14,12 +14,12 @@ namespace MCPsharp.Tests.Integration;
 [Category("Phase2Integration")]
 public partial class Phase2IntegrationTests
 {
-    private string _testRoot;
-    private RoslynWorkspace _workspace;
-    private ReferenceFinderService _referenceFinder;
-    private MCPsharp.Services.Phase2.WorkflowAnalyzerService _workflowAnalyzer;
-    private ConfigAnalyzerService _configAnalyzer;
-    private ImpactAnalyzerService _impactAnalyzer;
+    private string _testRoot = null!;
+    private RoslynWorkspace _workspace = null!;
+    private ReferenceFinderService _referenceFinder = null!;
+    private MCPsharp.Services.Phase2.WorkflowAnalyzerService _workflowAnalyzer = null!;
+    private ConfigAnalyzerService _configAnalyzer = null!;
+    private ImpactAnalyzerService _impactAnalyzer = null!;
 
     [SetUp]
     public void SetUp()

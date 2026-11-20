@@ -80,7 +80,7 @@ public partial class McpToolRegistry
         return Path.GetFullPath(Path.IsPathRooted(path) || root == null ? path : Path.Combine(root, path));
     }
 
-    private async Task<ToolCallResult> ExecuteLoadRoslynAnalyzers(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteLoadRoslynAnalyzersAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_roslynAnalyzerService == null)
         {
@@ -115,7 +115,7 @@ public partial class McpToolRegistry
         };
     }
 
-    private async Task<ToolCallResult> ExecuteRunRoslynAnalyzers(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteRunRoslynAnalyzersAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_roslynAnalyzerService == null)
         {
@@ -189,7 +189,7 @@ public partial class McpToolRegistry
 
     // ===== Refactoring =====
 
-    private async Task<ToolCallResult> ExecuteExtractMethod(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteExtractMethodAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_workspace == null)
         {

@@ -15,7 +15,7 @@ public partial class McpToolRegistry
     /// <param name="arguments">Tool arguments containing files, regexPattern, replacement, and optional parameters</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
     /// <returns>Tool execution result with bulk replacement details</returns>
-    private async Task<ToolCallResult> ExecuteBulkReplace(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteBulkReplaceAsync(JsonDocument arguments, CancellationToken cancellationToken)
     {
         if (_bulkEditService == null)
         {
@@ -94,7 +94,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteBulkReplace));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteBulkReplaceAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -105,7 +105,7 @@ public partial class McpToolRegistry
     /// <param name="arguments">Tool arguments containing files, conditionType, pattern, edits, and optional parameters</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
     /// <returns>Tool execution result with conditional edit details</returns>
-    private async Task<ToolCallResult> ExecuteConditionalEdit(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteConditionalEditAsync(JsonDocument arguments, CancellationToken cancellationToken)
     {
         if (_bulkEditService == null)
         {
@@ -220,7 +220,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteConditionalEdit));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteConditionalEditAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -231,7 +231,7 @@ public partial class McpToolRegistry
     /// <param name="arguments">Tool arguments containing files, refactorType, targetPattern, replacementPattern, and optional parameters</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
     /// <returns>Tool execution result with refactoring details</returns>
-    private async Task<ToolCallResult> ExecuteBatchRefactor(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteBatchRefactorAsync(JsonDocument arguments, CancellationToken cancellationToken)
     {
         if (_bulkEditService == null)
         {
@@ -301,7 +301,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteBatchRefactor));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteBatchRefactorAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -312,7 +312,7 @@ public partial class McpToolRegistry
     /// <param name="arguments">Tool arguments containing operations array with file patterns and edits</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
     /// <returns>Tool execution result with multi-file edit details</returns>
-    private async Task<ToolCallResult> ExecuteMultiFileEdit(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteMultiFileEditAsync(JsonDocument arguments, CancellationToken cancellationToken)
     {
         if (_bulkEditService == null)
         {
@@ -394,7 +394,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteMultiFileEdit));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteMultiFileEditAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }

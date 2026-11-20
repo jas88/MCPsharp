@@ -73,7 +73,7 @@ public class McpToolRegistryRoslynFixTests
         new(analyzer, NullLogger<RoslynAnalyzerAdapter>.Instance);
 
     private Task<ToolCallResult> Execute(string toolName, object arguments) =>
-        _registry.ExecuteTool(new ToolCallRequest
+        _registry.ExecuteToolAsync(new ToolCallRequest
         {
             Name = toolName,
             Arguments = JsonDocument.Parse(JsonSerializer.Serialize(arguments))

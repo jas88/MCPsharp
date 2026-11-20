@@ -10,8 +10,8 @@ namespace MCPsharp.Tests;
 [TestFixture]
 public class WorkflowAnalyzerStandaloneTests
 {
-    private string _testWorkflowDir;
-    private WorkflowAnalyzerService _service;
+    private string _testWorkflowDir = null!;
+    private WorkflowAnalyzerService _service = null!;
 
     [SetUp]
     public void SetUp()

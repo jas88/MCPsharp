@@ -9,7 +9,7 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
-    private async Task<ToolCallResult> ExecuteValidateArchitecture(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteValidateArchitectureAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -55,7 +55,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateArchitecture));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateArchitectureAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -64,7 +64,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteDetectLayerViolations(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteDetectLayerViolationsAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -105,7 +105,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectLayerViolations));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDetectLayerViolationsAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -114,7 +114,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetArchitectureReport(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetArchitectureReportAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -157,7 +157,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetArchitectureReport));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetArchitectureReportAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -166,7 +166,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteDefineCustomArchitecture(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteDefineCustomArchitectureAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -206,7 +206,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteDefineCustomArchitecture));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteDefineCustomArchitectureAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -215,7 +215,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeCircularDependencies(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteAnalyzeCircularDependenciesAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -255,7 +255,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeCircularDependencies));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteAnalyzeCircularDependenciesAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -264,7 +264,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGenerateArchitectureDiagram(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGenerateArchitectureDiagramAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -301,7 +301,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateArchitectureDiagram));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGenerateArchitectureDiagramAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -310,7 +310,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetArchitectureRecommendations(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetArchitectureRecommendationsAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -354,7 +354,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetArchitectureRecommendations));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetArchitectureRecommendationsAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -363,7 +363,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteCheckTypeCompliance(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteCheckTypeComplianceAsync(JsonDocument arguments, CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -409,7 +409,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteCheckTypeCompliance));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCheckTypeComplianceAsync));
             return new ToolCallResult
             {
                 Success = false,
@@ -418,7 +418,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetPredefinedArchitectures(CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetPredefinedArchitecturesAsync(CancellationToken ct)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -447,7 +447,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetPredefinedArchitectures));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetPredefinedArchitecturesAsync));
             return new ToolCallResult
             {
                 Success = false,

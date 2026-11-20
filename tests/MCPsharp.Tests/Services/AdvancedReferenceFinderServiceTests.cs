@@ -9,12 +9,12 @@ namespace MCPsharp.Tests.Services;
 [TestFixture]
 public partial class AdvancedReferenceFinderServiceIntegrationTests
 {
-    private RoslynWorkspace _workspace;
-    private SymbolQueryService _symbolQuery;
-    private CallerAnalysisService _callerAnalysis;
-    private CallChainService _callChain;
-    private TypeUsageService _typeUsage;
-    private AdvancedReferenceFinderService _advancedReferenceFinder;
+    private RoslynWorkspace _workspace = null!;
+    private SymbolQueryService _symbolQuery = null!;
+    private CallerAnalysisService _callerAnalysis = null!;
+    private CallChainService _callChain = null!;
+    private TypeUsageService _typeUsage = null!;
+    private AdvancedReferenceFinderService _advancedReferenceFinder = null!;
 
     [SetUp]
     public void SetUp()

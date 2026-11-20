@@ -85,7 +85,7 @@ public partial class AdvancedReferenceFinderService
 
         foreach (var symbol in symbols)
         {
-            var methodSymbol = await GetMethodSymbol(symbol.File, symbol.Line);
+            var methodSymbol = await GetMethodSymbolAsync(symbol.File, symbol.Line);
             if (methodSymbol != null)
             {
                 var methodSignature = CreateMethodSignature(methodSymbol);
@@ -108,14 +108,6 @@ public partial class AdvancedReferenceFinderService
         return allMethods
             .Where(m => CalculateSimilarity(m.Name, methodName) >= threshold)
             .ToList();
-    }
-
-    /// <summary>
-    /// Find methods with similar names (synchronous wrapper for tests)
-    /// </summary>
-    public async Task<List<MethodSignature>> FindSimilarMethods(string methodName, double threshold = 0.8)
-    {
-        return await FindSimilarMethodsAsync(methodName, threshold);
     }
 
     /// <summary>

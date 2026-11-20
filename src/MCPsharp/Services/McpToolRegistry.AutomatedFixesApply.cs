@@ -14,7 +14,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// Apply automated code quality fixes to improve code
     /// </summary>
-    private async Task<ToolCallResult> ExecuteCodeQualityFix(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteCodeQualityFixAsync(JsonDocument arguments, CancellationToken ct)
     {
         try
         {
@@ -200,7 +200,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteCodeQualityFix));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteCodeQualityFixAsync));
             return new ToolCallResult
             {
                 Success = false,

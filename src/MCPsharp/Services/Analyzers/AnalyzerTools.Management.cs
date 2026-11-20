@@ -69,7 +69,7 @@ public static partial class AnalyzerTools
         }
     }
 
-    private static async Task<ToolCallResult> ExecuteRunAnalysis(
+    private static async Task<ToolCallResult> ExecuteRunAnalysisAsync(
         JsonDocument arguments,
         IAnalyzerHost analyzerHost,
         CancellationToken cancellationToken)
@@ -153,7 +153,7 @@ public static partial class AnalyzerTools
         }
     }
 
-    private static async Task<ToolCallResult> ExecuteLoadAnalyzer(
+    private static async Task<ToolCallResult> ExecuteLoadAnalyzerAsync(
         JsonDocument arguments,
         IAnalyzerHost analyzerHost,
         CancellationToken cancellationToken)
@@ -199,7 +199,7 @@ public static partial class AnalyzerTools
         }
     }
 
-    private static async Task<ToolCallResult> ExecuteUnloadAnalyzer(
+    private static async Task<ToolCallResult> ExecuteUnloadAnalyzerAsync(
         JsonDocument arguments,
         IAnalyzerHost analyzerHost,
         CancellationToken cancellationToken)
@@ -227,7 +227,7 @@ public static partial class AnalyzerTools
         }
     }
 
-    private static async Task<ToolCallResult> ExecuteConfigureAnalyzer(
+    private static async Task<ToolCallResult> ExecuteConfigureAnalyzerAsync(
         JsonDocument arguments,
         IAnalyzerHost analyzerHost,
         CancellationToken cancellationToken)
@@ -268,7 +268,7 @@ public static partial class AnalyzerTools
         }
     }
 
-    private static async Task<ToolCallResult> ExecuteGetAnalyzerHealth(
+    private static async Task<ToolCallResult> ExecuteGetAnalyzerHealthAsync(
         JsonDocument arguments,
         IAnalyzerHost analyzerHost,
         CancellationToken cancellationToken)

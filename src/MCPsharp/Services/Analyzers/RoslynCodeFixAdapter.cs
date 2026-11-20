@@ -112,7 +112,7 @@ public partial class RoslynCodeFixAdapter
             var diagnostic = CreateDiagnosticFromIssue(issue, syntaxTree);
 
             // Get code actions from the provider
-            var actions = await GetCodeActionsFromContext(document, diagnostic, cancellationToken);
+            var actions = await GetCodeActionsFromContextAsync(document, diagnostic, cancellationToken);
 
             // Convert CodeActions to AnalyzerFix objects
             var fixes = new List<AnalyzerFix>();
@@ -156,7 +156,7 @@ public partial class RoslynCodeFixAdapter
 
         LogApplyingFix(_logger, Name, diagnostic.Id);
 
-        var actions = await GetCodeActionsFromContext(document, diagnostic, cancellationToken);
+        var actions = await GetCodeActionsFromContextAsync(document, diagnostic, cancellationToken);
         if (actions.IsEmpty)
         {
             return CodeFixComputation.Failure($"{Name} offered no code action for this diagnostic");
@@ -194,7 +194,7 @@ public partial class RoslynCodeFixAdapter
         }
     }
 
-    private async Task<ImmutableArray<CodeAction>> GetCodeActionsFromContext(
+    private async Task<ImmutableArray<CodeAction>> GetCodeActionsFromContextAsync(
         Document document,
         Diagnostic diagnostic,
         CancellationToken cancellationToken)

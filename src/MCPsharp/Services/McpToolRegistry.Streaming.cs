@@ -25,7 +25,7 @@ public partial class McpToolRegistry
     /// <param name="arguments">Tool arguments containing filePath, outputPath, processorType, and optional parameters</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
     /// <returns>Tool execution result with operation details</returns>
-    private async Task<ToolCallResult> ExecuteStreamProcessFile(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteStreamProcessFileAsync(JsonDocument arguments, CancellationToken cancellationToken)
     {
         if (_streamingProcessor == null)
         {
@@ -90,7 +90,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteStreamProcessFile));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteStreamProcessFileAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -101,7 +101,7 @@ public partial class McpToolRegistry
     /// <param name="arguments">Tool arguments containing inputFiles, outputDirectory, processorType, and configuration</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
     /// <returns>Tool execution result with bulk transformation details</returns>
-    private async Task<ToolCallResult> ExecuteBulkTransform(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteBulkTransformAsync(JsonDocument arguments, CancellationToken cancellationToken)
     {
         if (_streamingProcessor == null)
         {
@@ -180,7 +180,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteBulkTransform));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteBulkTransformAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -189,7 +189,7 @@ public partial class McpToolRegistry
     /// Get list of available stream processors and their capabilities
     /// </summary>
     /// <returns>Tool execution result with processor information</returns>
-    private async Task<ToolCallResult> ExecuteGetAvailableProcessors()
+    private async Task<ToolCallResult> ExecuteGetAvailableProcessorsAsync()
     {
         if (_streamingProcessor == null)
         {
@@ -222,7 +222,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetAvailableProcessors));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetAvailableProcessorsAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -232,7 +232,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing filePath, processorType, and optional configuration</param>
     /// <returns>Tool execution result with time estimation</returns>
-    private async Task<ToolCallResult> ExecuteEstimateStreamProcessing(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteEstimateStreamProcessingAsync(JsonDocument arguments)
     {
         if (_streamingProcessor == null)
         {
@@ -296,7 +296,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteEstimateStreamProcessing));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteEstimateStreamProcessingAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }

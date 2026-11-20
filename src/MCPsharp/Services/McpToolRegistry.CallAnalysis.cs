@@ -9,7 +9,7 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
-    private async Task<ToolCallResult> ExecuteFindCallers(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteFindCallersAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_advancedReferenceFinder == null)
@@ -50,7 +50,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = result };
     }
 
-    private async Task<ToolCallResult> ExecuteFindCallChains(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteFindCallChainsAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_advancedReferenceFinder == null)
@@ -104,7 +104,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = result };
     }
 
-    private async Task<ToolCallResult> ExecuteFindTypeUsages(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteFindTypeUsagesAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_advancedReferenceFinder == null)
@@ -133,7 +133,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = result };
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeCallPatterns(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteAnalyzeCallPatternsAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_advancedReferenceFinder == null)
@@ -163,7 +163,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = result };
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeInheritance(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteAnalyzeInheritanceAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_advancedReferenceFinder == null)
@@ -187,7 +187,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = result };
     }
 
-    private async Task<ToolCallResult> ExecuteFindCircularDependencies(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteFindCircularDependenciesAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_advancedReferenceFinder == null)
@@ -209,7 +209,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = new { CircularDependencies = result, TotalCount = result.Count } };
     }
 
-    private async Task<ToolCallResult> ExecuteFindUnusedMethods(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteFindUnusedMethodsAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_advancedReferenceFinder == null)
@@ -231,7 +231,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = new { UnusedMethods = result, TotalCount = result.Count } };
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeCallGraph(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteAnalyzeCallGraphAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_advancedReferenceFinder == null)
@@ -259,7 +259,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = result };
     }
 
-    private async Task<ToolCallResult> ExecuteFindRecursiveCalls(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteFindRecursiveCallsAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_advancedReferenceFinder == null)
@@ -295,7 +295,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = new { RecursiveCalls = result, TotalCount = result.Count } };
     }
 
-    private async Task<ToolCallResult> ExecuteAnalyzeTypeDependencies(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteAnalyzeTypeDependenciesAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_advancedReferenceFinder == null)

@@ -171,12 +171,11 @@ All tests passed!
 
 **Cross-File Intelligence:**
 ```bash
-# Change a method signature
+# Change a method (changeType is add, modify, delete or rename)
 analyze_impact({
-  "symbolName": "User.Delete",
-  "changeType": "signature_change",
-  "oldSignature": "void Delete()",
-  "newSignature": "Task DeleteAsync(bool cascade)"
+  "filePath": "src/Models/User.cs",
+  "changeType": "modify",
+  "symbolName": "User.Delete"
 })
 
 # Returns impacts across:

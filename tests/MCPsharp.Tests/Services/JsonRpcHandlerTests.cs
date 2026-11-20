@@ -45,7 +45,7 @@ public class JsonRpcHandlerTests
         var handler = CreateHandler("", out _);
 
         // Act
-        var response = await handler.HandleRequest(request);
+        var response = await handler.HandleRequestAsync(request);
 
         // Assert
         Assert.That(response, Is.Not.Null);
@@ -89,7 +89,7 @@ public class JsonRpcHandlerTests
         var handler = CreateHandler("", out _);
 
         // Act
-        var response = await handler.HandleRequest(request);
+        var response = await handler.HandleRequestAsync(request);
 
         // Assert
         Assert.That(response.Error, Is.Not.Null);
@@ -112,7 +112,7 @@ public class JsonRpcHandlerTests
         var handler = CreateHandler("", out _);
 
         // Act
-        var response = await handler.HandleRequest(request);
+        var response = await handler.HandleRequestAsync(request);
 
         // Assert
         Assert.That(response.Error, Is.Null);
@@ -195,7 +195,7 @@ public class JsonRpcHandlerTests
         var handler = CreateHandler("", out _);
 
         // Act
-        var response = await handler.HandleRequest(request);
+        var response = await handler.HandleRequestAsync(request);
 
         // Assert
         Assert.That(response.Jsonrpc, Is.EqualTo("2.0"));
@@ -220,7 +220,7 @@ public class JsonRpcHandlerTests
         var handler = CreateHandler("", out _);
 
         // Act
-        var response = await handler.HandleRequest(request);
+        var response = await handler.HandleRequestAsync(request);
 
         // Assert
         Assert.That(response.Error, Is.Not.Null);
@@ -242,7 +242,7 @@ public class JsonRpcHandlerTests
         var handler = CreateHandler("", out _);
 
         // Act
-        var response = await handler.HandleRequest(request);
+        var response = await handler.HandleRequestAsync(request);
 
         // Assert
         Assert.That(response.Error, Is.Null);
@@ -286,7 +286,7 @@ public class JsonRpcHandlerTests
         var handler = CreateHandler("", out _);
 
         // Act
-        var response = await handler.HandleRequest(request);
+        var response = await handler.HandleRequestAsync(request);
 
         // Assert
         Assert.That(response.Jsonrpc, Is.EqualTo("2.0"));

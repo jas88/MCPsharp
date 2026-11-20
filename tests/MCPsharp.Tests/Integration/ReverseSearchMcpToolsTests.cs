@@ -12,9 +12,9 @@ namespace MCPsharp.Tests.Integration;
 [TestFixture]
 public class ReverseSearchMcpToolsTests
 {
-    private ProjectContextManager _projectContext;
-    private RoslynWorkspace _workspace;
-    private McpToolRegistry _toolRegistry;
+    private ProjectContextManager _projectContext = null!;
+    private RoslynWorkspace _workspace = null!;
+    private McpToolRegistry _toolRegistry = null!;
 
     [SetUp]
     public void SetUp()
@@ -120,7 +120,7 @@ public class Consumer
         }");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_callers", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_callers", Arguments = arguments });
 
         // Debug - capture actual values
         Console.WriteLine($"Success: {result.Success}");
@@ -146,7 +146,7 @@ public class Consumer
         }");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_call_chains", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_call_chains", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -164,7 +164,7 @@ public class Consumer
         }");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_type_usages", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_type_usages", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -183,7 +183,7 @@ public class Consumer
         }");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_call_patterns", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "analyze_call_patterns", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -201,7 +201,7 @@ public class Consumer
         }");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_inheritance", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "analyze_inheritance", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -219,7 +219,7 @@ public class Consumer
         }");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_circular_dependencies", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_circular_dependencies", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -237,7 +237,7 @@ public class Consumer
         }");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_unused_methods", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_unused_methods", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -255,7 +255,7 @@ public class Consumer
         }");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_call_graph", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "analyze_call_graph", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -275,7 +275,7 @@ public class Consumer
         }");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_recursive_calls", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_recursive_calls", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -293,7 +293,7 @@ public class Consumer
         }");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_type_dependencies", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "analyze_type_dependencies", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -308,7 +308,7 @@ public class Consumer
         var arguments = JsonDocument.Parse("{}");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_callers", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_callers", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.False);
@@ -323,7 +323,7 @@ public class Consumer
         var arguments = JsonDocument.Parse("{}");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_type_usages", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_type_usages", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.False);
@@ -338,7 +338,7 @@ public class Consumer
         var arguments = JsonDocument.Parse("{}");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_inheritance", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "analyze_inheritance", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.False);
@@ -353,7 +353,7 @@ public class Consumer
         var arguments = JsonDocument.Parse("{}");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "unknown_tool", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "unknown_tool", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.False);
@@ -406,7 +406,7 @@ public class Consumer
             ""direction"": ""backward""
         }");
 
-        var backwardResult = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_call_chains", Arguments = backwardArgs });
+        var backwardResult = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_call_chains", Arguments = backwardArgs });
         Assert.That(backwardResult.Success, Is.True);
 
         // Test forward direction
@@ -416,7 +416,7 @@ public class Consumer
             ""direction"": ""forward""
         }");
 
-        var forwardResult = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_call_chains", Arguments = forwardArgs });
+        var forwardResult = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_call_chains", Arguments = forwardArgs });
         Assert.That(forwardResult.Success, Is.True);
     }
 
@@ -431,7 +431,7 @@ public class Consumer
         }");
 
         // Act
-        var result = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_call_chains", Arguments = arguments });
+        var result = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_call_chains", Arguments = arguments });
 
         // Assert
         Assert.That(result.Success, Is.True);
@@ -448,7 +448,7 @@ public class Consumer
             ""containingType"": ""Service""
         }");
 
-        var callersResult = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_callers", Arguments = callersArgs });
+        var callersResult = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_callers", Arguments = callersArgs });
         Assert.That(callersResult.Success, Is.True);
 
         var typeUsagesArgs = JsonDocument.Parse(@"
@@ -456,7 +456,7 @@ public class Consumer
             ""typeName"": ""Service""
         }");
 
-        var typeUsagesResult = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "find_type_usages", Arguments = typeUsagesArgs });
+        var typeUsagesResult = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "find_type_usages", Arguments = typeUsagesArgs });
         Assert.That(typeUsagesResult.Success, Is.True);
 
         var patternsArgs = JsonDocument.Parse(@"
@@ -465,7 +465,7 @@ public class Consumer
             ""containingType"": ""Service""
         }");
 
-        var patternsResult = await _toolRegistry.ExecuteTool(new ToolCallRequest { Name = "analyze_call_patterns", Arguments = patternsArgs });
+        var patternsResult = await _toolRegistry.ExecuteToolAsync(new ToolCallRequest { Name = "analyze_call_patterns", Arguments = patternsArgs });
         Assert.That(patternsResult.Success, Is.True);
     }
 

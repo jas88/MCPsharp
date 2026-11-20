@@ -305,14 +305,6 @@ public partial class AdvancedReferenceFinderService
     }
 
     /// <summary>
-    /// Find methods only called by tests (synchronous wrapper for tests)
-    /// </summary>
-    public async Task<List<MethodSignature>> FindTestOnlyMethods()
-    {
-        return await FindTestOnlyMethodsAsync();
-    }
-
-    /// <summary>
     /// Find methods only called by tests
     /// </summary>
     public async Task<List<MethodSignature>> FindTestOnlyMethodsAsync(CancellationToken cancellationToken = default)

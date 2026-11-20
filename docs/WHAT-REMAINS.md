@@ -96,7 +96,7 @@ await handler.RunAsync(CancellationToken.None);
 **Needed:**
 - Constructor accepting McpToolRegistry
 - tools/list calls registry.GetTools()
-- tools/call calls registry.ExecuteTool()
+- tools/call calls registry.ExecuteToolAsync()
 
 **Estimated Time:** 30 minutes
 

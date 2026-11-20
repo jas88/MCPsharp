@@ -79,7 +79,7 @@ public partial class McpToolRegistry
         RebindConsolidatedServices();
     }
 
-    private async Task<ToolCallResult> ExecuteProjectOpen(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteProjectOpenAsync(JsonDocument arguments)
     {
         var path = arguments.RootElement.GetProperty("path").GetString();
         if (string.IsNullOrEmpty(path))
@@ -115,7 +115,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteProjectOpen));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteProjectOpenAsync));
             return new ToolCallResult
             {
                 Success = false,

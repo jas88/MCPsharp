@@ -28,7 +28,7 @@ public sealed class SemanticModelCache : IDisposable
 
         if (_cache.TryGetValue(document.Id, out var weakRef) &&
             weakRef.TryGetTarget(out var cached) &&
-            await IsDocumentVersionCurrent(document))
+            await IsDocumentVersionCurrentAsync(document))
         {
             return cached;
         }
@@ -39,7 +39,7 @@ public sealed class SemanticModelCache : IDisposable
             // Double-check after acquiring lock
             if (_cache.TryGetValue(document.Id, out weakRef) &&
                 weakRef.TryGetTarget(out cached) &&
-                await IsDocumentVersionCurrent(document))
+                await IsDocumentVersionCurrentAsync(document))
             {
                 return cached;
             }
@@ -48,7 +48,7 @@ public sealed class SemanticModelCache : IDisposable
             if (model != null)
             {
                 _cache[document.Id] = new WeakReference<SemanticModel>(model);
-                _documentVersions[document.Id] = await GetDocumentVersion(document);
+                _documentVersions[document.Id] = await GetDocumentVersionAsync(document);
             }
             return model;
         }
@@ -139,18 +139,18 @@ public sealed class SemanticModelCache : IDisposable
         return toRemove.Count;
     }
 
-    private async Task<bool> IsDocumentVersionCurrent(Document document)
+    private async Task<bool> IsDocumentVersionCurrentAsync(Document document)
     {
         if (!_documentVersions.TryGetValue(document.Id, out var cachedVersion))
         {
             return false;
         }
 
-        var currentVersion = await GetDocumentVersion(document);
+        var currentVersion = await GetDocumentVersionAsync(document);
         return cachedVersion == currentVersion;
     }
 
-    private static async Task<int> GetDocumentVersion(Document document)
+    private static async Task<int> GetDocumentVersionAsync(Document document)
     {
         // Use document's version stamp if available
         var version = await document.GetSyntaxVersionAsync();

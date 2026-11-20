@@ -10,10 +10,10 @@ namespace MCPsharp.Tests.Services;
 [TestFixture]
 public class CallChainServiceTests
 {
-    private RoslynWorkspace _workspace;
-    private SymbolQueryService _symbolQuery;
-    private CallerAnalysisService _callerAnalysis;
-    private CallChainService _callChain;
+    private RoslynWorkspace _workspace = null!;
+    private SymbolQueryService _symbolQuery = null!;
+    private CallerAnalysisService _callerAnalysis = null!;
+    private CallChainService _callChain = null!;
 
     [SetUp]
     public void SetUp()

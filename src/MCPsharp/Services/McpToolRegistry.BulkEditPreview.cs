@@ -15,7 +15,7 @@ public partial class McpToolRegistry
     /// <param name="arguments">Tool arguments containing operation type, files, and operation-specific parameters</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
     /// <returns>Tool execution result with preview details and impact analysis</returns>
-    private async Task<ToolCallResult> ExecutePreviewBulkChanges(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecutePreviewBulkChangesAsync(JsonDocument arguments, CancellationToken cancellationToken)
     {
         if (_bulkEditService == null)
         {
@@ -149,7 +149,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecutePreviewBulkChanges));
+            LogToolOperationFailed(_logger, ex, nameof(ExecutePreviewBulkChangesAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -159,7 +159,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing operation type, files, and operation-specific parameters</param>
     /// <returns>Tool execution result with validation details</returns>
-    private async Task<ToolCallResult> ExecuteValidateBulkEdit(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteValidateBulkEditAsync(JsonDocument arguments)
     {
         if (_bulkEditService == null)
         {
@@ -238,7 +238,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateBulkEdit));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteValidateBulkEditAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -248,7 +248,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing operation type and files</param>
     /// <returns>Tool execution result with impact estimation</returns>
-    private async Task<ToolCallResult> ExecuteEstimateBulkImpact(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteEstimateBulkImpactAsync(JsonDocument arguments)
     {
         if (_bulkEditService == null)
         {
@@ -301,7 +301,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteEstimateBulkImpact));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteEstimateBulkImpactAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -311,7 +311,7 @@ public partial class McpToolRegistry
     /// </summary>
     /// <param name="arguments">Tool arguments containing files array</param>
     /// <returns>Tool execution result with file statistics</returns>
-    private async Task<ToolCallResult> ExecuteGetBulkFileStatistics(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteGetBulkFileStatisticsAsync(JsonDocument arguments)
     {
         if (_bulkEditService == null)
         {
@@ -347,7 +347,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetBulkFileStatistics));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetBulkFileStatisticsAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }

@@ -10,7 +10,7 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
-    private async Task<ToolCallResult> ExecuteFindSymbol(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteFindSymbolAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
 
@@ -83,7 +83,7 @@ public partial class McpToolRegistry
         };
     }
 
-    private async Task<ToolCallResult> ExecuteGetSymbolInfo(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteGetSymbolInfoAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_symbolQuery == null)
@@ -113,7 +113,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = result };
     }
 
-    private async Task<ToolCallResult> ExecuteGetClassStructure(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteGetClassStructureAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_classStructure == null)
@@ -146,7 +146,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = result };
     }
 
-    private async Task<ToolCallResult> ExecuteAddClassProperty(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteAddClassPropertyAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_semanticEdit == null)
@@ -194,7 +194,7 @@ public partial class McpToolRegistry
         };
     }
 
-    private async Task<ToolCallResult> ExecuteAddClassMethod(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteAddClassMethodAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_semanticEdit == null)
@@ -250,7 +250,7 @@ public partial class McpToolRegistry
         };
     }
 
-    private async Task<ToolCallResult> ExecuteFindReferences(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteFindReferencesAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_referenceFinder == null)
@@ -299,7 +299,7 @@ public partial class McpToolRegistry
         return new ToolCallResult { Success = true, Result = result };
     }
 
-    private async Task<ToolCallResult> ExecuteFindImplementations(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteFindImplementationsAsync(JsonDocument arguments)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_referenceFinder == null)
@@ -325,7 +325,7 @@ public partial class McpToolRegistry
         };
     }
 
-    private static async Task<ToolCallResult> ExecuteParseProject(JsonDocument arguments)
+    private static async Task<ToolCallResult> ExecuteParseProjectAsync(JsonDocument arguments)
     {
         var projectPath = arguments.RootElement.GetProperty("projectPath").GetString();
         if (string.IsNullOrEmpty(projectPath))

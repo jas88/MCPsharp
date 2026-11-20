@@ -106,7 +106,7 @@ public sealed partial class BulkEditService
             // Process each file to generate preview
             foreach (var filePath in filesToProcess)
             {
-                var preview = await GenerateFilePreview(filePath, requestCopy, cancellationToken);
+                var preview = await GenerateFilePreviewAsync(filePath, requestCopy, cancellationToken);
                 filePreviews.Add(preview);
 
                 if (preview.WouldChange)
@@ -186,7 +186,7 @@ public sealed partial class BulkEditService
         }
     }
 
-    private async Task<FilePreviewResult> GenerateFilePreview(
+    private async Task<FilePreviewResult> GenerateFilePreviewAsync(
         string filePath,
         BulkEditRequest request,
         CancellationToken cancellationToken)

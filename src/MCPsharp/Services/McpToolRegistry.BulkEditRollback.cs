@@ -15,7 +15,7 @@ public partial class McpToolRegistry
     /// <param name="arguments">Tool arguments containing rollbackId</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
     /// <returns>Tool execution result with rollback details</returns>
-    private async Task<ToolCallResult> ExecuteRollbackBulkEdit(JsonDocument arguments, CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteRollbackBulkEditAsync(JsonDocument arguments, CancellationToken cancellationToken)
     {
         if (_bulkEditService == null)
         {
@@ -42,7 +42,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteRollbackBulkEdit));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteRollbackBulkEditAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }
@@ -75,7 +75,7 @@ public partial class McpToolRegistry
     /// Get list of available rollback sessions that can be used to undo changes
     /// </summary>
     /// <returns>Tool execution result with list of available rollbacks</returns>
-    private async Task<ToolCallResult> ExecuteGetAvailableRollbacks(CancellationToken cancellationToken)
+    private async Task<ToolCallResult> ExecuteGetAvailableRollbacksAsync(CancellationToken cancellationToken)
     {
         if (_bulkEditService == null)
         {
@@ -110,7 +110,7 @@ public partial class McpToolRegistry
         }
         catch (Exception ex)
         {
-            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetAvailableRollbacks));
+            LogToolOperationFailed(_logger, ex, nameof(ExecuteGetAvailableRollbacksAsync));
             return new ToolCallResult { Success = false, Error = ex.Message };
         }
     }

@@ -295,7 +295,7 @@ public partial class McpToolRegistry
 
     // ===== Universal File Operations =====
 
-    private async Task<ToolCallResult> ExecuteGetFileInfo(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetFileInfoAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_universalFileOps == null)
         {
@@ -316,7 +316,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteGetFileContent(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetFileContentAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_universalFileOps == null)
         {
@@ -350,7 +350,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteFileOperation(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteFileOperationAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_universalFileOps == null)
         {
@@ -403,7 +403,7 @@ public partial class McpToolRegistry
         return FromServiceResponse(response, response.Error);
     }
 
-    private async Task<ToolCallResult> ExecuteBatch(JsonDocument arguments, CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteBatchAsync(JsonDocument arguments, CancellationToken ct)
     {
         if (_universalFileOps == null)
         {

@@ -121,7 +121,7 @@ public partial class McpToolRegistry
         },
     };
 
-    private async Task<ToolCallResult> ExecuteRenameSymbol(JsonDocument arguments, CancellationToken ct = default)
+    private async Task<ToolCallResult> ExecuteRenameSymbolAsync(JsonDocument arguments, CancellationToken ct = default)
     {
         await EnsureWorkspaceInitializedAsync();
         if (_renameSymbol == null)

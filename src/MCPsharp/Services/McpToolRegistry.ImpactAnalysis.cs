@@ -8,7 +8,7 @@ namespace MCPsharp.Services;
 /// </summary>
 public partial class McpToolRegistry
 {
-    private async Task<ToolCallResult> ExecuteAnalyzeImpact(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteAnalyzeImpactAsync(JsonDocument arguments)
     {
         if (_impactAnalyzer == null)
         {
@@ -51,7 +51,7 @@ public partial class McpToolRegistry
         }
     }
 
-    private async Task<ToolCallResult> ExecuteTraceFeature(JsonDocument arguments)
+    private async Task<ToolCallResult> ExecuteTraceFeatureAsync(JsonDocument arguments)
     {
         if (_featureTracer == null)
         {

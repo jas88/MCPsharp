@@ -151,17 +151,17 @@ internal sealed class AnalyzerToolRegistry : McpToolRegistry
         return baseTools.Concat(analyzerTools).ToList();
     }
 
-    public override async Task<ToolCallResult> ExecuteTool(ToolCallRequest request, CancellationToken ct = default)
+    public override async Task<ToolCallResult> ExecuteToolAsync(ToolCallRequest request, CancellationToken ct = default)
     {
         // Check if this is an analyzer tool
         var analyzerToolNames = AnalyzerTools.GetAnalyzerTools().Select(t => t.Name).ToHashSet();
 
         if (analyzerToolNames.Contains(request.Name))
         {
-            return await AnalyzerTools.ExecuteAnalyzerTool(request.Name, request.Arguments, _analyzerHost, _fixEngine, ct);
+            return await AnalyzerTools.ExecuteAnalyzerToolAsync(request.Name, request.Arguments, _analyzerHost, _fixEngine, ct);
         }
 
         // Fall back to base implementation for other tools
-        return await base.ExecuteTool(request, ct);
+        return await base.ExecuteToolAsync(request, ct);
     }
 }

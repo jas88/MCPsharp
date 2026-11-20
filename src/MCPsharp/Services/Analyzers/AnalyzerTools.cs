@@ -82,7 +82,7 @@ public static partial class AnalyzerTools
     /// <summary>
     /// Execute analyzer tool
     /// </summary>
-    public static async Task<ToolCallResult> ExecuteAnalyzerTool(
+    public static async Task<ToolCallResult> ExecuteAnalyzerToolAsync(
         string toolName,
         JsonDocument arguments,
         IAnalyzerHost analyzerHost,
@@ -92,15 +92,15 @@ public static partial class AnalyzerTools
         return toolName switch
         {
             "analyzer_list" => await ExecuteListAnalyzers(arguments, analyzerHost),
-            "analyzer_run" => await ExecuteRunAnalysis(arguments, analyzerHost, cancellationToken),
-            "analyzer_get_fixes" => await ExecuteGetFixes(arguments, analyzerHost, cancellationToken),
-            "analyzer_apply_fixes" => await ExecuteApplyFixes(arguments, analyzerHost, cancellationToken),
-            "analyzer_load" => await ExecuteLoadAnalyzer(arguments, analyzerHost, cancellationToken),
-            "analyzer_unload" => await ExecuteUnloadAnalyzer(arguments, analyzerHost, cancellationToken),
-            "analyzer_configure" => await ExecuteConfigureAnalyzer(arguments, analyzerHost, cancellationToken),
-            "analyzer_get_health" => await ExecuteGetAnalyzerHealth(arguments, analyzerHost, cancellationToken),
-            "analyzer_get_fix_history" => await ExecuteGetFixHistory(arguments, fixEngine, cancellationToken),
-            "analyzer_rollback_fixes" => await ExecuteRollbackFixes(arguments, fixEngine, cancellationToken),
+            "analyzer_run" => await ExecuteRunAnalysisAsync(arguments, analyzerHost, cancellationToken),
+            "analyzer_get_fixes" => await ExecuteGetFixesAsync(arguments, analyzerHost, cancellationToken),
+            "analyzer_apply_fixes" => await ExecuteApplyFixesAsync(arguments, analyzerHost, cancellationToken),
+            "analyzer_load" => await ExecuteLoadAnalyzerAsync(arguments, analyzerHost, cancellationToken),
+            "analyzer_unload" => await ExecuteUnloadAnalyzerAsync(arguments, analyzerHost, cancellationToken),
+            "analyzer_configure" => await ExecuteConfigureAnalyzerAsync(arguments, analyzerHost, cancellationToken),
+            "analyzer_get_health" => await ExecuteGetAnalyzerHealthAsync(arguments, analyzerHost, cancellationToken),
+            "analyzer_get_fix_history" => await ExecuteGetFixHistoryAsync(arguments, fixEngine, cancellationToken),
+            "analyzer_rollback_fixes" => await ExecuteRollbackFixesAsync(arguments, fixEngine, cancellationToken),
             _ => new ToolCallResult
             {
                 Success = false,

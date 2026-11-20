@@ -122,7 +122,7 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
 
             fileResults.AddRange(await ProcessFilesInParallelAsync(
                 filesToProcess,
-                filePath => ProcessFileForBulkReplace(filePath, regex, replacement, options, rollbackInfo, cancellationToken),
+                filePath => ProcessFileForBulkReplaceAsync(filePath, regex, replacement, options, rollbackInfo, cancellationToken),
                 cancellationToken));
 
             var result = BuildBulkEditResult(operationId, startTime, filesToProcess.Count, fileResults, options, rollbackInfo);
@@ -187,7 +187,7 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
 
             var fileResults = await ProcessFilesInParallelAsync(
                 filesToProcess,
-                filePath => ProcessFileForConditionalEdit(filePath, condition, edits, options, rollbackInfo, cancellationToken),
+                filePath => ProcessFileForConditionalEditAsync(filePath, condition, edits, options, rollbackInfo, cancellationToken),
                 cancellationToken);
 
             return BuildBulkEditResult(operationId, startTime, filesToProcess.Count, fileResults, options, rollbackInfo);
@@ -219,7 +219,7 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
 
             var fileResults = await ProcessFilesInParallelAsync(
                 filesToProcess,
-                filePath => ProcessFileForBatchRefactor(filePath, refactorPattern, options, rollbackInfo, cancellationToken),
+                filePath => ProcessFileForBatchRefactorAsync(filePath, refactorPattern, options, rollbackInfo, cancellationToken),
                 cancellationToken);
 
             return BuildBulkEditResult(operationId, startTime, filesToProcess.Count, fileResults, options, rollbackInfo);
@@ -265,7 +265,7 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
             {
                 var results = await ProcessFilesInParallelAsync(
                     operationFiles,
-                    filePath => ProcessFileForMultiFileEdit(filePath, operation, options, rollbackInfo, cancellationToken),
+                    filePath => ProcessFileForMultiFileEditAsync(filePath, operation, options, rollbackInfo, cancellationToken),
                     cancellationToken);
                 fileResults.AddRange(results);
 
@@ -299,7 +299,7 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
             return null;
         }
 
-        return await CreateRollbackSession(operationId, files, "BulkEdit", cancellationToken);
+        return await CreateRollbackSessionCoreAsync(operationId, files, "BulkEdit", cancellationToken);
     }
 
     /// <summary>

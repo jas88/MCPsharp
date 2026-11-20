@@ -174,7 +174,7 @@ public partial class McpToolRegistry
     }
 
     /// <summary>
-    /// Names of every tool <see cref="ExecuteTool"/> can dispatch, whether or not it is currently listed.
+    /// Names of every tool <see cref="ExecuteToolAsync"/> can dispatch, whether or not it is currently listed.
     /// </summary>
     internal IReadOnlyCollection<string> HandledToolNames => _toolHandlers.Keys;
 
@@ -186,7 +186,7 @@ public partial class McpToolRegistry
     /// <summary>
     /// Execute a tool by name with the provided arguments
     /// </summary>
-    public virtual async Task<ToolCallResult> ExecuteTool(ToolCallRequest request, CancellationToken ct = default)
+    public virtual async Task<ToolCallResult> ExecuteToolAsync(ToolCallRequest request, CancellationToken ct = default)
     {
         try
         {

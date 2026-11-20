@@ -200,7 +200,7 @@ new McpTool
 // ... similar for configure_analyzer, get_analyzer_config, reset_analyzer_config, generate_analysis_report
 ```
 
-2. **Add to ExecuteTool switch statement** (~line 208):
+2. **Add to ExecuteToolAsync switch statement** (~line 208):
 ```csharp
 "apply_roslyn_fixes" => await ExecuteApplyRoslynFixes(request.Arguments, ct),
 "configure_analyzer" => await ExecuteConfigureAnalyzer(request.Arguments, ct),
@@ -304,7 +304,7 @@ Used partial class `McpToolRegistry.RoslynCodeFix.cs` to keep analyzer fix code 
 ### Immediate (1-2 hours)
 1. Fix 14 compilation errors
 2. Add tool registrations to RegisterTools()
-3. Add tool routes to ExecuteTool switch
+3. Add tool routes to ExecuteToolAsync switch
 4. Build and verify no compilation errors
 5. Manual smoke test of MCP tools
 

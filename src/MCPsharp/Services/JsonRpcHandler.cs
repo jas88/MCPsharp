@@ -78,7 +78,7 @@ public partial class JsonRpcHandler
                         continue; // Don't send response for notifications
                     }
 
-                    response = await HandleRequest(request);
+                    response = await HandleRequestAsync(request);
                 }
             }
             catch (JsonException ex)
@@ -100,7 +100,7 @@ public partial class JsonRpcHandler
     /// <summary>
     /// Routes requests to appropriate handlers based on method name
     /// </summary>
-    public async Task<JsonRpcResponse> HandleRequest(JsonRpcRequest request)
+    public async Task<JsonRpcResponse> HandleRequestAsync(JsonRpcRequest request)
     {
         // Validate JSON-RPC version
         if (request.Jsonrpc != "2.0")
@@ -114,7 +114,7 @@ public partial class JsonRpcHandler
             {
                 "initialize" => await HandleInitialize(),
                 "tools/list" => await HandleToolsList(),
-                "tools/call" => await HandleToolsCall(request.Params),
+                "tools/call" => await HandleToolsCallAsync(request.Params),
                 "resources/list" => await HandleResourcesListAsync(),
                 "resources/read" => await HandleResourcesReadAsync(request.Params),
                 "prompts/list" => await HandlePromptsListAsync(),
@@ -227,7 +227,7 @@ public partial class JsonRpcHandler
         return Task.FromResult<object>(response);
     }
 
-    private async Task<object> HandleToolsCall(object? parameters)
+    private async Task<object> HandleToolsCallAsync(object? parameters)
     {
         // Execute a tool via the registry
         if (parameters == null)
@@ -250,7 +250,7 @@ public partial class JsonRpcHandler
             Arguments = JsonDocument.Parse(arguments.GetRawText())
         };
 
-        var result = await _toolRegistry.ExecuteTool(request);
+        var result = await _toolRegistry.ExecuteToolAsync(request);
 
         var response = new
         {

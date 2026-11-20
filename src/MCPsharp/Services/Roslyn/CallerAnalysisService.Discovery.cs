@@ -43,7 +43,7 @@ public partial class CallerAnalysisService
 
                 filesAnalyzed++;
                 var symbolLocation = ConvertToSymbolLocation(location);
-                var callerInfo = await AnalyzeCallerLocation(symbolLocation, symbol, cancellationToken);
+                var callerInfo = await AnalyzeCallerLocationAsync(symbolLocation, symbol, cancellationToken);
                 if (callerInfo != null)
                 {
                     callers.Add(callerInfo);
@@ -62,7 +62,7 @@ public partial class CallerAnalysisService
         methodsAnalyzed += callers.Count;
 
         // Analyze indirect calls through interfaces and base classes
-        var indirectCallers = await FindIndirectCallers(symbol, cancellationToken);
+        var indirectCallers = await FindIndirectCallersCoreAsync(symbol, cancellationToken);
         callers.AddRange(indirectCallers);
 
         var endTime = DateTime.UtcNow;
@@ -83,7 +83,7 @@ public partial class CallerAnalysisService
         };
     }
 
-    private async Task<List<CallerInfo>> FindIndirectCallers(ISymbol targetSymbol, CancellationToken cancellationToken)
+    private async Task<List<CallerInfo>> FindIndirectCallersCoreAsync(ISymbol targetSymbol, CancellationToken cancellationToken)
     {
         var indirectCallers = new List<CallerInfo>();
         if (!_workspace.IsInitialized)
@@ -129,7 +129,7 @@ public partial class CallerAnalysisService
         return indirectCallers;
     }
 
-    private async Task<CallerInfo?> AnalyzeCallerLocation(SymbolLocation location, ISymbol targetSymbol, CancellationToken cancellationToken)
+    private async Task<CallerInfo?> AnalyzeCallerLocationAsync(SymbolLocation location, ISymbol targetSymbol, CancellationToken cancellationToken)
     {
         var document = location.Document;
         if (document == null)
