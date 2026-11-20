@@ -6,7 +6,9 @@ namespace MCPsharp.Models.BulkEdit;
 public class BulkEditOptions
 {
     /// <summary>
-    /// Maximum number of files to process in parallel
+    /// Maximum number of the operation's files to process in parallel, at least 1 (default: the processor count).
+    /// However high it is, a <see cref="MCPsharp.Services.BulkEditService"/> processes at most one file per
+    /// processor at once, across all its operations.
     /// </summary>
     public int MaxParallelism { get; init; } = Environment.ProcessorCount;
 

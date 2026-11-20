@@ -8,7 +8,7 @@ public partial class BulkOperationsHub
     private static BulkEditOptions BuildEditOptions(BulkOperationRequest request) => new()
     {
         CreateBackups = request.Options?.CreateBackup == true,
-        MaxParallelism = request.Options?.MaxParallelism ?? 10,
+        MaxParallelism = request.Options?.MaxParallelism ?? Environment.ProcessorCount,
         PreviewMode = request.Options?.DryRun == true
     };
 

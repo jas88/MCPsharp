@@ -57,6 +57,7 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
         {
             // Check cancellation immediately at the start
             cancellationToken.ThrowIfCancellationRequested();
+            var maxParallelism = GetMaxParallelism(options);
 
             // Add a small delay to ensure cancellation can be caught during setup
             await Task.Delay(1, cancellationToken);
@@ -122,6 +123,7 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
 
             fileResults.AddRange(await ProcessFilesInParallelAsync(
                 filesToProcess,
+                maxParallelism,
                 filePath => ProcessFileForBulkReplaceAsync(filePath, regex, replacement, options, rollbackInfo, cancellationToken),
                 cancellationToken));
 
@@ -182,11 +184,13 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
 
         try
         {
+            var maxParallelism = GetMaxParallelism(options);
             var filesToProcess = await ResolveFilePatterns(files, options, cancellationToken);
             var rollbackInfo = await CreateRollbackSessionIfEnabledAsync(operationId, filesToProcess, options, cancellationToken);
 
             var fileResults = await ProcessFilesInParallelAsync(
                 filesToProcess,
+                maxParallelism,
                 filePath => ProcessFileForConditionalEditAsync(filePath, condition, edits, options, rollbackInfo, cancellationToken),
                 cancellationToken);
 
@@ -214,11 +218,13 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
 
         try
         {
+            var maxParallelism = GetMaxParallelism(options);
             var filesToProcess = await ResolveFilePatterns(files, options, cancellationToken);
             var rollbackInfo = await CreateRollbackSessionIfEnabledAsync(operationId, filesToProcess, options, cancellationToken);
 
             var fileResults = await ProcessFilesInParallelAsync(
                 filesToProcess,
+                maxParallelism,
                 filePath => ProcessFileForBatchRefactorAsync(filePath, refactorPattern, options, rollbackInfo, cancellationToken),
                 cancellationToken);
 
@@ -245,6 +251,8 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
 
         try
         {
+            var maxParallelism = GetMaxParallelism(options);
+
             // Sort operations by priority and resolve each operation's files once
             var resolvedOperations = new List<(MultiFileEditOperation Operation, IReadOnlyList<string> Files)>();
             var allFiles = new List<string>();
@@ -265,6 +273,7 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
             {
                 var results = await ProcessFilesInParallelAsync(
                     operationFiles,
+                    maxParallelism,
                     filePath => ProcessFileForMultiFileEditAsync(filePath, operation, options, rollbackInfo, cancellationToken),
                     cancellationToken);
                 fileResults.AddRange(results);
@@ -303,24 +312,46 @@ public sealed partial class BulkEditService : IBulkEditService, IDisposable
     }
 
     /// <summary>
-    /// Runs <paramref name="processFile"/> over each file in parallel, throttled by the shared semaphore.
+    /// The most files of one operation to process at once: <see cref="BulkEditOptions.MaxParallelism"/>, which must
+    /// be at least 1. However high it is, the shared semaphore lets no more files than processors run at once.
+    /// </summary>
+    private static int GetMaxParallelism(BulkEditOptions options) =>
+        options.MaxParallelism >= 1
+            ? options.MaxParallelism
+            : throw new ArgumentOutOfRangeException(nameof(options), options.MaxParallelism, "MaxParallelism must be at least 1");
+
+    /// <summary>
+    /// Runs <paramref name="processFile"/> over each file in parallel: at most <paramref name="maxParallelism"/> of
+    /// these files at once, and at most one file per processor across all the service's operations (the shared
+    /// semaphore).
     /// </summary>
     private async Task<List<FileBulkEditResult>> ProcessFilesInParallelAsync(
         IReadOnlyList<string> files,
+        int maxParallelism,
         Func<string, Task<FileBulkEditResult>> processFile,
         CancellationToken cancellationToken)
     {
+        // The operation's own limit is taken first, so a file waiting for it holds none of the shared slots
+        using var operationLimit = new SemaphoreSlim(maxParallelism, maxParallelism);
         var tasks = files.Select(async filePath =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await _processingSemaphore.WaitAsync(cancellationToken);
+            await operationLimit.WaitAsync(cancellationToken);
             try
             {
-                return await processFile(filePath);
+                await _processingSemaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    return await processFile(filePath);
+                }
+                finally
+                {
+                    _processingSemaphore.Release();
+                }
             }
             finally
             {
-                _processingSemaphore.Release();
+                operationLimit.Release();
             }
         });
 

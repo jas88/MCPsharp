@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MCPsharp.Models.BulkEdit;
+using MCPsharp.Tests.Services.BulkEdit;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Performance;
@@ -18,46 +19,28 @@ public partial class PerformanceTests
             .ToList();
         var leastInParallel = Math.Min(2, Environment.ProcessorCount);
 
-        // Act - One bulk edit, then four at once
+        // Act - One bulk edit, one capped at two files at once, then four at once
         var single = await _bulkEdit.BulkReplaceAsync(fileSets[0], "content", "SINGLE", options);
+        var capped = await _bulkEdit.BulkReplaceAsync(fileSets[1], "content", "CAPPED", new BulkEditOptions { CreateBackups = false, MaxParallelism = 2 });
         var concurrent = await Task.WhenAll(fileSets.Select(fileSet =>
-            _bulkEdit.BulkReplaceAsync(fileSet, "content|SINGLE", "PARALLEL", options)));
+            _bulkEdit.BulkReplaceAsync(fileSet, "content|SINGLE|CAPPED", "PARALLEL", options)));
 
         // Assert - Every edit is applied to all of its files
         Assert.That(single.ModifiedFiles, Is.EqualTo(filesPerEdit), "The bulk edit should edit all of its files");
+        Assert.That(capped.ModifiedFiles, Is.EqualTo(filesPerEdit), "The capped bulk edit should edit all of its files");
         Assert.That(concurrent.Select(r => r.ModifiedFiles), Has.All.EqualTo(filesPerEdit), "Each concurrent bulk edit should edit all of its files");
         Assert.That(fileSets.SelectMany(fileSet => fileSet).Select(File.ReadAllText), Has.All.EndsWith("PARALLEL"));
 
         // The service processes the files of all its bulk edits in parallel, one per processor at most. As one edit of
         // 100 files keeps every processor busy, four edits at once aren't faster than four in a row by any margin a
         // test can rely on; check the parallelism itself, from when each file's processing started and ended.
-        var singleInProgress = MostFilesInProgress(single.FileResults);
-        var concurrentInProgress = MostFilesInProgress(concurrent.SelectMany(r => r.FileResults));
-        Console.WriteLine($"Most files in progress at once: {singleInProgress} in one edit, {concurrentInProgress} in four ({Environment.ProcessorCount} processors)");
+        var singleInProgress = BulkEditConcurrency.MostFilesInProgress(single.FileResults);
+        var cappedInProgress = BulkEditConcurrency.MostFilesInProgress(capped.FileResults);
+        var concurrentInProgress = BulkEditConcurrency.MostFilesInProgress(concurrent.SelectMany(r => r.FileResults));
+        Console.WriteLine($"Most files in progress at once: {singleInProgress} in one edit, {cappedInProgress} in one capped at 2, {concurrentInProgress} in four ({Environment.ProcessorCount} processors)");
         Assert.That(singleInProgress, Is.InRange(leastInParallel, Environment.ProcessorCount), "A bulk edit should process its files in parallel, one per processor at most");
+        Assert.That(cappedInProgress, Is.InRange(leastInParallel, Math.Min(2, Environment.ProcessorCount)), "A bulk edit with MaxParallelism 2 should process two files at once at most");
         Assert.That(concurrentInProgress, Is.InRange(leastInParallel, Environment.ProcessorCount), "Concurrent bulk edits should share the limit of one file per processor");
-    }
-
-    /// <summary>
-    /// The most files whose processing was in progress at the same moment
-    /// </summary>
-    private static int MostFilesInProgress(IEnumerable<FileBulkEditResult> files)
-    {
-        // A file that started as another ended did not overlap it, so at the same time ends come before starts
-        var events = files
-            .SelectMany(file => new[] { (Time: file.ProcessStartTime, Change: 1), (Time: file.ProcessEndTime, Change: -1) })
-            .OrderBy(e => e.Time)
-            .ThenBy(e => e.Change);
-
-        var inProgress = 0;
-        var most = 0;
-        foreach (var (_, change) in events)
-        {
-            inProgress += change;
-            most = Math.Max(most, inProgress);
-        }
-
-        return most;
     }
 
     [Test]

@@ -62,6 +62,10 @@ public partial class McpToolRegistry
             var maxParallelism = arguments.RootElement.TryGetProperty("maxParallelism", out var maxParallelElement)
                 ? maxParallelElement.GetInt32()
                 : Environment.ProcessorCount;
+            if (maxParallelism < 1)
+            {
+                return new ToolCallResult { Success = false, Error = "maxParallelism must be at least 1" };
+            }
 
             var createBackups = !arguments.RootElement.TryGetProperty("createBackups", out var backupsElement) || backupsElement.GetBoolean();
 

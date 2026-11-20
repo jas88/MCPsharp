@@ -84,6 +84,12 @@ public partial class McpToolRegistry
             return argumentError;
         }
 
+        var maxParallelism = GetIntArgument(arguments, "max_parallelism") ?? Environment.ProcessorCount;
+        if (maxParallelism < 1)
+        {
+            return ToolError("max_parallelism must be at least 1");
+        }
+
         var response = await _bulkOperationsHub.ExecuteBulkOperationAsync(new BulkOperationRequest
         {
             OperationType = bulk.OperationType,
@@ -100,7 +106,7 @@ public partial class McpToolRegistry
             {
                 DryRun = GetBoolArgument(arguments, "dry_run") ?? false,
                 CreateBackup = GetBoolArgument(arguments, "create_backup") ?? false,
-                MaxParallelism = GetIntArgument(arguments, "max_parallelism") ?? 10,
+                MaxParallelism = maxParallelism,
                 FailFast = GetBoolArgument(arguments, "fail_fast") ?? true
             }
         }, ct);

@@ -117,7 +117,7 @@ public partial class McpToolRegistry
                     required: true, items: StringItems),
                 Prop("regexPattern", "string", "Regular expression to match", required: true),
                 Prop("replacement", "string", "Replacement text (supports $1-style group references)", required: true),
-                Prop("maxParallelism", "integer", "Maximum files processed in parallel (default: processor count)"),
+                Prop("maxParallelism", "integer", "Maximum files processed in parallel, at least 1 (default and upper limit: processor count)"),
                 Prop("createBackups", "boolean", "Back up files so the edit can be rolled back (default: true)"),
                 Prop("previewMode", "boolean", "Compute changes without writing (default: false)"),
                 Prop("excludedFiles", "array", "Files, directories or glob patterns (relative to the project root or absolute within it) to skip; applied after the files are expanded", items: StringItems))

@@ -293,7 +293,7 @@ public partial class McpToolRegistry
                 Prop("operations", "array", "multi_edit / file_operation: per-file operations", items: FileOperationItems()),
                 Prop("dry_run", "boolean", "Compute changes without writing (default: false)"),
                 Prop("create_backup", "boolean", "Back up files and roll back on failure (default: false)"),
-                Prop("max_parallelism", "integer", "Maximum files processed in parallel (default: 10)"),
+                Prop("max_parallelism", "integer", "Maximum files processed in parallel, at least 1 (default and upper limit: processor count)"),
                 Prop("fail_fast", "boolean", "Stop at the first failure (default: true)"))
         },
         new McpTool
