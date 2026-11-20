@@ -45,21 +45,7 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
                 }
 
                 _analyzers[analyzer.Id] = analyzer;
-
-                var info = new AnalyzerInfo
-                {
-                    Id = analyzer.Id,
-                    Name = analyzer.Name,
-                    Description = analyzer.Description,
-                    Version = analyzer.Version,
-                    Author = analyzer.Author,
-                    SupportedExtensions = analyzer.SupportedExtensions,
-                    IsBuiltIn = analyzer.GetType().Assembly.GetName().Name?.Equals("MCPsharp", StringComparison.OrdinalIgnoreCase) ?? false,
-                    IsEnabled = analyzer.IsEnabled,
-                    Rules = analyzer.GetRules()
-                };
-
-                _analyzerInfos[analyzer.Id] = info;
+                _analyzerInfos[analyzer.Id] = CreateAnalyzerInfo(analyzer);
             }
 
             await analyzer.InitializeAsync(cancellationToken);
@@ -89,19 +75,7 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
                 }
 
                 _analyzerInfos.Remove(analyzerId);
-
-                // Dispose analyzer asynchronously
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await analyzer.DisposeAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        LogErrorDisposing(_logger, ex, analyzerId);
-                    }
-                }, cancellationToken);
+                DisposeInBackground(analyzer, cancellationToken);
             }
 
             LogUnregistered(_logger, analyzerId);

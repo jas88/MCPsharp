@@ -78,20 +78,19 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
 
             var analyzers = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath, cancellationToken);
 
-            // Register loaded analyzers
+            // Only an analyzer the host registered can run, so only those are published as loaded
+            var registered = await RegisterWithHostAsync(analyzers, cancellationToken);
             lock (_lock)
             {
-                foreach (var analyzer in analyzers)
+                foreach (var analyzer in registered)
                 {
                     _loadedAnalyzers[analyzer.Id] = analyzer;
                 }
             }
 
-            await RegisterWithHostAsync(analyzers, cancellationToken);
+            LogLoadedAnalyzers(_logger, registered.Length, assemblyPath);
 
-            LogLoadedAnalyzers(_logger, analyzers.Length, assemblyPath);
-
-            return analyzers;
+            return registered;
         }
         catch (Exception ex)
         {
@@ -193,27 +192,32 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
     }
 
     /// <summary>
-    /// Register explicitly loaded analyzers in the registry the analyzer host runs analyzers from. As in
-    /// <see cref="_loadedAnalyzers"/>, an explicitly loaded analyzer replaces one already registered under its ID
-    /// (e.g. an auto-loaded one).
+    /// Register explicitly loaded analyzers in the registry the analyzer host runs analyzers from, returning those
+    /// registered. An explicitly loaded analyzer replaces one already registered under its ID (e.g. an auto-loaded
+    /// one) in one step, and one that fails to register leaves the previous analyzer in place. Without a registry,
+    /// every analyzer is returned, to be listed but not run.
     /// </summary>
-    private async Task RegisterWithHostAsync(ImmutableArray<IAnalyzer> analyzers, CancellationToken cancellationToken)
+    private async Task<ImmutableArray<IAnalyzer>> RegisterWithHostAsync(ImmutableArray<IAnalyzer> analyzers, CancellationToken cancellationToken)
     {
         if (_registry == null)
         {
-            return;
+            return analyzers;
         }
 
+        var registered = ImmutableArray.CreateBuilder<IAnalyzer>(analyzers.Length);
         foreach (var analyzer in analyzers)
         {
-            var registered = _registry.GetAnalyzer(analyzer.Id);
-            if (registered != null && !ReferenceEquals(registered, analyzer))
+            if (await _registry.ReplaceAnalyzerAsync(analyzer, cancellationToken))
             {
-                await _registry.UnregisterAnalyzerAsync(analyzer.Id, cancellationToken);
+                registered.Add(analyzer);
             }
-
-            await _registry.RegisterAnalyzerAsync(analyzer, cancellationToken);
+            else
+            {
+                LogAnalyzerNotRegistered(_logger, analyzer.Id);
+            }
         }
+
+        return registered.ToImmutable();
     }
 
     /// <summary>
@@ -244,6 +248,9 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzers from {AssemblyPath}")]
     private static partial void LogErrorLoadingAnalyzers(ILogger logger, Exception exception, string assemblyPath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The analyzer host could not register analyzer {AnalyzerId}, so it was not loaded")]
+    private static partial void LogAnalyzerNotRegistered(ILogger logger, string analyzerId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Discovering analyzer assemblies in {Directory}")]
     private static partial void LogDiscoveringAssemblies(ILogger logger, string directory);

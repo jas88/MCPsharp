@@ -318,8 +318,7 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
         foreach (var analyzer in _registeredAnalyzers)
         {
             // Leave the ID alone if something else has registered its own analyzer under it since
-            if (ReferenceEquals(_registry.GetAnalyzer(analyzer.Id), analyzer) &&
-                await _registry.UnregisterAnalyzerAsync(analyzer.Id, cancellationToken))
+            if (await _registry.UnregisterAnalyzerInstanceAsync(analyzer, cancellationToken))
             {
                 unregistered++;
             }
