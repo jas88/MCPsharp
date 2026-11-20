@@ -57,23 +57,20 @@ public sealed partial class AnalyzerAutoLoadService
         }
 
         var configuration = ReadConfiguration(file.FullName, out var readError);
-        string? error = null;
+        string? error;
         if (configuration == null)
         {
             error = $"Ignored the analyzer auto-load configuration {file.FullName}, which could not be read ({readError}); using the default configuration";
             LogInvalidConfiguration(_logger, file.FullName, readError);
+            configuration = _defaultConfiguration;
         }
         else
         {
             LogReadConfiguration(_logger, file.FullName);
+            configuration = ResolveCustomPaths(configuration, projectDirectory, out error);
         }
 
-        var state = new ConfigurationFile(
-            file.FullName,
-            file.LastWriteTimeUtc,
-            file.Length,
-            configuration == null ? _defaultConfiguration : ResolveCustomPaths(configuration, projectDirectory),
-            error);
+        var state = new ConfigurationFile(file.FullName, file.LastWriteTimeUtc, file.Length, configuration, error);
         lock (_lock)
         {
             _configurationFile = state;
@@ -134,13 +131,34 @@ public sealed partial class AnalyzerAutoLoadService
         values.IsDefault ? ImmutableArray<string>.Empty : values.Where(v => !string.IsNullOrWhiteSpace(v)).ToImmutableArray();
 
     /// <summary>
-    /// A project's configuration gives custom analyzer paths relative to the project root
+    /// A project's configuration gives custom analyzer paths relative to the project root. An entry that is not a
+    /// valid path is left out, and reported in <paramref name="error"/>.
     /// </summary>
-    private static AnalyzerAutoLoadConfiguration ResolveCustomPaths(AnalyzerAutoLoadConfiguration configuration, string projectDirectory) =>
-        configuration with
+    private AnalyzerAutoLoadConfiguration ResolveCustomPaths(
+        AnalyzerAutoLoadConfiguration configuration,
+        string projectDirectory,
+        out string? error)
+    {
+        var paths = new List<string>();
+        var invalidEntries = new List<string>();
+        foreach (var path in configuration.CustomAnalyzerPaths)
         {
-            CustomAnalyzerPaths = configuration.CustomAnalyzerPaths.Select(p => Path.GetFullPath(p, projectDirectory)).ToImmutableArray()
-        };
+            try
+            {
+                paths.Add(Path.GetFullPath(path, projectDirectory));
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                // JSON quoting shows characters such as NUL that make the entry invalid
+                var entry = JsonSerializer.Serialize(path);
+                LogInvalidCustomAnalyzerPath(_logger, entry, ex.Message);
+                invalidEntries.Add($"Ignored the customAnalyzerPaths entry {entry}, which is not a valid path ({ex.Message})");
+            }
+        }
+
+        error = invalidEntries.Count == 0 ? null : string.Join("; ", invalidEntries);
+        return configuration with { CustomAnalyzerPaths = [.. paths] };
+    }
 
     /// <summary>
     /// A configuration file as read, current while its path, time and length are unchanged
@@ -166,4 +184,7 @@ public sealed partial class AnalyzerAutoLoadService
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Ignoring the unknown analyzer source '{Source}'")]
     private static partial void LogUnknownSource(ILogger logger, string source);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Ignoring the customAnalyzerPaths entry {Entry}, which is not a valid path: {Reason}")]
+    private static partial void LogInvalidCustomAnalyzerPath(ILogger logger, string entry, string reason);
 }

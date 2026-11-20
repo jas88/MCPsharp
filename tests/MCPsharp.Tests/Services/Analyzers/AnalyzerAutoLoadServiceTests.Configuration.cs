@@ -129,6 +129,24 @@ public partial class AnalyzerAutoLoadServiceTests
     }
 
     [Test]
+    public async Task EnsureAnalyzersLoadedAsync_WithAnInvalidCustomAnalyzerPath_ReportsItAndLoadsTheOthers()
+    {
+        // A NUL character makes a path invalid on every platform
+        OpenProjectWithConfiguration("""{ "customAnalyzerPaths": ["tools/analyzers", "bad\u0000path"] }""");
+        ProjectsReference(); // the analyzers can only come from the valid custom path
+        var analyzerDirectory = CreateTestDirectory(Path.Combine("tools", "analyzers"));
+        File.Copy(typeof(StaticMethodAnalyzer).Assembly.Location, Path.Combine(analyzerDirectory, "MCPsharp.Analyzers.dll"));
+
+        var configuration = _service.GetConfiguration();
+        var result = await _service.EnsureAnalyzersLoadedAsync();
+
+        Assert.That(configuration.CustomAnalyzerPaths, Is.EqualTo(new[] { analyzerDirectory }));
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.LoadedAnalyzers.Select(a => a.Id), Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds));
+        Assert.That(result.Errors, Has.One.Contain("customAnalyzerPaths entry \"bad\\u0000path\"").And.Contain("not a valid path"));
+    }
+
+    [Test]
     public async Task EnsureAnalyzersLoadedAsync_WithAnUnknownAnalyzerSource_ReportsIt()
     {
         // e.g. nuget_cache, which earlier documentation listed
