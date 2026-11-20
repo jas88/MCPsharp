@@ -183,9 +183,10 @@ public partial class RoslynAnalyzerServiceTests
     [Test]
     public async Task RunAnalyzersAsync_OnADirectoryOverTheFileLimit_AnalyzesTheFirstFilesAndCountsTheRest()
     {
+        var files = new List<string>();
         for (var i = 0; i <= RoslynAnalyzerService.MaxDirectoryFiles; i++)
         {
-            CreateTestFile($"public class C{i} {{ }}", ".cs", "many");
+            files.Add(CreateTestFile($"public class C{i} {{ }}", ".cs", "many"));
         }
 
         var assemblyPath = CreateTestFile("test assembly", ".dll");
@@ -199,6 +200,11 @@ public partial class RoslynAnalyzerServiceTests
 
         Assert.That(result.FilesAnalyzed, Is.EqualTo(RoslynAnalyzerService.MaxDirectoryFiles));
         Assert.That(result.FilesSkipped, Is.EqualTo(1));
+        var analyzedPaths = _mockAnalyzerHost.ReceivedCalls()
+            .Where(call => call.GetMethodInfo().Name == nameof(IAnalyzerHost.RunAnalyzerAsync))
+            .Select(call => (string)call.GetArguments()[1]!);
+        Assert.That(analyzedPaths, Is.EqualTo(files.Order(StringComparer.Ordinal).Take(RoslynAnalyzerService.MaxDirectoryFiles)),
+            "The files analyzed should be the first in ordinal path order, in that order");
     }
 
     /// <summary>
