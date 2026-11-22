@@ -232,7 +232,7 @@ await client.call("run_roslyn_analyzers", { target_path: "/my/project" });
 ### Auto-Load Workflow
 1. User calls `run_roslyn_analyzers` or `apply_roslyn_fixes`
 2. `RoslynAnalyzerService` calls `AnalyzerAutoLoadService.EnsureAnalyzersLoadedAsync()`
-3. The auto-load service gets the workspace's project analyzer references (`RoslynWorkspace.GetAnalyzerReferences()`, each assembly once); if they are the ones it last loaded, nothing more happens
+3. The auto-load service gets the workspace's project analyzer references (`RoslynWorkspace.GetAnalyzerReferences()`, each assembly path once, so copies of one assembly at different paths are separate references); if they are the ones it last loaded, nothing more happens
 4. Otherwise it unregisters the analyzers of its previous load, then loads the C# analyzers of the references (`RoslynAnalyzerLoader.LoadAnalyzersFromReferences()`) and any custom paths
 5. It registers one analyzer per ID with `AnalyzerRegistry`, except under an ID another analyzer already holds (e.g. one loaded with `load_roslyn_analyzers`), and the analyzers it registered replace the previous auto-loaded analyzers in `RoslynAnalyzerService` (explicitly loaded analyzers stay)
 6. Analysis proceeds normally: each file gets the analyzers that apply to it (see [Which Analyzers Run on a File](#which-analyzers-run-on-a-file))

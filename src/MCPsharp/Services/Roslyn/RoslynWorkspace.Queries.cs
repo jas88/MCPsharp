@@ -29,9 +29,10 @@ public partial class RoslynWorkspace
 
     /// <summary>
     /// The analyzer references (analyzer and source generator assemblies) of every project in the solution,
-    /// each assembly once, in solution order. These are the analyzers the compiler and an IDE use for the
-    /// projects: the analyzer assets of the NuGet packages the projects restore, the SDK's analyzers and any
-    /// Analyzer items. Empty when nothing is loaded; an adhoc workspace (no project file) has none.
+    /// each assembly path once, in solution order: copies of one assembly at different paths are separate
+    /// references. These are the analyzers the compiler and an IDE use for the projects: the analyzer assets of
+    /// the NuGet packages the projects restore, the SDK's analyzers and any Analyzer items. Empty when nothing is
+    /// loaded; an adhoc workspace (no project file) has none.
     /// </summary>
     public virtual IReadOnlyList<AnalyzerReference> GetAnalyzerReferences() =>
         _workspace == null

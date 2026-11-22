@@ -32,7 +32,7 @@ public sealed class FileAnalyzerScope
     public int ProjectCount { get; }
 
     /// <summary>
-    /// The analyzer references of those projects, each assembly once
+    /// The analyzer references of those projects, each assembly path once
     /// </summary>
     public IReadOnlyList<AnalyzerReference> AnalyzerReferences { get; }
 
