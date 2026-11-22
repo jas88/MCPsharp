@@ -53,11 +53,6 @@ internal sealed class TestAnalyzer : IAnalyzer
     public AnalyzerConfiguration Configuration { get; set; } = new();
 
     /// <summary>
-    /// Whether <see cref="DisposeAsync"/> has been called
-    /// </summary>
-    public bool IsDisposed => _disposed.Task.IsCompleted;
-
-    /// <summary>
     /// Wait until <see cref="InitializeAsync"/> has been called; throws <see cref="TimeoutException"/> if it isn't
     /// </summary>
     public Task WaitUntilInitializingAsync() => _initializationStarted.Task.WaitAsync(WaitLimit);
@@ -71,8 +66,8 @@ internal sealed class TestAnalyzer : IAnalyzer
     /// <summary>
     /// Wait for a disposal that should not happen, and return whether <see cref="DisposeAsync"/> was called: false
     /// means that the registry has left the analyzer alone. The registry disposes in the background, so a check made
-    /// as soon as the registry returns finds nearly every analyzer undisposed, even one whose disposal the registry
-    /// has started.
+    /// without waiting, even one made after another disposal has run, can find undisposed an analyzer whose disposal
+    /// the registry has started.
     /// </summary>
     public async Task<bool> IsDisposedSoonAsync()
     {

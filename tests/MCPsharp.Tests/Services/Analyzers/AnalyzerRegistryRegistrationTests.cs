@@ -104,6 +104,6 @@ public class AnalyzerRegistryRegistrationTests : TestBase
         Assert.That(await registering, Is.False);
         Assert.That(_registry.GetAnalyzer(AnalyzerId), Is.SameAs(faster));
         await slower.WaitUntilDisposedAsync();
-        Assert.That(faster.IsDisposed, Is.False);
+        Assert.That(await faster.IsDisposedSoonAsync(), Is.False);
     }
 }

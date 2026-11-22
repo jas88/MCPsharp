@@ -69,7 +69,7 @@ public class AnalyzerRegistryReplaceTests : TestBase
         Assert.That(error.Message, Is.EqualTo("Cannot initialize"));
         Assert.That(_registry.GetAnalyzer(AnalyzerId), Is.SameAs(previous));
         await failing.WaitUntilDisposedAsync();
-        Assert.That(previous.IsDisposed, Is.False);
+        Assert.That(await previous.IsDisposedSoonAsync(), Is.False);
     }
 
     [Test]
@@ -87,7 +87,7 @@ public class AnalyzerRegistryReplaceTests : TestBase
         await Assert.CatchAsync<OperationCanceledException>(() => replacing);
         Assert.That(_registry.GetAnalyzer(AnalyzerId), Is.SameAs(previous));
         await replacement.WaitUntilDisposedAsync();
-        Assert.That(previous.IsDisposed, Is.False);
+        Assert.That(await previous.IsDisposedSoonAsync(), Is.False);
     }
 
     [Test]
@@ -109,7 +109,7 @@ public class AnalyzerRegistryReplaceTests : TestBase
         Assert.That(_registry.GetAnalyzer(AnalyzerId), Is.SameAs(replacement), "a replacement reported registered is registered");
         Assert.That(registeredWhenReported, Is.SameAs(replacement), "the registration event is for an analyzer that is registered");
         await previous.WaitUntilDisposedAsync();
-        Assert.That(replacement.IsDisposed, Is.False);
+        Assert.That(await replacement.IsDisposedSoonAsync(), Is.False);
     }
 
     [Test]
