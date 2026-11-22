@@ -72,7 +72,8 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     /// <see cref="EnsureAnalyzersLoadedAsync(CancellationToken)"/>, calling <paramref name="onLoaded"/> with the
     /// result of a load, though not when the analyzers were already loaded, before any other caller is told they are
     /// loaded or starts another load. A caller that lists the loaded analyzers itself updates its list there, so
-    /// that a caller that waited for the load finds them listed.
+    /// that a caller that waited for the load finds them listed. If <paramref name="onLoaded"/> throws, the exception
+    /// propagates and the next call loads again.
     /// </summary>
     public async Task<AnalyzerAutoLoadResult> EnsureAnalyzersLoadedAsync(
         Action<AnalyzerAutoLoadResult>? onLoaded,
@@ -105,7 +106,17 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
             var result = await LoadAnalyzersAsync(configuration, configurationError, references, cancellationToken);
 
             // Before the lock is released: the callers waiting for it go on only once the load is published
-            onLoaded?.Invoke(result);
+            try
+            {
+                onLoaded?.Invoke(result);
+            }
+            catch
+            {
+                // The caller could not publish the load, so the next call loads again and gives it that load
+                Reset();
+                throw;
+            }
+
             return result;
         }
         finally

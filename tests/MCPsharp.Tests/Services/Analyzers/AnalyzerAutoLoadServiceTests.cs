@@ -133,6 +133,24 @@ public partial class AnalyzerAutoLoadServiceTests : FileServiceTestBase
     }
 
     [Test]
+    public async Task EnsureAnalyzersLoadedAsync_WhenOnLoadedThrows_LoadsAgainOnTheNextCall()
+    {
+        // A load its caller could not list isn't recorded as loaded, or the caller would never be given it again
+        ProjectsReference(TestAnalyzerReferences.BuiltInAnalyzers());
+        AnalyzerAutoLoadResult? reported = null;
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _service.EnsureAnalyzersLoadedAsync(_ => throw new InvalidOperationException("Cannot list the analyzers")));
+        var next = await _service.EnsureAnalyzersLoadedAsync(loaded => reported = loaded);
+
+        Assert.That(error.Message, Is.EqualTo("Cannot list the analyzers"));
+        Assert.That(next.AlreadyLoaded, Is.False);
+        Assert.That(reported, Is.SameAs(next));
+        Assert.That(next.Errors, Is.Empty, "the registrations of the first load are replaced, not duplicated");
+        Assert.That(RegisteredIds(), Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds));
+    }
+
+    [Test]
     public async Task EnsureAnalyzersLoadedAsync_WithTheAnalyzersAlreadyLoaded_DoesNotCallOnLoaded()
     {
         ProjectsReference(TestAnalyzerReferences.BuiltInAnalyzers());
