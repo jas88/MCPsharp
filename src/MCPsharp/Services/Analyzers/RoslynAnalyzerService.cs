@@ -176,11 +176,14 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
 
         try
         {
-            var result = await _autoLoadService.EnsureAnalyzersLoadedAsync(cancellationToken);
+            // A load's analyzers are listed here before the auto-load lets anyone else go on, so a caller that waited
+            // for the load (e.g. a request made during the load at startup) finds them listed
+            var result = await _autoLoadService.EnsureAnalyzersLoadedAsync(
+                loaded => ReplaceAutoLoadedAnalyzers(loaded.LoadedAnalyzers),
+                cancellationToken);
 
             if (!result.AlreadyLoaded)
             {
-                ReplaceAutoLoadedAnalyzers(result.LoadedAnalyzers);
                 LogAutoLoaded(_logger, result.LoadedAnalyzers.Length, result.LoadDuration.TotalMilliseconds);
             }
 

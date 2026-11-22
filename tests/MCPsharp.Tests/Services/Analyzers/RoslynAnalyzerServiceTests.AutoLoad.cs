@@ -77,6 +77,31 @@ public partial class RoslynAnalyzerServiceTests
     }
 
     [Test]
+    public async Task RunAnalyzersAsync_AfterWaitingForAnotherCallersAutoLoad_RunsTheAnalyzersOfThatLoad()
+    {
+        // e.g. a request that arrives while the analyzers load at startup: it waits for that load, and by the time
+        // it goes on, the load's analyzers are listed
+        var file = CreateTestFile("public class Calc { }", ".cs");
+        var reference = TestAnalyzerReferences.BuiltInAnalyzers();
+        using var workspace = Substitute.For<RoslynWorkspace>();
+        workspace.GetAnalyzerReferences().Returns(new AnalyzerReference[] { reference });
+        workspace.GetFileAnalyzerScope(Arg.Any<string>()).Returns(new FileAnalyzerScope(1, [reference]));
+        var registry = new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>());
+        using var autoLoad = CreateAutoLoadService(workspace, registry);
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, autoLoad, registry);
+        HostReports((_, _) => []);
+        Task<AnalyzerRunResult>? waitingRun = null;
+        registry.AnalyzerRegistered += (_, _) => waitingRun ??= service.RunAnalyzersAsync(file);
+
+        await service.EnsureAnalyzersLoadedAsync();
+
+        Assert.That(waitingRun, Is.Not.Null);
+        var run = await waitingRun!;
+        Assert.That(run.Success, Is.True, run.ErrorMessage);
+        Assert.That(run.AnalyzersRun, Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds));
+    }
+
+    [Test]
     public async Task LoadOnStartupAsync_WhenTheProjectConfigurationSetsLoadOnStartup_LoadsTheAnalyzersNow()
     {
         using var workspace = OpenProjectReferencingTheBuiltInAnalyzers("""{ "loadOnStartup": true }""");

@@ -65,7 +65,18 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     /// Auto-load the analyzers of the workspace's current analyzer references, as the open project's configuration
     /// says, unless they are already loaded
     /// </summary>
-    public async Task<AnalyzerAutoLoadResult> EnsureAnalyzersLoadedAsync(CancellationToken cancellationToken = default)
+    public Task<AnalyzerAutoLoadResult> EnsureAnalyzersLoadedAsync(CancellationToken cancellationToken = default) =>
+        EnsureAnalyzersLoadedAsync(onLoaded: null, cancellationToken);
+
+    /// <summary>
+    /// <see cref="EnsureAnalyzersLoadedAsync(CancellationToken)"/>, calling <paramref name="onLoaded"/> with the
+    /// result of a load, though not when the analyzers were already loaded, before any other caller is told they are
+    /// loaded or starts another load. A caller that lists the loaded analyzers itself updates its list there, so
+    /// that a caller that waited for the load finds them listed.
+    /// </summary>
+    public async Task<AnalyzerAutoLoadResult> EnsureAnalyzersLoadedAsync(
+        Action<AnalyzerAutoLoadResult>? onLoaded,
+        CancellationToken cancellationToken = default)
     {
         // One load at a time, so concurrent callers don't load and register the same analyzers twice
         await _loadLock.WaitAsync(cancellationToken);
@@ -91,7 +102,11 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
                 }
             }
 
-            return await LoadAnalyzersAsync(configuration, configurationError, references, cancellationToken);
+            var result = await LoadAnalyzersAsync(configuration, configurationError, references, cancellationToken);
+
+            // Before the lock is released: the callers waiting for it go on only once the load is published
+            onLoaded?.Invoke(result);
+            return result;
         }
         finally
         {
@@ -310,7 +325,8 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     public FileAnalyzerScope GetFileAnalyzerScope(string filePath) => _workspace.GetFileAnalyzerScope(filePath);
 
     /// <summary>
-    /// Make the next <see cref="EnsureAnalyzersLoadedAsync"/> load again, replacing the analyzers loaded so far
+    /// Make the next <see cref="EnsureAnalyzersLoadedAsync(CancellationToken)"/> load again, replacing the analyzers
+    /// loaded so far
     /// </summary>
     public void Reset()
     {

@@ -110,6 +110,42 @@ public partial class AnalyzerAutoLoadServiceTests : FileServiceTestBase
     }
 
     [Test]
+    public async Task EnsureAnalyzersLoadedAsync_CallsOnLoadedBeforeAnotherCallerIsToldTheAnalyzersAreLoaded()
+    {
+        // A caller that lists the loaded analyzers itself does so in onLoaded, so nobody who waited for the load goes
+        // on before they are listed
+        ProjectsReference(TestAnalyzerReferences.BuiltInAnalyzers());
+        AnalyzerAutoLoadResult? reported = null;
+        Task<AnalyzerAutoLoadResult>? waiting = null;
+        var waitingFinishedDuringOnLoaded = true;
+
+        var result = await _service.EnsureAnalyzersLoadedAsync(loaded =>
+        {
+            reported = loaded;
+            waiting = _service.EnsureAnalyzersLoadedAsync();
+            waitingFinishedDuringOnLoaded = waiting.IsCompleted;
+        });
+
+        Assert.That(reported, Is.SameAs(result));
+        Assert.That(result.AlreadyLoaded, Is.False);
+        Assert.That(waitingFinishedDuringOnLoaded, Is.False, "another caller waits until onLoaded has returned");
+        Assert.That((await waiting!).AlreadyLoaded, Is.True);
+    }
+
+    [Test]
+    public async Task EnsureAnalyzersLoadedAsync_WithTheAnalyzersAlreadyLoaded_DoesNotCallOnLoaded()
+    {
+        ProjectsReference(TestAnalyzerReferences.BuiltInAnalyzers());
+        await _service.EnsureAnalyzersLoadedAsync();
+        var calls = 0;
+
+        var result = await _service.EnsureAnalyzersLoadedAsync(_ => calls++);
+
+        Assert.That(result.AlreadyLoaded, Is.True);
+        Assert.That(calls, Is.Zero);
+    }
+
+    [Test]
     public async Task EnsureAnalyzersLoadedAsync_WithChangedReferences_ReplacesTheAnalyzers()
     {
         // e.g. another project, which references no analyzers, was opened
