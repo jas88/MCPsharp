@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using MCPsharp.Models.Analyzers;
 
 namespace MCPsharp.Services.Analyzers;
@@ -5,7 +6,8 @@ namespace MCPsharp.Services.Analyzers;
 /// <summary>
 /// Replacing an analyzer, and unregistering a particular one, each in one step, so that two callers registering
 /// analyzers under one ID (an explicit load and the auto-load) can't leave it with an analyzer neither expects. An
-/// analyzer is registered only once it has initialized, so nothing can get and run it before.
+/// analyzer is registered only once it has initialized, so nothing can get and run it before. And publishing the
+/// analyzers that are registered in one step, so a caller's own record of them can't fall out of step.
 /// </summary>
 public partial class AnalyzerRegistry
 {
@@ -65,6 +67,21 @@ public partial class AnalyzerRegistry
         LogUnregistered(_logger, analyzer.Id);
         AnalyzerUnregistered?.Invoke(this, new AnalyzerUnregisteredEventArgs(analyzer.Id));
         return Task.FromResult(true);
+    }
+
+    /// <inheritdoc />
+    public ImmutableArray<IAnalyzer> PublishRegisteredAnalyzers(IEnumerable<IAnalyzer> analyzers, Action<ImmutableArray<IAnalyzer>> publish)
+    {
+        // Under the lock every registration and unregistration takes, so none happens between the check and the end
+        // of the caller's publishing
+        lock (_lock)
+        {
+            var registered = analyzers
+                .Where(analyzer => _analyzers.TryGetValue(analyzer.Id, out var current) && ReferenceEquals(current, analyzer))
+                .ToImmutableArray();
+            publish(registered);
+            return registered;
+        }
     }
 
     /// <summary>

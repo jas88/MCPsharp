@@ -50,6 +50,33 @@ public partial class RoslynAnalyzerServiceTests
     }
 
     [Test]
+    public async Task EnsureAnalyzersLoadedAsync_WhenAnAutoLoadedAnalyzerIsUnregisteredBeforeItIsPublished_DoesNotListIt()
+    {
+        // One analyzer's ID is unloaded as soon as the registry reports the analyzer registered
+        using var workspace = Substitute.For<RoslynWorkspace>();
+        workspace.GetAnalyzerReferences().Returns(new AnalyzerReference[] { TestAnalyzerReferences.BuiltInAnalyzers() });
+        var registry = new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>());
+        using var autoLoad = CreateAutoLoadService(workspace, registry);
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, autoLoad, registry);
+        Task<bool>? unregistering = null;
+        registry.AnalyzerRegistered += (_, args) =>
+        {
+            if (args.AnalyzerId == StaticMethodAnalyzerId)
+            {
+                unregistering = registry.UnregisterAnalyzerAsync(args.AnalyzerId);
+            }
+        };
+
+        await service.EnsureAnalyzersLoadedAsync();
+
+        Assert.That(unregistering, Is.Not.Null);
+        Assert.That(await unregistering!, Is.True);
+        var remaining = TestAnalyzerReferences.BuiltInAnalyzerIds.Where(id => id != StaticMethodAnalyzerId).ToList();
+        Assert.That(registry.GetLoadedAnalyzers().Select(a => a.Id), Is.EquivalentTo(remaining));
+        Assert.That(service.GetLoadedAnalyzers().Select(a => a.Id), Is.EquivalentTo(remaining), "the service lists the analyzers the registry holds");
+    }
+
+    [Test]
     public async Task LoadOnStartupAsync_WhenTheProjectConfigurationSetsLoadOnStartup_LoadsTheAnalyzersNow()
     {
         using var workspace = OpenProjectReferencingTheBuiltInAnalyzers("""{ "loadOnStartup": true }""");
@@ -93,9 +120,9 @@ public partial class RoslynAnalyzerServiceTests
         return workspace;
     }
 
-    private static AnalyzerAutoLoadService CreateAutoLoadService(RoslynWorkspace workspace) =>
+    private static AnalyzerAutoLoadService CreateAutoLoadService(RoslynWorkspace workspace, AnalyzerRegistry? registry = null) =>
         new(CreateNullLogger<AnalyzerAutoLoadService>(),
             new RoslynAnalyzerLoader(CreateNullLogger<RoslynAnalyzerLoader>(), CreateNullLoggerFactory()),
-            new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>()),
+            registry ?? new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>()),
             workspace);
 }

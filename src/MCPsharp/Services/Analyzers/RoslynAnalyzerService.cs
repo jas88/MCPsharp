@@ -51,8 +51,9 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
     /// <param name="logger">Logger.</param>
     /// <param name="autoLoadService">Auto-loads the analyzers the open project references, if given.</param>
     /// <param name="registry">
-    /// The analyzer host's registry. Explicitly loaded analyzers are registered there so the host can run them;
-    /// without it they are listed but not run.
+    /// The analyzer host's registry. Explicitly loaded analyzers are registered there so the host can run them, and
+    /// an analyzer is listed as loaded only if the registry holds it; without a registry, analyzers are listed but
+    /// not run.
     /// </param>
     public RoslynAnalyzerService(
         RoslynAnalyzerLoader loader,
@@ -78,19 +79,22 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
 
             var analyzers = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath, cancellationToken);
 
-            // Only an analyzer the host registered can run, so only those are published as loaded
+            // Only an analyzer the host's registry holds can run, so only those are published as loaded
             var registered = await RegisterWithHostAsync(analyzers, cancellationToken);
-            lock (_lock)
+            var loaded = PublishRegistered(registered, published =>
             {
-                foreach (var analyzer in registered)
+                lock (_lock)
                 {
-                    _loadedAnalyzers[analyzer.Id] = analyzer;
+                    foreach (var analyzer in published)
+                    {
+                        _loadedAnalyzers[analyzer.Id] = analyzer;
+                    }
                 }
-            }
+            });
 
-            LogLoadedAnalyzers(_logger, registered.Length, assemblyPath);
+            LogLoadedAnalyzers(_logger, loaded.Length, assemblyPath);
 
-            return registered;
+            return loaded;
         }
         catch (Exception ex)
         {
@@ -229,24 +233,49 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
     }
 
     /// <summary>
+    /// Publish as loaded those of <paramref name="analyzers"/>, which were registered, that the registry still holds,
+    /// and return them. One replaced or unregistered since, by another load of its ID or an unload, is left out: the
+    /// analyzer the registry holds under its ID, if any, is the one to list. The registry's analyzers don't change
+    /// while <paramref name="publish"/> runs, so the analyzers this service lists stay in step with them. Without a
+    /// registry, every analyzer is published.
+    /// </summary>
+    private ImmutableArray<IAnalyzer> PublishRegistered(ImmutableArray<IAnalyzer> analyzers, Action<ImmutableArray<IAnalyzer>> publish)
+    {
+        if (_registry == null)
+        {
+            publish(analyzers);
+            return analyzers;
+        }
+
+        var published = _registry.PublishRegisteredAnalyzers(analyzers, publish);
+        foreach (var analyzer in analyzers.Except<IAnalyzer>(published, ReferenceEqualityComparer.Instance))
+        {
+            LogAnalyzerNoLongerRegistered(_logger, analyzer.Id);
+        }
+
+        return published;
+    }
+
+    /// <summary>
     /// A new auto-load replaces the analyzers of the previous one (e.g. those of a project that is no longer
     /// open); analyzers loaded explicitly stay
     /// </summary>
-    private void ReplaceAutoLoadedAnalyzers(ImmutableArray<IAnalyzer> analyzers)
-    {
-        lock (_lock)
+    private void ReplaceAutoLoadedAnalyzers(ImmutableArray<IAnalyzer> analyzers) =>
+        PublishRegistered(analyzers, published =>
         {
-            foreach (var previous in _autoLoadedAnalyzers)
+            lock (_lock)
             {
-                if (_loadedAnalyzers.TryGetValue(previous.Id, out var current) && ReferenceEquals(current, previous))
+                foreach (var previous in _autoLoadedAnalyzers)
                 {
-                    _loadedAnalyzers.Remove(previous.Id);
+                    if (_loadedAnalyzers.TryGetValue(previous.Id, out var current) && ReferenceEquals(current, previous))
+                    {
+                        _loadedAnalyzers.Remove(previous.Id);
+                    }
                 }
-            }
 
-            _autoLoadedAnalyzers = analyzers.Where(analyzer => _loadedAnalyzers.TryAdd(analyzer.Id, analyzer)).ToImmutableArray();
-        }
-    }
+                _autoLoadedAnalyzers = published.Where(analyzer => _loadedAnalyzers.TryAdd(analyzer.Id, analyzer)).ToImmutableArray();
+            }
+        });
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Loading Roslyn analyzers from {AssemblyPath}")]
     private static partial void LogLoadingAnalyzers(ILogger logger, string assemblyPath);
@@ -262,6 +291,9 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Analyzer {AnalyzerId} failed to initialize, so it was not loaded")]
     private static partial void LogAnalyzerFailedToInitialize(ILogger logger, Exception exception, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Analyzer {AnalyzerId} is not the analyzer registered under its ID any more, so it is not listed as loaded")]
+    private static partial void LogAnalyzerNoLongerRegistered(ILogger logger, string analyzerId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Discovering analyzer assemblies in {Directory}")]
     private static partial void LogDiscoveringAssemblies(ILogger logger, string directory);

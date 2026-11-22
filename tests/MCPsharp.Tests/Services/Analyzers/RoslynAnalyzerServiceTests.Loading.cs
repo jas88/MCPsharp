@@ -150,6 +150,63 @@ public partial class RoslynAnalyzerServiceTests
         Assert.That(service.GetAnalyzer("analyzer1"), Is.SameAs(earlier));
     }
 
+    [Test]
+    public async Task LoadAnalyzersAsync_WhenTheAnalyzerIsUnregisteredBeforeItIsPublished_DoesNotListIt()
+    {
+        // Arrange - the ID is unloaded as soon as the registry reports the analyzer registered
+        var registry = new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>());
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, registry: registry);
+        var assemblyPath = CreateTestFile("test assembly", ".dll");
+        var analyzer = CreateMockAnalyzer("analyzer1");
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(assemblyPath, Arg.Any<CancellationToken>())
+            .Returns(ImmutableArray.Create(analyzer));
+        Task<bool>? unregistering = null;
+        registry.AnalyzerRegistered += (_, args) => unregistering = registry.UnregisterAnalyzerAsync(args.AnalyzerId);
+
+        // Act
+        var loaded = await service.LoadAnalyzersAsync(assemblyPath);
+
+        // Assert
+        Assert.That(unregistering, Is.Not.Null);
+        Assert.That(await unregistering!, Is.True);
+        Assert.That(loaded, Is.Empty);
+        Assert.That(service.GetAnalyzer("analyzer1"), Is.Null, "an analyzer the registry no longer holds isn't listed as loaded");
+    }
+
+    [Test]
+    public async Task LoadAnalyzersAsync_WhenAnotherLoadReplacesTheAnalyzerBeforeItIsPublished_ListsTheOneTheRegistryHolds()
+    {
+        // Arrange - two loads of one ID at once: the second registers and publishes its analyzer after the first has
+        // registered its own, and before the first publishes it
+        var registry = new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>());
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, registry: registry);
+        var firstPath = CreateTestFile("first assembly", ".dll");
+        var first = CreateMockAnalyzer("analyzer1");
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(firstPath, Arg.Any<CancellationToken>()).Returns(ImmutableArray.Create(first));
+        var secondPath = CreateTestFile("second assembly", ".dll");
+        var second = CreateMockAnalyzer("analyzer1");
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(secondPath, Arg.Any<CancellationToken>()).Returns(ImmutableArray.Create(second));
+        Task<ImmutableArray<IAnalyzer>>? secondLoad = null;
+        registry.AnalyzerRegistered += (_, _) =>
+        {
+            if (ReferenceEquals(registry.GetAnalyzer("analyzer1"), first))
+            {
+                secondLoad = service.LoadAnalyzersAsync(secondPath);
+            }
+        };
+
+        // Act
+        var firstLoaded = await service.LoadAnalyzersAsync(firstPath);
+
+        // Assert
+        Assert.That(secondLoad, Is.Not.Null);
+        Assert.That(secondLoad!.IsCompletedSuccessfully, Is.True, "the second load finished before the first published");
+        Assert.That(await secondLoad, Is.EqualTo(new[] { second }));
+        Assert.That(registry.GetAnalyzer("analyzer1"), Is.SameAs(second));
+        Assert.That(service.GetAnalyzer("analyzer1"), Is.SameAs(second), "the service lists the analyzer the registry holds");
+        Assert.That(firstLoaded, Is.Empty, "the first load's analyzer was replaced before it could be listed");
+    }
+
     #endregion
 
     #region LoadAnalyzersFromDirectoryAsync Tests

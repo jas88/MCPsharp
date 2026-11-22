@@ -35,6 +35,15 @@ public interface IAnalyzerRegistry
     Task<bool> UnregisterAnalyzerInstanceAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Call <paramref name="publish"/> with those of <paramref name="analyzers"/> that are registered, each being the
+    /// analyzer registered under its ID, and return them. No analyzer is registered or unregistered while
+    /// <paramref name="publish"/> runs, so a caller that keeps its own record of the registered analyzers can update
+    /// it in step with the registry. <paramref name="publish"/> must not wait for anything else that uses the
+    /// registry.
+    /// </summary>
+    ImmutableArray<IAnalyzer> PublishRegisteredAnalyzers(IEnumerable<IAnalyzer> analyzers, Action<ImmutableArray<IAnalyzer>> publish);
+
+    /// <summary>
     /// Get all registered analyzers
     /// </summary>
     ImmutableArray<AnalyzerInfo> GetRegisteredAnalyzers();
