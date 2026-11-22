@@ -174,6 +174,38 @@ public partial class RoslynAnalyzerServiceTests
     }
 
     [Test]
+    public async Task LoadAnalyzersAsync_CancelledPartWay_ListsTheAnalyzersItHadRegistered()
+    {
+        // Arrange - the load's first analyzer replaces a listed one with its ID, and the load is cancelled while its
+        // second analyzer initializes
+        var registry = new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>());
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, registry: registry);
+        var earlierPath = CreateTestFile("earlier assembly", ".dll");
+        var earlier = new TestAnalyzer("analyzer1");
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(earlierPath, Arg.Any<CancellationToken>())
+            .Returns(ImmutableArray.Create<IAnalyzer>(earlier));
+        await service.LoadAnalyzersAsync(earlierPath);
+        var assemblyPath = CreateTestFile("test assembly", ".dll");
+        var registered = new TestAnalyzer("analyzer1");
+        var held = new TestAnalyzer("analyzer2", holdInitialization: true);
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(assemblyPath, Arg.Any<CancellationToken>())
+            .Returns(ImmutableArray.Create<IAnalyzer>(registered, held));
+        using var cancellation = new CancellationTokenSource();
+
+        // Act
+        var loading = service.LoadAnalyzersAsync(assemblyPath, cancellation.Token);
+        await held.WaitUntilInitializingAsync();
+        await cancellation.CancelAsync();
+        await loading;
+
+        // Assert
+        Assert.That(registry.GetLoadedAnalyzers(), Is.EqualTo(new IAnalyzer[] { registered }));
+        Assert.That(service.GetAnalyzer("analyzer1"), Is.SameAs(registered), "the service lists the analyzer the registry holds");
+        Assert.That(service.GetLoadedAnalyzers(), Is.EqualTo(new IAnalyzer[] { registered }));
+        await held.WaitUntilDisposedAsync();
+    }
+
+    [Test]
     public async Task LoadAnalyzersAsync_WhenTheAnalyzerIsUnregisteredLater_StopsListingIt()
     {
         // Arrange - e.g. the analyzer host unloads the ID of one of the analyzers loaded

@@ -86,17 +86,7 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
             var analyzers = await _loader.LoadAnalyzersFromAssemblyAsync(assemblyPath, cancellationToken);
 
             // Only an analyzer the host's registry holds can run, so only those are published as loaded
-            var registered = await RegisterWithHostAsync(analyzers, cancellationToken);
-            var loaded = PublishRegistered(registered, published =>
-            {
-                lock (_lock)
-                {
-                    foreach (var analyzer in published)
-                    {
-                        _loadedAnalyzers[analyzer.Id] = analyzer;
-                    }
-                }
-            });
+            var loaded = await RegisterAndListAsync(analyzers, cancellationToken);
 
             LogLoadedAnalyzers(_logger, loaded.Length, assemblyPath);
 
@@ -205,40 +195,59 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
     }
 
     /// <summary>
-    /// Register explicitly loaded analyzers in the registry the analyzer host runs analyzers from, returning those
-    /// registered. An explicitly loaded analyzer replaces one already registered under its ID (e.g. an auto-loaded
-    /// one) in one step, and one that fails to register leaves the previous analyzer in place. Without a registry,
-    /// every analyzer is returned, to be listed but not run.
+    /// Register explicitly loaded analyzers in the registry the analyzer host runs analyzers from, and list those it
+    /// holds as loaded, returning them. Each analyzer is listed as soon as it is registered, so a load that is
+    /// cancelled part-way, whose cancellation propagates, leaves listed the analyzers it had registered. Without a
+    /// registry, every analyzer is listed, though none can be run.
     /// </summary>
-    private async Task<ImmutableArray<IAnalyzer>> RegisterWithHostAsync(ImmutableArray<IAnalyzer> analyzers, CancellationToken cancellationToken)
+    private async Task<ImmutableArray<IAnalyzer>> RegisterAndListAsync(ImmutableArray<IAnalyzer> analyzers, CancellationToken cancellationToken)
     {
-        if (_registry == null)
-        {
-            return analyzers;
-        }
-
-        var registered = ImmutableArray.CreateBuilder<IAnalyzer>(analyzers.Length);
+        var loaded = ImmutableArray.CreateBuilder<IAnalyzer>(analyzers.Length);
         foreach (var analyzer in analyzers)
         {
-            try
+            if (_registry == null || await RegisterWithHostAsync(_registry, analyzer, cancellationToken))
             {
-                if (await _registry.ReplaceAnalyzerAsync(analyzer, cancellationToken))
-                {
-                    registered.Add(analyzer);
-                }
-                else
-                {
-                    LogAnalyzerNotRegistered(_logger, analyzer.Id);
-                }
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
-            {
-                // The analyzer it was to replace stays registered
-                LogAnalyzerFailedToInitialize(_logger, ex, analyzer.Id);
+                loaded.AddRange(PublishRegistered([analyzer], ListExplicitlyLoadedAnalyzers));
             }
         }
 
-        return registered.ToImmutable();
+        return loaded.ToImmutable();
+    }
+
+    /// <summary>
+    /// Register an explicitly loaded analyzer, returning whether it is registered. It replaces an analyzer already
+    /// registered under its ID (e.g. an auto-loaded one) in one step, and leaves that one in place if it fails to
+    /// register.
+    /// </summary>
+    private async Task<bool> RegisterWithHostAsync(IAnalyzerRegistry registry, IAnalyzer analyzer, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (await registry.ReplaceAnalyzerAsync(analyzer, cancellationToken))
+            {
+                return true;
+            }
+
+            LogAnalyzerNotRegistered(_logger, analyzer.Id);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // The analyzer it was to replace stays registered
+            LogAnalyzerFailedToInitialize(_logger, ex, analyzer.Id);
+        }
+
+        return false;
+    }
+
+    private void ListExplicitlyLoadedAnalyzers(ImmutableArray<IAnalyzer> analyzers)
+    {
+        lock (_lock)
+        {
+            foreach (var analyzer in analyzers)
+            {
+                _loadedAnalyzers[analyzer.Id] = analyzer;
+            }
+        }
     }
 
     /// <summary>
