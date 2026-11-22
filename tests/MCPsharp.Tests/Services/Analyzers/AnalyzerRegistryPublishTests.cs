@@ -13,8 +13,11 @@ namespace MCPsharp.Tests.Services.Analyzers;
 [Category("Analyzers")]
 public class AnalyzerRegistryPublishTests : TestBase
 {
-    // Long enough for an unregistration that nothing holds up to finish
+    // Long enough for an unregistration that nothing holds up to finish, once its thread is running
     private static readonly TimeSpan UnregistrationWait = TimeSpan.FromMilliseconds(250);
+
+    // How long the test waits for the thread pool to start the unregistration before failing
+    private static readonly TimeSpan StartLimit = TimeSpan.FromSeconds(10);
 
     private AnalyzerRegistry _registry = null!;
 
@@ -54,17 +57,27 @@ public class AnalyzerRegistryPublishTests : TestBase
         // So that what the caller publishes is what the registry holds when it has finished publishing
         var analyzer = new TestAnalyzer("analyzer1");
         await _registry.RegisterAnalyzerAsync(analyzer);
+        using var unregistrationStarted = new ManualResetEventSlim();
         Task<bool>? unregistering = null;
+        var startedInTime = false;
         var unregisteredWhilePublishing = true;
         IAnalyzer? heldWhilePublishing = null;
 
         _registry.PublishRegisteredAnalyzers([analyzer], _ =>
         {
-            unregistering = Task.Run(() => _registry.UnregisterAnalyzerAsync(analyzer.Id));
+            unregistering = Task.Run(() =>
+            {
+                unregistrationStarted.Set();
+                return _registry.UnregisterAnalyzerAsync(analyzer.Id);
+            });
+
+            // Timed from when the other thread is running, so that a slow start can't pass for being made to wait
+            startedInTime = unregistrationStarted.Wait(StartLimit);
             unregisteredWhilePublishing = unregistering.Wait(UnregistrationWait);
             heldWhilePublishing = _registry.GetAnalyzer(analyzer.Id);
         });
 
+        Assert.That(startedInTime, Is.True, "the unregistration was started");
         Assert.That(unregisteredWhilePublishing, Is.False, "an unregistration waits until the analyzers are published");
         Assert.That(heldWhilePublishing, Is.SameAs(analyzer));
         Assert.That(await unregistering!, Is.True);
