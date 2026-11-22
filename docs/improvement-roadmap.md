@@ -16,6 +16,7 @@ MCPsharp has achieved significant progress with 38 consolidated MCP tools and co
 4. **AST Editing Implementation** - Semantic C#, XML, and YAML editing systems
 
 **Key Findings:**
+
 - ✅ Core architecture is solid (Roslyn direct integration, tool consolidation)
 - ⚠️ No caching layer → repeated semantic queries are expensive
 - ⚠️ No background analysis → blocking on first query
@@ -24,6 +25,7 @@ MCPsharp has achieved significant progress with 38 consolidated MCP tools and co
 - ⚠️ Missing AST-based editing → current text edits are brittle
 
 **Recommended Priority:**
+
 1. **Critical Path** (Weeks 1-4): Caching + Column Fix + Core AST Editing
 2. **High Value** (Weeks 5-8): Background Analysis + Complete Phase 3
 3. **Enhancement** (Weeks 9-12): Advanced AST Editing + Testing + Polish
@@ -37,6 +39,7 @@ MCPsharp has achieved significant progress with 38 consolidated MCP tools and co
 **Problem**: Every semantic query rebuilds compilation and semantic models from scratch.
 
 **Impact**:
+
 - `find_references` on large project: 5-10s per query
 - Repeated queries: 100% redundant work
 - Poor developer experience
@@ -82,11 +85,13 @@ public sealed class SemanticModelCache
 ```
 
 **Cache Levels**:
+
 1. **Compilation Cache** - Expensive, long-lived (workspace-level)
 2. **SemanticModel Cache** - Per-document, invalidate on edit
 3. **Symbol Resolution Cache** - Short-lived LRU for repeated symbol lookups
 
 **Implementation**:
+
 - Week 1: Implement SemanticModelCache
 - Week 1: Integrate with RoslynWorkspace
 - Week 2: Add invalidation hooks for document changes
@@ -105,6 +110,7 @@ public sealed class SemanticModelCache
 **Problem**: Document edits invalidate entire compilation, forcing full rebuild.
 
 **Current Behavior**:
+
 ```csharp
 // User edits File.cs
 await AddDocumentAsync(filePath); // Replaces document
@@ -139,11 +145,13 @@ public async Task<bool> UpdateDocumentAsync(string filePath, string newContent, 
 ```
 
 **Benefits**:
+
 - 90% faster for single-file edits (only recompile changed file + dependents)
 - Preserve semantic model cache for unchanged files
 - Better background analysis support
 
 **Implementation**:
+
 - Week 2: Add `UpdateDocumentAsync` to RoslynWorkspace
 - Week 2: Track document version numbers for staleness detection
 - Week 3: Integrate with file watcher (when implemented)
@@ -160,6 +168,7 @@ public async Task<bool> UpdateDocumentAsync(string filePath, string newContent, 
 **Problem**: 6,074-line switch statement is unmaintainable.
 
 **Current State**:
+
 ```csharp
 // src/Services/McpToolRegistry.cs (6074 lines!)
 public async Task<ToolCallResult> ExecuteToolAsync(ToolCallRequest request, CancellationToken ct = default)
@@ -233,12 +242,14 @@ public sealed class McpToolRegistry
 ```
 
 **Benefits**:
+
 - Each tool in separate file (~100 lines each)
 - Easy to add new tools (implement `IToolHandler`)
 - Testable in isolation
 - Clear dependency injection
 
 **Implementation**:
+
 - Week 4: Define `IToolHandler` interface
 - Week 4-5: Extract 10 tools per day → 4 days for all 38
 - Week 5: Update DI registration
@@ -256,6 +267,7 @@ public sealed class McpToolRegistry
 **Problem**: ResponseProcessor truncates after generation, wasting work.
 
 **Current Approach**:
+
 ```csharp
 // Generate full response (expensive)
 var fullResult = await ExecuteToolAsync(...);
@@ -303,11 +315,13 @@ public sealed class BudgetedJsonWriter
 ```
 
 **Benefits**:
+
 - Stop serialization when budget reached (don't waste CPU)
 - Provide partial results faster
 - More accurate truncation (per-property vs per-character)
 
 **Implementation**:
+
 - Week 3: Implement BudgetedJsonWriter
 - Week 3: Integrate with tool handlers
 - Week 3: Add tests with large responses
@@ -324,6 +338,7 @@ public sealed class BudgetedJsonWriter
 **Problem**: All services instantiated at startup, even if unused.
 
 **Current**: Program.cs creates all services eagerly
+
 ```csharp
 var workspace = new RoslynWorkspace(...);
 var symbolQuery = new SymbolQueryService(workspace, ...);
@@ -353,11 +368,13 @@ public sealed class ServiceFactory
 ```
 
 **Benefits**:
+
 - Faster startup (don't create unused services)
 - Lower memory footprint
 - Services created on-demand
 
 **Implementation**:
+
 - Week 4: Implement ServiceFactory
 - Week 4: Update Program.cs to use factory
 - Week 4: Benchmark startup time (expect 40% faster)
@@ -377,11 +394,13 @@ public sealed class ServiceFactory
 **Root Cause**: Inconsistent 0-based vs 1-based indexing in edit operations.
 
 **Investigation Needed**:
+
 1. Trace all column usage in edit paths
 2. Determine if LSP spec requires 0-based (it does: lines and cols both 0-indexed)
 3. Audit all conversion points
 
 **Fix Locations**:
+
 ```csharp
 // src/Services/FileOperationsService.cs
 public FileEditResult EditFile(string path, List<TextEdit> edits)
@@ -401,12 +420,14 @@ public FileEditResult EditFile(string path, List<TextEdit> edits)
 ```
 
 **Solution Strategy**:
+
 1. **Standardize on 0-based internally** (matches LSP, programming convention)
 2. **Document at API boundaries** (XML doc comments state index base)
 3. **Add validation** (reject column >= line.Length)
 4. **Add conversion helpers** if external APIs use 1-based
 
 **Implementation**:
+
 - Week 1: Audit all edit code paths (FileOperationsService, SemanticEditService)
 - Week 1: Add unit tests with explicit assertions about indexing
 - Week 1: Fix all 1-based → 0-based conversions
@@ -425,12 +446,14 @@ public FileEditResult EditFile(string path, List<TextEdit> edits)
 **Status**: Code complete (~43KB), limited testing, not integrated
 
 **Missing**:
+
 - MCP tool registration in McpToolRegistry
 - Comprehensive test suite
 - Integration with consolidated analysis tools
 - Documentation and examples
 
 **Implementation**:
+
 - Week 6: Add MCP tool handlers for architecture validation
 - Week 6: Write test suite (predefined architectures, custom definitions)
 - Week 7: Integration tests with real projects
@@ -438,6 +461,7 @@ public FileEditResult EditFile(string path, List<TextEdit> edits)
 - Week 7: Document in user guide
 
 **Tools to Expose**:
+
 - `validate_architecture` - Check against predefined patterns
 - `detect_layer_violations` - Find architectural violations
 - `get_architecture_report` - Comprehensive report
@@ -454,12 +478,14 @@ public FileEditResult EditFile(string path, List<TextEdit> edits)
 **Status**: Code complete (~98KB), limited testing, not integrated
 
 **Missing**:
+
 - Hash-based exact duplicate detection optimization
 - Near-miss similarity tuning (configurable threshold)
 - Refactoring suggestion quality improvements
 - MCP tool integration
 
 **Implementation**:
+
 - Week 6: Optimize exact duplicate detection (hash-based)
 - Week 6: Tune similarity algorithm (test with real codebases)
 - Week 7: Improve refactoring suggestions (context-aware)
@@ -468,6 +494,7 @@ public FileEditResult EditFile(string path, List<TextEdit> edits)
 - Week 8: Document usage patterns
 
 **Tools to Expose**:
+
 - `detect_duplicates` - Find all duplicates (exact + near-miss)
 - `find_exact_duplicates` - Fast exact-only search
 - `get_duplicate_hotspots` - Files with most duplication
@@ -483,12 +510,14 @@ public FileEditResult EditFile(string path, List<TextEdit> edits)
 **Status**: Services implemented, not all wired to McpToolRegistry
 
 **Missing Tools** (need MCP exposure):
+
 - `UniversalFileOperations`: 4 tools partially wired
 - `UnifiedAnalysisService`: 15 tools need full integration
 - `BulkOperationsHub`: 8 tools need testing
 - `StreamProcessingController`: 6 tools need testing
 
 **Implementation**:
+
 - Week 8: Extract all consolidated tools to IToolHandler implementations
 - Week 8: Add integration tests for each
 - Week 9: Performance benchmarks vs old tools
@@ -504,16 +533,19 @@ public FileEditResult EditFile(string path, List<TextEdit> edits)
 **Status**: Not implemented (planned in original design)
 
 **Design** (from CLAUDE.md):
-```
+
+```text
 Idle → Initializing → Loaded → FullyAnalyzed
 ```
 
 **Benefits**:
+
 - Return quick results immediately (project structure, file list)
 - Fill in semantic details in background
 - Better UX for large projects
 
 **Implementation**:
+
 ```csharp
 // src/Services/BackgroundAnalysis/AnalysisStateMachine.cs
 public sealed class BackgroundAnalysisManager
@@ -542,6 +574,7 @@ public sealed class BackgroundAnalysisManager
 ```
 
 **Implementation**:
+
 - Week 9: Implement AnalysisStateMachine
 - Week 9: Add file watcher integration
 - Week 10: Incremental re-analysis on file changes
@@ -557,6 +590,7 @@ public sealed class BackgroundAnalysisManager
 **Current Coverage**: ~84% (117/139 tests passing)
 
 **Gaps**:
+
 - MCP protocol integration (JSON-RPC over stdio)
 - Consolidated tools (UniversalFileOperations, UnifiedAnalysisService)
 - Phase 3 services (architecture, duplicate detection)
@@ -565,12 +599,14 @@ public sealed class BackgroundAnalysisManager
 
 **Test Plan**:
 
-**Week 10-11: Critical Path Tests**
+#### Week 10-11: Critical Path Tests
+
 - Edit operation tests (especially column indexing)
 - MCP protocol end-to-end tests
 - Consolidated tool integration tests
 
-**Week 11-12: Coverage Expansion**
+#### Week 11-12: Coverage Expansion
+
 - Phase 3 service tests
 - Large project stress tests (RDMP, RoslynAnalyzers)
 - Performance regression tests
@@ -591,23 +627,27 @@ public sealed class BackgroundAnalysisManager
 **Core Operations** (Priority Order):
 
 **Phase 1: Member Operations** (Week 5-6)
+
 - ✅ `AddMethodOperation` - Add method to class with proper indentation
 - ✅ `AddPropertyOperation` - Add property with getter/setter
 - ✅ `ModifyMethodOperation` - Change signature, body
 - ✅ `RemoveMethodOperation` - Delete method safely
 
 **Phase 2: Refactoring Operations** (Week 7-8)
+
 - ✅ `RenameSymbolOperation` - Rename with cascading updates (Roslyn Renamer API)
 - ✅ `ExtractMethodOperation` - Extract code into new method with data flow analysis
 - ✅ `InlineMethodOperation` - Inline method calls
 - ✅ `ExtractInterfaceOperation` - Generate interface from class
 
 **Phase 3: Namespace/Using Operations** (Week 9)
+
 - ✅ `ChangeNamespaceOperation` - Move type to new namespace
 - ✅ `AddUsingOperation` - Smart using directive placement
 - ✅ `OrganizeUsingsOperation` - Sort and remove unused
 
 **Architecture** (from design doc):
+
 ```csharp
 EditOrchestrator
   ├─ EditTransactionManager (backup/rollback)
@@ -623,11 +663,13 @@ Integration:
 ```
 
 **MCP Tools**:
+
 - `edit_code_semantic` - Apply single operation
 - `preview_edit` - Dry-run with diff
 - `batch_edit` - Multiple operations in transaction
 
 **Implementation Timeline**:
+
 - Week 5-6: Foundation + Member Operations (4 operations)
 - Week 7-8: Refactoring Operations (4 operations)
 - Week 9: Namespace Operations (3 operations)
@@ -647,24 +689,28 @@ Integration:
 **Core Operations**:
 
 **Phase 1: Basic Project Edits** (Week 8-9)
+
 - ✅ `AddPackageReferenceOperation` - Add NuGet package
 - ✅ `UpdateTargetFrameworkOperation` - Change target framework
 - ✅ `ModifyPropertyOperation` - Set MSBuild property
 - ✅ `AddProjectReferenceOperation` - Add project reference
 
 **Phase 2: Advanced Features** (Week 10-11)
+
 - ✅ Central Package Management support
 - ✅ Directory.Build.props editing
 - ✅ Conditional ItemGroup handling
 - ✅ Multi-targeting support
 
 **Phase 3: Integration** (Week 11-12)
+
 - ✅ Roslyn workspace reload after edit
 - ✅ Package compatibility validation
 - ✅ Breaking change detection
 - ✅ Solution file editing (.sln)
 
 **Architecture**:
+
 ```csharp
 ProjectFileEditor
   ├─ XmlProjectDocument (XDocument wrapper)
@@ -674,12 +720,14 @@ ProjectFileEditor
 ```
 
 **MCP Tools**:
+
 - `modify_project_file` - Generic edit operation
 - `add_package_reference` - Add NuGet package
 - `update_target_framework` - Change framework version
 - `analyze_project_structure` - Project analysis
 
 **Implementation Timeline**:
+
 - Week 8-9: XML infrastructure + basic operations (4 operations)
 - Week 10-11: Advanced features (CPM, Directory.Build.props)
 - Week 11-12: Integration with Roslyn workspace
@@ -697,22 +745,26 @@ ProjectFileEditor
 **Core Operations**:
 
 **Phase 1: Job Operations** (Week 10-11)
+
 - ✅ `AddJobEdit` - Add workflow job
 - ✅ `RemoveJobEdit` - Remove job with dependency updates
 - ✅ `ModifyJobEdit` - Change job properties
 
 **Phase 2: Step Operations** (Week 11-12)
+
 - ✅ `AddStepEdit` - Add step to job
 - ✅ `ModifyStepEdit` - Change step properties
 - ✅ `UpdateActionVersionEdit` - Update action versions
 
 **Phase 3: Advanced Features** (Week 12)
+
 - ✅ Matrix configuration editing
 - ✅ Trigger management (on: push, etc.)
 - ✅ Schema validation against GitHub Actions
 - ✅ Action deprecation detection
 
 **Architecture**:
+
 ```csharp
 WorkflowEditorService
   ├─ YamlDocumentContext (YamlDotNet wrapper)
@@ -724,6 +776,7 @@ WorkflowEditorService
 ```
 
 **MCP Tools**:
+
 - `edit_workflow` - Apply edits to workflow
 - `add_workflow_job` - Add job with steps
 - `update_action_versions` - Bulk version updates
@@ -731,6 +784,7 @@ WorkflowEditorService
 - `validate_workflow` - Schema validation
 
 **Implementation Timeline**:
+
 - Week 10-11: YAML infrastructure + job operations (3 operations)
 - Week 11-12: Step operations + action versioning (3 operations)
 - Week 12: Advanced features (matrix, validation)
@@ -746,6 +800,7 @@ WorkflowEditorService
 ### 4.1 Error Messages & Developer Experience 💬
 
 **Current Issues**:
+
 - Generic error messages ("Edit failed")
 - No actionable guidance
 - Stack traces exposed to user
@@ -753,6 +808,7 @@ WorkflowEditorService
 **Improvements**:
 
 **Structured Error Responses**:
+
 ```csharp
 public record DetailedError
 {
@@ -765,6 +821,7 @@ public record DetailedError
 ```
 
 **Example**:
+
 ```json
 {
   "code": "E_COLUMN_OUT_OF_RANGE",
@@ -780,6 +837,7 @@ public record DetailedError
 ```
 
 **Implementation**:
+
 - Week 3: Define error code taxonomy
 - Week 3: Add suggestion database
 - Week 4: Update all error paths
@@ -815,6 +873,7 @@ public async Task<T> WithTimeoutAsync<T>(
 ```
 
 **Implementation**:
+
 - Week 5: Audit all async operations for CancellationToken
 - Week 5: Add timeout configuration
 - Week 5: Add progress reporting for long operations
@@ -836,6 +895,7 @@ public async Task<T> WithTimeoutAsync<T>(
 6. **Symbolic Links** - Follow or reject?
 
 **Implementation**:
+
 - Week 6: Add edge case test suite
 - Week 6: Fix identified issues
 - Week 7: Document known limitations
@@ -850,36 +910,42 @@ public async Task<T> WithTimeoutAsync<T>(
 ### Phased Rollout (12-Week Plan)
 
 **Weeks 1-2: Critical Foundations** 🔴
+
 - ✅ Semantic model caching
 - ✅ Incremental compilation
 - ✅ Fix column indexing bug
 - ✅ Start C# AST editing foundation
 
 **Weeks 3-4: Performance & Architecture** 🟡
+
 - ✅ Response token optimization
 - ✅ McpToolRegistry refactoring
 - ✅ Lazy service instantiation
 - ✅ Continue C# AST editing (member operations)
 
 **Weeks 5-6: Core Editing + Phase 3** 🟢
+
 - ✅ Complete C# AST editing (member + refactoring operations)
 - ✅ Complete architecture validation
 - ✅ Complete duplicate detection
 - ✅ Start XML project editing
 
 **Weeks 7-8: Advanced Editing** 🔵
+
 - ✅ Complete C# AST editing (namespace operations)
 - ✅ Complete XML project editing (basic operations)
 - ✅ Consolidated tool integration
 - ✅ Start YAML workflow editing
 
 **Weeks 9-10: Polish & Integration** 🟣
+
 - ✅ Background analysis state machine
 - ✅ Complete XML project editing (advanced features)
 - ✅ Complete YAML workflow editing (job operations)
 - ✅ Testing improvements (Phase 1)
 
 **Weeks 11-12: Testing & Documentation** ⚪
+
 - ✅ Complete YAML workflow editing (advanced features)
 - ✅ Testing improvements (Phase 2)
 - ✅ Comprehensive documentation
@@ -891,24 +957,28 @@ public async Task<T> WithTimeoutAsync<T>(
 ## Success Metrics
 
 ### Performance Targets
+
 - ⚡ Repeated semantic queries: 80% faster (via caching)
 - ⚡ Edit-analyze cycle: 90% faster (incremental compilation)
 - ⚡ Startup time: 40% faster (lazy services)
 - ⚡ Large response handling: 50% faster (streaming serialization)
 
 ### Reliability Targets
+
 - 🎯 Edit success rate: 95%+ (AST-based editing)
 - 🎯 Test pass rate: 100% (fix failing tests)
 - 🎯 Code coverage: 95%+ (add missing tests)
 - 🎯 Column indexing: 100% correct (fix bug)
 
 ### Completeness Targets
+
 - ✅ Phase 3 services: 100% complete and tested
 - ✅ AST editing: C# (11 operations), XML (8 operations), YAML (9 operations)
 - ✅ Consolidated tools: 100% integrated
 - ✅ Documentation: Complete API reference + examples
 
 ### Developer Experience Targets
+
 - 💬 Error messages: 100% actionable with suggestions
 - 💬 Response time: <1s for common queries
 - 💬 Edit preview: Available for all operations
@@ -919,6 +989,7 @@ public async Task<T> WithTimeoutAsync<T>(
 ## Risk Assessment
 
 ### High Risk Items
+
 1. **C# AST Editing Complexity** - Roslyn API is large, edge cases numerous
    - *Mitigation*: Start with simple operations, extensive testing, iterate
 
@@ -929,17 +1000,19 @@ public async Task<T> WithTimeoutAsync<T>(
    - *Mitigation*: Conservative invalidation, workspace change events
 
 ### Medium Risk Items
-4. **Background Analysis** - Complexity of state machine
+
+1. **Background Analysis** - Complexity of state machine
    - *Mitigation*: Start simple (two states), add complexity iteratively
 
-5. **XML MSBuild Evaluation** - Complex condition evaluation
+2. **XML MSBuild Evaluation** - Complex condition evaluation
    - *Mitigation*: Support common cases, document limitations
 
 ### Low Risk Items
-6. **McpToolRegistry Refactoring** - Mechanical transformation
+
+1. **McpToolRegistry Refactoring** - Mechanical transformation
    - *Mitigation*: Thorough testing, gradual migration
 
-7. **YAML Editing** - YamlDotNet is mature
+2. **YAML Editing** - YamlDotNet is mature
    - *Mitigation*: Comment preservation may require workarounds
 
 ---
@@ -947,6 +1020,7 @@ public async Task<T> WithTimeoutAsync<T>(
 ## Dependencies & Prerequisites
 
 ### External Dependencies
+
 - **NuGet Packages** (already present):
   - Microsoft.CodeAnalysis.CSharp (Roslyn)
   - YamlDotNet
@@ -957,11 +1031,13 @@ public async Task<T> WithTimeoutAsync<T>(
   - DiffPlex (for edit previews)
 
 ### Infrastructure Requirements
+
 - **GitHub API Access** (for action metadata) - Optional, cached
 - **NuGet API Access** (for package validation) - Optional, cached
 - **Local File System** - Required for all operations
 
 ### Team Prerequisites
+
 - Roslyn API familiarity (C# AST editing)
 - XDocument API familiarity (XML editing)
 - YamlDotNet API familiarity (YAML editing)
@@ -972,11 +1048,13 @@ public async Task<T> WithTimeoutAsync<T>(
 ## Appendix: Design Documents
 
 Full architecture designs are available in:
+
 1. **C# AST Editing**: Detailed in agent output (58KB design doc)
 2. **XML Project Editing**: Detailed in agent output (45KB design doc)
 3. **YAML Workflow Editing**: Detailed in agent output (52KB design doc)
 
 These documents include:
+
 - Complete class hierarchies
 - Operation implementations
 - MCP tool interfaces
@@ -989,6 +1067,7 @@ These documents include:
 ## Next Steps
 
 **Immediate Actions** (Week 1):
+
 1. ✅ Review and approve this roadmap
 2. ✅ Set up project tracking (GitHub issues/projects)
 3. ✅ Begin Week 1 tasks:
@@ -997,11 +1076,13 @@ These documents include:
    - Start C# AST editing foundation
 
 **Communication**:
+
 - Weekly progress updates
 - Design review for major components
 - Integration testing at phase boundaries
 
 **Success Criteria**:
+
 - All P0 items complete by Week 8
 - All P1 items complete by Week 12
 - Performance targets met
@@ -1009,4 +1090,4 @@ These documents include:
 
 ---
 
-**End of Roadmap**
+End of Roadmap

@@ -9,7 +9,8 @@ This document tracks issues, limitations, and failures encountered while using M
 ---
 
 ## Issue Template
-```
+
+```markdown
 ### [Date] [Phase]
 **Operation:** [What was attempted]
 **Tool Used:** [Which MCPsharp tool]
@@ -21,6 +22,7 @@ This document tracks issues, limitations, and failures encountered while using M
 ---
 
 ## Summary Statistics
+
 - Total Issues: 2
 - Critical Blockers: 1
 - Workarounds Found: 1
@@ -29,6 +31,7 @@ This document tracks issues, limitations, and failures encountered while using M
 ## Issues
 
 ### 2025-10-30 Phase 1 - Issue 1 - RESOLVED
+
 **Operation:** Reading McpToolRegistry.cs (47,561 tokens)
 **Tool Used:** mcp__MCPsharp__file_read
 **Error/Issue:** File content truncated from 47,561 to 1,037 tokens due to size limits
@@ -36,6 +39,7 @@ This document tracks issues, limitations, and failures encountered while using M
 **Impact:** MCPsharp's edit facilities work perfectly for large files - no need to read entire file first
 
 ### 2025-10-30 Phase 1 - Issue 2 - INVESTIGATING
+
 **Operation:** Attempting to use mcp__MCPsharp__file_edit for method replacement
 **Tool Used:** mcp__MCPsharp__file_edit
 **Error/Issue:** Multiple errors: "The given key was not present in the dictionary" and "Index and length must refer to a location within the string"
@@ -43,6 +47,7 @@ This document tracks issues, limitations, and failures encountered while using M
 **Impact:** Edit facility has line/column number accuracy issues for precise method replacement
 
 ## Categories
+
 - **Tool Execution Failures**
 - **API Limitations**
 - **Schema/Validation Issues**

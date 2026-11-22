@@ -1,4 +1,5 @@
 # MCPsharp Text Search Implementation Design
+
 ## ULTRATHINK Analysis & Architecture
 
 ---
@@ -8,6 +9,7 @@
 This document provides a comprehensive design for implementing **text-based search capabilities** in MCPsharp, addressing the critical **Priority 1 gap** of missing regex/literal/comment search functionality. The design integrates seamlessly with existing architecture while providing fast, scalable, and flexible search across large codebases.
 
 **Key Design Decisions:**
+
 - **Hybrid Approach:** Combine Roslyn for code-aware search with optimized text scanning for general patterns
 - **Cursor-Based Pagination:** Efficient memory management for large result sets
 - **Streaming Architecture:** Progressive result delivery without memory exhaustion
@@ -19,7 +21,7 @@ This document provides a comprehensive design for implementing **text-based sear
 
 ### 1.1 Component Hierarchy
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │              MCP Tool Layer                      │
 ├─────────────────────────────────────────────────┤
@@ -57,6 +59,7 @@ This document provides a comprehensive design for implementing **text-based sear
 ### 1.2 Design Philosophy
 
 **Principle:** Layer search engines by speed and capability
+
 1. **IndexedSearchEngine** - Fastest, uses pre-built indices for common patterns
 2. **RegexSearchEngine** - Fast, direct file scanning with compiled regex
 3. **RoslynSearchEngine** - Slower but semantic-aware (comments, strings, trivia)
@@ -69,13 +72,14 @@ This document provides a comprehensive design for implementing **text-based sear
 
 After analysis, the **Hybrid Approach** combining multiple engines provides the best balance:
 
-#### Advantages:
+#### Advantages
+
 - ✅ Optimal performance for different search types
 - ✅ Semantic awareness when needed
 - ✅ Fast literal search when AST isn't required
 - ✅ Graceful degradation (fallback engines)
 
-#### Implementation:
+#### Implementation
 
 ```csharp
 public interface ISearchEngine
@@ -101,7 +105,7 @@ public class SearchEngineCapabilities
 ### 2.2 Engine Selection Matrix
 
 | Search Type | Primary Engine | Fallback | Rationale |
-|------------|---------------|----------|-----------|
+| ------------ | --------------- | ---------- | ----------- |
 | Comments | RoslynSearchEngine | RegexSearchEngine | SyntaxTrivia provides accurate comment detection |
 | String Literals | RoslynSearchEngine | RegexSearchEngine | Semantic model identifies actual strings vs code |
 | Arbitrary Text | RegexSearchEngine | - | Fastest for non-semantic patterns |
@@ -134,7 +138,7 @@ public class PaginatedSearchResult
 }
 ```
 
-#### Implementation Details:
+#### Implementation Details
 
 1. **Stateless Cursors:** Encode position in cursor token
 2. **Result Caching:** 5-minute cache for active searches
@@ -296,6 +300,7 @@ public async IAsyncEnumerable<SearchMatch> SearchStreamAsync(
 ### 6.1 MCP Tools
 
 #### Tool: `search_text`
+
 ```json
 {
   "name": "search_text",
@@ -338,6 +343,7 @@ public async IAsyncEnumerable<SearchMatch> SearchStreamAsync(
 ```
 
 #### Tool: `search_regex`
+
 ```json
 {
   "name": "search_regex",
@@ -376,6 +382,7 @@ public async IAsyncEnumerable<SearchMatch> SearchStreamAsync(
 ```
 
 #### Tool: `search_files`
+
 ```json
 {
   "name": "search_files",
@@ -459,7 +466,7 @@ interface SearchMatch {
 
 ### 7.1 File Structure
 
-```
+```text
 src/MCPsharp/
 ├── Services/
 │   ├── Search/
@@ -494,30 +501,35 @@ src/MCPsharp/
 ### 7.2 Implementation Phases
 
 #### Phase 1: Core Infrastructure (2-3 days)
+
 - [ ] Create `ISearchEngine` interface and base implementation
 - [ ] Implement `RegexSearchEngine` with basic file scanning
 - [ ] Integrate with `FileOperationsService` for file enumeration
 - [ ] Add basic result models and response formatting
 
 #### Phase 2: Pagination & Streaming (2 days)
+
 - [ ] Implement cursor-based pagination
 - [ ] Add result caching with expiration
 - [ ] Implement streaming result delivery
 - [ ] Add progress tracking integration
 
 #### Phase 3: Advanced Engines (3 days)
+
 - [ ] Implement `RoslynSearchEngine` for semantic search
 - [ ] Add `IndexedSearchEngine` for common patterns
 - [ ] Implement `SearchEngineSelector` with fallback logic
 - [ ] Add engine-specific optimizations
 
 #### Phase 4: MCP Tool Integration (1 day)
+
 - [ ] Register tools in `McpToolRegistry`
 - [ ] Implement tool handlers with validation
 - [ ] Add ResponseProcessor integration
 - [ ] Test with Claude Code
 
 #### Phase 5: Performance & Polish (2 days)
+
 - [ ] Add parallel processing optimizations
 - [ ] Implement regex compilation caching
 - [ ] Add comprehensive error handling
@@ -530,7 +542,7 @@ src/MCPsharp/
 ### 8.1 Target Metrics
 
 | Metric | Target | Acceptable | Current (Baseline) |
-|--------|--------|------------|-------------------|
+| -------- | -------- | ------------ | ------------------- |
 | 500-file search | <2s | <5s | N/A |
 | 10K-file search | <10s | <20s | N/A |
 | Regex compilation | <50ms | <100ms | N/A |
@@ -582,7 +594,7 @@ public class TextSearchBenchmarks
 ### 9.1 Existing Service Integration
 
 | Service | Integration Point | Purpose |
-|---------|------------------|---------|
+| --------- | ------------------ | --------- |
 | BulkEditService | File enumeration, exclusion patterns | Reuse optimized file discovery |
 | StreamingFileProcessor | Large file handling | Stream search in files >10MB |
 | ResponseProcessor | Token limiting | Respect MCP response limits |
@@ -818,6 +830,7 @@ This design provides a comprehensive, performant, and extensible text search cap
 The implementation can be completed in approximately **10-12 days** with the phased approach, delivering immediate value after Phase 1 (basic search) while building toward advanced capabilities.
 
 **Next Steps:**
+
 1. Review and approve design
 2. Begin Phase 1 implementation
 3. Create integration tests with sample projects

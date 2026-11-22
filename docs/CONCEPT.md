@@ -28,7 +28,7 @@ A Language Model Context Protocol (MCP) server for intelligent C# project analys
 
 ### High Level
 
-```
+```text
 Claude Code
     ↓ MCP (stdio, JSON-RPC)
 ┌─────────────────────────────────┐
@@ -50,6 +50,7 @@ Claude Code
 ### Component Design
 
 #### 1. MCP Protocol Handler
+
 - Manages stdin/stdout communication with Claude Code
 - Implements JSON-RPC 2.0 for MCP spec compliance
 - Routes tool calls to appropriate analyzers
@@ -58,6 +59,7 @@ Claude Code
 **Key responsibility:** Translate MCP tool calls into internal analyzer calls.
 
 #### 2. Background Analysis Manager
+
 - Maintains project analysis state machine: `Idle → Initializing → Loaded → FullyAnalyzed`
 - Coordinates incremental re-analysis on file changes
 - Manages Roslyn compilation state for the project
@@ -66,7 +68,8 @@ Claude Code
 **Key responsibility:** Non-blocking analysis that fills in detail over time.
 
 **State transitions:**
-```
+
+```text
 Idle
   ↓ project_open() called
 Initializing (parse .sln, enumerate files, start csharp-ls)
@@ -79,54 +82,64 @@ Loaded (revert to partial mode, re-analyze)
 ```
 
 **Staleness rules:**
+
 - `get_project_overview()` — always returns current (even if Initializing)
 - `get_type_hierarchy()` — returns partial if Loaded, full if FullyAnalyzed
 - `find_references()` — blocks until FullyAnalyzed (critical accuracy)
 - `detect_issues()` — returns current state (okay to be incomplete)
 
 #### 3. Multi-Language Analyzer
+
 Modular analyzers for each file type:
 
-**CSharpAnalyzer**
+##### CSharpAnalyzer
+
 - Wraps csharp-ls LSP client
 - Provides semantic queries (definition, references, diagnostics)
 - Handles source-generated code visibility
 - Caches Roslyn CompilationUnit per file
 
-**ProjectAnalyzer**
+##### ProjectAnalyzer
+
 - Parses `.csproj`, `.sln` files (XML)
 - Extracts: target frameworks, package references, project dependencies, properties
 - Builds project graph (which project references which)
 
-**ConfigAnalyzer**
+##### ConfigAnalyzer
+
 - Parses JSON config files (appsettings.*.json)
 - Parses YAML (github workflows, docker-compose)
 - Merges environment-specific configs
 - Tracks secrets/sensitive keys
 
-**WorkflowAnalyzer**
+##### WorkflowAnalyzer
+
 - Parses `.github/workflows/*.yml`
 - Extracts: triggers, environment, jobs, steps, secrets, matrix strategies
 - Correlates with project configuration (e.g., dotnet-version in workflow vs. TargetFramework in .csproj)
 
-**SqlAnalyzer**
+##### SqlAnalyzer
+
 - Parses Entity Framework migration files
 - Extracts table/column definitions from Up() methods
 - Tracks schema evolution
 - Links to C# DbContext definitions
 
-**DocumentationAnalyzer**
+##### DocumentationAnalyzer
+
 - Extracts Markdown structure (headings, sections)
 - Identifies "out of sync" sections (mentions old code patterns)
 - Links sections to relevant code files
 
 #### 4. Project Index & Cache
+
 - In-memory index of all symbols, types, files, configurations
 - Incremental update on file changes (watch filesystem)
 - Exports as queryable data structures
 - Persists lightweight cache to disk (optional, for faster startup on re-open)
 
 **What's indexed:**
+
 - File→Type mappings (which file defines which types)
 - Type→References (where each type/method is used)
 - Dependencies (which projects/packages depend on which)
@@ -136,14 +149,17 @@ Modular analyzers for each file type:
 ### External Dependencies
 
 **NuGet packages:**
+
 - `OmniSharp.Extensions.LanguageServer` — MCP/LSP protocol implementation
 - `YamlDotNet` — YAML parsing (workflows)
 - `System.Xml`, `System.Text.Json` — XML/JSON parsing (built-in)
 
 **Embedded binary:**
+
 - csharp-ls — packaged as a .NET tool within the published binary
 
 **Runtime:**
+
 - .NET 9 runtime (included in self-contained deployment)
 
 ## MCP Tools
@@ -151,9 +167,11 @@ Modular analyzers for each file type:
 ### Project Structure
 
 #### `get_project_overview()`
+
 Returns immediate snapshot of project shape.
 
 **Response:**
+
 ```json
 {
   "workspace": "/path/to/workspace",
@@ -178,9 +196,11 @@ Returns immediate snapshot of project shape.
 ---
 
 #### `get_project_references()`
+
 Project-level dependency graph.
 
 **Response:**
+
 ```json
 {
   "projectDependencies": [
@@ -207,9 +227,11 @@ Project-level dependency graph.
 ### File Analysis
 
 #### `summarize_file(path: string)`
+
 Structured overview of a single file.
 
 **Response:**
+
 ```json
 {
   "path": "src/Core/Services/UserService.cs",
@@ -244,9 +266,11 @@ Structured overview of a single file.
 ---
 
 #### `get_type_hierarchy(namespace?: string)`
+
 Classes, interfaces, records in a namespace.
 
 **Response:**
+
 ```json
 {
   "namespace": "MyApp.Services",
@@ -272,9 +296,11 @@ Classes, interfaces, records in a namespace.
 ### Semantic Analysis
 
 #### `find_references(symbol: string, file?: string, line?: number, column?: number)`
+
 Find all uses of a symbol.
 
 **Response:**
+
 ```json
 {
   "symbol": "UserService.GetUser",
@@ -299,9 +325,11 @@ Find all uses of a symbol.
 ---
 
 #### `get_definition(symbol: string)`
+
 Resolve symbol to its definition.
 
 **Response:**
+
 ```json
 {
   "symbol": "IUserService",
@@ -317,9 +345,11 @@ Resolve symbol to its definition.
 ---
 
 #### `get_dependents(symbol: string)`
+
 What depends on this?
 
 **Response:**
+
 ```json
 {
   "symbol": "UserService",
@@ -336,9 +366,11 @@ What depends on this?
 ---
 
 #### `get_full_impact(change: EditChange)`
+
 Predict impact of a code change across all file types.
 
 **Request:**
+
 ```json
 {
   "file": "src/Core/Models/User.cs",
@@ -349,6 +381,7 @@ Predict impact of a code change across all file types.
 ```
 
 **Response:**
+
 ```json
 {
   "csharpImpact": [
@@ -375,9 +408,11 @@ Predict impact of a code change across all file types.
 ### Project Mapping
 
 #### `trace_feature(featureName: string)`
+
 Find all code implementing a feature.
 
 **Response:**
+
 ```json
 {
   "feature": "user-authentication",
@@ -397,9 +432,11 @@ Find all code implementing a feature.
 ---
 
 #### `get_architecture()`
+
 Layer structure and violations.
 
 **Response:**
+
 ```json
 {
   "layers": [
@@ -441,9 +478,11 @@ Layer structure and violations.
 ### Configuration & Environment
 
 #### `get_configuration_schema()`
+
 Config file locations and structure.
 
 **Response:**
+
 ```json
 {
   "appsettings": {
@@ -469,9 +508,11 @@ Config file locations and structure.
 ---
 
 #### `get_workflows()`
+
 GitHub Actions workflow definitions.
 
 **Response:**
+
 ```json
 {
   "workflows": [
@@ -503,9 +544,11 @@ GitHub Actions workflow definitions.
 ---
 
 #### `get_workflow_impact(change: ProjectChange)`
+
 Does this code change break the CI/CD?
 
 **Request:**
+
 ```json
 {
   "file": "src/MyApp.csproj",
@@ -516,6 +559,7 @@ Does this code change break the CI/CD?
 ```
 
 **Response:**
+
 ```json
 {
   "affectedWorkflows": [
@@ -534,9 +578,11 @@ Does this code change break the CI/CD?
 ### Code Quality
 
 #### `detect_issues()`
+
 Quick scan for code smells.
 
 **Response:**
+
 ```json
 {
   "unusedVariables": [
@@ -563,9 +609,11 @@ Quick scan for code smells.
 ---
 
 #### `validate_consistency()`
+
 Check .csproj vs. workflow vs. actual code.
 
 **Response:**
+
 ```json
 {
   "warnings": [
@@ -595,9 +643,11 @@ Check .csproj vs. workflow vs. actual code.
 ### Database & Migrations
 
 #### `analyze_migrations()`
+
 Entity Framework migration history.
 
 **Response:**
+
 ```json
 {
   "migrationsFolder": "src/Data/Migrations",
@@ -634,9 +684,11 @@ Entity Framework migration history.
 ### Code Editing
 
 #### `edit_file(path: string, edits: TextEdit[])`
+
 Apply semantic-aware edits to a file.
 
 **Request:**
+
 ```json
 {
   "path": "src/Services/UserService.cs",
@@ -651,6 +703,7 @@ Apply semantic-aware edits to a file.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -666,9 +719,11 @@ Apply semantic-aware edits to a file.
 ---
 
 #### `get_call_chain(method: string, direction: "up" | "down")`
+
 Backward/forward analysis of method calls.
 
 **Response:**
+
 ```json
 {
   "method": "ProcessOrder",
@@ -691,6 +746,7 @@ Backward/forward analysis of method calls.
 ## Implementation Phases
 
 ### Phase 1: MVP (Core C# + Project Structure)
+
 - MCP protocol handler
 - Basic background analysis state machine
 - csharp-ls LSP client wrapper
@@ -704,6 +760,7 @@ Backward/forward analysis of method calls.
 ---
 
 ### Phase 2: Polyglot & Cross-File Impact
+
 - YAML workflow parsing
 - JSON/YAML config analysis
 - `get_full_impact()` cross-file change prediction
@@ -717,6 +774,7 @@ Backward/forward analysis of method calls.
 ---
 
 ### Phase 3: Quality & Depth
+
 - SQL migration analysis
 - Architecture layer validation
 - Duplicate code detection
@@ -728,6 +786,7 @@ Backward/forward analysis of method calls.
 ---
 
 ### Phase 4: Polish & Extensibility
+
 - Incremental re-analysis on file changes
 - Caching layer (fast re-opens)
 - Custom analyzer extensibility
@@ -740,28 +799,33 @@ Backward/forward analysis of method calls.
 ## Technical Decisions
 
 ### Why embedded csharp-ls?
+
 - Single binary deployment (no separate tool install)
 - Version control (you own when upgrades happen)
 - Integration with background analysis (managed lifecycle)
 - Trade-off: Larger binary, but acceptable for Claude Code use case
 
 ### Why background analysis?
+
 - Claude Code responsiveness (return quick partial results)
 - Progressive UX (similar to VS)
 - Complexity: state machine + incremental updates
 - Payoff: Feels fast even on large projects
 
 ### Why Roslyn + csharp-ls?
+
 - Roslyn: deep AST analysis for large files, source generators
 - csharp-ls: proven LSP implementation, clean stdio interface
 - Combination: best of both worlds
 
 ### Why YAML/JSON/XML parsing in .NET?
+
 - Language-native parsers (YamlDotNet is solid)
 - Tight integration with C# analysis (context from project config)
 - Alternative: External tools (slower, IPC overhead)
 
 ### Why not build on isaacphi/mcp-language-server?
+
 - That tool is Go-based, generic bridge
 - Your tool is .NET-native, C#-specific
 - Domain knowledge (workflows, migrations, generators) is C#-specific
@@ -772,12 +836,14 @@ Backward/forward analysis of method calls.
 ## Deployment
 
 ### Build & Package
+
 ```bash
 dotnet publish -c Release -r osx-arm64 --self-contained
 # Output: single binary csharp-mcp (150-200MB)
 ```
 
 ### Installation
+
 ```bash
 # Claude Code claude_desktop_config.json
 "mcpServers": {
@@ -789,6 +855,7 @@ dotnet publish -c Release -r osx-arm64 --self-contained
 ```
 
 ### Versioning
+
 - Semantic versioning (1.0.0, 1.1.0, etc.)
 - Track separately from csharp-ls versions
 - Breaking MCP tool changes bump major version
@@ -798,17 +865,20 @@ dotnet publish -c Release -r osx-arm64 --self-contained
 ## Testing Strategy
 
 ### Unit Tests
+
 - Analyzer implementations (YAML, JSON, project parsing)
 - State machine transitions
 - Edit application logic
 
 ### Integration Tests
+
 - Real C# projects (small, medium, large)
 - Monorepo scenarios
 - Source generator handling
 - Cross-file impact predictions
 
 ### Performance Benchmarks
+
 - Project load time (target: <5s for 500-file project)
 - Analysis completion time
 - Tool response latency (<1s for most queries)

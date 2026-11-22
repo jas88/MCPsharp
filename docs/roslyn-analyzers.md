@@ -13,7 +13,7 @@ The Roslyn analyzer integration serves two purposes:
 
 ### Component Hierarchy
 
-```
+```text
 ┌─────────────────────────────────────┐
 │ RoslynAnalyzerService               │
 │ (High-level orchestration)          │
@@ -31,11 +31,13 @@ The Roslyn analyzer integration serves two purposes:
 ### Key Components
 
 #### 1. RoslynAnalyzerAdapter
+
 **File**: `src/MCPsharp/Services/Analyzers/RoslynAnalyzerAdapter.cs`
 
 Wraps Roslyn's `DiagnosticAnalyzer` to implement MCPsharp's `IAnalyzer` interface. This allows Roslyn analyzers to work seamlessly with MCPsharp's analyzer framework.
 
 **Key Features**:
+
 - Converts Roslyn diagnostics to MCPsharp issues
 - Creates mini-compilations for analysis
 - Maps severity levels and categories
@@ -44,6 +46,7 @@ Wraps Roslyn's `DiagnosticAnalyzer` to implement MCPsharp's `IAnalyzer` interfac
 **Analyzer IDs**: an adapter's ID is `Roslyn_`, the analyzer's full type name, `@` and its assembly's name, then `+` and the assembly's culture unless it is neutral, `+` and its public key token if it is strong-named, and `-` and its version, e.g. `Roslyn_Microsoft.CodeQuality.Analyzers.QualityGuidelines.MarkMembersAsStaticAnalyzer@Microsoft.CodeAnalysis.NetAnalyzers+31bf3856ad364e35-10.0.403.0` (`RoslynAnalyzerAdapter.GetId`). The ID is the same in every run and names the whole identity of the analyzer's assembly, so analyzers in assemblies of different identities get different IDs: same-named analyzers in different assemblies, different builds of one analyzer (such as the SDK's and a NuGet package's code style analyzers), and builds signed with different keys. Assemblies of the same identity, such as two unsigned builds with the same name and version, give the same IDs, and their analyzers count as one. `VersionIndependentId` is the ID without `-` and the version; `excludeAnalyzers` accepts either form. `name` is the analyzer's type name.
 
 **Example Usage**:
+
 ```csharp
 var roslynAnalyzer = new SomeRoslynAnalyzer();
 var adapter = new RoslynAnalyzerAdapter(roslynAnalyzer, logger);
@@ -53,9 +56,11 @@ var result = await adapter.AnalyzeAsync(filePath, content, cancellationToken);
 ```
 
 #### 2. RoslynAnalyzerLoader
+
 **File**: `src/MCPsharp/Services/Analyzers/RoslynAnalyzerLoader.cs`
 
 Loads Roslyn analyzers from:
+
 - The analyzer references of the projects being analysed (`Project.AnalyzerReferences`), as an IDE does
 - Individual assembly files
 - Directories (recursive search)
@@ -63,12 +68,14 @@ Loads Roslyn analyzers from:
 It never scans the NuGet cache: the analyzers of a project come from that project's references, which are the analyzer assets of the packages it restores (at the restored versions), the SDK's analyzers and any `Analyzer` items. `AnalyzerAutoLoadService` uses this to load the analyzers of the open project automatically (see [analyzer-autoload.md](analyzer-autoload.md)).
 
 **Key Features**:
+
 - Project analyzer references load through Roslyn, so only the types they export for C# with `[DiagnosticAnalyzer]` are used, and a workspace's already-loaded analyzer instances are reused
 - Assembly reflection to find `DiagnosticAnalyzer` types in explicitly given assemblies
 - Automatic discovery in directories
 - Assembly metadata extraction
 
 **Example Usage**:
+
 ```csharp
 var loader = new RoslynAnalyzerLoader(logger, loggerFactory);
 
@@ -89,17 +96,20 @@ var assemblyPaths = loader.DiscoverAnalyzerAssemblies(
 ```
 
 #### 3. RoslynAnalyzerService
+
 **File**: `src/MCPsharp/Services/Analyzers/RoslynAnalyzerService.cs`
 
 High-level orchestration service that manages analyzer lifecycle and execution.
 
 **Key Features**:
+
 - Centralized analyzer management
 - Batch loading and execution
 - Integration with MCPsharp's analyzer host
 - Progress tracking
 
 **Example Usage**:
+
 ```csharp
 var service = new RoslynAnalyzerService(loader, analyzerHost, logger);
 
@@ -157,11 +167,13 @@ MCPsharp includes the following analyzer packages (configured in `MCPsharp.cspro
 ### Configuration
 
 Analyzers are configured with `PrivateAssets="all"` to:
+
 - Keep analyzer DLLs out of published output
 - Prevent analyzer dependencies from leaking
 - Ensure analyzers only run during build
 
 Example configuration:
+
 ```xml
 <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0">
   <PrivateAssets>all</PrivateAssets>
@@ -174,11 +186,13 @@ Example configuration:
 To suppress specific analyzer warnings, use:
 
 **Global suppression** (in `.globalconfig` or `Directory.Build.props`):
+
 ```ini
 dotnet_diagnostic.CA1062.severity = none
 ```
 
 **Local suppression** (in code):
+
 ```csharp
 #pragma warning disable CA1062
 // Code here
@@ -186,6 +200,7 @@ dotnet_diagnostic.CA1062.severity = none
 ```
 
 **Attribute-based suppression**:
+
 ```csharp
 [SuppressMessage("Design", "CA1062:Validate arguments of public methods")]
 public void Method(string arg)
@@ -199,6 +214,7 @@ public void Method(string arg)
 The following tools are registered whenever the server is started with a Roslyn analyzer service (the default):
 
 ### `load_roslyn_analyzers`
+
 Load Roslyn analyzers from assembly or directory.
 
 Every DLL in a directory is loaded to look for analyzers, so the directory may hold at most 100 DLLs and 100 MB of DLLs. For a larger one, such as the NuGet cache, the tool returns an error naming the limit and suggesting a specific package's analyzer folder (e.g. `~/.nuget/packages/<package>/<version>/analyzers/dotnet/cs`), a project's analyzer output folder, or a single DLL.
@@ -206,9 +222,11 @@ Every DLL in a directory is loaded to look for analyzers, so the directory may h
 A loaded analyzer replaces an analyzer registered under the same ID, such as an auto-loaded one, and later auto-loads leave it in place (see [analyzer-autoload.md](analyzer-autoload.md#1-project-analyzer-references)).
 
 **Parameters**:
+
 - `path` (string, required): Path to an analyzer assembly or a directory of assemblies (relative paths resolve against the open project)
 
 **Returns**:
+
 ```json
 {
   "analyzersLoaded": 1,
@@ -228,13 +246,16 @@ A loaded analyzer replaces an analyzer registered under the same ID, such as an 
 ```
 
 ### `run_roslyn_analyzers`
+
 Run Roslyn analyzers on target path. As in an IDE, each file gets the analyzers of the projects that compile it, which are loaded automatically, plus any loaded with `load_roslyn_analyzers` or from `customAnalyzerPaths`, which run on every file; a file in no project gets only the latter. A file several projects compile (linked, or multi-targeted) gets each of their analyzers once, and the same diagnostic from more than one of them is reported once. See [analyzer-autoload.md](analyzer-autoload.md#which-analyzers-run-on-a-file).
 
 **Parameters**:
+
 - `target_path` (string, required): File or directory to analyze; for a directory, its C# files outside `bin`, `obj` and hidden directories, in path order and at most 100
 - `analyzer_ids` (string[], optional): Specific analyzers to run, by the IDs `list_roslyn_analyzers` reports (default: all); each file still gets only those that apply to it
 
 **Returns**:
+
 ```json
 {
   "analyzersRun": [
@@ -264,9 +285,11 @@ Each issue's `ruleId` is the diagnostic ID that reported it (e.g. `CA1001`), whi
 A failed run is reported as a tool error rather than in the result.
 
 ### `list_roslyn_analyzers`
+
 List all loaded Roslyn analyzers.
 
 **Returns**:
+
 ```json
 {
   "totalAnalyzers": 1,
@@ -395,6 +418,7 @@ var result = await adapter.AnalyzeAsync(filePath, content, cancellationToken);
 **Cause**: Large codebase or complex analyzers
 
 **Solution**:
+
 - Run fewer analyzers at once
 - Use specific analyzer IDs instead of all
 - Analyze smaller subsets of files
@@ -404,6 +428,7 @@ var result = await adapter.AnalyzeAsync(filePath, content, cancellationToken);
 **Cause**: Single-file app deployment incompatibility
 
 **Solution**: These warnings are expected and don't affect functionality. To suppress:
+
 ```xml
 <PropertyGroup>
   <NoWarn>IL3000</NoWarn>

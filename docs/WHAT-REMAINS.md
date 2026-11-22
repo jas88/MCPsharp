@@ -8,11 +8,13 @@
 ### What's Missing
 
 **Current Program.cs:**
+
 ```csharp
 Console.WriteLine("Hello, World!");
 ```
 
 **Needed:**
+
 - Wire up JsonRpcHandler to stdin/stdout
 - Initialize services (ProjectContextManager, FileOperationsService, McpToolRegistry, RoslynWorkspace)
 - Run the JSON-RPC message loop
@@ -27,6 +29,7 @@ Console.WriteLine("Hello, World!");
 We have all the pieces but they're not connected:
 
 ✅ **Built and Tested:**
+
 - JSON-RPC protocol handler (reads/writes JSON-RPC messages)
 - MCP Tool Registry (14 tools registered)
 - Project Context Manager (track opened projects)
@@ -39,6 +42,7 @@ We have all the pieces but they're not connected:
 - Project Parser Service (parse .csproj/.sln)
 
 ❌ **Not Connected:**
+
 - Program.cs doesn't wire these together
 - No stdin/stdout MCP server running
 - Cannot actually be used by Claude Code yet
@@ -52,6 +56,7 @@ We have all the pieces but they're not connected:
 **File:** `src/MCPsharp/Program.cs`
 
 **Needs:**
+
 ```csharp
 using MCPsharp.Services;
 using MCPsharp.Services.Roslyn;
@@ -94,6 +99,7 @@ await handler.RunAsync(CancellationToken.None);
 **Current:** JsonRpcHandler has placeholder implementations for tools/list and tools/call
 
 **Needed:**
+
 - Constructor accepting McpToolRegistry
 - tools/list calls registry.GetTools()
 - tools/call calls registry.ExecuteToolAsync()
@@ -105,6 +111,7 @@ await handler.RunAsync(CancellationToken.None);
 ### 3. End-to-End Testing
 
 **Needed:**
+
 - Manual test with actual Claude Code MCP client
 - Or create a test that simulates complete stdin/stdout MCP session
 - Verify all 14 tools work through JSON-RPC protocol
@@ -118,6 +125,7 @@ await handler.RunAsync(CancellationToken.None);
 According to CONCEPT.md, Phase 2 would add:
 
 ### Polyglot & Cross-File Impact
+
 - ✅ **YAML workflow parsing** — Parse GitHub Actions workflows
 - ✅ **JSON config analysis** — Parse appsettings.json
 - ❌ **`get_full_impact()`** — Predict cross-file change impact
@@ -131,6 +139,7 @@ According to CONCEPT.md, Phase 2 would add:
 ## Summary: What's Left for Working MVP
 
 ### Critical (Must Have)
+
 1. **Program.cs main entry point** — Wire services together, run MCP server
 2. **JsonRpcHandler integration** — Connect to McpToolRegistry
 3. **End-to-end test** — Verify works with Claude Code
@@ -138,6 +147,7 @@ According to CONCEPT.md, Phase 2 would add:
 **Estimated Time:** 2-4 hours
 
 ### Nice to Have (Phase 2)
+
 1. **Workflow analysis** — Parse .github/workflows/*.yml
 2. **Config analysis** — Parse appsettings.json, YAML configs
 3. **Impact analysis** — Predict which files affected by changes

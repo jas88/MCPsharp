@@ -3,19 +3,21 @@
 ## Executive Summary
 
 Comparison of two .NET projects using Roslyn static analysis:
+
 - **RDMP**: Large, mature healthcare data platform (~347K LOC)
 - **MCPsharp**: Small, modern MCP server (~74K LOC)
 
 ## Project Metrics
 
 | Metric | MCPsharp | RDMP | Ratio |
-|--------|----------|------|-------|
+| -------- | ---------- | ------ | ------- |
 | Total C# Files | 167 | 2,703 | 16.2× |
 | Total Lines of Code | 73,933 | 347,392 | 4.7× |
 | Test Files | 8 | 429 | 53.6× |
 | Lines per File (avg) | 443 | 128 | 0.29× |
 
 **Key Observations:**
+
 - RDMP is 4.7× larger by LOC but 16× larger by file count
 - MCPsharp has larger files on average (443 vs 128 LOC/file)
 - RDMP has much more comprehensive test coverage (429 test files vs 8)
@@ -23,6 +25,7 @@ Comparison of two .NET projects using Roslyn static analysis:
 ## Analyzer Configuration
 
 ### MCPsharp Analyzers
+
 MCPsharp uses aggressive, modern analyzer stack:
 
 ```xml
@@ -37,6 +40,7 @@ MCPsharp uses aggressive, modern analyzer stack:
 ```
 
 ### RDMP Analyzers
+
 RDMP uses minimal analyzer setup with extensive suppressions:
 
 ```xml
@@ -49,6 +53,7 @@ RDMP uses minimal analyzer setup with extensive suppressions:
 ```
 
 **RDMP Suppression Details:**
+
 - `CS1591`: Missing XML documentation comments
 - `CA1416`: Platform compatibility checks
 - `NUnit1032, NUnit1034`: NUnit test-specific warnings
@@ -58,11 +63,13 @@ RDMP uses minimal analyzer setup with extensive suppressions:
 ## Build Analysis
 
 ### MCPsharp Build Results
+
 - **Total Warnings**: 2,182
 - **Build Status**: FAILED (4 errors)
 - **Warnings per 1,000 LOC**: 29.5
 
 ### RDMP Build Results
+
 - **Total Warnings**: 0 (with suppressions)
 - **Build Status**: SUCCESS
 - **Build Time**: 12.91 seconds
@@ -73,7 +80,7 @@ RDMP uses minimal analyzer setup with extensive suppressions:
 ### Top 20 Warning Categories
 
 | Code | Count | Category | Description |
-|------|-------|----------|-------------|
+| ------ | ------- | ---------- | ------------- |
 | S1172 | 392 | Code Smell | Unused method parameters |
 | S2325 | 378 | Code Smell | Methods should be static |
 | CS1998 | 240 | Language | Async method lacks await |
@@ -98,7 +105,7 @@ RDMP uses minimal analyzer setup with extensive suppressions:
 ### Warning Categories Summary
 
 | Category | Count | % of Total |
-|----------|-------|------------|
+| ---------- | ------- | ------------ |
 | Code Smells (Sonar S*) | 1,426 | 65.4% |
 | Language (CS*) | 378 | 17.3% |
 | Error Prone (EPC*, ERP*) | 342 | 15.7% |
@@ -108,15 +115,18 @@ RDMP uses minimal analyzer setup with extensive suppressions:
 ## Issue Density Analysis
 
 ### MCPsharp
+
 - **Total Issues**: 2,182
 - **Lines of Code**: 73,933
 - **Issues per 1,000 LOC**: 29.5
 - **Issues per File**: 13.1
 
 ### RDMP (Estimated)
+
 Based on code patterns and suppression configuration, RDMP would likely have:
 
 **Conservative Estimate:**
+
 - **Missing XML Docs (CS1591)**: ~15,000-20,000 (most public APIs)
 - **Platform Compatibility (CA1416)**: ~100-300 (WinForms-specific code)
 - **NUnit Warnings**: ~50-150 (test-specific issues)
@@ -176,6 +186,7 @@ From RDMP's own analysis:
 ## Code Quality Indicators
 
 ### MCPsharp Strengths
+
 - Modern C# 12 patterns
 - Nullable reference types enabled
 - Comprehensive analyzer coverage
@@ -183,6 +194,7 @@ From RDMP's own analysis:
 - Good separation of concerns
 
 ### MCPsharp Weaknesses (per analyzers)
+
 - Too many unused method parameters
 - Poor exception handling practices
 - Over-use of async without actual async work
@@ -190,6 +202,7 @@ From RDMP's own analysis:
 - Methods that should be static
 
 ### RDMP Strengths
+
 - Comprehensive test coverage (429 test files)
 - Builds with TreatWarningsAsErrors
 - Well-documented domain logic (migration scripts)
@@ -197,6 +210,7 @@ From RDMP's own analysis:
 - Strong domain model
 
 ### RDMP Weaknesses (inferred)
+
 - Extensive warning suppressions hide issues
 - Large XML documentation debt
 - Platform-specific code limiting portability
@@ -208,6 +222,7 @@ From RDMP's own analysis:
 ### For MCPsharp
 
 **High Priority:**
+
 1. Fix the 4 compilation errors
 2. Address exception handling (EPC12, ERP022) - 330 issues
 3. Fix async/await misuse (CS1998) - 240 issues
@@ -228,6 +243,7 @@ From RDMP's own analysis:
 ### For RDMP
 
 **High Priority:**
+
 1. Add Microsoft.CodeAnalysis.NetAnalyzers
 2. Gradually reduce NoWarn suppressions
 3. Address AOT compatibility blockers
@@ -250,11 +266,13 @@ From RDMP's own analysis:
 Both projects show common .NET patterns:
 
 **MCPsharp** is typical of greenfield .NET 9 projects:
+
 - High initial analyzer noise
 - Modern patterns but immature error handling
 - Rapid development with tech debt accumulation
 
 **RDMP** is typical of mature enterprise .NET:
+
 - Warning suppression to maintain productivity
 - Legacy patterns mixed with modern updates
 - Comprehensive testing but analyzer debt
@@ -273,6 +291,7 @@ RDMP's domain creates unique challenges:
 5. **Security**: Healthcare data requires strict access controls
 
 **Expected Warning Patterns:**
+
 - Complex boolean logic (healthcare rules)
 - Deep inheritance hierarchies (database abstraction)
 - Large methods (data transformation pipelines)
@@ -289,6 +308,7 @@ MCPsharp's domain creates different challenges:
 5. **Single Binary**: Deployment simplicity
 
 **Observed Warning Patterns:**
+
 - Unused parameters (protocol-mandated signatures)
 - Async without await (interface compliance)
 - Exception swallowing (protocol error handling)
@@ -299,12 +319,14 @@ MCPsharp's domain creates different challenges:
 ### Pattern 1: Interface Implementation Debt
 
 **Both projects** show high counts of unused parameters (S1172):
+
 - MCPsharp: 392 occurrences
 - RDMP: Likely similar in plugin interfaces
 
 **Root Cause**: Implementing interfaces with methods not yet needed
 
 **Solution**:
+
 ```csharp
 // Before (warning)
 public Task HandleAsync(Request request, CancellationToken ct) {
@@ -326,6 +348,7 @@ public Task HandleAsync(Request request, CancellationToken ct) {
 **Root Cause**: Only logging exception messages, not full stack traces
 
 **Solution**:
+
 ```csharp
 // Before (EPC12)
 catch (Exception ex) {
@@ -345,6 +368,7 @@ catch (Exception ex) {
 **Root Cause**: Task-returning methods for future async work
 
 **Solution**:
+
 ```csharp
 // Before (CS1998)
 public async Task<int> GetCountAsync() {
@@ -364,6 +388,7 @@ public Task<int> GetCountAsync() {
 **Root Cause**: Large public API surface without XML docs
 
 **Solution**: Incremental documentation
+
 1. Start with public types
 2. Add docs during feature work
 3. Use tools like InheritDoc
@@ -372,6 +397,7 @@ public Task<int> GetCountAsync() {
 ## Conclusion
 
 ### MCPsharp Analysis
+
 - **2,182 warnings** across **73,933 LOC**
 - **29.5 warnings per 1,000 LOC**
 - **Primary issues**: Exception handling, async/await patterns, unused code
@@ -380,6 +406,7 @@ public Task<int> GetCountAsync() {
 - **Estimated cleanup**: 40-60 hours for clean build
 
 ### RDMP Analysis
+
 - **0 warnings** (with suppressions), estimated **15,000-20,000+** without
 - **43-58 estimated warnings per 1,000 LOC** (without suppressions)
 - **Primary issues**: Documentation debt, platform dependencies, AOT blockers
@@ -394,6 +421,7 @@ public Task<int> GetCountAsync() {
 **RDMP** demonstrates the deliberate choice to suppress warnings for productivity, accepting technical debt in exchange for delivery velocity.
 
 Both approaches are valid for their contexts:
+
 - MCPsharp: Greenfield project, can afford to clean up warnings incrementally
 - RDMP: Mature platform, warning cleanup would block feature delivery
 

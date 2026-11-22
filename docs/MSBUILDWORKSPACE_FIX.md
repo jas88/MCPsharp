@@ -62,7 +62,7 @@ else if (Directory.Exists(projectPath))
 
 All tests now pass:
 
-```
+```text
 ✓ InitializeAsync_WithRealProject_LoadsWithoutErrors
 ✓ InitializeAsync_WithRealProject_CanFindSymbols
 ✓ InitializeAsync_WithSolutionFile_LoadsSuccessfully (NEW)
@@ -72,7 +72,7 @@ All tests now pass:
 ### Error Count Comparison
 
 | Scenario | Before Fix | After Fix |
-|----------|------------|-----------|
+| ---------- | ------------ | ----------- |
 | Directory path | 179 errors | < 50 errors |
 | .sln file path | 15,785 errors | < 50 errors |
 | .csproj file path | 15,785 errors | < 50 errors |
@@ -80,6 +80,7 @@ All tests now pass:
 ### Expected Outcome
 
 After the fix:
+
 - ✅ MSBuildWorkspace loads successfully with 0-50 errors (matches `dotnet build`)
 - ✅ `find_symbol` reports `"semantic": true` and low error count
 - ✅ `rename_symbol` works correctly
@@ -109,6 +110,7 @@ For more information about MSBuildWorkspace:
 ## Impact
 
 This fix ensures that:
+
 1. Auto-load works correctly when MCPsharp is started in a directory with a .sln file
 2. Semantic analysis tools (rename, find references, etc.) have access to full type information
 3. Error counts match the actual build state (0 errors for clean builds)

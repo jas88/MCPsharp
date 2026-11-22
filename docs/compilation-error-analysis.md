@@ -8,7 +8,7 @@
 ## Error Distribution by Type
 
 | Error Code | Count | Description | Primary Causes |
-|------------|-------|-------------|----------------|
+| ------------ | ------- | ------------- | ---------------- |
 | CS9035 | 410 | Required member not set in object initializer | Model property mismatches |
 | CS0117 | 322 | Member does not exist in type | Missing/outdated model properties |
 | CS1061 | 170 | Extension method not found | Wrong property names on models |
@@ -44,9 +44,11 @@
 ## Root Cause Analysis
 
 ### 1. **Model Definition Gaps**
+
 The primary issue is that the service layer expects model properties and classes that don't exist or have different names:
 
 **Missing Classes:**
+
 - `BulkEditSummary` - Referenced 18 times
 - `RiskItem` - Referenced 18 times
 - `ComplexityEstimate` - Referenced 8 times
@@ -55,14 +57,17 @@ The primary issue is that the service layer expects model properties and classes
 - `FileEdit` - Referenced 4 times
 
 **Missing Enums:**
+
 - `RiskType` - Referenced multiple times
 - `RiskSeverity` - Referenced multiple times
 - `ChangeRiskLevel` - Referenced multiple times
 
 ### 2. **Property Name Mismatches**
+
 Services are accessing properties that don't exist on the actual models:
 
 **BulkEditService.cs Issues:**
+
 - `BulkEditResult.Error` → should be `BulkEditResult.Errors`
 - `BulkEditResult.OperationId` → doesn't exist
 - `BulkEditResult.StartTime` → doesn't exist
@@ -73,13 +78,15 @@ Services are accessing properties that don't exist on the actual models:
 - `RollbackInfo.Files` → should be `ModifiedFiles`
 
 ### 3. **Type Conversion Issues**
+
 - `FileBulkEditResult[]` being assigned to `IReadOnlyList<BulkFileEditResult>`
 - `List<FileBulkEditResult>` being assigned to `IReadOnlyList<BulkFileEditResult>`
 
 ## Systematic Fixing Plan
 
 ### Phase 1: Foundation (High Impact, Quick Wins)
-**Priority: CRITICAL - These unblock many other errors**
+
+Priority: CRITICAL - These unblock many other errors
 
 1. **Add Missing Model Classes** (Fixes ~200+ errors)
    - Create `BulkEditSummary` class
@@ -95,52 +102,59 @@ Services are accessing properties that don't exist on the actual models:
    - Update `RollbackInfo.Files` → `ModifiedFiles`
 
 ### Phase 2: Service Layer Corrections (Medium Impact)
-**Priority: HIGH - Core functionality**
 
-3. **Fix Object Initializers** (Fixes ~200+ CS9035 errors)
+Priority: HIGH - Core functionality
+
+1. **Fix Object Initializers** (Fixes ~200+ CS9035 errors)
    - Add all required properties to `BulkEditResult` initializers
    - Add required properties to `ConfigValidationResult` initializers
    - Add required properties to `ImpactEstimate` initializers
 
-4. **Fix Type Conversions** (Fixes ~20 CS0266/CS0029 errors)
+2. **Fix Type Conversions** (Fixes ~20 CS0266/CS0029 errors)
    - Add explicit type conversions where needed
    - Fix array/List to `IReadOnlyList` assignments
 
 ### Phase 3: Namespace and Service Issues (Lower Impact)
-**Priority: MEDIUM - Edge functionality**
 
-5. **Fix Namespace Issues** (Fixes ~15 CS0234/CS0246 errors)
+Priority: MEDIUM - Edge functionality
+
+1. **Fix Namespace Issues** (Fixes ~15 CS0234/CS0246 errors)
    - Add missing service classes
    - Fix namespace references
    - Add missing using statements
 
-6. **Fix Remaining Property Access** (Fixes ~100 CS0117/CS1061 errors)
+2. **Fix Remaining Property Access** (Fixes ~100 CS0117/CS1061 errors)
    - Remove or update references to non-existent properties
    - Fix method parameter counts (CS1501 errors)
 
 ### Phase 4: Cleanup and Validation (Final Polish)
-**Priority: LOW - Final cleanup**
 
-7. **Fix Init-Only Property Issues** (Fixes ~22 CS8852 errors)
-8. **Address Remaining Edge Cases** (Fixes ~24 miscellaneous errors)
+Priority: LOW - Final cleanup
+
+1. **Fix Init-Only Property Issues** (Fixes ~22 CS8852 errors)
+2. **Address Remaining Edge Cases** (Fixes ~24 miscellaneous errors)
 
 ## Parallel Execution Strategy
 
 **Agent 1:** Model Definitions
+
 - Add all missing classes and enums
 - Update existing models with missing properties
 - Estimated time: 2-3 hours
 
 **Agent 2:** BulkEditService.cs Fixes
+
 - Fix property name mismatches
 - Fix object initializers
 - Estimated time: 3-4 hours
 
 **Agent 3:** Other Service Files
+
 - Apply same fixes to RollbackService.cs, Streaming.cs, etc.
 - Estimated time: 2-3 hours
 
 **Agent 4:** Type Conversion and Namespace Fixes
+
 - Fix type conversion issues
 - Fix namespace and using statement issues
 - Estimated time: 1-2 hours
@@ -155,16 +169,19 @@ Services are accessing properties that don't exist on the actual models:
 ## Risk Assessment
 
 **Low Risk Fixes:**
+
 - Adding missing model classes
 - Fixing property name mismatches
 - Adding missing enums
 
 **Medium Risk Fixes:**
+
 - Modifying object initializers
 - Type conversion fixes
 - Namespace changes
 
 **High Risk Fixes:**
+
 - Core model property changes (need careful validation)
 
 ## Implementation Notes

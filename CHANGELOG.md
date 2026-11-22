@@ -8,26 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - New features and capabilities
 
 ### Changed
+
 - Changes to existing functionality
 
 ### Deprecated
+
 - Features that will be removed in upcoming releases
 
 ### Removed
+
 - Features removed in this release
 
 ### Fixed
+
 - Bug fixes
 
 ### Security
+
 - Security fixes and improvements
 
 ## [1.0.0] - 2024-11-09
 
 ### Added
+
 - Initial release of MCPsharp - Model Context Protocol server for C# project analysis
 - Advanced code search with semantic understanding
 - Bulk edit and refactoring capabilities
@@ -43,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for multi-project analysis
 
 ### Fixed
+
 - Resolved all compilation errors and warnings
 - Fixed build configuration for Windows and cross-platform deployment
 - Resolved PDB embedding for single-file executable deployment

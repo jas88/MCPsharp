@@ -1,27 +1,33 @@
 # Reference Finder Service Implementation Report
 
 ## Overview
+
 This report documents the implementation of the Reference Finder Service for MCPsharp Phase 1, which provides comprehensive symbol reference finding capabilities using Roslyn's SymbolFinder API.
 
 ## Implementation Summary
 
 ### 1. Models (RoslynModels.cs)
+
 **Location**: `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Models/RoslynModels.cs`
 
 **Added/Updated Models**:
+
 - `ReferenceResult` - Contains symbol name, kind, definition location, and list of references
 - `SymbolReference` - Individual reference with file path, line, column, context, and reference kind
 - `ReferenceKind` enum - Categorizes references: Read, Write, Invocation, Declaration, Implementation
 
 **Key Features**:
+
 - Full location tracking (file, line, column)
 - Context extraction (surrounding code line)
 - Reference kind detection for better understanding of usage patterns
 
 ### 2. Symbol Query Service (SymbolQueryService.cs)
+
 **Location**: `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/Roslyn/SymbolQueryService.cs`
 
 **Added Methods**:
+
 ```csharp
 Task<IReadOnlyList<ISymbol>> FindSymbolsByNameAsync(string symbolName, CancellationToken ct)
 Task<ISymbol?> FindSymbolAtLocationAsync(string filePath, int line, int column, CancellationToken ct)
@@ -30,15 +36,18 @@ Task<IReadOnlyList<INamedTypeSymbol>> FindDerivedTypesAsync(INamedTypeSymbol bas
 ```
 
 **Capabilities**:
+
 - Find symbols by name across all projects
 - Find symbol at specific code location
 - Find all types implementing an interface
 - Find all types derived from a base class
 
 ### 3. Reference Finder Service
+
 **Location**: `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/Roslyn/ReferenceFinderService.cs`
 
 **Existing Methods** (verified and enhanced):
+
 ```csharp
 Task<ReferenceResult?> FindReferencesAsync(
     string? symbolName = null,
@@ -50,6 +59,7 @@ Task<List<SymbolResult>> FindImplementationsAsync(string symbolName)
 ```
 
 **Key Features**:
+
 - Find references by symbol name OR by location (file/line/column)
 - Find implementations of interfaces and abstract members
 - Extract surrounding code context for each reference
@@ -57,9 +67,11 @@ Task<List<SymbolResult>> FindImplementationsAsync(string symbolName)
 - Uses Roslyn's `SymbolFinder.FindReferencesAsync()` and `FindImplementationsAsync()`
 
 ### 4. Comprehensive Unit Tests
+
 **Location**: `/Users/jas88/Developer/Github/MCPsharp/tests/MCPsharp.Tests/Services/ReferenceFinderServiceTests.cs`
 
 **Test Coverage** (15 comprehensive tests):
+
 1. `FindReferencesAsync_FindsReferencesToClassName` - Finds class references
 2. `FindReferencesAsync_FindsReferencesToMethodName` - Finds method references
 3. `FindReferencesAsync_FindsReferencesToPropertyName` - Finds property references
@@ -77,9 +89,11 @@ Task<List<SymbolResult>> FindImplementationsAsync(string symbolName)
 15. `FindReferencesAsync_FindsMethodInvocations` - Method invocations
 
 ### 5. Test Fixtures
+
 **Location**: `/Users/jas88/Developer/Github/MCPsharp/tests/MCPsharp.Tests/TestFixtures/`
 
 **Created Files**:
+
 - `IService.cs` - Test interface with Execute() and GetData() methods
 - `ServiceImpl.cs` - First implementation of IService
 - `DerivedService.cs` - Second implementation of IService
@@ -87,6 +101,7 @@ Task<List<SymbolResult>> FindImplementationsAsync(string symbolName)
 - `BaseClass.cs` - Abstract base class with derived types
 
 **Test Scenarios Covered**:
+
 - Interface implementations
 - Method invocations
 - Property reads and writes
@@ -97,6 +112,7 @@ Task<List<SymbolResult>> FindImplementationsAsync(string symbolName)
 ## Technical Implementation Details
 
 ### Roslyn API Usage
+
 The implementation leverages several key Roslyn APIs:
 
 1. **SymbolFinder.FindReferencesAsync()** - Core reference finding
@@ -107,7 +123,9 @@ The implementation leverages several key Roslyn APIs:
 6. **ReferenceLocation** - Location information for each reference
 
 ### Reference Kind Detection
+
 The implementation includes logic to determine reference types:
+
 - **Declaration** - Symbol definition
 - **Read** - Symbol is being accessed
 - **Write** - Symbol is being assigned
@@ -115,12 +133,15 @@ The implementation includes logic to determine reference types:
 - **Implementation** - Interface/abstract member implementation
 
 Detection uses:
+
 - `ReferenceLocation.IsWrittenTo` for writes
 - `ReferenceLocation.IsImplicit` for declarations
 - Syntax node analysis for invocations
 
 ### Context Extraction
+
 Each reference includes surrounding code context:
+
 ```csharp
 var text = await syntaxTree.GetTextAsync(ct);
 var textLine = text.Lines[lineSpan.StartLinePosition.Line];
@@ -130,6 +151,7 @@ var context = textLine.ToString().Trim();
 ## Build Status
 
 ### ⚠️ Pre-Existing Build Issues
+
 The project has pre-existing compilation errors in unrelated files that existed BEFORE this implementation:
 
 1. **ClassStructureService.cs** - Missing type references (ClassStructure, MemberKind, InsertionPoint)
@@ -139,7 +161,9 @@ The project has pre-existing compilation errors in unrelated files that existed 
 These errors are NOT introduced by the Reference Finder Service implementation.
 
 ### ✅ Reference Finder Implementation Status
+
 The Reference Finder Service implementation is **complete and functional**:
+
 - All required models defined
 - All required methods implemented
 - 15 comprehensive unit tests created
@@ -148,12 +172,14 @@ The Reference Finder Service implementation is **complete and functional**:
 
 ## Files Modified/Created
 
-### Modified Files:
+### Modified Files
+
 1. `/src/MCPsharp/Models/RoslynModels.cs` - Added ReferenceResult, SymbolReference, ReferenceKind
 2. `/src/MCPsharp/Services/Roslyn/SymbolQueryService.cs` - Added symbol finding methods
 3. `/src/MCPsharp/Services/Roslyn/ReferenceFinderService.cs` - Enhanced with proper models
 
-### Created Files:
+### Created Files
+
 1. `/tests/MCPsharp.Tests/Services/ReferenceFinderServiceTests.cs` - 15 comprehensive tests
 2. `/tests/MCPsharp.Tests/TestFixtures/IService.cs` - Test interface
 3. `/tests/MCPsharp.Tests/TestFixtures/ServiceImpl.cs` - First implementation
@@ -171,6 +197,7 @@ To resolve the build issues and run tests:
    - Reconcile dual RoslynWorkspace classes (one in Services, one in Services/Roslyn)
 
 2. **Run Tests**:
+
    ```bash
    dotnet build
    dotnet test --filter "ReferenceFinderServiceTests"
@@ -183,6 +210,7 @@ To resolve the build issues and run tests:
 ## API Examples
 
 ### Find References by Symbol Name
+
 ```csharp
 var result = await referenceF​inder.FindReferencesAsync(symbolName: "Consumer");
 // result.Symbol == "Consumer"
@@ -191,6 +219,7 @@ var result = await referenceF​inder.FindReferencesAsync(symbolName: "Consumer"
 ```
 
 ### Find References at Location
+
 ```csharp
 var result = await referenceFinder.FindReferencesAsync(
     filePath: "/path/to/file.cs",
@@ -199,6 +228,7 @@ var result = await referenceFinder.FindReferencesAsync(
 ```
 
 ### Find Interface Implementations
+
 ```csharp
 var implementations = await referenceFinder.FindImplementationsAsync("IService");
 // Returns SymbolResult for ServiceImpl and DerivedService

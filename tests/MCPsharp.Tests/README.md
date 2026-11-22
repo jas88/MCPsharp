@@ -5,11 +5,13 @@ This directory contains comprehensive unit tests for the MCPsharp project, cover
 ## Test Structure
 
 ### Core Test Files
+
 - **TestBase.cs** - Base test classes providing common functionality
 - **TestDataFixtures.cs** - Test data and fixtures for various scenarios
 - **SampleCSharpFiles.cs** - Sample C# code files for testing
 
 ### Service Tests
+
 - **Services/Roslyn/** - Tests for reverse search services
   - `AdvancedReferenceFinderServiceTests.cs` - Comprehensive tests for advanced reference finding
 - **Services/BulkEdit/** - Tests for bulk edit operations
@@ -20,16 +22,19 @@ This directory contains comprehensive unit tests for the MCPsharp project, cover
   - `AnalyzerHostTests.cs` - Tests for analyzer hosting and security
 
 ### Integration Tests
+
 - **Integration/** - End-to-end tests for MCP tools
   - `McpToolsIntegrationTests.cs` - Comprehensive integration tests across services
 
 ### Performance Tests
+
 - **Performance/** - Performance and stress testing
   - `PerformanceTests.cs` - Performance validation and benchmarking
 
 ## Test Categories
 
 Tests are organized using NUnit categories:
+
 - **Unit** - Individual service unit tests
 - **Integration** - Cross-service integration tests
 - **Performance** - Performance and stress tests
@@ -46,11 +51,13 @@ Tests are organized using NUnit categories:
 ## Running Tests
 
 ### Run All Tests
+
 ```bash
 dotnet test
 ```
 
 ### Run Specific Categories
+
 ```bash
 dotnet test --filter "Category=Unit"
 dotnet test --filter "Category=Performance"
@@ -58,11 +65,13 @@ dotnet test --filter "Category=Integration"
 ```
 
 ### Run with Coverage
+
 ```bash
 dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=opencover
 ```
 
 ### Run Performance Tests Only
+
 ```bash
 dotnet test --filter "Category=Performance"
 ```
@@ -70,7 +79,9 @@ dotnet test --filter "Category=Performance"
 ## Test Data
 
 ### Sample Files
+
 The tests use various sample C# files:
+
 - Simple class with basic methods
 - Inheritance hierarchies and interfaces
 - Complex call chains and workflows
@@ -79,6 +90,7 @@ The tests use various sample C# files:
 - Error patterns and edge cases
 
 ### Test Scenarios
+
 - **Happy Path** - Normal operation scenarios
 - **Edge Cases** - Boundary conditions and unusual inputs
 - **Error Handling** - Exception scenarios and recovery
@@ -89,6 +101,7 @@ The tests use various sample C# files:
 ## Performance Targets
 
 The tests validate the following performance targets:
+
 - **Reverse Search** - <2 seconds for <1000 references
 - **Bulk Edit** - Process 1000 files in <30 seconds
 - **Streaming** - Handle large files with <100MB memory usage
@@ -97,6 +110,7 @@ The tests validate the following performance targets:
 ## Coverage Goals
 
 Target coverage:
+
 - **Line Coverage**: >90%
 - **Branch Coverage**: >85%
 - **Method Coverage**: >95%
@@ -121,16 +135,19 @@ Target coverage:
 ## Running Specific Tests
 
 ### Individual Test Files
+
 ```bash
 dotnet test --filter "ClassName=AdvancedReferenceFinderServiceTests"
 ```
 
 ### Specific Test Methods
+
 ```bash
 dotnet test --filter "TestMethodName=FindCallersAsync_WithValidParameters_ShouldReturnCallerResult"
 ```
 
 ### Multiple Categories
+
 ```bash
 dotnet test --filter "Category=Unit|Category=Integration"
 ```
@@ -138,6 +155,7 @@ dotnet test --filter "Category=Unit|Category=Integration"
 ## CI/CD Integration
 
 The tests are designed to run in CI/CD pipelines:
+
 - Fast execution for quick feedback
 - Categorized for selective test runs
 - Performance tests for regression detection
@@ -146,6 +164,7 @@ The tests are designed to run in CI/CD pipelines:
 ## Debugging Tests
 
 To debug failing tests:
+
 1. Run with `--logger "console;verbosity=detailed"`
 2. Use `Debugger.Break()` in test code
 3. Run tests individually to isolate issues
@@ -154,6 +173,7 @@ To debug failing tests:
 ## Contributing
 
 When adding new tests:
+
 1. Follow existing naming conventions
 2. Add appropriate categories
 3. Include performance testing where relevant

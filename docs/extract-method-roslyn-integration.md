@@ -7,6 +7,7 @@ This document provides detailed Roslyn API usage patterns specifically for extra
 ## 1. Data Flow Analysis APIs
 
 ### Basic Data Flow Analysis
+
 ```csharp
 public class DataFlowAnalyzer
 {
@@ -71,6 +72,7 @@ public class DataFlowAnalyzer
 ```
 
 ### Control Flow Analysis
+
 ```csharp
 public class ControlFlowAnalyzer
 {
@@ -117,6 +119,7 @@ public class ControlFlowAnalyzer
 ## 2. Symbol Analysis APIs
 
 ### Type Inference
+
 ```csharp
 public class TypeInferencer
 {
@@ -163,6 +166,7 @@ public class TypeInferencer
 ```
 
 ### Symbol Resolution
+
 ```csharp
 public class SymbolResolver
 {
@@ -195,6 +199,7 @@ public class SymbolResolver
 ## 3. Syntax Rewriting APIs
 
 ### Method Extraction Rewriter
+
 ```csharp
 public class ExtractMethodRewriter : CSharpSyntaxRewriter
 {
@@ -283,6 +288,7 @@ public class ExtractMethodRewriter : CSharpSyntaxRewriter
 ```
 
 ### Variable Reference Updater
+
 ```csharp
 public class VariableReferenceRewriter : CSharpSyntaxRewriter
 {
@@ -320,6 +326,7 @@ public class VariableReferenceRewriter : CSharpSyntaxRewriter
 ## 4. Semantic Queries
 
 ### Finding Containing Method
+
 ```csharp
 public static class SemanticQueries
 {
@@ -364,6 +371,7 @@ public static class SemanticQueries
 ## 5. Compilation Update APIs
 
 ### Applying Changes
+
 ```csharp
 public class CompilationUpdater
 {
@@ -410,6 +418,7 @@ public class CompilationUpdater
 ## 6. Diagnostic Analysis
 
 ### Pre-extraction Validation
+
 ```csharp
 public class ExtractionValidator
 {
@@ -442,6 +451,7 @@ public class ExtractionValidator
 ## 7. Formatting APIs
 
 ### Code Formatting
+
 ```csharp
 public class CodeFormatter
 {
@@ -486,6 +496,7 @@ public class CodeFormatter
 ## 8. Special Case Handlers
 
 ### Async Method Detection and Transformation
+
 ```csharp
 public class AsyncMethodHandler
 {
@@ -520,6 +531,7 @@ public class AsyncMethodHandler
 ## 9. Performance Optimizations
 
 ### Incremental Semantic Model
+
 ```csharp
 public class IncrementalAnalyzer
 {
@@ -547,7 +559,7 @@ public class IncrementalAnalyzer
 ## Key Roslyn Types Reference
 
 | Type | Purpose | Key Methods |
-|------|---------|-------------|
+| ------ | --------- | ------------- |
 | `SemanticModel` | Semantic analysis | `AnalyzeDataFlow`, `AnalyzeControlFlow`, `GetTypeInfo` |
 | `DataFlowAnalysis` | Variable flow | `DataFlowsIn`, `DataFlowsOut`, `WrittenInside` |
 | `ControlFlowAnalysis` | Control flow | `EntryPoints`, `ExitPoints`, `ReturnStatements` |

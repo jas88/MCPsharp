@@ -9,6 +9,7 @@
 This document describes the design for incorporating automated code quality fixes into MCPsharp as production-ready, reusable features. The system will leverage existing Roslyn analyzer infrastructure while adding built-in fix providers for common code quality patterns demonstrated during MCPsharp's own cleanup.
 
 **Key Goals:**
+
 - Make MCPsharp self-improving (dogfooding)
 - Provide reusable fixes for any C# project analyzed via MCP
 - Leverage existing infrastructure (RoslynCodeFixAdapter, FixEngine)
@@ -22,6 +23,7 @@ This document describes the design for incorporating automated code quality fixe
 ### 1.1 Current State
 
 MCPsharp recently gained comprehensive Roslyn analyzer integration:
+
 - **RoslynAnalyzerAdapter** - Wraps third-party analyzers
 - **RoslynCodeFixAdapter** - Wraps third-party code fix providers
 - **RoslynAnalyzerService** - Manages analyzer lifecycle
@@ -33,6 +35,7 @@ MCPsharp recently gained comprehensive Roslyn analyzer integration:
 During MCPsharp cleanup, we created Python scripts demonstrating automated fixes:
 
 **1. Exception Handling Patterns** (`fix_exception_logging.py`)
+
 ```python
 # Before: Improper pattern
 catch (Exception ex) { Logger.LogError(ex.Message); }
@@ -42,6 +45,7 @@ catch (Exception ex) { Logger.LogError(ex, "..."); }
 ```
 
 **2. Async/Await Patterns** (`fix_async_warnings.py`, `bulk_fix_async.py`)
+
 ```python
 # CS1998: Remove unnecessary async keyword
 # Before: async Task<T> Method() { return value; }
@@ -49,12 +53,14 @@ catch (Exception ex) { Logger.LogError(ex, "..."); }
 ```
 
 **3. Unused Code Removal** (demonstrated in cleanup)
+
 ```csharp
 // Remove unused variables, fields, parameters
 // Simplify unnecessary complexity
 ```
 
 **4. Static Method Conversion** (demonstrated in cleanup)
+
 ```csharp
 // Convert instance methods that don't use 'this' to static
 ```
@@ -62,6 +68,7 @@ catch (Exception ex) { Logger.LogError(ex, "..."); }
 ### 1.3 Key Insights from Python Scripts
 
 **Pattern Analysis** (from `fix_async_warnings.py`):
+
 - Parse build warnings/errors for diagnostics
 - Analyze method body for actual usage (e.g., presence of `await`)
 - Categorize fixes: auto-applicable vs. needs-investigation
@@ -69,6 +76,7 @@ catch (Exception ex) { Logger.LogError(ex, "..."); }
 - Provide statistics and reporting
 
 **Bulk Application** (from `bulk_fix_async.py`):
+
 - Process files in reverse line order to maintain indices
 - Simple text replacements for straightforward cases
 - Flag complex cases requiring manual review
@@ -92,12 +100,14 @@ catch (Exception ex) { Logger.LogError(ex, "..."); }
 #### Option A: Custom DiagnosticAnalyzers + CodeFixProviders
 
 **Pros:**
+
 - Standard Roslyn pattern
 - IDE integration (if MCPsharp used in Rider/VS)
 - Reusable outside MCPsharp
 - Can be packaged as NuGet
 
 **Cons:**
+
 - More boilerplate
 - Slower to develop
 - Requires separate analyzer + fix provider classes
@@ -105,12 +115,14 @@ catch (Exception ex) { Logger.LogError(ex, "..."); }
 #### Option B: AST Rewriting Service (SyntaxRewriters)
 
 **Pros:**
+
 - Direct control over transformations
 - Faster to implement simple patterns
 - Can batch multiple fixes in single pass
 - Good for bulk operations
 
 **Cons:**
+
 - Bypasses Roslyn's diagnostic infrastructure
 - Harder to report issues incrementally
 - Less reusable
@@ -122,6 +134,7 @@ catch (Exception ex) { Logger.LogError(ex, "..."); }
 **Coordination:** FixEngine orchestrates preview, conflict detection, rollback
 
 **Why Hybrid:**
+
 - Best of both worlds
 - Analyzers provide structured issue reporting
 - Rewriters enable efficient bulk transformations
@@ -130,7 +143,7 @@ catch (Exception ex) { Logger.LogError(ex, "..."); }
 
 ### 2.3 Proposed Class Hierarchy
 
-```
+```text
 Services/Analyzers/BuiltIn/CodeFixes/
 ├── Base/
 │   ├── IAutomatedCodeFixProvider.cs         (interface)
@@ -1191,6 +1204,7 @@ public class FixPerformanceTests
 ```
 
 **Response:**
+
 ```json
 {
   "result": {
@@ -1297,11 +1311,13 @@ git commit -m "Apply automated code quality fixes (conservative profile)"
 **Problem:** Some patterns require human judgment
 
 **Examples:**
+
 - `async` method with conditional await (only awaits in some branches)
 - Exception logging where message is intentionally logged separately
 - Static method conversion where instance method is overridden in subclass
 
 **Solution:**
+
 - Mark as `IsFullyAutomated = false`
 - Require user approval
 - Provide detailed explanation in fix description
@@ -1312,6 +1328,7 @@ git commit -m "Apply automated code quality fixes (conservative profile)"
 **Problem:** Fix might change semantics
 
 **Example:**
+
 ```csharp
 // Before: async Task<int> GetValue() { return 42; }
 // After:  Task<int> GetValue() { return Task.FromResult(42); }
@@ -1323,6 +1340,7 @@ var result = await GetValue().ConfigureAwait(false);
 ```
 
 **Solution:**
+
 - Semantic analysis before applying fix
 - Warn about potential behavior changes
 - Document breaking changes in fix description
@@ -1333,10 +1351,12 @@ var result = await GetValue().ConfigureAwait(false);
 **Problem:** Multiple fixes might conflict
 
 **Example:**
+
 - Fix A: Remove unused variable `x`
 - Fix B: Extract method that references `x`
 
 **Solution:**
+
 - Leverage existing `FixEngine.DetectConflictsAsync`
 - Order fixes by dependency (apply extractions before removals)
 - Detect overlapping edits
@@ -1347,6 +1367,7 @@ var result = await GetValue().ConfigureAwait(false);
 **Problem:** Batch fixes on large codebases might be slow
 
 **Mitigation:**
+
 - Parallel processing where safe
 - Progress reporting
 - Cancellation support
@@ -1366,6 +1387,7 @@ var result = await GetValue().ConfigureAwait(false);
 - **Self-Improvement:** # of fixes applied to MCPsharp itself
 
 **Targets:**
+
 - Fix accuracy: >99%
 - Coverage: 80% of common warnings
 - Performance: <30s for 500 files
@@ -1385,18 +1407,21 @@ var result = await GetValue().ConfigureAwait(false);
 ### 11.1 Additional Fix Providers
 
 **High Priority:**
+
 - **Nullable reference types** - Add missing `?` annotations
 - **Pattern matching** - Simplify `is` checks
 - **Collection expressions** - Use C# 12 collection syntax
 - **Primary constructors** - Convert to C# 12 syntax
 
 **Medium Priority:**
+
 - **String interpolation** - Replace `string.Format`
 - **LINQ optimization** - Replace loops with LINQ
 - **File-scoped namespaces** - Convert to C# 10 syntax
 - **Records** - Suggest record types for data classes
 
 **Low Priority:**
+
 - **Extract method** - Suggest method extraction
 - **Inline variable** - Suggest inlining single-use vars
 - **Rename** - Suggest better naming
@@ -1410,6 +1435,7 @@ var result = await GetValue().ConfigureAwait(false);
 ### 11.3 NuGet Package
 
 Package as standalone analyzer NuGet:
+
 - `MCPsharp.Analyzers` - Analyzer DLLs
 - `MCPsharp.CodeFixes` - Fix provider DLLs
 - Can be used outside MCPsharp
@@ -1425,7 +1451,7 @@ Package as standalone analyzer NuGet:
 ## 12. Risks & Mitigation
 
 | Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|------------|
+| ------ | -------- | ------------- | ------------ |
 | Incorrect fixes break code | High | Medium | Extensive testing, preview mode, backups |
 | Performance issues on large codebases | Medium | Medium | Parallel processing, cancellation, progress |
 | User confusion about profiles | Low | High | Clear documentation, sensible defaults |
@@ -1439,12 +1465,14 @@ Package as standalone analyzer NuGet:
 ### 13.1 Diagnostic ID Ranges
 
 **Reserved for MCPsharp:**
+
 - `MCP001-MCP099`: Code quality fixes
 - `MCP100-MCP199`: Migration analyzers
 - `MCP200-MCP299`: Performance analyzers
 - `MCP300-MCP399`: Security analyzers
 
 **Current Assignments:**
+
 - `MCP001`: Async method lacks await
 - `MCP002`: Improper exception logging
 - `MCP003`: Unused variable/field
@@ -1453,15 +1481,18 @@ Package as standalone analyzer NuGet:
 ### 13.2 References
 
 **Roslyn Analyzer Docs:**
+
 - [Writing Roslyn Analyzers](https://github.com/dotnet/roslyn/blob/main/docs/wiki/How-To-Write-a-C%23-Analyzer-and-Code-Fix.md)
 - [Roslyn API Documentation](https://docs.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/)
 
 **Existing Analyzers:**
+
 - [Roslynator](https://github.com/JosefPihrt/Roslynator)
 - [StyleCop Analyzers](https://github.com/DotNetAnalyzers/StyleCopAnalyzers)
 - [ErrorProne.NET](https://github.com/SergeyTeplyakov/ErrorProne.NET)
 
 **MCPsharp Docs:**
+
 - `/docs/tool-consolidation-design.md`
 - `/docs/efficiency-analysis-report.md`
 - `/docs/improvement-roadmap.md`
@@ -1480,6 +1511,7 @@ All example code and tests available at:
 **Next Review:** After Phase 1 completion
 
 **Reviewers:**
+
 - [ ] Architecture approval
 - [ ] Implementation team review
 - [ ] Testing strategy approval
@@ -1487,4 +1519,4 @@ All example code and tests available at:
 
 ---
 
-**End of Design Document**
+End of Design Document

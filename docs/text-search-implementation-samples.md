@@ -1,4 +1,5 @@
 # Text Search Implementation Code Samples
+
 ## Key Algorithms and Integration Examples
 
 ---

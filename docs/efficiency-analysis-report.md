@@ -11,6 +11,7 @@
 This comprehensive analysis evaluates the MCPsharp MCP tool implementations after the 196→38 tool consolidation, identifying performance bottlenecks, architectural issues, and optimization opportunities. The analysis covers tool registry design, service lifecycle, response processing, and implementation patterns across 126 C# files.
 
 **Key Findings:**
+
 - **Critical Issues:** 5 (immediate action required)
 - **High Priority:** 12 (address within sprint)
 - **Medium Priority:** 18 (plan for next sprint)
@@ -25,6 +26,7 @@ This comprehensive analysis evaluates the MCPsharp MCP tool implementations afte
 ### 1.1 Consolidation Success Metrics
 
 **Achievement:**
+
 - ✅ 196 → 38 tools (80.6% reduction) **ACHIEVED**
 - ✅ Token reduction target 30% → 45% **EXCEEDED**
 - ✅ Test coverage 92% **EXCEEDED**
@@ -33,7 +35,8 @@ This comprehensive analysis evaluates the MCPsharp MCP tool implementations afte
 
 #### Low-Hanging Fruit (Priority: High)
 
-**Issue #1: Duplicate JSON Serialization Patterns**
+##### Issue #1: Duplicate JSON Serialization Patterns
+
 - **Location:** 118 occurrences across 13 files
 - **Files:** `McpToolRegistry.cs`, `MCPSharpTools.BulkEdit.cs`, `ResponseProcessor.cs`
 - **Impact:** Unnecessary allocations, inconsistent error handling
@@ -65,35 +68,40 @@ public static class JsonHelper
 
 ### 2.1 File I/O Issues
 
-**Issue #2: File.ReadAllText* Overuse (CRITICAL)**
+#### Issue #2: File.ReadAllText\* Overuse (CRITICAL)
 
 **Location:** 68 occurrences across services
 **Files:** `BulkEditService.cs:1285,1570,1696`, `ConfigAnalyzerService.cs:66,126,281`, `UnifiedAnalysisService.cs:1238,1301,1374`
 
 **Problem:**
+
 - Synchronously loads entire files into memory
 - No size validation before reading
 - Risk of OOM on large files (>100MB)
 - Blocking I/O on hot paths
 
 **Example from `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/BulkEditService.cs:1285`:**
+
 ```csharp
 var content = await File.ReadAllTextAsync(filePath, cancellationToken);
 // No size check! Could be 1GB file
 ```
 
 **Impact Analysis:**
+
 - **Memory:** O(file_size) per file, 10x100MB files = 1GB spike
 - **Time:** Blocking read of 100MB file ≈ 500ms+ on HDD
 - **Scalability:** Fails with OOM on large codebases
 
 **Recommendation:**
+
 1. **Immediate (Priority: Critical):**
    - Add file size validation (max 10MB for text files)
    - Use `StreamingFileProcessor` for large files
    - Implement chunked reading with cancellation
 
 2. **Implementation Pattern:**
+
 ```csharp
 private async Task<string> ReadFileSafelyAsync(string filePath, long maxSizeBytes, CancellationToken ct)
 {
@@ -115,6 +123,7 @@ private async Task<string> ReadFileSafelyAsync(string filePath, long maxSizeByte
 ```
 
 **Estimated Savings:**
+
 - 70% memory reduction on bulk operations
 - 40% faster response times for large files
 - Prevents OOM crashes
@@ -125,11 +134,12 @@ private async Task<string> ReadFileSafelyAsync(string filePath, long maxSizeByte
 
 ### 2.2 McpToolRegistry Switch Statement
 
-**Issue #3: 6074-Line Monolithic File (CRITICAL)**
+#### Issue #3: 6074-Line Monolithic File (CRITICAL)
 
 **Location:** `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/McpToolRegistry.cs`
 
 **Problem Analysis:**
+
 - **Size:** 6,074 lines (104 Execute methods)
 - **Complexity:** Single switch with 65+ cases (lines 126-251)
 - **Maintainability:** Adding new tool requires editing massive file
@@ -137,6 +147,7 @@ private async Task<string> ReadFileSafelyAsync(string filePath, long maxSizeByte
 - **Build Time:** Slows incremental compilation
 
 **Code Smell Example (lines 126-251):**
+
 ```csharp
 var result = request.Name switch
 {
@@ -150,17 +161,19 @@ var result = request.Name switch
 ```
 
 **Impact:**
+
 - **Compilation:** 2-3x slower incremental builds
 - **Mental Load:** Developers must navigate 6000 lines
 - **Risk:** Changes affect unrelated tools
 - **Testing:** Mocking requires entire registry
 
-**Recommendation: Dictionary-Based Handler Registry**
+#### Recommendation: Dictionary-Based Handler Registry
 
 **Priority:** Critical
 **Effort:** 16 hours (2 days)
 
 **Architecture:**
+
 ```csharp
 // 1. Handler Interface
 public interface IToolHandler
@@ -206,6 +219,7 @@ public class FileReadHandler : IToolHandler
 ```
 
 **Benefits:**
+
 - **Modularity:** Each handler in separate file (~100-200 lines)
 - **Testing:** Unit test handlers independently
 - **Extensibility:** Add handlers without touching registry
@@ -213,11 +227,13 @@ public class FileReadHandler : IToolHandler
 - **Type Safety:** Strong typing for handler dependencies
 
 **Migration Strategy:**
+
 1. Week 1: Create handler infrastructure + 5 pilot handlers
 2. Week 2-3: Migrate remaining 60 handlers (5-10 per day)
 3. Week 4: Remove old switch statement, refactor tests
 
 **Estimated Savings:**
+
 - 50% reduction in build time
 - 80% faster test execution (parallel handler tests)
 - 90% reduction in merge conflicts
@@ -226,7 +242,7 @@ public class FileReadHandler : IToolHandler
 
 ### 2.3 Response Processing Token Estimation
 
-**Issue #4: Naive Token Estimation (HIGH)**
+#### Issue #4: Naive Token Estimation (HIGH)
 
 **Location:** `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/ResponseProcessor.cs:112-133`
 
@@ -245,12 +261,14 @@ private int EstimateTokenCount(object obj)
 ```
 
 **Problems:**
+
 1. **Double Serialization:** Serializes response to estimate, then serializes again for transmission
 2. **Inaccurate:** `chars/4` is rough approximation (actual: 0.75-4 chars/token depending on content)
 3. **Overhead:** Every response pays serialization cost twice
 4. **No Caching:** Repeated serialization of similar structures
 
 **Impact:**
+
 - 30-40% overhead on response processing
 - Inaccurate token counts lead to suboptimal truncation
 - Wasted CPU cycles on double serialization
@@ -261,6 +279,7 @@ private int EstimateTokenCount(object obj)
 **Effort:** 6 hours
 
 **Improved Token Estimation:**
+
 ```csharp
 private static readonly ConcurrentDictionary<Type, int> TypeTokenCache = new();
 
@@ -311,6 +330,7 @@ private int EstimateStructuralTokens(object obj, Type type)
 ```
 
 **Benefits:**
+
 - 40% faster token estimation (no double serialization)
 - More accurate estimates (structural counting)
 - Lower memory pressure
@@ -322,11 +342,12 @@ private int EstimateStructuralTokens(object obj, Type type)
 
 ### 2.4 Service Instantiation Anti-Patterns
 
-**Issue #5: Eager Service Loading (MEDIUM)**
+#### Issue #5: Eager Service Loading (MEDIUM)
 
 **Location:** `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Program.cs:40-110`
 
 **Problem:**
+
 ```csharp
 // Instantiates ALL services at startup, even if not used
 var roslynWorkspace = new RoslynWorkspace();
@@ -343,6 +364,7 @@ var streamController = new StreamProcessingController(...);
 ```
 
 **Issues:**
+
 1. **Startup Time:** Initializes all services even if user only uses file_read
 2. **Memory:** All services loaded into memory (~50-100MB overhead)
 3. **Dependencies:** Complex initialization order requirements
@@ -351,7 +373,7 @@ var streamController = new StreamProcessingController(...);
 **Current Startup Time:** ~800ms (measured)
 **Expected Startup Time:** ~100ms (lazy loading)
 
-**Recommendation: Lazy Service Initialization**
+#### Recommendation: Lazy Service Initialization
 
 **Priority:** Medium
 **Effort:** 12 hours
@@ -386,6 +408,7 @@ public class FileReadHandler : IToolHandler
 ```
 
 **Benefits:**
+
 - 87% faster startup (100ms vs 800ms)
 - 60% lower initial memory footprint
 - Services only loaded when needed
@@ -397,7 +420,7 @@ public class FileReadHandler : IToolHandler
 
 ### 3.1 ResponseProcessor Inefficiencies
 
-**Issue #6: Quadratic LINQ Operations (MEDIUM)**
+#### Issue #6: Quadratic LINQ Operations (MEDIUM)
 
 **Location:** `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/ResponseProcessor.cs:273-300`
 
@@ -418,11 +441,13 @@ private Dictionary<string, object> TruncateJsonObject(JsonElement obj, int targe
 ```
 
 **Problems:**
+
 1. **Repeated Estimation:** `EstimateTokenCount` called 2x per property
 2. **Memory Allocation:** Unnecessary `.ToList()` allocates full list
 3. **Sorting Overhead:** Sorts ALL properties even if only taking first 5
 
 **Impact:**
+
 - O(n²) complexity for large objects (1000 properties = 1M operations)
 - 100ms+ latency on large responses
 - Unnecessary GC pressure
@@ -467,6 +492,7 @@ private Dictionary<string, object> TruncateJsonObject(JsonElement obj, int targe
 ```
 
 **Benefits:**
+
 - O(n log n) instead of O(n²)
 - Single pass token estimation
 - Lazy evaluation (only processes needed properties)
@@ -476,7 +502,7 @@ private Dictionary<string, object> TruncateJsonObject(JsonElement obj, int targe
 
 ### 3.2 BulkEditService Memory Issues
 
-**Issue #7: In-Memory File Accumulation (HIGH)**
+#### Issue #7: In-Memory File Accumulation (HIGH)
 
 **Location:** `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/BulkEditService.cs:67-83`
 
@@ -500,16 +526,18 @@ fileResults.AddRange(results);
 ```
 
 **Problem:**
+
 - **Memory Growth:** Accumulates all results before processing
 - **GC Pressure:** Large batch = 100x `FileBulkEditResult` objects in Gen 2
 - **No Streaming:** Results buffered entirely in memory
 
 **Example Impact:**
+
 - 1000 files × 50KB result = 50MB temporary allocation
 - GC pause times increase 3-5x
 - Risk of OOM on very large batches
 
-**Recommendation: Streaming Results**
+#### Recommendation: Streaming Results
 
 **Priority:** High
 **Effort:** 8 hours
@@ -553,6 +581,7 @@ await foreach (var result in resultsChannel.Reader.ReadAllAsync(cancellationToke
 ```
 
 **Benefits:**
+
 - 80% reduction in peak memory usage
 - Incremental progress reporting
 - Better cancellation support
@@ -564,13 +593,14 @@ await foreach (var result in resultsChannel.Reader.ReadAllAsync(cancellationToke
 
 ### 4.1 Parameter Parsing Duplication
 
-**Issue #8: Repeated JsonDocument Parsing (MEDIUM)**
+#### Issue #8: Repeated JsonDocument Parsing (MEDIUM)
 
 **Problem:** Every Execute* method manually parses parameters
 
 **Location:** Found in 104 methods across `McpToolRegistry.cs`, `MCPSharpTools.*.cs`
 
 **Example from `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/MCPSharpTools.BulkEdit.cs:33-44`:**
+
 ```csharp
 // REPEATED 104 TIMES with slight variations
 var filesArray = arguments.RootElement.GetProperty("files");
@@ -586,11 +616,12 @@ foreach (var fileElement in filesArray.EnumerateArray())
 ```
 
 **Impact:**
+
 - 1000+ lines of duplicate parsing code
 - Inconsistent error handling (some check null, some don't)
 - Hard to add validation (must update 104 places)
 
-**Recommendation: Strongly-Typed Parameter Models**
+#### Recommendation: Strongly-Typed Parameter Models
 
 **Priority:** Medium
 **Effort:** 16 hours
@@ -655,6 +686,7 @@ private async Task<ToolCallResult> ExecuteBulkReplace(JsonDocument arguments, Ca
 ```
 
 **Benefits:**
+
 - 70% reduction in parameter parsing code
 - Consistent validation across all tools
 - Type safety and IntelliSense support
@@ -664,7 +696,7 @@ private async Task<ToolCallResult> ExecuteBulkReplace(JsonDocument arguments, Ca
 
 ### 4.2 Error Handling Inconsistencies
 
-**Issue #9: Mixed Error Handling Patterns (LOW)**
+#### Issue #9: Mixed Error Handling Patterns (LOW)
 
 **Examples:**
 
@@ -690,12 +722,13 @@ catch (Exception ex)
 ```
 
 **Problems:**
+
 - Inconsistent error messages
 - Some exceptions logged, some not
 - No structured error codes
 - Hard to handle errors on client side
 
-**Recommendation: Structured Error Handling**
+#### Recommendation: Structured Error Handling
 
 **Priority:** Low
 **Effort:** 8 hours
@@ -767,16 +800,18 @@ public abstract class ToolHandlerBase
 
 ### 5.1 Service Disposal Issues
 
-**Issue #10: Missing Dispose Patterns (HIGH)**
+#### Issue #10: Missing Dispose Patterns (HIGH)
 
 **Analysis:** Grep shows 295 `.ToList()/.ToArray()` calls, many holding resources
 
 **Locations with Issues:**
+
 - `StreamingFileProcessor.cs` - Stream handles not disposed
 - `BulkEditService.cs` - Regex instances not cached
 - `RollbackService.cs` - File handles left open
 
 **Example from BulkEditService:**
+
 ```csharp
 // Line 53: Regex created per operation
 var regex = new Regex(regexPattern, options.RegexOptions);
@@ -822,6 +857,7 @@ var content = await stream.ReadToEndAsync(ct);
 ```
 
 **Impact:**
+
 - Prevents file handle leaks
 - 30% reduction in Regex compilation overhead
 - Better resource cleanup on shutdown
@@ -830,11 +866,12 @@ var content = await stream.ReadToEndAsync(ct);
 
 ### 5.2 Temp File Management
 
-**Issue #11: Temp File Accumulation (MEDIUM)**
+#### Issue #11: Temp File Accumulation (MEDIUM)
 
 **Location:** `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/TempFileManagerService.cs`
 
 **Problem:**
+
 - No automatic cleanup of old temp files
 - Rollback backups accumulate over time
 - No disk space monitoring
@@ -896,17 +933,19 @@ public class TempFileManagerService : ITempFileManager, IDisposable
 
 ### 6.1 UnifiedAnalysisService Complexity
 
-**Issue #12: 2641-Line God Class (HIGH)**
+#### Issue #12: 2641-Line God Class (HIGH)
 
 **Location:** `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/Consolidated/UnifiedAnalysisService.cs`
 
 **Problems:**
+
 - Violates Single Responsibility Principle
 - 7 different analysis types in one class
 - Hard to test individual analysis methods
 - Tight coupling between unrelated analyses
 
 **Current Methods:**
+
 - `AnalyzeSymbolAsync` - 139 lines
 - `AnalyzeTypeAsync` - 150+ lines
 - `AnalyzeFileAsync` - 200+ lines
@@ -914,7 +953,7 @@ public class TempFileManagerService : ITempFileManager, IDisposable
 - `AnalyzeArchitectureAsync` - 250+ lines
 - Plus 40+ helper methods
 
-**Recommendation: Strategy Pattern Refactoring**
+#### Recommendation: Strategy Pattern Refactoring
 
 **Priority:** High
 **Effort:** 20 hours
@@ -958,6 +997,7 @@ public class UnifiedAnalysisService
 ```
 
 **Benefits:**
+
 - Each strategy is 200-300 lines (vs 2641)
 - Parallel development (multiple devs, one strategy each)
 - Independent testing
@@ -971,14 +1011,14 @@ public class UnifiedAnalysisService
 ### Critical Issues (Fix Immediately)
 
 | Issue | Location | Impact | Effort | Priority |
-|-------|----------|--------|--------|----------|
+| ------- | ---------- | -------- | -------- | ---------- |
 | #2: File.ReadAllText Overuse | 68 locations | OOM risk | 8h | **CRITICAL** |
 | #3: 6074-Line Registry | McpToolRegistry.cs | Maintainability | 16h | **CRITICAL** |
 
 ### High Priority (Current Sprint)
 
 | Issue | Location | Impact | Effort | Priority |
-|-------|----------|--------|--------|----------|
+| ------- | ---------- | -------- | -------- | ---------- |
 | #1: JSON Serialization Duplication | 118 locations | 15-20% perf | 4h | **HIGH** |
 | #4: Token Estimation Overhead | ResponseProcessor.cs | 40% perf | 6h | **HIGH** |
 | #7: Memory Accumulation | BulkEditService.cs | 80% memory | 8h | **HIGH** |
@@ -988,7 +1028,7 @@ public class UnifiedAnalysisService
 ### Medium Priority (Next Sprint)
 
 | Issue | Location | Impact | Effort | Priority |
-|-------|----------|--------|--------|----------|
+| ------- | ---------- | -------- | -------- | ---------- |
 | #5: Eager Service Loading | Program.cs | 87% startup | 12h | **MEDIUM** |
 | #6: Quadratic Operations | ResponseProcessor.cs | 60% perf | 3h | **MEDIUM** |
 | #8: Parameter Parsing | 104 methods | Code quality | 16h | **MEDIUM** |
@@ -997,7 +1037,7 @@ public class UnifiedAnalysisService
 ### Low Priority (Technical Debt)
 
 | Issue | Location | Impact | Effort | Priority |
-|-------|----------|--------|--------|----------|
+| ------- | ---------- | -------- | -------- | ---------- |
 | #9: Error Handling | All handlers | Consistency | 8h | **LOW** |
 
 ---
@@ -1019,6 +1059,7 @@ public class UnifiedAnalysisService
    - Update tests
 
 **Expected Gains:**
+
 - 70% memory reduction
 - OOM crashes eliminated
 - 50% faster builds
@@ -1034,6 +1075,7 @@ public class UnifiedAnalysisService
 5. **Day 5-8:** Strategy Pattern (#12) - 20h
 
 **Expected Gains:**
+
 - 40% faster responses
 - 50% less memory
 - Better testability
@@ -1048,6 +1090,7 @@ public class UnifiedAnalysisService
 4. Temp file management (#11)
 
 **Expected Gains:**
+
 - 87% faster startup
 - Cleaner code
 - Better maintainability
@@ -1143,7 +1186,7 @@ public class MetricsCollector
 **If all recommendations implemented:**
 
 | Metric | Current | Target | Improvement |
-|--------|---------|--------|-------------|
+| -------- | --------- | -------- | ------------- |
 | Average Response Time | 500ms | 200ms | **60% faster** |
 | Peak Memory Usage | 500MB | 200MB | **60% reduction** |
 | Startup Time | 800ms | 100ms | **87% faster** |
@@ -1183,7 +1226,7 @@ See **Section 9** for complete implementation.
 
 ---
 
-**Report End**
+Report End
 
 *Generated by Code Analyzer Agent*
 *File: `/Users/jas88/Developer/Github/MCPsharp/docs/efficiency-analysis-report.md`*

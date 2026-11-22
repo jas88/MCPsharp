@@ -9,6 +9,7 @@ This roadmap provides a concrete implementation plan to reduce MCPsharp's tool c
 ### Week 1: Auto-Loading & Zero-Config
 
 #### Task 1.1: Implement Auto-Loading Infrastructure
+
 ```csharp
 // File: src/MCPsharp/Services/AutoLoading/AutoLoadManager.cs
 
@@ -116,6 +117,7 @@ public class AutoLoadManager
 Analyzer auto-loading was implemented differently from `DiscoverAndLoadAnalyzers` above: `AnalyzerAutoLoadService` loads the analyzers that the projects of the open workspace reference, as an IDE does (see [analyzer-autoload.md](analyzer-autoload.md)), instead of searching directories. The sample loads up to 10 DLLs with `Analyzer` in their names from each of the NuGet cache, the SDK directory and a local folder, which are whichever packages and versions it finds first rather than those the projects use; loading every analyzer assembly in the NuGet cache instead, as an earlier implementation did, means thousands of assemblies on a developer machine, and can exhaust memory and file handles.
 
 #### Task 1.2: Update McpToolRegistry Constructor
+
 ```csharp
 // Modify: src/MCPsharp/Services/McpToolRegistry.cs
 
@@ -145,6 +147,7 @@ public McpToolRegistry(/* existing params */)
 ### Week 2: Implement Unified Find Tool
 
 #### Task 2.1: Create Unified Find Tool
+
 ```csharp
 // File: src/MCPsharp/Services/Consolidated/UnifiedFindTool.cs
 
@@ -226,6 +229,7 @@ public class UnifiedFindTool
 ```
 
 #### Task 2.2: Add Backward Compatibility
+
 ```csharp
 // File: src/MCPsharp/Services/Compatibility/LegacyToolRedirects.cs
 
@@ -269,6 +273,7 @@ public class LegacyToolRedirects
 ### Week 3: Implement Unified Analysis Tool
 
 #### Task 3.1: Create Unified Analysis Tool
+
 ```csharp
 // File: src/MCPsharp/Services/Consolidated/UnifiedAnalysisTool.cs
 
@@ -349,6 +354,7 @@ public class UnifiedAnalysisTool
 ### Week 4: Consolidate Bulk & Stream Operations
 
 #### Task 4.1: Create Unified Bulk Operations
+
 ```csharp
 // File: src/MCPsharp/Services/Consolidated/UnifiedBulkOperations.cs
 
@@ -397,6 +403,7 @@ public class UnifiedBulkOperations
 ### Week 5: Testing & Migration
 
 #### Task 5.1: Create Comprehensive Tests
+
 ```csharp
 // File: tests/MCPsharp.Tests/Consolidation/ConsolidationTests.cs
 
@@ -476,28 +483,33 @@ public class ConsolidationTests
 ## Migration Timeline
 
 ### Phase 1: Foundation (Week 1)
+
 - ✅ Implement auto-loading infrastructure
 - ✅ Add configuration system
 - ✅ Update McpToolRegistry for auto-loading
 
 ### Phase 2: Core Consolidation (Week 2-3)
+
 - ✅ Implement unified `find` tool
 - ✅ Implement unified `analyze` tool
 - ✅ Add backward compatibility layer
 - ✅ Deprecation warnings for old tools
 
 ### Phase 3: Bulk Operations (Week 4)
+
 - ✅ Consolidate bulk operations
 - ✅ Consolidate stream processing
 - ✅ Unified progress tracking
 
 ### Phase 4: Testing & Documentation (Week 5)
+
 - ✅ Comprehensive test suite
 - ✅ Performance benchmarks
 - ✅ Migration guide for users
 - ✅ Update all documentation
 
 ### Phase 5: Release (Week 6)
+
 - ✅ Version 1.5 Beta with both old and new tools
 - ✅ Gather user feedback
 - ✅ Version 1.6 with deprecated tools hidden
@@ -506,6 +518,7 @@ public class ConsolidationTests
 ## Configuration Examples
 
 ### Environment Variables
+
 ```bash
 # Enable all auto-loading (default)
 export MCP_AUTO_LOAD_PROJECT=true
@@ -518,6 +531,7 @@ export MCP_AUTO_LOAD_ANALYZERS=false
 ```
 
 ### Configuration File (mcp.config.json)
+
 ```json
 {
   "autoLoad": {
@@ -541,8 +555,9 @@ export MCP_AUTO_LOAD_ANALYZERS=false
 ## Success Metrics
 
 ### Quantitative Metrics
+
 | Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
+| -------- | -------- | ------- | ------------- |
 | Tool Count | 119 | 50 | -58% |
 | Avg Response Time | 2.5s | 0.8s | -68% |
 | Token Usage (avg) | 5000 | 2000 | -60% |
@@ -550,6 +565,7 @@ export MCP_AUTO_LOAD_ANALYZERS=false
 | Lines of Code | 50,000 | 28,000 | -44% |
 
 ### Qualitative Metrics
+
 - **Learning Curve**: 2.5 hours → 30 minutes
 - **Tool Discovery**: Find right tool in <10 seconds
 - **User Satisfaction**: Measured via feedback
@@ -558,19 +574,25 @@ export MCP_AUTO_LOAD_ANALYZERS=false
 ## Risk Mitigation
 
 ### Risk 1: Breaking Changes
+
 **Mitigation**:
+
 - Maintain full backward compatibility for 2 major versions
 - Provide automatic migration tools
 - Clear deprecation warnings with migration hints
 
 ### Risk 2: Performance Regression
+
 **Mitigation**:
+
 - Comprehensive benchmarking before/after
 - Lazy loading to improve perceived performance
 - Smart caching for frequently used operations
 
 ### Risk 3: User Confusion
+
 **Mitigation**:
+
 - Extensive documentation with examples
 - Interactive migration guide
 - Tool discovery helper (`help` command)
@@ -578,6 +600,7 @@ export MCP_AUTO_LOAD_ANALYZERS=false
 ## Documentation Updates
 
 ### New User Guide Structure
+
 ```markdown
 # MCPsharp Quick Start
 
@@ -590,27 +613,32 @@ mcp-server
 ## 10 Essential Tools (80% of Use Cases)
 
 ### 1. Find Anything
+
 ```json
 {"tool": "find", "mode": "symbol", "target": "MyClass"}
 ```
 
 ### 2. Analyze Code
+
 ```json
 {"tool": "analyze", "type": "quality"}
 ```
 
 ### 3. Edit Semantically
+
 ```json
 {"tool": "edit", "operation": "add", "target": "property"}
 ```
 
 ### 4. Bulk Operations
+
 ```json
 {"tool": "bulk", "operation": "replace", "spec": {...}}
 ```
 
 [... continue with simple examples ...]
-```
+
+```markdown
 
 ## Implementation Checklist
 
