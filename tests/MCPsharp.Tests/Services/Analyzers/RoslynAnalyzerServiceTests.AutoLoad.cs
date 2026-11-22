@@ -50,6 +50,38 @@ public partial class RoslynAnalyzerServiceTests
     }
 
     [Test]
+    public async Task LoadAnalyzersAsync_WithTheIdOfAnAutoLoadedAnalyzer_ReplacesItAndKeepsTheIdThroughTheNextAutoLoad()
+    {
+        // The precedence the auto-load documentation gives load_roslyn_analyzers over the auto-loaded analyzers
+        using var workspace = Substitute.For<RoslynWorkspace>();
+        workspace.GetAnalyzerReferences().Returns(new AnalyzerReference[] { TestAnalyzerReferences.BuiltInAnalyzers() });
+        var registry = new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>());
+        using var autoLoad = CreateAutoLoadService(workspace, registry);
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, autoLoad, registry);
+        await service.EnsureAnalyzersLoadedAsync();
+        var autoLoaded = registry.GetAnalyzer(StaticMethodAnalyzerId);
+        var assemblyPath = CreateTestFile("test assembly", ".dll");
+        var explicitlyLoaded = CreateMockAnalyzer(StaticMethodAnalyzerId);
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(assemblyPath, Arg.Any<CancellationToken>())
+            .Returns(ImmutableArray.Create(explicitlyLoaded));
+
+        await service.LoadAnalyzersAsync(assemblyPath);
+
+        Assert.That(autoLoaded, Is.Not.Null.And.Not.SameAs(explicitlyLoaded));
+        Assert.That(registry.GetAnalyzer(StaticMethodAnalyzerId), Is.SameAs(explicitlyLoaded));
+        Assert.That(service.GetAnalyzer(StaticMethodAnalyzerId), Is.SameAs(explicitlyLoaded));
+
+        // The project's analyzers are auto-loaded again, one of them with the ID the explicitly loaded analyzer holds
+        autoLoad.Reset();
+        await service.EnsureAnalyzersLoadedAsync();
+
+        Assert.That(registry.GetAnalyzer(StaticMethodAnalyzerId), Is.SameAs(explicitlyLoaded));
+        Assert.That(service.GetAnalyzer(StaticMethodAnalyzerId), Is.SameAs(explicitlyLoaded));
+        Assert.That(service.GetLoadedAnalyzers().Select(a => a.Id), Is.EquivalentTo(TestAnalyzerReferences.BuiltInAnalyzerIds));
+        Assert.That(registry.GetLoadedAnalyzers(), Is.EquivalentTo(service.GetLoadedAnalyzers()), "the service lists the analyzers the registry holds");
+    }
+
+    [Test]
     public async Task EnsureAnalyzersLoadedAsync_WhenAnAutoLoadedAnalyzerIsUnregisteredBeforeItIsPublished_DoesNotListIt()
     {
         // One analyzer's ID is unloaded as soon as the registry reports the analyzer registered
