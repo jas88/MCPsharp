@@ -237,7 +237,7 @@ public sealed partial class BulkEditService
             }
 
             // File size risks
-            if (stats.OversizedFiles.Any())
+            if (stats.OversizedFiles.Count > 0)
             {
                 risks.Add(new RiskItem
                 {
@@ -251,7 +251,7 @@ public sealed partial class BulkEditService
             }
 
             // File access risks
-            if (stats.InaccessibleFiles.Any())
+            if (stats.InaccessibleFiles.Count > 0)
             {
                 risks.Add(new RiskItem
                 {

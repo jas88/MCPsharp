@@ -112,7 +112,7 @@ public partial class ConfigAnalyzerService
             var mergedConfig = await MergeConfigsAsync(configFiles.ToArray(), ct);
 
             // Check for conflicts that were detected during merging
-            if (mergedConfig.Conflicts?.Any() == true)
+            if (mergedConfig.Conflicts?.Count > 0)
             {
                 foreach (var conflict in mergedConfig.Conflicts)
                 {
@@ -163,7 +163,7 @@ public partial class ConfigAnalyzerService
                 try
                 {
                     var mergedEnvConfig = await MergeConfigsAsync(envConfigs.ToArray(), ct);
-                    if (mergedEnvConfig.Conflicts?.Any() == true)
+                    if (mergedEnvConfig.Conflicts?.Count > 0)
                     {
                         foreach (var conflict in mergedEnvConfig.Conflicts)
                         {

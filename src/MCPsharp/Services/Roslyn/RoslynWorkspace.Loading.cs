@@ -40,7 +40,7 @@ public partial class RoslynWorkspace
                 if (slnPath != null)
                 {
                     var solution = await pendingWorkspace.OpenSolutionAsync(slnPath);
-                    if (!solution.ProjectIds.Any())
+                    if (solution.ProjectIds.Count == 0)
                     {
                         throw new InvalidOperationException("Solution contains no projects");
                     }

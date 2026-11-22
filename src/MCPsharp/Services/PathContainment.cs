@@ -146,5 +146,5 @@ public static class PathContainment
     }
 
     private static string AppendSegments(string basePath, string[] segments, int start) =>
-        start >= segments.Length ? basePath : Path.Combine(basePath, Path.Combine(segments[start..]));
+        start >= segments.Length ? basePath : Path.Combine([basePath, .. segments[start..]]);
 }

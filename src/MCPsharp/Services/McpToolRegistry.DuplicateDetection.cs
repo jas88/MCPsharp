@@ -128,7 +128,7 @@ public partial class McpToolRegistry
                     ["totalGroups"] = result.Count,
                     ["totalDuplicates"] = result.Sum(g => g.CodeBlocks.Count),
                     ["similarityThreshold"] = similarityThreshold,
-                    ["averageSimilarity"] = result.Any() ? result.Average(g => g.SimilarityScore) : 0.0
+                    ["averageSimilarity"] = result.Count > 0 ? result.Average(g => g.SimilarityScore) : 0.0
                 }
             };
         }
