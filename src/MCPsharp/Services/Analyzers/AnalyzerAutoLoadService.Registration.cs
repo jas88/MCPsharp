@@ -12,9 +12,14 @@ namespace MCPsharp.Services.Analyzers;
 public sealed partial class AnalyzerAutoLoadService
 {
     /// <summary>
-    /// Register the analyzers, recording those the registry accepted as this service's to unregister. One the registry
-    /// rejects because another analyzer holds its ID (e.g. one loaded with load_roslyn_analyzers), and one that fails to
-    /// initialize, are reported in <paramref name="errors"/>; a cancellation of the load propagates.
+    /// Register the analyzers in the registry, one after another. An analyzer that the registry accepts is recorded
+    /// as registered by this service, which unregisters it when the load is cancelled or the next load begins;
+    /// whether it is published as loaded is decided when the load ends (see <see cref="PublishRegisteredAnalyzers"/>).
+    /// The registry rejects an analyzer whose ID another analyzer holds (e.g. one loaded with load_roslyn_analyzers):
+    /// that analyzer is reported in <paramref name="errors"/>, and the load goes on. An analyzer that fails to
+    /// initialize, or that cancels its own initialization while the load is not cancelled, is not registered: it too
+    /// is reported in <paramref name="errors"/>, and the load goes on. A cancellation of the load propagates to the
+    /// caller.
     /// </summary>
     private async Task RegisterAnalyzersAsync(List<IAnalyzer> analyzers, List<string> errors, CancellationToken cancellationToken)
     {
