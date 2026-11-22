@@ -1,29 +1,33 @@
+using System.Collections.Immutable;
 using MCPsharp.Models.Analyzers;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services.Analyzers;
 
 /// <summary>
-/// Registering a load's analyzers in the analyzer registry, and unregistering those of the previous load
+/// Registering a load's analyzers in the analyzer registry, publishing as loaded those the registry holds, and
+/// unregistering those of the previous load
 /// </summary>
 public sealed partial class AnalyzerAutoLoadService
 {
     /// <summary>
-    /// Register the analyzers, returning those the registry accepted: only those can run. One the registry rejects
-    /// because another analyzer holds its ID (e.g. one loaded with load_roslyn_analyzers), and one that fails to
+    /// Register the analyzers, recording those the registry accepted as this service's to unregister. One the registry
+    /// rejects because another analyzer holds its ID (e.g. one loaded with load_roslyn_analyzers), and one that fails to
     /// initialize, are reported in <paramref name="errors"/>; a cancellation of the load propagates.
     /// </summary>
-    private async Task<List<IAnalyzer>> RegisterAnalyzersAsync(List<IAnalyzer> analyzers, List<string> errors, CancellationToken cancellationToken)
+    private async Task RegisterAnalyzersAsync(List<IAnalyzer> analyzers, List<string> errors, CancellationToken cancellationToken)
     {
-        var registered = new List<IAnalyzer>();
         foreach (var analyzer in analyzers)
         {
             try
             {
                 if (await _registry.RegisterAnalyzerAsync(analyzer, cancellationToken))
                 {
+                    // Not yet one of the load's analyzers: the registry has told its subscribers of it, and one of
+                    // them, or another caller, may already have unregistered it. That is checked when the load is
+                    // published.
                     _registeredAnalyzers.Add(analyzer);
-                    registered.Add(analyzer);
                 }
                 else
                 {
@@ -38,8 +42,36 @@ public sealed partial class AnalyzerAutoLoadService
                 errors.Add($"Failed to initialize analyzer '{analyzer.Id}': {ex.Message}");
             }
         }
+    }
 
-        return registered;
+    /// <summary>
+    /// Record the outcome of a load, publishing as its analyzers those this service registered that the registry
+    /// holds, and return them. The registry checks which it holds and the service records them in one step, during
+    /// which nothing is registered or unregistered, so an analyzer that the registry stopped holding after the
+    /// service registered it is not published.
+    /// </summary>
+    private ImmutableArray<IAnalyzer> PublishRegisteredAnalyzers(
+        AnalyzerAutoLoadConfiguration configuration,
+        IReadOnlyList<AnalyzerReference> references,
+        bool loaded) =>
+        _registry.PublishRegisteredAnalyzers(
+            _registeredAnalyzers,
+            registered => Publish(configuration, references, registered, loaded));
+
+    /// <summary>
+    /// Report in <paramref name="errors"/> each analyzer this service registered that is not among those
+    /// <paramref name="published"/>: the registry stopped holding it before the load was published, because it was
+    /// unregistered (e.g. unloaded) or replaced by another analyzer loaded under its ID. It is not registered again:
+    /// like an analyzer unloaded after the load, it stays out until the next load.
+    /// </summary>
+    private void ReportAnalyzersNoLongerRegistered(ImmutableArray<IAnalyzer> published, List<string> errors)
+    {
+        var noLongerRegistered = _registeredAnalyzers.Except<IAnalyzer>(published, ReferenceEqualityComparer.Instance);
+        foreach (var analyzerId in noLongerRegistered.Select(analyzer => analyzer.Id))
+        {
+            LogAnalyzerNoLongerRegistered(_logger, analyzerId);
+            errors.Add($"Did not load analyzer '{analyzerId}': it was unregistered or replaced before the load finished");
+        }
     }
 
     /// <summary>
@@ -74,4 +106,7 @@ public sealed partial class AnalyzerAutoLoadService
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Analyzer {AnalyzerId} was not loaded: an analyzer with its ID is already registered")]
     private static partial void LogAnalyzerIdTaken(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Analyzer {AnalyzerId} was not loaded: it was unregistered or replaced before the load finished")]
+    private static partial void LogAnalyzerNoLongerRegistered(ILogger logger, string analyzerId);
 }

@@ -28,7 +28,9 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly object _lock = new();
 
-    // Analyzers this service registered and has not unregistered yet; only used while holding _loadLock
+    // Analyzers this service registered and has not unregistered itself; only used while holding _loadLock. Anything
+    // else may have unregistered or replaced one since, so whether the registry holds them is checked when they are
+    // published, and they are unregistered by instance
     private readonly List<IAnalyzer> _registeredAnalyzers = new();
 
     private bool _hasAutoLoaded;
@@ -135,7 +137,6 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
         CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
-        var loadedAnalyzers = new List<IAnalyzer>();
         var errors = configurationError == null ? new List<string>() : [configurationError];
 
         try
@@ -149,7 +150,7 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
                 return new AnalyzerAutoLoadResult
                 {
                     Success = true,
-                    LoadedAnalyzers = Publish(configuration, references, loadedAnalyzers, loaded: true),
+                    LoadedAnalyzers = Publish(configuration, references, [], loaded: true),
                     LoadDuration = stopwatch.Elapsed,
                     Errors = errors.ToImmutableArray(),
                     Message = "Auto-loading is disabled"
@@ -159,6 +160,7 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
             LogStartingAutoLoad(_logger, references.Count);
             ReportUnknownSources(configuration, errors);
 
+            var loadedAnalyzers = new List<IAnalyzer>();
             if (configuration.AnalyzerSources.Contains(AnalyzerAutoLoadConfiguration.ProjectReferencesSource))
             {
                 var projectAnalyzers = _loader.LoadAnalyzersFromReferences(references, cancellationToken);
@@ -173,10 +175,12 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
             }
 
             loadedAnalyzers.AddRange(await LoadFromCustomPathsAsync(configuration, errors, cancellationToken));
-            loadedAnalyzers = await RegisterAnalyzersAsync(SelectAnalyzersToRegister(configuration, loadedAnalyzers), errors, cancellationToken);
+            await RegisterAnalyzersAsync(SelectAnalyzersToRegister(configuration, loadedAnalyzers), errors, cancellationToken);
 
-            var published = Publish(configuration, references, loadedAnalyzers, loaded: true);
-            LogAutoLoadCompleted(_logger, loadedAnalyzers.Count, stopwatch.Elapsed.TotalMilliseconds);
+            // Only an analyzer the registry holds can run, and one registered here may have been unregistered since
+            var published = PublishRegisteredAnalyzers(configuration, references, loaded: true);
+            ReportAnalyzersNoLongerRegistered(published, errors);
+            LogAutoLoadCompleted(_logger, published.Length, stopwatch.Elapsed.TotalMilliseconds);
 
             return new AnalyzerAutoLoadResult
             {
@@ -184,7 +188,7 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
                 LoadedAnalyzers = published,
                 LoadDuration = stopwatch.Elapsed,
                 Errors = errors.ToImmutableArray(),
-                Message = $"Successfully auto-loaded {loadedAnalyzers.Count} analyzers"
+                Message = $"Successfully auto-loaded {published.Length} analyzers"
             };
         }
         catch (OperationCanceledException)
@@ -200,7 +204,8 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
             return new AnalyzerAutoLoadResult
             {
                 Success = false,
-                LoadedAnalyzers = Publish(configuration, references, loadedAnalyzers, loaded: false),
+                // Those the load registered, not those it loaded: it may have failed before registering them
+                LoadedAnalyzers = PublishRegisteredAnalyzers(configuration, references, loaded: false),
                 LoadDuration = stopwatch.Elapsed,
                 Errors = errors.Append($"Fatal error: {ex.Message}").ToImmutableArray(),
                 Message = $"Auto-load failed: {ex.Message}"
@@ -314,19 +319,18 @@ public sealed partial class AnalyzerAutoLoadService : IDisposable
     private ImmutableArray<IAnalyzer> Publish(
         AnalyzerAutoLoadConfiguration? configuration,
         IReadOnlyList<AnalyzerReference> references,
-        List<IAnalyzer> analyzers,
+        ImmutableArray<IAnalyzer> analyzers,
         bool loaded)
     {
-        var published = analyzers.ToImmutableArray();
         lock (_lock)
         {
             _hasAutoLoaded = loaded;
             _loadedConfiguration = configuration;
             _loadedReferences = references;
-            _autoLoadedAnalyzers = published;
+            _autoLoadedAnalyzers = analyzers;
         }
 
-        return published;
+        return analyzers;
     }
 
     /// <summary>
@@ -445,6 +449,11 @@ public record AnalyzerAutoLoadResult
 {
     public required bool Success { get; init; }
     public bool AlreadyLoaded { get; init; }
+
+    /// <summary>
+    /// The analyzers the load registered that the registry still held when the load finished. With
+    /// <see cref="AlreadyLoaded"/>, those of the load already done, as they were when it finished.
+    /// </summary>
     public ImmutableArray<IAnalyzer> LoadedAnalyzers { get; init; } = ImmutableArray<IAnalyzer>.Empty;
     public TimeSpan LoadDuration { get; init; }
     public ImmutableArray<string> Errors { get; init; } = ImmutableArray<string>.Empty;
