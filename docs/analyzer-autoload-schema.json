@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Analyzer Auto-Load Configuration",
-  "description": "Configuration for automatic loading of Roslyn analyzers in MCPsharp",
+  "description": "Configuration for automatic loading of Roslyn analyzers in MCPsharp, read from .mcpsharp/autoload-config.json in the project root",
   "type": "object",
   "properties": {
     "autoLoadEnabled": {
@@ -11,27 +11,27 @@
     },
     "loadOnStartup": {
       "type": "boolean",
-      "description": "Load analyzers on MCPsharp startup (true) or on first use (false)",
+      "description": "Load the analyzers of the project MCPsharp opens at startup as soon as it is loaded, in the background (true), or on first use (false)",
       "default": false
     },
     "analyzerSources": {
       "type": "array",
-      "description": "Sources to scan for analyzers",
+      "description": "Sources to load analyzers from: project_references loads the analyzers that the projects of the open workspace reference",
       "items": {
         "type": "string",
         "enum": [
-          "nuget_cache",
+          "project_references",
           "builtin_providers"
         ]
       },
       "default": [
-        "nuget_cache",
+        "project_references",
         "builtin_providers"
       ]
     },
     "excludeAnalyzers": {
       "type": "array",
-      "description": "Analyzer IDs to exclude from auto-loading",
+      "description": "Analyzer IDs to exclude from auto-loading, as list_roslyn_analyzers reports them, or without their -version suffix to exclude every version",
       "items": {
         "type": "string"
       },

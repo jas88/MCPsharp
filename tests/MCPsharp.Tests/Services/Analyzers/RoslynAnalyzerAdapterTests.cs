@@ -55,7 +55,7 @@ public partial class RoslynAnalyzerAdapterTests : FileServiceTestBase
         var adapter = new RoslynAnalyzerAdapter(analyzer, _mockLogger);
 
         // Assert
-        Assert.That(adapter.Id, Is.EqualTo("Roslyn_TestDiagnosticAnalyzer"));
+        Assert.That(adapter.Id, Is.EqualTo(RoslynAnalyzerAdapter.GetId(typeof(TestDiagnosticAnalyzer))));
         Assert.That(adapter.Name, Is.EqualTo("TestDiagnosticAnalyzer"));
         Assert.That(adapter.Description, Does.Contain("TestDiagnosticAnalyzer"));
         Assert.That(adapter.Version, Is.Not.Null);

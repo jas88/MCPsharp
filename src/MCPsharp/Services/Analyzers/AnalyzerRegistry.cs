@@ -26,54 +26,45 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
     public event EventHandler<AnalyzerRegisteredEventArgs>? AnalyzerRegistered;
     public event EventHandler<AnalyzerUnregisteredEventArgs>? AnalyzerUnregistered;
 
+    /// <inheritdoc />
     public async Task<bool> RegisterAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default)
     {
-        try
+        if (string.IsNullOrEmpty(analyzer.Id))
         {
-            if (string.IsNullOrEmpty(analyzer.Id))
-            {
-                LogEmptyAnalyzerId(_logger);
-                return false;
-            }
-
-            lock (_lock)
-            {
-                if (_analyzers.ContainsKey(analyzer.Id))
-                {
-                    LogAlreadyRegistered(_logger, analyzer.Id);
-                    return false;
-                }
-
-                _analyzers[analyzer.Id] = analyzer;
-
-                var info = new AnalyzerInfo
-                {
-                    Id = analyzer.Id,
-                    Name = analyzer.Name,
-                    Description = analyzer.Description,
-                    Version = analyzer.Version,
-                    Author = analyzer.Author,
-                    SupportedExtensions = analyzer.SupportedExtensions,
-                    IsBuiltIn = analyzer.GetType().Assembly.GetName().Name?.Equals("MCPsharp", StringComparison.OrdinalIgnoreCase) ?? false,
-                    IsEnabled = analyzer.IsEnabled,
-                    Rules = analyzer.GetRules()
-                };
-
-                _analyzerInfos[analyzer.Id] = info;
-            }
-
-            await analyzer.InitializeAsync(cancellationToken);
-
-            LogRegistered(_logger, analyzer.Id, analyzer.Version);
-            AnalyzerRegistered?.Invoke(this, new AnalyzerRegisteredEventArgs(analyzer.Id, _analyzerInfos[analyzer.Id]));
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LogErrorRegistering(_logger, ex, analyzer.Id);
+            LogEmptyAnalyzerId(_logger);
             return false;
         }
+
+        if (GetAnalyzer(analyzer.Id) != null)
+        {
+            LogAlreadyRegistered(_logger, analyzer.Id);
+            return false;
+        }
+
+        // Registered only once it has initialized, so nothing can get and run it before; a failure or cancellation
+        // propagates, so the caller can tell it from a rejection
+        var info = await InitializeForRegistrationAsync(analyzer, cancellationToken);
+        bool added;
+        lock (_lock)
+        {
+            // Another analyzer may have been registered under the ID while this one initialized
+            added = _analyzers.TryAdd(analyzer.Id, analyzer);
+            if (added)
+            {
+                _analyzerInfos[analyzer.Id] = info;
+            }
+        }
+
+        if (!added)
+        {
+            LogAlreadyRegistered(_logger, analyzer.Id);
+            DisposeInBackground(analyzer);
+            return false;
+        }
+
+        LogRegistered(_logger, analyzer.Id, analyzer.Version);
+        RaiseAnalyzerRegistered(analyzer.Id, info);
+        return true;
     }
 
     public Task<bool> UnregisterAnalyzerAsync(string analyzerId, CancellationToken cancellationToken = default)
@@ -89,23 +80,11 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
                 }
 
                 _analyzerInfos.Remove(analyzerId);
-
-                // Dispose analyzer asynchronously
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await analyzer.DisposeAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        LogErrorDisposing(_logger, ex, analyzerId);
-                    }
-                }, cancellationToken);
+                DisposeInBackground(analyzer);
             }
 
             LogUnregistered(_logger, analyzerId);
-            AnalyzerUnregistered?.Invoke(this, new AnalyzerUnregisteredEventArgs(analyzerId));
+            RaiseAnalyzerUnregistered(analyzerId);
 
             return Task.FromResult(true);
         }
@@ -160,9 +139,17 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
                 return Task.FromResult(ImmutableArray<AnalyzerInfo>.Empty);
             }
 
+            // Every DLL found is loaded, so refuse a directory with too many or too large DLLs, and load only those counted
+            var limitError = AnalyzerDirectoryScanLimits.ListAssemblies(directoryPath, recursive: false, out var dllFiles);
+            if (limitError != null)
+            {
+                LogDirectoryOverScanLimit(_logger, limitError);
+                return Task.FromResult(ImmutableArray<AnalyzerInfo>.Empty);
+            }
+
             var discoveredAnalyzers = new List<AnalyzerInfo>();
 
-            foreach (var dllFile in Directory.GetFiles(directoryPath, "*.dll", SearchOption.TopDirectoryOnly))
+            foreach (var dllFile in dllFiles)
             {
                 try
                 {
@@ -411,9 +398,6 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
     [LoggerMessage(Level = LogLevel.Information, Message = "Registered analyzer: {AnalyzerId} v{Version}")]
     private static partial void LogRegistered(ILogger logger, string analyzerId, Version version);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Error registering analyzer: {AnalyzerId}")]
-    private static partial void LogErrorRegistering(ILogger logger, Exception exception, string analyzerId);
-
     [LoggerMessage(Level = LogLevel.Warning, Message = "Analyzer {AnalyzerId} is not registered")]
     private static partial void LogNotRegistered(ILogger logger, string analyzerId);
 
@@ -431,6 +415,9 @@ public partial class AnalyzerRegistry : IAnalyzerRegistry
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Directory does not exist: {DirectoryPath}")]
     private static partial void LogDirectoryDoesNotExist(ILogger logger, string directoryPath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Not discovering analyzers: {Reason}")]
+    private static partial void LogDirectoryOverScanLimit(ILogger logger, string reason);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzers from assembly: {AssemblyPath}")]
     private static partial void LogErrorLoadingAssembly(ILogger logger, Exception exception, string assemblyPath);

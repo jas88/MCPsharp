@@ -1,12 +1,14 @@
 using System.Collections.Immutable;
 using MCPsharp.Models.Analyzers;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace MCPsharp.Services.Analyzers;
 
 /// <summary>
-/// Service for discovering and loading Roslyn DiagnosticAnalyzers from assemblies
+/// Service for loading Roslyn DiagnosticAnalyzers from the analyzer references of the projects being analysed,
+/// or from assemblies and directories given explicitly
 /// </summary>
 public partial class RoslynAnalyzerLoader
 {
@@ -130,10 +132,13 @@ public partial class RoslynAnalyzerLoader
                 return ImmutableArray<string>.Empty;
             }
 
-            var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-
-            // Look for DLL files
-            var dllFiles = Directory.GetFiles(directory, "*.dll", searchOption);
+            // Every DLL found is loaded, so refuse a directory such as the NuGet cache, and load only the DLLs counted
+            var limitError = AnalyzerDirectoryScanLimits.ListAssemblies(directory, recursive, out var dllFiles);
+            if (limitError != null)
+            {
+                LogDirectoryOverScanLimit(_logger, limitError);
+                return ImmutableArray<string>.Empty;
+            }
 
             var analyzerAssemblies = new List<string>();
 
@@ -174,51 +179,72 @@ public partial class RoslynAnalyzerLoader
     }
 
     /// <summary>
-    /// Load all Roslyn analyzers from NuGet packages cache
+    /// Create adapters for the C# analyzers of the given analyzer references, typically the
+    /// <see cref="Microsoft.CodeAnalysis.Project.AnalyzerReferences"/> of the projects being analysed.
     /// </summary>
-    public async Task<ImmutableArray<IAnalyzer>> LoadAnalyzersFromNuGetCacheAsync(
+    /// <remarks>
+    /// Only the given references are loaded, so the analyzers are the ones the projects reference, as in an IDE.
+    /// Each reference loads its own assembly (a workspace's references are already loaded by the workspace, and
+    /// their analyzer instances are reused) and returns the types it exports for C# with
+    /// <see cref="DiagnosticAnalyzerAttribute"/>, as the compiler would run them.
+    /// </remarks>
+    public ImmutableArray<IAnalyzer> LoadAnalyzersFromReferences(
+        IEnumerable<AnalyzerReference> references,
         CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
+        var adapterLogger = _loggerFactory.CreateLogger<RoslynAnalyzerAdapter>();
+        var analyzers = new List<IAnalyzer>();
+
+        foreach (var reference in references)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Loading a reference can take a while, and the caller may cancel meanwhile (e.g. during the last one)
+            var referenceAnalyzers = GetCSharpAnalyzers(reference);
+            cancellationToken.ThrowIfCancellationRequested();
+            analyzers.AddRange(referenceAnalyzers.Select(analyzer => new RoslynAnalyzerAdapter(analyzer, adapterLogger, reference)));
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                var description = Describe(reference);
+                LogLoadedFromReference(_logger, referenceAnalyzers.Length, description);
+            }
+        }
+
+        return analyzers.ToImmutableArray();
+    }
+
+    private ImmutableArray<DiagnosticAnalyzer> GetCSharpAnalyzers(AnalyzerReference reference)
+    {
+        // A file reference reports assemblies or types it cannot load through this event rather than by throwing
+        var fileReference = reference as AnalyzerFileReference;
+        void OnLoadFailed(object? sender, AnalyzerLoadFailureEventArgs e) =>
+            LogReferenceLoadFailed(_logger, Describe(reference), e.ErrorCode, e.Message);
+
+        if (fileReference != null)
+        {
+            fileReference.AnalyzerLoadFailed += OnLoadFailed;
+        }
 
         try
         {
-            // Common NuGet cache locations
-            var nugetCachePaths = new[]
-            {
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".nuget", "packages"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "NuGet", "Cache")
-            };
-
-            var allAnalyzers = new List<IAnalyzer>();
-
-            foreach (var cachePath in nugetCachePaths)
-            {
-                if (!Directory.Exists(cachePath))
-                    continue;
-
-                LogScanningNuGetCache(_logger, cachePath);
-
-                // Look for analyzer DLLs in the analyzers subdirectory
-
-                var assemblyPaths = DiscoverAnalyzerAssemblies(cachePath, recursive: true);
-                var analyzers = await LoadAnalyzersFromAssembliesAsync(assemblyPaths, cancellationToken);
-
-                allAnalyzers.AddRange(analyzers);
-            }
-
-            LogLoadedFromNuGetCache(_logger, allAnalyzers.Count);
-
-            return allAnalyzers.ToImmutableArray();
+            return reference.GetAnalyzers(LanguageNames.CSharp);
         }
         catch (Exception ex)
         {
-            LogErrorLoadingFromNuGetCache(_logger, ex);
-            return ImmutableArray<IAnalyzer>.Empty;
+            LogErrorLoadingFromReference(_logger, ex, Describe(reference));
+            return ImmutableArray<DiagnosticAnalyzer>.Empty;
+        }
+        finally
+        {
+            if (fileReference != null)
+            {
+                fileReference.AnalyzerLoadFailed -= OnLoadFailed;
+            }
         }
     }
+
+    private static string Describe(AnalyzerReference reference) =>
+        reference.FullPath ?? reference.Display ?? reference.GetType().Name;
 
     /// <summary>
     /// Get metadata about an analyzer assembly without loading it
@@ -283,6 +309,9 @@ public partial class RoslynAnalyzerLoader
     [LoggerMessage(Level = LogLevel.Error, Message = "Directory not found: {Directory}")]
     private static partial void LogDirectoryNotFound(ILogger logger, string directory);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Not searching for analyzer assemblies: {Reason}")]
+    private static partial void LogDirectoryOverScanLimit(ILogger logger, string reason);
+
     [LoggerMessage(Level = LogLevel.Debug, Message = "Discovered analyzer assembly: {AssemblyPath}")]
     private static partial void LogDiscoveredAssembly(ILogger logger, string assemblyPath);
 
@@ -295,14 +324,14 @@ public partial class RoslynAnalyzerLoader
     [LoggerMessage(Level = LogLevel.Error, Message = "Error discovering analyzer assemblies in {Directory}")]
     private static partial void LogErrorDiscoveringAssemblies(ILogger logger, Exception exception, string directory);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Scanning NuGet cache for analyzers: {CachePath}")]
-    private static partial void LogScanningNuGetCache(ILogger logger, string cachePath);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Loaded {Count} C# analyzers from analyzer reference {Reference}")]
+    private static partial void LogLoadedFromReference(ILogger logger, int count, string reference);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded {Count} analyzers from NuGet cache")]
-    private static partial void LogLoadedFromNuGetCache(ILogger logger, int count);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Analyzer reference {Reference} failed to load: {ErrorCode} {Message}")]
+    private static partial void LogReferenceLoadFailed(ILogger logger, string reference, AnalyzerLoadFailureEventArgs.FailureErrorCode errorCode, string message);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzers from NuGet cache")]
-    private static partial void LogErrorLoadingFromNuGetCache(ILogger logger, Exception exception);
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error loading analyzers from analyzer reference {Reference}")]
+    private static partial void LogErrorLoadingFromReference(ILogger logger, Exception exception, string reference);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Error getting analyzer assembly info for {AssemblyPath}")]
     private static partial void LogErrorGettingAssemblyInfo(ILogger logger, Exception exception, string assemblyPath);

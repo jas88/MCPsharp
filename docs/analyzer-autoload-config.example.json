@@ -3,7 +3,7 @@
   "autoLoadEnabled": true,
   "loadOnStartup": false,
   "analyzerSources": [
-    "nuget_cache",
+    "project_references",
     "builtin_providers"
   ],
   "excludeAnalyzers": [

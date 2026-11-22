@@ -1,8 +1,5 @@
 using System.Runtime.Loader;
 using MCPsharp.Services.Analyzers;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Diagnostics;
 using NUnit.Framework;
 
 namespace MCPsharp.Tests.Services.Analyzers;
@@ -17,27 +14,6 @@ namespace MCPsharp.Tests.Services.Analyzers;
 [Category("Analyzers")]
 public class AnalyzerAssemblyIsolationTests : FileServiceTestBase
 {
-    private const string AnalyzerSource = """
-        using System.Collections.Immutable;
-        using Microsoft.CodeAnalysis;
-        using Microsoft.CodeAnalysis.Diagnostics;
-
-        [DiagnosticAnalyzer(LanguageNames.CSharp)]
-        public sealed class IsolationProbeAnalyzer : DiagnosticAnalyzer
-        {
-            private static readonly DiagnosticDescriptor Rule = new(
-                "PROBE001", "Probe", "Probe", "Testing", DiagnosticSeverity.Info, isEnabledByDefault: true);
-
-            public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
-
-            public override void Initialize(AnalysisContext context)
-            {
-                context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
-                context.EnableConcurrentExecution();
-            }
-        }
-        """;
-
     private string _assemblyName = null!;
     private string _assemblyPath = null!;
 
@@ -49,7 +25,7 @@ public class AnalyzerAssemblyIsolationTests : FileServiceTestBase
         // Loaded analyzer assemblies stay locked on Windows; the base class ignores cleanup failures
         var directory = CreateTestDirectory("analyzers");
         _assemblyPath = Path.Combine(directory, _assemblyName + ".dll");
-        EmitAnalyzerAssembly(_assemblyName, _assemblyPath);
+        AnalyzerAssemblyEmitter.Emit(_assemblyName, _assemblyPath, AnalyzerAssemblyEmitter.AnalyzerSource("IsolationProbeAnalyzer", "PROBE001"));
     }
 
     [Test]
@@ -105,23 +81,5 @@ public class AnalyzerAssemblyIsolationTests : FileServiceTestBase
         Assert.That(AssemblyLoadContext.Default.Assemblies.Select(a => a.GetName().Name), Does.Not.Contain(_assemblyName));
         var loaded = AssemblyLoadContext.All.SelectMany(c => c.Assemblies).Single(a => a.GetName().Name == _assemblyName);
         Assert.That(AssemblyLoadContext.GetLoadContext(loaded), Is.Not.SameAs(AssemblyLoadContext.Default));
-    }
-
-    private static void EmitAnalyzerAssembly(string assemblyName, string path)
-    {
-        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
-            .Split(Path.PathSeparator)
-            .Append(typeof(DiagnosticAnalyzer).Assembly.Location)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(p => MetadataReference.CreateFromFile(p));
-
-        var compilation = CSharpCompilation.Create(
-            assemblyName,
-            [CSharpSyntaxTree.ParseText(AnalyzerSource)],
-            references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
-        var result = compilation.Emit(path);
-        Assert.That(result.Success, Is.True, string.Join(Environment.NewLine, result.Diagnostics));
     }
 }

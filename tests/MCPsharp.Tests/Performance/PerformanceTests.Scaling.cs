@@ -8,52 +8,56 @@ public partial class PerformanceTests
 {
     [Test]
     [Category("Concurrency")]
-    [Category("Manual")]
-    [Explicit("Performance test - run manually, not reliable on shared CI runners")]
-    public async Task Performance_ConcurrentBulkEdits_ShouldScaleWithParallelism()
+    public async Task Performance_ConcurrentBulkEdits_ShouldProcessFilesInParallelUpToProcessorCount()
     {
         // Arrange
+        const int filesPerEdit = 100;
+        var options = new BulkEditOptions { CreateBackups = false };
         var fileSets = Enumerable.Range(0, 4)
-            .Select(setIndex => Enumerable.Range(0, 100)
-                .Select(i => CreateTempFile($"Set{setIndex} File{i} content", ".cs"))
-                .ToList())
+            .Select(setIndex => CreateTestFiles(filesPerEdit, i => $"Set{setIndex} File{i} content"))
             .ToList();
+        var leastInParallel = Math.Min(2, Environment.ProcessorCount);
 
-        // Act - Sequential execution
-        var sequentialTime = await MeasurePerformanceAsync(async () =>
+        // Act - One bulk edit, then four at once
+        var single = await _bulkEdit.BulkReplaceAsync(fileSets[0], "content", "SINGLE", options);
+        var concurrent = await Task.WhenAll(fileSets.Select(fileSet =>
+            _bulkEdit.BulkReplaceAsync(fileSet, "content|SINGLE", "PARALLEL", options)));
+
+        // Assert - Every edit is applied to all of its files
+        Assert.That(single.ModifiedFiles, Is.EqualTo(filesPerEdit), "The bulk edit should edit all of its files");
+        Assert.That(concurrent.Select(r => r.ModifiedFiles), Has.All.EqualTo(filesPerEdit), "Each concurrent bulk edit should edit all of its files");
+        Assert.That(fileSets.SelectMany(fileSet => fileSet).Select(File.ReadAllText), Has.All.EndsWith("PARALLEL"));
+
+        // The service processes the files of all its bulk edits in parallel, one per processor at most. As one edit of
+        // 100 files keeps every processor busy, four edits at once aren't faster than four in a row by any margin a
+        // test can rely on; check the parallelism itself, from when each file's processing started and ended.
+        var singleInProgress = MostFilesInProgress(single.FileResults);
+        var concurrentInProgress = MostFilesInProgress(concurrent.SelectMany(r => r.FileResults));
+        Console.WriteLine($"Most files in progress at once: {singleInProgress} in one edit, {concurrentInProgress} in four ({Environment.ProcessorCount} processors)");
+        Assert.That(singleInProgress, Is.InRange(leastInParallel, Environment.ProcessorCount), "A bulk edit should process its files in parallel, one per processor at most");
+        Assert.That(concurrentInProgress, Is.InRange(leastInParallel, Environment.ProcessorCount), "Concurrent bulk edits should share the limit of one file per processor");
+    }
+
+    /// <summary>
+    /// The most files whose processing was in progress at the same moment
+    /// </summary>
+    private static int MostFilesInProgress(IEnumerable<FileBulkEditResult> files)
+    {
+        // A file that started as another ended did not overlap it, so at the same time ends come before starts
+        var events = files
+            .SelectMany(file => new[] { (Time: file.ProcessStartTime, Change: 1), (Time: file.ProcessEndTime, Change: -1) })
+            .OrderBy(e => e.Time)
+            .ThenBy(e => e.Change);
+
+        var inProgress = 0;
+        var most = 0;
+        foreach (var (_, change) in events)
         {
-            foreach (var fileSet in fileSets)
-            {
-                await _bulkEdit.BulkReplaceAsync(
-                    fileSet,
-                    "content",
-                    "SEQUENTIAL",
-                    new BulkEditOptions { CreateBackups = false });
-            }
-        }, iterations: 1, warmup: 0);
+            inProgress += change;
+            most = Math.Max(most, inProgress);
+        }
 
-        // Act - Parallel execution
-        var parallelTime = await MeasurePerformanceAsync(async () =>
-        {
-            var tasks = fileSets.Select(fileSet =>
-                _bulkEdit.BulkReplaceAsync(
-                    fileSet,
-                    "content",
-                    "PARALLEL",
-                    new BulkEditOptions { CreateBackups = false }));
-
-            await Task.WhenAll(tasks);
-        }, iterations: 1, warmup: 0);
-
-        // Assert
-        Console.WriteLine($"Sequential time: {sequentialTime}");
-        Console.WriteLine($"Parallel time: {parallelTime}");
-
-        var speedup = sequentialTime.AverageTime.TotalSeconds / parallelTime.AverageTime.TotalSeconds;
-        Console.WriteLine($"Parallel speedup: {speedup:F2}x");
-
-        // Should achieve reasonable parallel speedup (at least 1.5x on multi-core systems)
-        Assert.That(speedup, Is.GreaterThan(1.5), "Parallel execution should be significantly faster");
+        return most;
     }
 
     [Test]
@@ -61,42 +65,57 @@ public partial class PerformanceTests
     public async Task Stress_RapidSequentialOperations_ShouldMaintainPerformance()
     {
         // Arrange
+        const int warmupOperations = 5;
+        const int measuredOperations = 50;
         var testFile = CreateTempFile("Test content for stress testing", ".cs");
-        var operationTimes = new List<TimeSpan>();
+        var operationTimes = new List<double>();
+
+        Task<BulkEditResult> ReplaceAsync(int i) => _bulkEdit.BulkReplaceAsync(
+            new[] { testFile },
+            $"content {i % 10}", // Vary the pattern slightly
+            $"replaced {i}",
+            new BulkEditOptions { CreateBackups = false });
+
+        // The first calls pay for JIT compilation and first-use initialisation, so they are not measured
+        for (int i = 0; i < warmupOperations; i++)
+        {
+            Assert.That((await ReplaceAsync(i)).Success, Is.True, $"Warm-up operation {i} should succeed");
+        }
 
         // Act - Perform many rapid operations
-        for (int i = 0; i < 50; i++)
+        for (int i = 0; i < measuredOperations; i++)
         {
             var stopwatch = Stopwatch.StartNew();
-
-            var result = await _bulkEdit.BulkReplaceAsync(
-                new[] { testFile },
-                $"content {i % 10}", // Vary the pattern slightly
-                $"replaced {i}",
-                new BulkEditOptions { CreateBackups = false });
-
+            var result = await ReplaceAsync(i);
             stopwatch.Stop();
-            operationTimes.Add(stopwatch.Elapsed);
+            operationTimes.Add(stopwatch.Elapsed.TotalMilliseconds);
 
             Assert.That(result.Success, Is.True, $"Operation {i} should succeed");
         }
 
         // Assert
-        var averageTime = TimeSpan.FromTicks((long)operationTimes.Average(t => t.Ticks));
-        var maxTime = operationTimes.Max();
-        var minTime = operationTimes.Min();
+        operationTimes.Sort();
+        var median = Percentile(operationTimes, 0.5);
+        var p95 = Percentile(operationTimes, 0.95);
+        var max = operationTimes[^1];
 
-        Console.WriteLine($"Average operation time: {averageTime.TotalMilliseconds:F2}ms");
-        Console.WriteLine($"Min operation time: {minTime.TotalMilliseconds:F2}ms");
-        Console.WriteLine($"Max operation time: {maxTime.TotalMilliseconds:F2}ms");
+        Console.WriteLine($"Median operation time: {median:F2}ms");
+        Console.WriteLine($"95th percentile operation time: {p95:F2}ms");
+        Console.WriteLine($"Min operation time: {operationTimes[0]:F2}ms");
+        Console.WriteLine($"Max operation time: {max:F2}ms");
 
-        // Performance should remain consistent
-        Assert.That(averageTime.TotalMilliseconds, Is.LessThan(100), "Average operation should be fast");
-        Assert.That(maxTime.TotalMilliseconds, Is.LessThan(500), "No operation should be too slow");
-
-        // Variance should be reasonable (within 5x of average to allow for system variations)
-        Assert.That(maxTime.TotalMilliseconds, Is.LessThan(averageTime.TotalMilliseconds * 5), "Performance variance should be reasonable");
+        // The median and 95th percentile ignore a couple of stalls (a GC pause, a descheduled thread),
+        // which the mean and maximum don't, while a slowdown of more than a few operations still fails
+        Assert.That(median, Is.LessThan(100), "A typical operation should be fast");
+        Assert.That(max, Is.LessThan(500), "No operation should be too slow");
+        Assert.That(p95, Is.LessThan(median * 5), "Nearly all operations should take about as long as a typical one");
     }
+
+    /// <summary>
+    /// Nearest-rank percentile of values sorted in ascending order
+    /// </summary>
+    private static double Percentile(List<double> sortedValues, double fraction) =>
+        sortedValues[Math.Max(0, (int)Math.Ceiling(fraction * sortedValues.Count) - 1)];
 
     [Test]
     [Category("Regression")]
@@ -130,31 +149,40 @@ public partial class PerformanceTests
 
     [Test]
     [Category("Scaling")]
-    [Category("Manual")]
-    [Explicit("Performance test - run manually, not reliable on shared CI runners")]
     public async Task Scaling_FileCountScaling_ShouldScaleLinearly()
     {
         // Arrange
-        var fileCounts = new[] { 10, 50, 100, 200 };
-        var results = new List<(int fileCount, TimeSpan time)>();
+        const int warmupRounds = 2;
+        const int measuredRounds = 13;
+        var fileCounts = new[] { 50, 100, 200, 400 };
+        var fileSets = fileCounts.Select(count => CreateTestFiles(count, i => $"Scaling test content {i}")).ToList();
+        var times = fileCounts.Select(_ => new List<TimeSpan>()).ToList();
+        var options = new BulkEditOptions { CreateBackups = false };
 
-        foreach (var fileCount in fileCounts)
+        // Act - Each round edits every set once, alternately replacing the word and putting it back, so every run
+        // reads, edits and writes every file, and a stall slows one run of each count rather than every run of one
+        for (var round = 0; round < warmupRounds + measuredRounds; round++)
         {
-            var files = Enumerable.Range(0, fileCount)
-                .Select(i => CreateTempFile($"Scaling test content {i}", ".cs"))
-                .ToList();
-
-            var time = await MeasurePerformanceAsync(async () =>
+            var (pattern, replacement) = round % 2 == 0 ? ("content", "SCALED") : ("SCALED", "content");
+            for (var index = 0; index < fileSets.Count; index++)
             {
-                await _bulkEdit.BulkReplaceAsync(
-                    files,
-                    "content",
-                    "SCALED",
-                    new BulkEditOptions { CreateBackups = false });
-            }, iterations: 3, warmup: 1);
+                var stopwatch = Stopwatch.StartNew();
+                var result = await _bulkEdit.BulkReplaceAsync(fileSets[index], pattern, replacement, options);
+                stopwatch.Stop();
 
-            results.Add((fileCount, time.AverageTime));
-            Console.WriteLine($"File count: {fileCount}, Time: {time.AverageTime.TotalMilliseconds:F2}ms");
+                Assert.That(result.ModifiedFiles, Is.EqualTo(fileCounts[index]), $"Round {round} should edit all {fileCounts[index]} files");
+                if (round >= warmupRounds)
+                {
+                    times[index].Add(stopwatch.Elapsed);
+                }
+            }
+        }
+
+        // The fastest run of each count is the one least slowed by anything else running
+        var results = fileCounts.Select((fileCount, index) => (fileCount, time: times[index].Min())).ToList();
+        foreach (var (fileCount, time) in results)
+        {
+            Console.WriteLine($"File count: {fileCount}, Time: {time.TotalMilliseconds:F2}ms");
         }
 
         // Assert - Scaling should be roughly linear

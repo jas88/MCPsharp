@@ -8,7 +8,10 @@ namespace MCPsharp.Models.Analyzers;
 public interface IAnalyzerRegistry
 {
     /// <summary>
-    /// Register an analyzer
+    /// Register an analyzer, unless its ID is empty or another analyzer is registered under it, which returns false.
+    /// The analyzer is registered once it has initialized, so it can't be got before. When its initialization fails
+    /// or is cancelled, it is disposed and the exception propagates; when another analyzer is registered under its ID
+    /// meanwhile, it is disposed and false is returned.
     /// </summary>
     Task<bool> RegisterAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default);
 
@@ -16,6 +19,29 @@ public interface IAnalyzerRegistry
     /// Unregister an analyzer
     /// </summary>
     Task<bool> UnregisterAnalyzerAsync(string analyzerId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Register <paramref name="analyzer"/> in place of any analyzer registered under its ID, in one step, once it
+    /// has initialized: until then, the analyzer registered under the ID stays. When its initialization fails or is
+    /// cancelled, that analyzer stays registered, the replacement is disposed, and the exception propagates. Returns
+    /// false only when its ID is empty.
+    /// </summary>
+    Task<bool> ReplaceAnalyzerAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Unregister <paramref name="analyzer"/> if it is the analyzer registered under its ID, in one step, leaving an
+    /// analyzer that has replaced it registered
+    /// </summary>
+    Task<bool> UnregisterAnalyzerInstanceAsync(IAnalyzer analyzer, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Call <paramref name="publish"/> with those of <paramref name="analyzers"/> that are registered, each being the
+    /// analyzer registered under its ID, and return them. No analyzer is registered or unregistered while
+    /// <paramref name="publish"/> runs, so a caller that keeps its own record of the registered analyzers can update
+    /// it in step with the registry. <paramref name="publish"/> must not wait for anything else that uses the
+    /// registry.
+    /// </summary>
+    ImmutableArray<IAnalyzer> PublishRegisteredAnalyzers(IEnumerable<IAnalyzer> analyzers, Action<ImmutableArray<IAnalyzer>> publish);
 
     /// <summary>
     /// Get all registered analyzers
