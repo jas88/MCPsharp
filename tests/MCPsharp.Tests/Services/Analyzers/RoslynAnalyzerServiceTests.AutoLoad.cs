@@ -109,6 +109,60 @@ public partial class RoslynAnalyzerServiceTests
     }
 
     [Test]
+    public async Task EnsureAnalyzersLoadedAsync_WhenALoadIsCancelled_StopsListingTheAnalyzersItUnregistered()
+    {
+        // A load starts by unregistering the analyzers of the load before it, and leaves none registered if it is
+        // cancelled after that
+        using var workspace = Substitute.For<RoslynWorkspace>();
+        workspace.GetAnalyzerReferences().Returns(new AnalyzerReference[] { TestAnalyzerReferences.BuiltInAnalyzers() });
+        var registry = new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>());
+        using var autoLoad = CreateAutoLoadService(workspace, registry);
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, autoLoad, registry);
+        await service.EnsureAnalyzersLoadedAsync();
+        var listedBefore = service.GetLoadedAnalyzers().Length;
+
+        // Another project is opened, and the load of its analyzers is cancelled once it has unregistered the others
+        workspace.GetAnalyzerReferences().Returns(new AnalyzerReference[] { TestAnalyzerReferences.BuiltInCodeFixes() });
+        using var cancellation = new CancellationTokenSource();
+        registry.AnalyzerUnregistered += (_, _) => cancellation.Cancel();
+        await Assert.CatchAsync<OperationCanceledException>(() => service.EnsureAnalyzersLoadedAsync(cancellation.Token));
+
+        Assert.That(listedBefore, Is.EqualTo(TestAnalyzerReferences.BuiltInAnalyzerIds.Length));
+        Assert.That(registry.GetLoadedAnalyzers(), Is.Empty);
+        Assert.That(service.GetLoadedAnalyzers(), Is.Empty, "analyzers the registry no longer holds aren't listed as loaded");
+    }
+
+    [Test]
+    public async Task EnsureAnalyzersLoadedAsync_BeforeAnUnregistrationIsHandled_ListsTheAnalyzerRegisteredUnderTheFreedId()
+    {
+        // An explicitly loaded analyzer's ID is unloaded, and the project's analyzers, one of which has that ID, are
+        // auto-loaded before the service is told of the unregistration: the subscriber here is told first
+        using var workspace = Substitute.For<RoslynWorkspace>();
+        workspace.GetAnalyzerReferences().Returns(new AnalyzerReference[] { TestAnalyzerReferences.BuiltInAnalyzers() });
+        var registry = new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>());
+        RoslynAnalyzerService? service = null;
+        Task? autoLoading = null;
+        registry.AnalyzerUnregistered += (_, _) => autoLoading ??= service!.EnsureAnalyzersLoadedAsync();
+        using var autoLoad = CreateAutoLoadService(workspace, registry);
+        service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, autoLoad, registry);
+        var assemblyPath = CreateTestFile("test assembly", ".dll");
+        var explicitlyLoaded = CreateMockAnalyzer(StaticMethodAnalyzerId);
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(assemblyPath, Arg.Any<CancellationToken>())
+            .Returns(ImmutableArray.Create(explicitlyLoaded));
+        await service.LoadAnalyzersAsync(assemblyPath);
+
+        var unregistered = await registry.UnregisterAnalyzerAsync(StaticMethodAnalyzerId);
+
+        Assert.That(unregistered, Is.True);
+        Assert.That(autoLoading, Is.Not.Null);
+        await autoLoading!;
+        var registered = registry.GetAnalyzer(StaticMethodAnalyzerId);
+        Assert.That(registered, Is.Not.Null.And.Not.SameAs(explicitlyLoaded));
+        Assert.That(service.GetAnalyzer(StaticMethodAnalyzerId), Is.SameAs(registered));
+        Assert.That(service.GetLoadedAnalyzers(), Is.EquivalentTo(registry.GetLoadedAnalyzers()), "the service lists the analyzers the registry holds");
+    }
+
+    [Test]
     public async Task RunAnalyzersAsync_AfterWaitingForAnotherCallersAutoLoad_RunsTheAnalyzersOfThatLoad()
     {
         // e.g. a request that arrives while the analyzers load at startup: it waits for that load, and by the time

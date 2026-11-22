@@ -52,8 +52,8 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
     /// <param name="autoLoadService">Auto-loads the analyzers the open project references, if given.</param>
     /// <param name="registry">
     /// The analyzer host's registry. Explicitly loaded analyzers are registered there so the host can run them, and
-    /// an analyzer is listed as loaded only if the registry holds it; without a registry, analyzers are listed but
-    /// not run.
+    /// an analyzer is listed as loaded only while the registry holds it; without a registry, analyzers are listed
+    /// but not run.
     /// </param>
     public RoslynAnalyzerService(
         RoslynAnalyzerLoader loader,
@@ -67,6 +67,12 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _autoLoadService = autoLoadService;
         _registry = registry;
+        if (registry != null)
+        {
+            // Whatever unregisters an analyzer (an unload, or an auto-load replacing or abandoning its analyzers), it
+            // is no longer listed as loaded
+            registry.AnalyzerUnregistered += (_, args) => StopListingUnregisteredAnalyzer(args.AnalyzerId);
+        }
     }
 
     public async Task<ImmutableArray<IAnalyzer>> LoadAnalyzersAsync(
@@ -260,6 +266,41 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
     }
 
     /// <summary>
+    /// Stop listing the analyzer listed under <paramref name="analyzerId"/>, unless the registry holds it: an analyzer
+    /// with that ID has been unregistered, and since then another may have been registered under the ID and listed
+    /// </summary>
+    private void StopListingUnregisteredAnalyzer(string analyzerId)
+    {
+        var listed = GetAnalyzer(analyzerId);
+        if (listed == null || _registry == null)
+        {
+            return;
+        }
+
+        var stoppedListing = false;
+        _registry.PublishRegisteredAnalyzers([listed], registered =>
+        {
+            if (!registered.IsEmpty)
+            {
+                return;
+            }
+
+            lock (_lock)
+            {
+                if (_loadedAnalyzers.TryGetValue(analyzerId, out var current) && ReferenceEquals(current, listed))
+                {
+                    stoppedListing = _loadedAnalyzers.Remove(analyzerId);
+                }
+            }
+        });
+
+        if (stoppedListing)
+        {
+            LogStoppedListingAnalyzer(_logger, analyzerId);
+        }
+    }
+
+    /// <summary>
     /// A new auto-load replaces the analyzers of the previous one (e.g. those of a project that is no longer
     /// open); analyzers loaded explicitly stay
     /// </summary>
@@ -276,9 +317,26 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
                     }
                 }
 
-                _autoLoadedAnalyzers = published.Where(analyzer => _loadedAnalyzers.TryAdd(analyzer.Id, analyzer)).ToImmutableArray();
+                _autoLoadedAnalyzers = published.Where(ListAutoLoadedAnalyzer).ToImmutableArray();
             }
         });
+
+    /// <summary>
+    /// List an auto-loaded analyzer, while holding <see cref="_lock"/>, and return whether it is listed. With a
+    /// registry, the analyzer is the one the registry holds under its ID, so an analyzer already listed under the ID
+    /// has been unregistered (which this service has yet to be told) and gives way. Without a registry, an analyzer
+    /// already listed under the ID was loaded explicitly, and stays.
+    /// </summary>
+    private bool ListAutoLoadedAnalyzer(IAnalyzer analyzer)
+    {
+        if (_registry == null)
+        {
+            return _loadedAnalyzers.TryAdd(analyzer.Id, analyzer);
+        }
+
+        _loadedAnalyzers[analyzer.Id] = analyzer;
+        return true;
+    }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Loading Roslyn analyzers from {AssemblyPath}")]
     private static partial void LogLoadingAnalyzers(ILogger logger, string assemblyPath);
@@ -297,6 +355,9 @@ public partial class RoslynAnalyzerService : IRoslynAnalyzerService
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Analyzer {AnalyzerId} is not the analyzer registered under its ID any more, so it is not listed as loaded")]
     private static partial void LogAnalyzerNoLongerRegistered(ILogger logger, string analyzerId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Analyzer {AnalyzerId} was unregistered, so it is no longer listed as loaded")]
+    private static partial void LogStoppedListingAnalyzer(ILogger logger, string analyzerId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Discovering analyzer assemblies in {Directory}")]
     private static partial void LogDiscoveringAssemblies(ILogger logger, string directory);

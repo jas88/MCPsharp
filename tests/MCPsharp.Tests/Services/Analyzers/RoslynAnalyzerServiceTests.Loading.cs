@@ -174,6 +174,28 @@ public partial class RoslynAnalyzerServiceTests
     }
 
     [Test]
+    public async Task LoadAnalyzersAsync_WhenTheAnalyzerIsUnregisteredLater_StopsListingIt()
+    {
+        // Arrange - e.g. the analyzer host unloads the ID of one of the analyzers loaded
+        var registry = new AnalyzerRegistry(CreateNullLogger<AnalyzerRegistry>());
+        var service = new RoslynAnalyzerService(_mockLoader, _mockAnalyzerHost, _mockLogger, registry: registry);
+        var assemblyPath = CreateTestFile("test assembly", ".dll");
+        var unloaded = CreateMockAnalyzer("analyzer1");
+        var kept = CreateMockAnalyzer("analyzer2");
+        _mockLoader.LoadAnalyzersFromAssemblyAsync(assemblyPath, Arg.Any<CancellationToken>())
+            .Returns(ImmutableArray.Create(unloaded, kept));
+        await service.LoadAnalyzersAsync(assemblyPath);
+
+        // Act
+        var unregistered = await registry.UnregisterAnalyzerAsync("analyzer1");
+
+        // Assert
+        Assert.That(unregistered, Is.True);
+        Assert.That(service.GetAnalyzer("analyzer1"), Is.Null, "an analyzer the registry no longer holds isn't listed as loaded");
+        Assert.That(service.GetLoadedAnalyzers(), Is.EqualTo(new[] { kept }));
+    }
+
+    [Test]
     public async Task LoadAnalyzersAsync_WhenAnotherLoadReplacesTheAnalyzerBeforeItIsPublished_ListsTheOneTheRegistryHolds()
     {
         // Arrange - two loads of one ID at once: the second registers and publishes its analyzer after the first has
