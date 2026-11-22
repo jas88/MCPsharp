@@ -1,5 +1,7 @@
 ; Unshipped analyzer release
 ; <https://github.com/dotnet/roslyn/blob/main/src/RoslynAnalyzers/Microsoft.CodeAnalysis.Analyzers/ReleaseTrackingAnalyzers.Help.md>
+; Roslyn's release tracking analyzer (RS2007) needs the table rows below exactly as they are, so
+; markdownlint must not re-space them: <!-- markdownlint-disable-file MD060 -->
 
 ### New Rules
 
