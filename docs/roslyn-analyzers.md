@@ -203,6 +203,8 @@ Load Roslyn analyzers from assembly or directory.
 
 Every DLL in a directory is loaded to look for analyzers, so the directory may hold at most 100 DLLs and 100 MB of DLLs. For a larger one, such as the NuGet cache, the tool returns an error naming the limit and suggesting a specific package's analyzer folder (e.g. `~/.nuget/packages/<package>/<version>/analyzers/dotnet/cs`), a project's analyzer output folder, or a single DLL.
 
+A loaded analyzer replaces an analyzer registered under the same ID, such as an auto-loaded one, and later auto-loads leave it in place (see [analyzer-autoload.md](analyzer-autoload.md#1-project-analyzer-references)).
+
 **Parameters**:
 - `path` (string, required): Path to an analyzer assembly or a directory of assemblies (relative paths resolve against the open project)
 
