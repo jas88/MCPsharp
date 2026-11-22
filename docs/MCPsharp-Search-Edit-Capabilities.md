@@ -10,7 +10,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ### 1.1 Semantic/Symbol-Based Search (Strong)
 
-#### Tools Available:
+#### Tools Available
+
 - **find_symbol** - Locate symbols (classes, methods, properties) by name with optional kind filtering
 - **find_references** - Find all references to a symbol (both by name and by location)
 - **find_implementations** - Find all implementations of interfaces/abstract classes
@@ -21,7 +22,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 - **find_recursive_calls** - Find recursion patterns in methods
 - **find_circular_dependencies** - Detect circular dependency patterns
 
-#### Services Behind These Tools:
+#### Services Behind These Tools
+
 - **SymbolQueryService** - Symbol lookup by name with kind filtering
 - **ReferenceFinderService** - Reference analysis using Roslyn SymbolFinder
 - **AdvancedReferenceFinderService** - Facade for coordinating multiple search services
@@ -29,7 +31,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 - **CallChainService** - Call graph and chain analysis (10-depth default, configurable)
 - **TypeUsageService** - Type reference tracking across codebase
 
-#### Capabilities:
+#### Capabilities
+
 - Location-based lookup (file path + line/column)
 - Name-based lookup
 - Kind filtering (class, method, property, interface, etc.)
@@ -37,7 +40,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 - Confidence levels for call detection (AST-based, invocation-based, etc.)
 - Handles source generators transparently
 
-#### Limitations:
+#### Limitations
+
 - **No text/regex search** - Cannot search for arbitrary text patterns
 - **No grep-like functionality** - Cannot search file contents for strings
 - **Semantic only** - Requires compilation; won't find partial matches
@@ -46,16 +50,19 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ### 1.2 Type & Inheritance Analysis (Strong)
 
-#### Tools Available:
+#### Tools Available
+
 - **analyze_inheritance** - Map inheritance hierarchies (parent classes, interfaces)
 - **analyze_type_dependencies** - Find what a type depends on
 - **get_class_structure** - Complete class member introspection
 - **get_symbol_info** - Detailed symbol information at location
 
-#### Services:
+#### Services
+
 - **ClassStructureService** - Get class members (properties, methods, nested types)
 
-#### Capabilities:
+#### Capabilities
+
 - Full type hierarchy mapping
 - Interface implementation tracking
 - Dependency graph for types
@@ -65,16 +72,19 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ### 1.3 Call Graph & Dependency Analysis (Strong)
 
-#### Tools Available:
+#### Tools Available
+
 - **analyze_call_graph** - Build call graphs for types/namespaces
 - **analyze_call_patterns** - Analyze how methods are called
 - **find_call_chains** - Trace method call sequences
 - **find_circular_dependencies** - Detect circular reference issues
 
-#### Services:
+#### Services
+
 - **CallChainService** - Call chain exploration (configurable max depth: default 10-20)
 
-#### Capabilities:
+#### Capabilities
+
 - Bidirectional analysis (what calls X, what X calls)
 - Confidence scoring for detected calls
 - Call type classification (direct, invocation, delegate, etc.)
@@ -85,21 +95,25 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ### 1.4 Cross-File Impact & Feature Tracing (Moderate)
 
-#### Tools Available:
+#### Tools Available
+
 - **analyze_impact** - Predict what changes when code changes (C#, config, workflows, docs)
 - **trace_feature** - Find all code implementing a feature (multi-file)
 
-#### Services:
+#### Services
+
 - **ImpactAnalyzerService** - Combines C#, config, workflow, and documentation impacts
 - **FeatureTracerService** - Maps features to implementation files
 
-#### Capabilities:
+#### Capabilities
+
 - Multi-language impact analysis
 - Workflow/config impact detection
 - Feature component mapping (controller, service, repository, models, migrations, tests)
 - Documentation correlation
 
-#### Limitations:
+#### Limitations
+
 - Pattern-based rather than AST-based for non-C# files
 - Requires heuristic matching for feature identification
 
@@ -109,17 +123,20 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ### 2.1 Text-Based Editing (Basic)
 
-#### Tools:
+#### Tools
+
 - **file_edit** - Apply text edits (replace, insert, delete operations)
 - **file_write** - Write entire file content
 - **file_read** - Read file contents
 
-#### Implementation:
+#### Implementation
+
 - Simple text-based operations
 - No semantic awareness (text line/position based)
 - Support for batch operations via arrays
 
-#### Limitations:
+#### Limitations
+
 - Brittle for large files (line/column changes invalidate later edits)
 - No AST awareness - can produce invalid code
 - Manual offset calculation required
@@ -128,25 +145,29 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ### 2.2 Semantic/AST-Aware Editing (Strong)
 
-#### Tools:
+#### Tools
+
 - **add_class_property** - Add properties to classes with proper syntax
 - **add_class_method** - Add methods with parameter and body support
 - **file_edit** - (When used via SemanticEditService)
 
-#### Services:
+#### Services
+
 - **SemanticEditService** - AST-aware edits using Roslyn syntax rewriting
   - Finds insertion points (after properties, before methods)
   - Generates proper syntax nodes
   - Maintains code style consistency
   - Validates class existence and location
 
-#### Capabilities:
+#### Capabilities
+
 - Generate properties with getters/setters
 - Generate method stubs with parameters
 - Proper indentation and formatting
 - Respects accessibility modifiers (public, private, protected, internal)
 
-#### Limitations:
+#### Limitations
+
 - Limited to adding properties/methods
 - Cannot refactor existing code
 - Cannot restructure large blocks
@@ -155,14 +176,16 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ### 2.3 Bulk Editing Across Files (Strong)
 
-#### Tools:
+#### Tools
+
 - **bulk_replace** - Regex replace across multiple files in parallel
 - **bulk_transform** - Transform files using processors
 - **multi_file_edit** - Edit multiple files with different patterns
 - **conditional_edit** - Apply edits conditionally based on file content
 - **batch_refactor** - Structured refactoring across files
 
-#### Advanced Bulk Tools:
+#### Advanced Bulk Tools
+
 - **preview_bulk_changes** - Preview changes before applying
 - **validate_bulk_edit** - Validate bulk edits
 - **rollback_bulk_edit** - Undo bulk operations
@@ -170,7 +193,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 - **estimate_bulk_impact** - Predict bulk edit consequences
 - **get_bulk_file_statistics** - Pre-edit analysis
 
-#### Services:
+#### Services
+
 - **BulkEditService** - Parallel processing with:
   - Regex pattern support (with validation)
   - Backup creation (automatic rollback points)
@@ -180,7 +204,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
   - Progress tracking
   - Error handling and reporting
 
-#### Capabilities:
+#### Capabilities
+
 - Regex replacement patterns
 - Exclusion lists
 - Parallel processing
@@ -189,7 +214,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 - Pre-execution validation
 - Statistics collection
 
-#### Implementation Details:
+#### Implementation Details
+
 - Uses `System.Text.RegularExpressions.Regex` with validation
 - Concurrent processing with semaphore limiting
 - Temporary backup storage with MD5 checksums
@@ -201,7 +227,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ### 3.1 Code Quality & Static Analysis
 
-#### Tools:
+#### Tools
+
 - **code_quality_analyze** - Scan for code quality issues
 - **code_quality_fix** - Apply automated fixes
 - **code_quality_profiles** - Manage analysis profiles
@@ -209,7 +236,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 - **load_roslyn_analyzers** - Load custom analyzers
 - **list_roslyn_analyzers** - List available analyzers
 
-#### Services:
+#### Services
+
 - **RoslynAnalyzerService** - Roslyn-based diagnostic collection
 - **AnalyzerRegistry** - Manage built-in and custom analyzers
 - **BuiltInCodeFixRegistry** - Automated fixes for:
@@ -218,7 +246,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
   - Unused code
   - Static method recommendations
 
-#### Capabilities:
+#### Capabilities
+
 - Roslyn diagnostic detection
 - Configurable analyzer profiles
 - Code fix automation
@@ -229,7 +258,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ### 3.2 Duplicate Code Detection
 
-#### Tools:
+#### Tools
+
 - **detect_duplicates** - Find duplicate code blocks
 - **find_exact_duplicates** - Identical code sequences
 - **find_near_duplicates** - Similar code patterns
@@ -239,14 +269,16 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 - **get_refactoring_suggestions** - Suggest extract-method opportunities
 - **validate_refactoring** - Verify refactoring safety
 
-#### Services:
+#### Services
+
 - **DuplicateCodeDetectorService** - Syntax-based duplicate detection
 
 ---
 
 ### 3.3 Architecture & Complexity Analysis
 
-#### Tools:
+#### Tools
+
 - **validate_architecture** - Check against defined layers
 - **detect_layer_violations** - Find architecture rule breaks
 - **get_architecture_report** - Generate architecture summary
@@ -256,10 +288,12 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 - **get_predefined_architectures** - List template architectures
 - **define_custom_architecture** - Define custom layer rules
 
-#### Services:
+#### Services
+
 - **ArchitectureValidatorService** - Layer definition and validation
 
-#### Capabilities:
+#### Capabilities
+
 - Predefined architectures (Clean, Onion, Hexagonal, etc.)
 - Custom layer definitions
 - Violation reporting
@@ -269,7 +303,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ### 3.4 Large File & Complexity Analysis
 
-#### Tools (Phase 3 - Placeholders):
+#### Tools (Phase 3 - Placeholders)
+
 - **analyze_large_files** - Identify large files
 - **optimize_large_class** - Suggest class refactoring
 - **optimize_large_method** - Suggest method splitting
@@ -279,7 +314,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 - **get_complexity_metrics** - Cyclomatic complexity, etc.
 - **generate_optimization_plan** - Refactoring roadmap
 
-#### Status:
+#### Status
+
 - Currently placeholders (returns coming-soon message)
 - Infrastructure in place
 
@@ -287,18 +323,21 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ### 3.5 Configuration & Workflow Analysis
 
-#### Tools:
+#### Tools
+
 - **get_workflows** - List GitHub Actions workflows
 - **parse_workflow** - Parse workflow YAML structure
 - **validate_workflow_consistency** - Check workflow-code alignment
 - **get_config_schema** - Introspect config file structure
 - **merge_configs** - Combine configuration files
 
-#### Services:
+#### Services
+
 - **ConfigAnalyzerService** - JSON/YAML config parsing
 - **WorkflowAnalyzerService** - GitHub Actions YAML parsing
 
-#### Capabilities:
+#### Capabilities
+
 - YAML/JSON schema extraction
 - Workflow definition parsing
 - Config consistency checking
@@ -308,7 +347,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ## 4. STREAMING & LARGE-FILE PROCESSING
 
-#### Tools:
+### Tools
+
 - **stream_process_file** - Process files using streaming processors
 - **get_stream_progress** - Monitor streaming operations
 - **cancel_stream_operation** - Stop in-progress streams
@@ -318,11 +358,13 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 - **get_available_processors** - List available stream processors
 - **estimate_stream_processing** - Estimate stream operation cost
 
-#### Services:
+### Services
+
 - **StreamingFileProcessor** - Process large files incrementally
 - **StreamOperationManager** - Manage operation lifecycle
 
-#### Capabilities:
+### Capabilities
+
 - Streaming for large file processing
 - Progress tracking
 - Operation cancellation and resumption
@@ -332,7 +374,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 ## 5. CONSOLIDATED/UNIFIED SERVICES
 
-#### High-Level Tools:
+### High-Level Tools
+
 - **analyze_symbol** - Unified symbol analysis
 - **analyze_type** - Unified type analysis
 - **analyze_file** - Unified file analysis
@@ -341,7 +384,8 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 - **analyze_dependencies** - Unified dependency analysis
 - **analyze_quality** - Unified quality analysis
 
-#### Services:
+### Services
+
 - **UnifiedAnalysisService** - Facade coordinating multiple analyzers
 - **UniversalFileOperations** - File ops abstraction
 - **BulkOperationsHub** - Coordinate bulk operations
@@ -354,17 +398,20 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 ### 6.1 Text-Based Search (HIGH PRIORITY)
 
 **Missing:**
+
 - No full-text search / grep-like functionality
 - No regex literal search in file contents
 - No case-sensitive/insensitive text search
 - No multi-file text pattern matching
 
 **Impact:**
+
 - Cannot search for arbitrary strings across codebase
 - Must use semantic search (limited to valid C# symbols)
 - Cannot find string literals, comments, documentation text
 
 **Use Cases Blocked:**
+
 - "Find all TODO comments" → Not possible
 - "Find string 'connection_string' in configs" → Not possible
 - "Search for deprecated method name in comments" → Not possible
@@ -372,6 +419,7 @@ MCPsharp provides a **mature but incomplete** search and editing infrastructure.
 
 **Implementation Approach:**
 Would need:
+
 1. RipGrep / UGrep integration OR built-in regex file scanner
 2. Pattern: `search_text(pattern, fileGlob, caseSensitive, regex)`
 3. Limited results (pagination) due to response size
@@ -382,6 +430,7 @@ Would need:
 ### 6.2 Refactoring Operations (MEDIUM PRIORITY)
 
 **Missing:**
+
 - No rename symbol (requires cross-file updates)
 - No extract method
 - No extract class
@@ -391,10 +440,12 @@ Would need:
 - No convert to lambda
 
 **Impact:**
+
 - Large refactorings must be done manually
 - Cannot safely rename across project
 
 **What Exists:**
+
 - Add property/method (forward engineering only)
 - Bulk replace (text-based, fragile)
 
@@ -403,6 +454,7 @@ Would need:
 ### 6.3 Code Navigation Gaps (MEDIUM PRIORITY)
 
 **Missing:**
+
 - No "go to definition" (only "find references")
 - No "go to implementation" for interfaces
 - No "find all overrides" of a virtual method
@@ -410,6 +462,7 @@ Would need:
 - No "show base class" navigation
 
 **What Exists:**
+
 - find_references (find usages)
 - find_implementations (find implementing classes)
 - analyze_inheritance (get type hierarchy)
@@ -419,6 +472,7 @@ Would need:
 ### 6.4 Advanced Refactoring Tools (MEDIUM PRIORITY)
 
 **Missing:**
+
 - No automated code fix application (beyond bulk_replace)
 - No safe method extraction
 - No safe variable extraction
@@ -426,6 +480,7 @@ Would need:
 - No null-safety refactoring
 
 **What Exists:**
+
 - RoslynAnalyzerService detects issues
 - Code fix framework in place
 - Automated fixes for specific patterns (async/await, logging, unused code)
@@ -435,6 +490,7 @@ Would need:
 ### 6.5 SQL Migration Analysis (LOWER PRIORITY)
 
 **Status:** Phase 3 placeholder tools exist but not fully implemented
+
 - analyze_migrations
 - detect_breaking_changes  
 - get_migration_history
@@ -447,6 +503,7 @@ Would need:
 ### 6.6 Large File Optimization (LOWER PRIORITY)
 
 **Status:** Phase 3 placeholder tools exist but not fully implemented
+
 - analyze_large_files
 - optimize_large_class
 - optimize_large_method
@@ -460,7 +517,7 @@ Would need:
 ## 7. INVENTORY TABLE: Search Tools
 
 | Tool Name | Category | Type | Status | Depends On |
-|-----------|----------|------|--------|-----------|
+| ----------- | ---------- | ------ | -------- | ----------- |
 | find_symbol | Symbol Search | Semantic | ✓ Complete | SymbolQueryService |
 | find_references | Symbol Search | Semantic | ✓ Complete | ReferenceFinderService |
 | find_implementations | Symbol Search | Semantic | ✓ Complete | ReferenceFinderService |
@@ -494,7 +551,7 @@ Would need:
 ## 8. INVENTORY TABLE: Edit Tools
 
 | Tool Name | Category | Capability | Status | Mechanism |
-|-----------|----------|-----------|--------|-----------|
+| ----------- | ---------- | ----------- | -------- | ----------- |
 | file_edit | Basic Text Edit | Text operations | ✓ Complete | Line/column positioning |
 | file_write | File Write | Full file replacement | ✓ Complete | Direct write |
 | add_class_property | Code Generation | AST-aware | ✓ Complete | Roslyn syntax rewriting |
@@ -518,6 +575,7 @@ Would need:
 ## 9. ARCHITECTURE OBSERVATIONS
 
 ### 9.1 Strengths
+
 1. **Well-layered architecture**
    - Service layer (semantic operations)
    - MCP tool registry (marshaling)
@@ -544,6 +602,7 @@ Would need:
    - Impact analysis across languages
 
 ### 9.2 Weaknesses
+
 1. **Text search not implemented** - Major gap
 2. **No refactoring operations** - Limited to add/bulk operations
 3. **Phase 3 features incomplete** - SQL, large file optimization still placeholder
@@ -555,6 +614,7 @@ Would need:
 ## 10. RECOMMENDATIONS FOR IMPROVEMENT
 
 ### Priority 1 (CRITICAL): Add Text Search
+
 ```csharp
 // Proposed tool: search_text
 "search_text" => await ExecuteSearchText(request.Arguments, ct)
@@ -573,6 +633,7 @@ Would need:
 ```
 
 **Implementation approach:**
+
 1. Wrap System.Text.RegularExpressions or use built-in File I/O
 2. Parallel file iteration with early termination
 3. Pagination support for large result sets
@@ -581,6 +642,7 @@ Would need:
 ---
 
 ### Priority 2 (HIGH): Rename Symbol
+
 ```csharp
 "rename_symbol" => await ExecuteRenameSymbol(request.Arguments, ct)
 
@@ -599,6 +661,7 @@ Would need:
 ---
 
 ### Priority 3 (HIGH): Extract Method
+
 ```csharp
 "extract_method" => await ExecuteExtractMethod(request.Arguments, ct)
 
@@ -618,6 +681,7 @@ Would need:
 ---
 
 ### Priority 4 (MEDIUM): Enhance Code Generation
+
 - Add class generation (not just property/method)
 - Add interface generation
 - Add record/struct generation
@@ -626,6 +690,7 @@ Would need:
 ---
 
 ### Priority 5 (MEDIUM): Complete Phase 3
+
 - Implement SQL migration analysis
 - Implement large file optimization
 - Complete code smell detection
@@ -635,18 +700,21 @@ Would need:
 ## 11. COMPARATIVE ANALYSIS
 
 ### vs. ReSharper/Visual Studio
+
 - **Missing:** Rename refactoring, extract method, move type
 - **Missing:** Code navigation (go-to-definition)
 - **Have:** Better bulk operations, streaming support
 - **Comparable:** Architecture validation, code quality analysis
 
 ### vs. OmniSharp LSP
+
 - **Missing:** Text search (LSP `textDocument/references` for symbols exists)
 - **Have:** Better bulk operations, cross-language analysis
 - **Have:** Dedicated streaming/large-file support
 - **Comparable:** Symbol search, code completion
 
 ### vs. ripgrep/ag (Text Search Tools)
+
 - **Missing:** What we need! Pure text search not implemented
 - **Have:** Semantic awareness (they don't)
 - **Have:** AST-aware edits (they don't)
@@ -656,22 +724,26 @@ Would need:
 ## 12. TOOL USAGE RECOMMENDATIONS
 
 ### For C# Code Analysis
+
 - Use `find_symbol` + `find_references` for navigation
 - Use `analyze_call_graph` for understanding method interactions
 - Use `code_quality_analyze` for static analysis
 - Use `detect_duplicates` for code quality metrics
 
 ### For Safe Editing
+
 - Always use semantic tools (`add_class_property`, etc.) over `file_edit`
 - Use `preview_bulk_changes` before `bulk_replace`
 - Keep semantic edits atomic (one property/method at a time)
 
 ### For Large Refactorings
+
 - Break into multiple `bulk_replace` operations with `preview_bulk_changes`
 - Use `rollback_bulk_edit` if validation fails
 - Consider `multi_file_edit` for conditional changes
 
 ### For Architecture Validation
+
 - Start with `validate_architecture` to establish baseline
 - Use `detect_layer_violations` for compliance checking
 - Use `get_architecture_report` for documentation
@@ -681,17 +753,20 @@ Would need:
 ## 13. CONCLUSION
 
 **Current State:**
+
 - 60+ MCP tools exposed
 - Strong semantic/AST-based search and analysis
 - Comprehensive bulk editing capabilities
 - Well-architected service layer
 
 **Critical Gaps:**
+
 1. No text-based search (regex/grep)
 2. No refactoring operations (rename, extract)
 3. Phase 3 features incomplete
 
 **Priority Order:**
+
 1. Add text search capability (impacts many use cases)
 2. Implement rename symbol (most common refactoring)
 3. Implement extract method (code organization)
@@ -699,6 +774,7 @@ Would need:
 5. Add code generation for classes/interfaces
 
 **Overall Assessment:** **7.5/10**
+
 - Excellent foundation for AST-based work
 - Bulk editing is mature
 - Text search is critical missing piece

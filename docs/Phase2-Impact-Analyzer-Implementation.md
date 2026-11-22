@@ -53,7 +53,7 @@ Successfully implemented the Cross-File Impact Analyzer for MCPsharp Phase 2. Th
 
 ## Architecture
 
-```
+```text
 ImpactAnalyzerService (Orchestrator)
 ├── RoslynWorkspace (C# semantic analysis)
 ├── ReferenceFinderService (Symbol references)
@@ -73,25 +73,30 @@ ImpactAnalyzerService (Orchestrator)
 ## Key Features
 
 ### 1. Multi-Layer Impact Detection
+
 - **C# Code**: Method calls, class references, inheritance
 - **Configuration**: Settings that reference code (e.g., "UserService")
 - **Workflows**: Build scripts, test commands, deployment jobs
 - **Documentation**: API examples, code snippets, guides
 
 ### 2. Breaking Change Classification
+
 - `signature_change` - Method/property signature modified
 - `rename` - Class/method renamed
 - `delete` - Symbol removed entirely
 - `add` - New symbol added (minimal impact)
 
 ### 3. Smart Impact Determination
+
 - **C#**: Breaking if delete/signature_change/rename, otherwise reference
 - **Config**: Validation if delete, behavior if signature_change
 - **Workflow**: Breaking if affects build/test jobs
 - **Documentation**: Needs update if delete/signature_change/rename
 
 ### 4. Project Root Detection
+
 Automatically finds project root by searching for:
+
 - `*.sln` files
 - `*.csproj` files
 - `.git` directory
@@ -139,6 +144,7 @@ foreach (var impact in result.CSharpImpacts)
 ## Testing Strategy
 
 ### Integration Tests
+
 All integration tests are in `/Users/jas88/Developer/Github/MCPsharp/tests/MCPsharp.Tests/Integration/Phase2IntegrationTests.cs`:
 
 1. **WorkflowAnalysis** - Parse and validate GitHub Actions workflows
@@ -146,7 +152,8 @@ All integration tests are in `/Users/jas88/Developer/Github/MCPsharp/tests/MCPsh
 3. **ImpactAnalysis** - Cross-file impact prediction (to be added)
 
 ### Test Project Structure (Recommended)
-```
+
+```text
 TestProject/
 ├── src/
 │   ├── Models/User.cs (class with Delete method)
@@ -160,6 +167,7 @@ TestProject/
 ```
 
 When `User.Delete()` signature changes:
+
 - **3 C# files** affected (UserService, UserController, UserServiceTests)
 - **1 config file** may need review (appsettings.json)
 - **1 workflow** will fail tests (build.yml)
@@ -188,18 +196,21 @@ When `User.Delete()` signature changes:
 ## Next Steps
 
 ### High Priority
+
 1. Write comprehensive unit tests for ImpactAnalyzerService
 2. Add real test project with multi-file impacts
 3. Test method signature changes, renames, deletions
 4. Verify config and workflow impact detection
 
 ### Medium Priority
+
 1. Improve workflow validation (check .NET versions against csproj)
 2. Add config value type checking
 3. Detect documentation code fence blocks for more accurate matching
 4. Performance benchmarking on large codebases
 
 ### Future Enhancements
+
 1. Support for multiple projects in solution
 2. Transitive impact analysis (A → B → C)
 3. Impact severity scoring
@@ -209,6 +220,7 @@ When `User.Delete()` signature changes:
 ## Files Modified/Created
 
 ### Created
+
 - `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Models/ImpactModels.cs`
 - `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/Phase2/ConfigAnalyzerService.cs`
 - `/Users/jas88/Developer/Github/MCPsharp/src/MCPsharp/Services/Phase2/WorkflowAnalyzerService.cs`
@@ -216,11 +228,13 @@ When `User.Delete()` signature changes:
 - `/Users/jas88/Developer/Github/MCPsharp/docs/Phase2-Impact-Analyzer-Implementation.md`
 
 ### Modified
+
 - `/Users/jas88/Developer/Github/MCPsharp/tests/MCPsharp.Tests/Integration/Phase2IntegrationTests.cs` (Fixed dependencies)
 
 ## Build Status
 
 ✅ **Build Successful**
+
 - 0 Errors
 - 7 Warnings (pre-existing, not related to this implementation)
 - All projects compile successfully
@@ -228,6 +242,7 @@ When `User.Delete()` signature changes:
 ## Conclusion
 
 The Cross-File Impact Analyzer is now fully functional and ready for testing. It successfully:
+
 - Analyzes C# code changes using Roslyn semantic analysis
 - Parses and searches configuration files (JSON/YAML)
 - Analyzes GitHub Actions workflows

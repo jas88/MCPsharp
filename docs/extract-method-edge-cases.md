@@ -3,6 +3,7 @@
 ## Control Flow Edge Cases
 
 ### 1. Multiple Return Statements
+
 ```csharp
 // Input
 void ProcessData(int value) {
@@ -34,6 +35,7 @@ private void ExtractedMethod(int result) {
 ```
 
 ### 2. Early Returns with Values
+
 ```csharp
 // Input
 int Calculate(int x) {
@@ -55,6 +57,7 @@ private int ExtractedMethod(int x) {
 ```
 
 ### 3. Yield Return (Iterator)
+
 ```csharp
 // Input
 IEnumerable<int> Generate() {
@@ -74,6 +77,7 @@ private IEnumerable<int> ExtractedMethod() {
 ```
 
 ### 4. Async/Await
+
 ```csharp
 // Input
 async Task ProcessAsync() {
@@ -92,6 +96,7 @@ private async Task ExtractedMethod(Data data) {
 ```
 
 ### 5. Try-Catch-Finally
+
 ```csharp
 // Input - Partial try block (ERROR)
 void Process() {
@@ -133,6 +138,7 @@ private void ExtractedMethod() {
 ```
 
 ### 6. Using Statement
+
 ```csharp
 // Input
 void ProcessFile(string path) {
@@ -156,6 +162,7 @@ private void ExtractedMethod(string path) {
 ```
 
 ### 7. Lock Statement
+
 ```csharp
 // Input
 void UpdateCounter() {
@@ -177,6 +184,7 @@ private void ExtractedMethod(object syncRoot) {
 ```
 
 ### 8. Goto and Labels (FORBIDDEN)
+
 ```csharp
 // Input
 void Process() {
@@ -190,6 +198,7 @@ void Process() {
 ```
 
 ### 9. Switch Expression (C# 8.0+)
+
 ```csharp
 // Input
 string GetStatus(int code) {
@@ -217,6 +226,7 @@ private string ExtractedMethod(int code) {
 ```
 
 ### 10. Break/Continue in Loops
+
 ```csharp
 // Input - Break/continue to outer loop (ERROR)
 void Process() {
@@ -246,6 +256,7 @@ void Process() {
 ## Variable Scope Edge Cases
 
 ### 11. Out Variable Declaration (C# 7.0+)
+
 ```csharp
 // Input
 void Process() {
@@ -265,6 +276,7 @@ private void ExtractedMethod(string input) {
 ```
 
 ### 12. Pattern Matching Variables
+
 ```csharp
 // Input
 void Process(object obj) {
@@ -286,6 +298,7 @@ private void ExtractedMethod(object obj) {
 ```
 
 ### 13. Tuple Deconstruction
+
 ```csharp
 // Input
 void Process() {
@@ -305,6 +318,7 @@ private (string name, int age) ExtractedMethod() {
 ```
 
 ### 14. Ref Locals
+
 ```csharp
 // Input
 void Process(int[] array) {
@@ -322,6 +336,7 @@ private void ExtractedMethod(int[] array, int index) {
 ```
 
 ### 15. Anonymous Types
+
 ```csharp
 // Input
 void Process() {
@@ -338,6 +353,7 @@ private void ExtractedMethod() {
 ```
 
 ### 16. LINQ Query Variables
+
 ```csharp
 // Input
 void Process(List<Order> orders) {
@@ -361,6 +377,7 @@ private void ExtractedMethod(List<Order> orders) {
 ```
 
 ### 17. Captured Variables (Closures)
+
 ```csharp
 // Input
 void Process() {
@@ -382,6 +399,7 @@ private (Action increment, Func<int> getCount) ExtractedMethod(ref int counter) 
 ```
 
 ### 18. Discards
+
 ```csharp
 // Input
 void Process() {
@@ -403,6 +421,7 @@ private void ExtractedMethod() {
 ## Type System Edge Cases
 
 ### 19. Generic Type Parameters
+
 ```csharp
 // Input
 void Process<T>(T item) where T : IComparable<T> {
@@ -424,6 +443,7 @@ private void ExtractedMethod<T>(T item) where T : IComparable<T> {
 ```
 
 ### 20. Dynamic Types
+
 ```csharp
 // Input
 void Process(dynamic data) {
@@ -443,6 +463,7 @@ private void ExtractedMethod(dynamic data) {
 ```
 
 ### 21. Nullable Reference Types (C# 8.0+)
+
 ```csharp
 // Input
 void Process(string? input) {
@@ -466,6 +487,7 @@ private void ExtractedMethod(string? input) {
 ```
 
 ### 22. ValueTuple with Names
+
 ```csharp
 // Input
 void Process() {
@@ -485,6 +507,7 @@ private (string summary, (string name, int age) person) ExtractedMethod() {
 ```
 
 ### 23. Extension Method Context
+
 ```csharp
 // Input
 public static class Extensions {
@@ -506,6 +529,7 @@ private static void ExtractedMethod(string text) {
 ## Special Constructs
 
 ### 24. Local Functions
+
 ```csharp
 // Input
 void Process() {
@@ -527,6 +551,7 @@ private bool IsValid(int x) => x > 0;
 ```
 
 ### 25. Fixed Statement
+
 ```csharp
 // Input
 unsafe void Process(byte[] buffer) {
@@ -544,6 +569,7 @@ private unsafe void ExtractedMethod(byte[] buffer) {
 ```
 
 ### 26. Checked/Unchecked
+
 ```csharp
 // Input
 void Calculate(int x, int y) {
@@ -565,6 +591,7 @@ private void ExtractedMethod(int x, int y) {
 ```
 
 ### 27. Stackalloc
+
 ```csharp
 // Input
 void Process() {
@@ -583,6 +610,7 @@ private void ExtractedMethod() {
 ```
 
 ### 28. Conditional Compilation
+
 ```csharp
 // Input
 void Process() {
@@ -608,6 +636,7 @@ private void ExtractedMethod() {
 ```
 
 ### 29. String Interpolation with Format
+
 ```csharp
 // Input
 void Process(Person person) {
@@ -629,6 +658,7 @@ private void ExtractedMethod(Person person) {
 ```
 
 ### 30. Record Types (C# 9.0+)
+
 ```csharp
 // Input
 void Process(PersonRecord person) {
@@ -650,6 +680,7 @@ private PersonRecord ExtractedMethod(PersonRecord person) {
 ```
 
 ### 31. Init-Only Properties (C# 9.0+)
+
 ```csharp
 // Input
 void CreatePerson() {
@@ -675,6 +706,7 @@ private Person ExtractedMethod() {
 ```
 
 ### 32. Range and Index (C# 8.0+)
+
 ```csharp
 // Input
 void Process(string[] items) {
@@ -694,6 +726,7 @@ private void ExtractedMethod(string[] items) {
 ```
 
 ### 33. Async Streams (C# 8.0+)
+
 ```csharp
 // Input
 async Task ProcessStream() {
@@ -717,7 +750,7 @@ private async Task ExtractedMethod() {
 ## Validation Matrix
 
 | Scenario | Can Extract | Requirements | Warning |
-|----------|------------|--------------|---------|
+| ---------- | ------------ | -------------- | --------- |
 | Multiple returns | ✅ | Transform to single exit | Performance impact |
 | Yield return | ✅ | Extract as iterator | Changes method signature |
 | Async/await | ✅ | Extract as async | Propagates async |
@@ -739,6 +772,7 @@ private async Task ExtractedMethod() {
 ## Testing Checklist
 
 Each edge case should have:
+
 1. ✅ Positive test (successful extraction)
 2. ✅ Negative test (expected failure)
 3. ✅ Warning test (extraction with warnings)

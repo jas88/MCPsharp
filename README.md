@@ -15,7 +15,7 @@ A Model Context Protocol (MCP) server for intelligent C# project analysis and se
 
 ## Architecture
 
-```
+```text
 Claude Code
     ↓ MCP (stdio, JSON-RPC)
 ┌─────────────────────────────────┐
@@ -137,6 +137,7 @@ ollama pull qwen2.5-coder:3b
 MCPsharp will automatically detect Ollama at `http://localhost:11434` and use `qwen2.5-coder:3b` by default.
 
 **Environment variables:**
+
 - `OLLAMA_URL` — Ollama server URL (default: `http://localhost:11434`)
 - `OLLAMA_MODEL` — Model to use (default: `qwen2.5-coder:3b`)
 
@@ -191,12 +192,14 @@ The `apply_changes` parameter defaults to `false` to preview changes before appl
 **Why Roslyn AST instead of text manipulation?**
 
 Traditional tools use sed scripts, regex, or Python text manipulation which can:
+
 - Generate syntactically invalid code
 - Break compilation
 - Corrupt code structure
 - Introduce subtle bugs
 
 MCPsharp's AI transformation tools use Roslyn's Abstract Syntax Tree (AST) to:
+
 - ✅ Guarantee syntactically valid C# code
 - ✅ Preserve compilation integrity
 - ✅ Maintain code structure and formatting
@@ -204,6 +207,7 @@ MCPsharp's AI transformation tools use Roslyn's Abstract Syntax Tree (AST) to:
 - ✅ Use semantic awareness for refactoring
 
 **Available transformation tools:**
+
 - `ai_suggest_fix` - Bug fixes with Roslyn validation
 - `ai_refactor` - Semantic-aware refactoring (preserves behavior)
 - `ai_implement_feature` - AST-based code generation
@@ -245,6 +249,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | dotnet run -
 The server provides 40 MCP tools:
 
 **File Operations:**
+
 - `project_open` - Open a project directory
 - `project_info` - Get current project information
 - `file_list` - List files with optional glob patterns
@@ -253,6 +258,7 @@ The server provides 40 MCP tools:
 - `file_edit` - Apply text edits to a file
 
 **Roslyn/Semantic Analysis:**
+
 - `find_symbol` - Find symbols by name
 - `get_symbol_info` - Get detailed symbol information
 - `get_class_structure` - Get complete class structure
@@ -263,6 +269,7 @@ The server provides 40 MCP tools:
 - `parse_project` - Parse .csproj files
 
 **Workflow & Configuration:**
+
 - `get_workflows` - Get GitHub Actions workflows
 - `parse_workflow` - Parse workflow YAML
 - `validate_workflow_consistency` - Validate workflow vs project
@@ -270,6 +277,7 @@ The server provides 40 MCP tools:
 - `merge_configs` - Merge configuration files
 
 **Advanced Analysis (Phase 2):**
+
 - `analyze_impact` - Analyze code change impact
 - `trace_feature` - Trace features across files
 - `rename_symbol` - Rename symbols across the codebase
@@ -285,15 +293,18 @@ The server provides 40 MCP tools:
 - `analyze_type_dependencies` - Analyze type dependencies
 
 **Code Quality:**
+
 - `code_quality_analyze` - Analyze code quality issues
 - `code_quality_fix` - Apply automated fixes
 - `code_quality_profiles` - List available fix profiles
 - `extract_method` - Extract code to new method
 
 **AI-Powered Tools (Read-Only):**
+
 - `ask_codebase` - Ask natural language questions about the codebase using AI (returns concise answers, not verbose data)
 
 **AI-Powered Code Transformation (Roslyn AST-based):**
+
 - `ai_suggest_fix` - AI suggests bug fixes using Roslyn transformations (guarantees syntactically valid C#)
 - `ai_refactor` - AI-guided refactoring with semantic awareness (preserves program behavior)
 - `ai_implement_feature` - AI implements features using AST-based code generation (no string templates)
@@ -304,7 +315,7 @@ The server provides 40 MCP tools:
 
 ### Project Structure
 
-```
+```text
 MCPsharp/
 ├── src/
 │   └── MCPsharp/           # Main MCP server
@@ -348,6 +359,7 @@ dotnet run --project src/MCPsharp/MCPsharp.csproj --configuration Debug
 ## MCP Tools (Planned)
 
 ### Phase 0: Basic File Operations
+
 - `project_open` — Open a C# project directory
 - `project_info` — Get project metadata
 - `file_list` — List files with glob patterns
@@ -356,6 +368,7 @@ dotnet run --project src/MCPsharp/MCPsharp.csproj --configuration Debug
 - `file_edit` — Apply text edits
 
 ### Phase 1: Semantic C# Operations
+
 - `language_server_start` — Initialize Roslyn workspace
 - `find_symbol` — Find classes, methods, properties by name
 - `get_symbol_info` — Get detailed symbol information
@@ -369,12 +382,14 @@ See [docs/MVP-PLAN.md](docs/MVP-PLAN.md) for detailed tool specifications.
 ## Dependencies
 
 ### Runtime Dependencies
+
 - **Microsoft.CodeAnalysis.CSharp** (4.11.0) — Roslyn C# compiler APIs
 - **Microsoft.CodeAnalysis.CSharp.Workspaces** (4.11.0) — Roslyn workspace APIs
 - **Microsoft.Extensions.FileSystemGlobbing** (9.0.0) — Glob pattern matching
 - **Microsoft.Extensions.Logging** (9.0.0) — Logging infrastructure
 
 ### Test Dependencies
+
 - **xUnit** (2.9.2) — Test framework
 - **FluentAssertions** (6.12.1) — Fluent assertion library
 - **Moq** (4.20.72) — Mocking framework
@@ -383,6 +398,7 @@ See [docs/MVP-PLAN.md](docs/MVP-PLAN.md) for detailed tool specifications.
 ## CI/CD
 
 GitHub Actions workflow runs on every push and PR:
+
 - Builds on Linux, macOS, and Windows
 - Runs all tests with code coverage
 - Publishes self-contained binaries on main branch
@@ -418,5 +434,5 @@ This is a personal project by @jas88. Contributions are welcome!
 
 ## Support
 
-- Issues: https://github.com/jas88/MCPsharp/issues
-- Discussions: https://github.com/jas88/MCPsharp/discussions
+- Issues: <https://github.com/jas88/MCPsharp/issues>
+- Discussions: <https://github.com/jas88/MCPsharp/discussions>

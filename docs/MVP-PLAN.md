@@ -3,12 +3,14 @@
 ## Overview
 
 This document outlines the implementation plan for the MCPsharp MVP, broken into two phases:
+
 - **Phase 0**: Basic MCP server with file operations (open, list, read, write, edit)
 - **Phase 1**: csharp-ls integration for semantic C# operations (find class, modify class)
 
 ## Phase 0: Basic MCP Server
 
 ### Goals
+
 - Implement MCP protocol (JSON-RPC 2.0 over stdio)
 - Support project/directory context management
 - Provide basic file operations (list, read, write, edit as text)
@@ -16,7 +18,7 @@ This document outlines the implementation plan for the MCPsharp MVP, broken into
 
 ### Architecture
 
-```
+```text
 Claude Code
     ↓ stdin/stdout (JSON-RPC 2.0)
 ┌─────────────────────────────────┐
@@ -34,7 +36,9 @@ File System
 ### Components
 
 #### 1. JSON-RPC Handler
+
 **Responsibilities:**
+
 - Read JSON-RPC messages from stdin
 - Parse and validate JSON-RPC 2.0 format
 - Route to appropriate handlers
@@ -42,6 +46,7 @@ File System
 - Error handling and logging
 
 **Implementation:**
+
 ```csharp
 public class JsonRpcHandler
 {
@@ -62,19 +67,23 @@ public class JsonRpcHandler
 ```
 
 **Message Types:**
+
 - `initialize` — Handshake with Claude Code
 - `tools/list` — Return available tools
 - `tools/call` — Execute a tool
 - `notifications/*` — Log messages, progress updates
 
 #### 2. Project Context Manager
+
 **Responsibilities:**
+
 - Track currently opened project directory
 - Validate paths are within project boundary
 - Maintain project metadata (file count, last scan time)
 - Watch for file system changes (optional for MVP)
 
 **State:**
+
 ```csharp
 public class ProjectContext
 {
@@ -86,18 +95,22 @@ public class ProjectContext
 ```
 
 **Operations:**
+
 - `OpenProject(path)` — Validate and set root path
 - `IsValidPath(path)` — Check path is within project
 - `GetProjectInfo()` — Return metadata
 
 #### 3. File Operations Service
+
 **Responsibilities:**
+
 - List files matching patterns
 - Read file contents as text
 - Write file contents
 - Apply text edits (line/column based or full replace)
 
 **Implementation Considerations:**
+
 - Use `System.IO.File` for basic operations
 - Support glob patterns for listing (`**/*.cs`, `src/**/*.csproj`)
 - Text editing: support both full-file replace and range-based edits
@@ -107,9 +120,11 @@ public class ProjectContext
 ### MCP Tools (Phase 0)
 
 #### `project_open`
+
 Open a project directory for analysis.
 
 **Parameters:**
+
 ```json
 {
   "path": "/absolute/path/to/project"
@@ -117,6 +132,7 @@ Open a project directory for analysis.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -127,6 +143,7 @@ Open a project directory for analysis.
 ```
 
 **Validation:**
+
 - Path must exist and be a directory
 - Path must be absolute
 - Update ProjectContext state
@@ -134,11 +151,13 @@ Open a project directory for analysis.
 ---
 
 #### `project_info`
+
 Get information about the currently opened project.
 
 **Parameters:** None
 
 **Response:**
+
 ```json
 {
   "path": "/absolute/path/to/project",
@@ -151,9 +170,11 @@ Get information about the currently opened project.
 ---
 
 #### `file_list`
+
 List files in the project, optionally filtered by glob pattern.
 
 **Parameters:**
+
 ```json
 {
   "pattern": "**/*.cs",
@@ -162,6 +183,7 @@ List files in the project, optionally filtered by glob pattern.
 ```
 
 **Response:**
+
 ```json
 {
   "files": [
@@ -184,6 +206,7 @@ List files in the project, optionally filtered by glob pattern.
 ```
 
 **Implementation:**
+
 ```csharp
 // Use Directory.EnumerateFiles with SearchOption.AllDirectories
 // Filter with Glob pattern matching library (DotNet.Glob or Microsoft.Extensions.FileSystemGlobbing)
@@ -192,9 +215,11 @@ List files in the project, optionally filtered by glob pattern.
 ---
 
 #### `file_read`
+
 Read a file's contents as text.
 
 **Parameters:**
+
 ```json
 {
   "path": "src/Program.cs"
@@ -202,6 +227,7 @@ Read a file's contents as text.
 ```
 
 **Response:**
+
 ```json
 {
   "path": "src/Program.cs",
@@ -213,6 +239,7 @@ Read a file's contents as text.
 ```
 
 **Error Cases:**
+
 - File not found → `FileNotFoundError`
 - Path outside project → `SecurityError`
 - File too large → Return truncated with warning
@@ -221,9 +248,11 @@ Read a file's contents as text.
 ---
 
 #### `file_write`
+
 Write content to a file (creates if doesn't exist, overwrites if exists).
 
 **Parameters:**
+
 ```json
 {
   "path": "src/NewFile.cs",
@@ -233,6 +262,7 @@ Write content to a file (creates if doesn't exist, overwrites if exists).
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -243,6 +273,7 @@ Write content to a file (creates if doesn't exist, overwrites if exists).
 ```
 
 **Implementation:**
+
 - Validate path is within project
 - Create parent directories if `createDirectories: true`
 - Write with UTF-8 encoding
@@ -251,9 +282,11 @@ Write content to a file (creates if doesn't exist, overwrites if exists).
 ---
 
 #### `file_edit`
+
 Apply text edits to a file without reading full content.
 
 **Parameters:**
+
 ```json
 {
   "path": "src/Program.cs",
@@ -279,6 +312,7 @@ Apply text edits to a file without reading full content.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -289,6 +323,7 @@ Apply text edits to a file without reading full content.
 ```
 
 **Implementation:**
+
 - Read file into memory
 - Apply edits in reverse order (end to start) to maintain offsets
 - Validate all edits before applying any
@@ -296,6 +331,7 @@ Apply text edits to a file without reading full content.
 - Write back to file
 
 **Edit Types:**
+
 - `replace` — Replace text in range
 - `insert` — Insert text at position
 - `delete` — Delete text in range
@@ -340,13 +376,14 @@ Apply text edits to a file without reading full content.
    - Test error cases
    - Manual testing with Claude Code (if possible)
 
-**Total Phase 0 Estimate: 16-24 hours (2-3 days)**
+Total Phase 0 Estimate: 16-24 hours (2-3 days)
 
 ---
 
 ## Phase 1: csharp-ls Integration
 
 ### Goals
+
 - Integrate csharp-ls as embedded language server
 - Implement LSP client for communication
 - Provide semantic C# operations (find class, get symbol info, modify class)
@@ -354,7 +391,7 @@ Apply text edits to a file without reading full content.
 
 ### Architecture
 
-```
+```text
 Claude Code
     ↓ stdin/stdout (MCP/JSON-RPC)
 ┌─────────────────────────────────┐
@@ -374,7 +411,9 @@ Claude Code
 ### Components
 
 #### 1. LSP Client
+
 **Responsibilities:**
+
 - Start csharp-ls subprocess
 - Send LSP initialization handshake
 - Notify csharp-ls of file opens/changes/closes
@@ -383,7 +422,8 @@ Claude Code
 - Manage subprocess lifecycle
 
 **Key LSP Messages:**
-```
+
+```text
 initialize → Initialize language server with workspace root
 initialized → Server ready notification
 textDocument/didOpen → Open a file for analysis
@@ -398,6 +438,7 @@ exit → Terminate
 ```
 
 **Implementation:**
+
 ```csharp
 public class LspClient
 {
@@ -450,14 +491,17 @@ public class LspClient
 ```
 
 #### 2. Semantic Operation Handler
+
 **Responsibilities:**
+
 - Translate high-level MCP tool calls into LSP requests
 - Parse LSP responses and format for MCP
 - Handle multi-step operations (e.g., "add property" = find class + parse + generate + edit)
 - Cache LSP responses for performance
 
-**Example Flow: "Find class ExampleClass"**
-```
+##### Example Flow: "Find class ExampleClass"
+
+```text
 MCP Tool Call: find_symbol(name="ExampleClass", kind="class")
     ↓
 LSP Request: workspace/symbol(query="ExampleClass")
@@ -467,8 +511,9 @@ LSP Response: [ { name: "ExampleClass", kind: Class, location: {...} } ]
 MCP Response: { className: "ExampleClass", file: "src/Example.cs", line: 10 }
 ```
 
-**Example Flow: "Add property to class"**
-```
+##### Example Flow: "Add property to class"
+
+```text
 MCP Tool Call: add_class_property(className="ExampleClass", propertyName="ClaudeWasHere", propertyType="string")
     ↓
 1. find_symbol("ExampleClass") → get file location
@@ -483,9 +528,11 @@ MCP Response: { success: true, property: "ClaudeWasHere", location: {...} }
 ### MCP Tools (Phase 1)
 
 #### `language_server_start`
+
 Start the csharp-ls language server for the current project.
 
 **Parameters:**
+
 ```json
 {
   "workspaceRoot": "/absolute/path/to/project"
@@ -493,6 +540,7 @@ Start the csharp-ls language server for the current project.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -507,6 +555,7 @@ Start the csharp-ls language server for the current project.
 ```
 
 **Implementation:**
+
 - Call `LspClient.StartAsync()`
 - Wait for `initialized` notification
 - Cache server capabilities
@@ -514,9 +563,11 @@ Start the csharp-ls language server for the current project.
 ---
 
 #### `find_symbol`
+
 Find symbols (classes, methods, properties, etc.) by name.
 
 **Parameters:**
+
 ```json
 {
   "query": "ExampleClass",
@@ -526,6 +577,7 @@ Find symbols (classes, methods, properties, etc.) by name.
 ```
 
 **Response:**
+
 ```json
 {
   "symbols": [
@@ -543,10 +595,12 @@ Find symbols (classes, methods, properties, etc.) by name.
 ```
 
 **LSP Mapping:**
+
 - `workspace/symbol` with query parameter
 - Filter by `kind` if specified (Class = 5, Method = 6, Property = 7, etc.)
 
 **Symbol Kinds:**
+
 - `class`, `interface`, `struct`, `enum`
 - `method`, `property`, `field`
 - `namespace`
@@ -554,9 +608,11 @@ Find symbols (classes, methods, properties, etc.) by name.
 ---
 
 #### `get_symbol_info`
+
 Get detailed information about a symbol at a specific location.
 
 **Parameters:**
+
 ```json
 {
   "file": "src/Example.cs",
@@ -566,6 +622,7 @@ Get detailed information about a symbol at a specific location.
 ```
 
 **Response:**
+
 ```json
 {
   "name": "ExampleClass",
@@ -592,6 +649,7 @@ Get detailed information about a symbol at a specific location.
 ```
 
 **LSP Mapping:**
+
 - `textDocument/hover` for documentation
 - `textDocument/documentSymbol` for members
 - Combine results into single response
@@ -599,9 +657,11 @@ Get detailed information about a symbol at a specific location.
 ---
 
 #### `get_class_structure`
+
 Get the structure of a specific class (all members, base types, etc.).
 
 **Parameters:**
+
 ```json
 {
   "className": "ExampleClass",
@@ -610,6 +670,7 @@ Get the structure of a specific class (all members, base types, etc.).
 ```
 
 **Response:**
+
 ```json
 {
   "name": "ExampleClass",
@@ -649,6 +710,7 @@ Get the structure of a specific class (all members, base types, etc.).
 ```
 
 **Implementation:**
+
 - Use `textDocument/documentSymbol` to get full structure
 - Parse symbol tree to extract class details
 - May need Roslyn for full detail (Phase 2)
@@ -656,9 +718,11 @@ Get the structure of a specific class (all members, base types, etc.).
 ---
 
 #### `add_class_property`
+
 Add a property to an existing class.
 
 **Parameters:**
+
 ```json
 {
   "className": "ExampleClass",
@@ -672,6 +736,7 @@ Add a property to an existing class.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -686,6 +751,7 @@ Add a property to an existing class.
 ```
 
 **Implementation Steps:**
+
 1. Find class location (use `find_symbol` or provided `file`)
 2. Get class structure (use `get_class_structure`)
 3. Determine insertion point:
@@ -697,6 +763,7 @@ Add a property to an existing class.
 6. Notify LSP of change: `textDocument/didChange`
 
 **Code Generation:**
+
 ```csharp
 string GenerateProperty(string name, string type, string accessibility, bool hasGetter, bool hasSetter)
 {
@@ -709,9 +776,11 @@ string GenerateProperty(string name, string type, string accessibility, bool has
 ---
 
 #### `add_class_method`
+
 Add a method to an existing class.
 
 **Parameters:**
+
 ```json
 {
   "className": "ExampleClass",
@@ -727,6 +796,7 @@ Add a method to an existing class.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -741,6 +811,7 @@ Add a method to an existing class.
 ```
 
 **Implementation:**
+
 - Similar to `add_class_property`
 - Parse parameters and generate signature
 - Format method body with proper indentation
@@ -749,9 +820,11 @@ Add a method to an existing class.
 ---
 
 #### `find_references`
+
 Find all references to a symbol.
 
 **Parameters:**
+
 ```json
 {
   "file": "src/Example.cs",
@@ -761,6 +834,7 @@ Find all references to a symbol.
 ```
 
 **Response:**
+
 ```json
 {
   "symbol": "ExampleClass",
@@ -783,6 +857,7 @@ Find all references to a symbol.
 ```
 
 **LSP Mapping:**
+
 - `textDocument/references`
 - Include declaration location if `includeDeclaration: true`
 
@@ -836,7 +911,7 @@ Find all references to a symbol.
    - Create sample C# project for testing
    - Add troubleshooting guide
 
-**Total Phase 1 Estimate: 30-45 hours (4-6 days)**
+Total Phase 1 Estimate: 30-45 hours (4-6 days)
 
 ---
 
@@ -845,12 +920,14 @@ Find all references to a symbol.
 ### Phase 0 Testing
 
 **Unit Tests:**
+
 - JSON-RPC message parsing/serialization
 - Path validation (inside/outside project)
 - Glob pattern matching
 - Text edit application (multiple edits, edge cases)
 
 **Integration Tests:**
+
 ```csharp
 [Fact]
 public async Task FullWorkflow_OpenListReadEditWrite()
@@ -873,12 +950,14 @@ public async Task FullWorkflow_OpenListReadEditWrite()
 ### Phase 1 Testing
 
 **Unit Tests:**
+
 - LSP message serialization
 - LSP request/response correlation (match IDs)
 - Code generation (properties, methods)
 - Indentation detection
 
 **Integration Tests:**
+
 ```csharp
 [Fact]
 public async Task SemanticEdit_AddPropertyToClass()
@@ -913,6 +992,7 @@ public async Task SemanticEdit_AddPropertyToClass()
 ```
 
 **Manual Testing with Claude Code:**
+
 1. Install MCP server in Claude Code config
 2. Open a real C# project
 3. Ask Claude Code to: "Find the class Program"
@@ -925,18 +1005,21 @@ public async Task SemanticEdit_AddPropertyToClass()
 ## Dependencies
 
 ### NuGet Packages
+
 - **System.Text.Json** — JSON serialization (built-in)
 - **Microsoft.Extensions.FileSystemGlobbing** — Glob pattern matching
 - **Microsoft.Extensions.Logging** — Logging infrastructure
 - **Newtonsoft.Json** or **System.Text.Json** — LSP message handling
 
 ### External Tools
-- **csharp-ls** — Download from https://github.com/razzmatazz/csharp-language-server
+
+- **csharp-ls** — Download from <https://github.com/razzmatazz/csharp-language-server>
   - Version: 0.5.0 or later
   - Binary for macOS: `csharp-ls` (x64 or arm64)
   - Bundle in `/tools/csharp-ls` directory
 
 ### Testing Tools
+
 - **xUnit** — Unit testing framework
 - **FluentAssertions** — Assertion library
 - **Moq** — Mocking framework for LSP client tests
@@ -946,6 +1029,7 @@ public async Task SemanticEdit_AddPropertyToClass()
 ## Success Criteria
 
 ### Phase 0
+
 - ✅ Can open a C# project directory
 - ✅ Can list files with glob patterns
 - ✅ Can read file contents as text
@@ -956,6 +1040,7 @@ public async Task SemanticEdit_AddPropertyToClass()
 - ✅ Integration test: complete file edit workflow
 
 ### Phase 1
+
 - ✅ csharp-ls starts and initializes successfully
 - ✅ Can find classes by name across project
 - ✅ Can get class structure (properties, methods)
@@ -971,25 +1056,33 @@ public async Task SemanticEdit_AddPropertyToClass()
 ## Risk Mitigation
 
 ### Risk: csharp-ls fails to start or crashes
+
 **Mitigation:**
+
 - Implement health check and auto-restart
 - Log stderr output for debugging
 - Provide fallback: text-based operations still work
 
 ### Risk: LSP responses are slow on large projects
+
 **Mitigation:**
+
 - Implement timeout and cancellation
 - Cache LSP responses (symbols, structure)
 - Show progress to user for long operations
 
 ### Risk: Text edits corrupt file (indentation, syntax)
+
 **Mitigation:**
+
 - Always validate edit locations before applying
 - Use csharp-ls diagnostics to verify syntax after edit
 - Implement "dry run" mode that returns preview without applying
 
 ### Risk: Path traversal security issues
+
 **Mitigation:**
+
 - Canonicalize all paths (Path.GetFullPath)
 - Always check path starts with project root
 - Unit tests for path traversal attempts
@@ -1016,7 +1109,7 @@ public async Task SemanticEdit_AddPropertyToClass()
 **Phase 1:** 4-6 days (30-45 hours)
 **Testing & Polish:** 1-2 days (8-16 hours)
 
-**Total MVP Timeline: 7-11 days (54-85 hours)**
+Total MVP Timeline: 7-11 days (54-85 hours)
 
 ---
 

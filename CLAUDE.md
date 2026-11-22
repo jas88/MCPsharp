@@ -49,7 +49,7 @@ dotnet publish -c Release -r win-x64 --self-contained
 
 ### Component Hierarchy
 
-```
+```text
 Claude Code
     ↓ MCP (stdio, JSON-RPC)
 ┌─────────────────────────────────┐
@@ -70,18 +70,21 @@ Claude Code
 
 ### Key Components
 
-**1. MCP Protocol Handler**
+#### 1. MCP Protocol Handler
+
 - Manages stdin/stdout communication with Claude Code
 - Implements JSON-RPC 2.0 for MCP spec compliance
 - Routes tool calls to appropriate analyzers
 
-**2. Background Analysis Manager**
+#### 2. Background Analysis Manager
+
 - State machine: `Idle → Initializing → Loaded → FullyAnalyzed`
 - Coordinates incremental re-analysis on file changes
 - Maintains Roslyn compilation state
 - Provides non-blocking analysis that fills in detail over time
 
-**3. Multi-Language Analyzer**
+#### 3. Multi-Language Analyzer
+
 - **CSharpAnalyzer** — Wraps csharp-ls, provides semantic queries
 - **ProjectAnalyzer** — Parses .csproj/.sln files, builds dependency graph
 - **ConfigAnalyzer** — Parses JSON/YAML config files
@@ -89,7 +92,8 @@ Claude Code
 - **SqlAnalyzer** — Parses Entity Framework migrations
 - **DocumentationAnalyzer** — Extracts Markdown structure
 
-**4. Project Index & Cache**
+#### 4. Project Index & Cache
+
 - In-memory index of symbols, types, files, configurations
 - Incremental update on file changes
 - Optional disk persistence for faster startup
@@ -99,14 +103,17 @@ Claude Code
 The server will provide these tools to Claude Code:
 
 ### Project Structure
+
 - `get_project_overview()` — Immediate snapshot of project shape
 - `get_project_references()` — Project-level dependency graph
 
 ### File Analysis
+
 - `summarize_file(path)` — Structured overview of a single file
 - `get_type_hierarchy(namespace?)` — Classes, interfaces, records in namespace
 
 ### Semantic Analysis
+
 - `find_references(symbol)` — Find all uses of a symbol
 - `get_definition(symbol)` — Resolve symbol to definition
 - `get_dependents(symbol)` — What depends on this?
@@ -114,28 +121,34 @@ The server will provide these tools to Claude Code:
 - `get_call_chain(method, direction)` — Backward/forward call analysis
 
 ### Project Mapping
+
 - `trace_feature(featureName)` — Find all code implementing a feature
 - `get_architecture()` — Layer structure and violations
 
 ### Configuration & Environment
+
 - `get_configuration_schema()` — Config file locations and structure
 - `get_workflows()` — GitHub Actions workflow definitions
 - `get_workflow_impact(change)` — Check if code change breaks CI/CD
 
 ### Code Quality
+
 - `detect_issues()` — Quick scan for code smells
 - `validate_consistency()` — Check .csproj vs. workflow vs. code
 
 ### Database & Migrations
+
 - `analyze_migrations()` — Entity Framework migration history
 
 ### Code Editing
+
 - `edit_file(path, edits)` — Apply semantic-aware edits
 - `get_call_chain(method, direction)` — Method call analysis
 
 ## Implementation Phases
 
 ### Phase 1: MVP (Current)
+
 - MCP protocol handler
 - Basic background analysis state machine
 - csharp-ls LSP client wrapper
@@ -143,18 +156,21 @@ The server will provide these tools to Claude Code:
 - Core tools: `get_project_overview`, `summarize_file`, `find_references`, `edit_file`
 
 ### Phase 2: Polyglot & Cross-File Impact
+
 - YAML workflow parsing
 - JSON/YAML config analysis
 - `get_full_impact()` cross-file change prediction
 - `trace_feature()` multi-file navigation
 
 ### Phase 3: Quality & Depth
+
 - SQL migration analysis
 - Architecture layer validation
 - Duplicate code detection
 - Large-file optimization
 
 ### Phase 4: Polish & Extensibility
+
 - Incremental re-analysis on file changes
 - Caching layer
 - Custom analyzer extensibility
@@ -162,23 +178,27 @@ The server will provide these tools to Claude Code:
 
 ## Technical Decisions
 
-**Embedded csharp-ls**
+### Embedded csharp-ls
+
 - Single binary deployment (no separate tool install)
 - Version control (controlled upgrades)
 - Managed lifecycle integration
 - Trade-off: Larger binary (~150-200MB)
 
-**Background Analysis**
+### Background Analysis
+
 - Progressive UX (returns quick partial results)
 - State machine for incremental updates
 - Feels fast even on large projects
 
-**Roslyn + csharp-ls Combination**
+### Roslyn + csharp-ls Combination
+
 - Roslyn: Deep AST analysis for large files, source generators
 - csharp-ls: Proven LSP implementation, clean stdio interface
 - Best of both worlds
 
-**Native .NET Parsers**
+### Native .NET Parsers
+
 - YamlDotNet for YAML (workflows)
 - Built-in System.Xml, System.Text.Json
 - Tight integration with C# analysis
@@ -186,17 +206,20 @@ The server will provide these tools to Claude Code:
 ## Testing Strategy
 
 ### Unit Tests
+
 - Analyzer implementations (YAML, JSON, project parsing)
 - State machine transitions
 - Edit application logic
 
 ### Integration Tests
+
 - Real C# projects (small, medium, large)
 - Monorepo scenarios
 - Source generator handling
 - Cross-file impact predictions
 
 ### Performance Benchmarks
+
 - Project load time (target: <5s for 500-file project)
 - Analysis completion time
 - Tool response latency (<1s for most queries)
@@ -216,11 +239,13 @@ The server will provide these tools to Claude Code:
 ## Key Dependencies
 
 **NuGet packages:**
+
 - `OmniSharp.Extensions.LanguageServer` — MCP/LSP protocol implementation
 - `YamlDotNet` — YAML parsing for workflows
 - `System.Xml`, `System.Text.Json` — XML/JSON parsing (built-in)
 
 **Embedded binary:**
+
 - csharp-ls — Packaged as .NET tool within published binary
 
 ## Success Criteria

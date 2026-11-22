@@ -792,26 +792,31 @@ public class ExtractMethodBenchmarks
 ## Rollout Plan
 
 ### Week 1: Foundation
+
 - Core extraction logic
 - Basic parameter inference
 - Simple test cases
 
 ### Week 2: Data Flow
+
 - Complete data flow analysis
 - Ref/out parameter detection
 - Return value inference
 
 ### Week 3: Edge Cases
+
 - Async/await handling
 - Multiple returns
 - Exception handling
 
 ### Week 4: Advanced Features
+
 - Generic methods
 - Iterator methods
 - Complex control flow
 
 ### Week 5: Polish
+
 - Performance optimization
 - Error messages
 - Preview mode

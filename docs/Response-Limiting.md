@@ -19,7 +19,7 @@ MCPsharp includes a configurable response processing system that automatically l
 Configure response limiting using these environment variables:
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `MCP_MAX_TOKENS` | `4000` | Maximum tokens per response |
 | `MCP_ENABLE_TRUNCATION` | `true` | Whether to truncate oversized responses |
 | `MCP_SUMMARY_STYLE` | `Ellipsis` | Truncation strategy (Ellipsis, Paragraphs, JsonStructure, LineBased) |
@@ -49,15 +49,19 @@ export MCP_WARNING_THRESHOLD=0.6
 ## Truncation Strategies
 
 ### Ellipsis (Default)
+
 Simple truncation with ellipsis at the end. Best for general text responses.
 
 ### Paragraphs
+
 Preserves complete paragraphs, truncating at paragraph boundaries. Best for documentation and explanatory text.
 
 ### JsonStructure
+
 Intelligently truncates JSON responses while preserving structure. Keeps important fields and truncates large arrays/objects.
 
 ### LineBased
+
 Truncates at line boundaries, preserving complete lines. Best for code, logs, and structured text.
 
 ## Response Format
@@ -108,6 +112,7 @@ The response processing system works by:
 ## Use Cases
 
 ### Development Environments
+
 ```bash
 export MCP_MAX_TOKENS=2000
 export MCP_WARNING_THRESHOLD=0.6
@@ -115,6 +120,7 @@ export MCP_INCLUDE_TOKEN_COUNT=true
 ```
 
 ### Production Systems
+
 ```bash
 export MCP_MAX_TOKENS=4000
 export MCP_ENABLE_TRUNCATION=true
@@ -122,6 +128,7 @@ export MCP_SUMMARY_STYLE=JsonStructure
 ```
 
 ### API Gateways
+
 ```bash
 export MCP_MAX_TOKENS=1500
 export MCP_EXEMPT_TOOLS="stream_*,bulk_*"

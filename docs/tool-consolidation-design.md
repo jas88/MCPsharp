@@ -375,6 +375,7 @@ public abstract class ToolHandler
    - Add deprecation warnings to old tools
 
 3. **Migration path**
+
    ```csharp
    // Old tool still works but warns
    [Obsolete("Use file_info instead")]
@@ -397,6 +398,7 @@ public abstract class ToolHandler
    - etc.
 
 3. **Feature mapping**
+
    ```csharp
    // Map old tool parameters to new ones
    var parameters = new Dictionary<string, object>
@@ -441,26 +443,31 @@ public abstract class ToolHandler
 ## Benefits of Consolidation
 
 ### 1. Reduced Complexity
+
 - From 196 tools to 38 tools (80% reduction)
 - Easier to learn and remember
 - Clearer organization
 
 ### 2. Improved Discoverability
+
 - Logical grouping by functionality
 - Consistent parameter patterns
 - Better documentation structure
 
 ### 3. Token Optimization
+
 - Single tool calls return comprehensive data
 - Reduced request/response overhead
 - Better pagination support
 
 ### 4. Maintainability
+
 - Fewer handlers to maintain
 - Consistent error handling
 - Unified logging and diagnostics
 
 ### 5. Flexibility
+
 - Parameter-driven behavior
 - Composable operations
 - Extensible architecture

@@ -3,6 +3,7 @@
 ## Issue Summary
 
 The `file_edit` tool in MCPsharp is experiencing column indexing inconsistencies that cause errors when applying text edits. Users report two main errors:
+
 - "The given key was not present in the dictionary"
 - "Index and length must refer to a location within the string"
 
@@ -11,6 +12,7 @@ The `file_edit` tool in MCPsharp is experiencing column indexing inconsistencies
 ### 1. Indexing Convention
 
 **MCPsharp uses 0-indexed positions for both lines and columns:**
+
 - Line 0 = First line in file
 - Column 0 = First character in line
 - Position refers to the character before which the operation occurs
@@ -48,6 +50,7 @@ lines[edit.StartLine] = before + edit.NewText + after;
 **Problem**: Users often expect EndColumn to be inclusive, but the implementation treats it as exclusive.
 
 **Example**:
+
 ```csharp
 // User wants to replace "5" with "10" in "int x = 5;"
 // User might provide: StartColumn=8, EndColumn=9 (expecting inclusive)
@@ -119,6 +122,7 @@ The MCP tool interface doesn't clearly document whether positions are 0-indexed 
 ### 2. Missing Validation
 
 The implementation doesn't validate that:
+
 - StartLine and EndLine are within file bounds
 - StartColumn and EndColumn are within line bounds
 - Start position is before End position

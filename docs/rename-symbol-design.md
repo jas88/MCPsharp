@@ -20,6 +20,7 @@ This document presents a comprehensive architectural design for implementing saf
 5. **Preview mode** with conflict resolution UI
 
 ### Supported Symbol Types (Phase 1)
+
 - Classes, Interfaces, Records, Structs
 - Methods (including overloads)
 - Properties, Fields
@@ -27,6 +28,7 @@ This document presents a comprehensive architectural design for implementing saf
 - Namespaces (with file moves)
 
 ### Out of Scope (Phase 1)
+
 - Type parameters (generics)
 - Labels, goto targets
 - XML documentation references
@@ -523,7 +525,7 @@ returns:
 ### 4.1 Conflict Types and Severity
 
 | Conflict Type | Severity | Resolution Strategy | Example |
-|--------------|----------|-------------------|----------|
+| -------------- | ---------- | ------------------- | ---------- |
 | Name Collision | ERROR | Manual/Abort | Class with same name exists |
 | Hiding Inherited | WARNING | Prompt user | New name hides base member |
 | Breaking Override | ERROR | Abort | Changes override signature |
@@ -635,7 +637,7 @@ public class RenameEdgeCases
 ### 5.2 Test Matrix
 
 | Test Category | Scenario | Expected Behavior |
-|--------------|----------|-------------------|
+| -------------- | ---------- | ------------------- |
 | **Basic** | Rename local variable | All references in method updated |
 | **Basic** | Rename parameter | Updates declaration and all uses |
 | **Class** | Rename class | Updates file name, constructors, all references |
@@ -661,7 +663,7 @@ public class RenameEdgeCases
 ### 6.1 Performance Targets
 
 | Operation | Target Time | Max Time |
-|-----------|------------|----------|
+| ----------- | ------------ | ---------- |
 | Find symbol | <100ms | 500ms |
 | Find references (small) | <500ms | 1s |
 | Find references (large) | <2s | 5s |
@@ -734,6 +736,7 @@ public class RenameOptimizations
 ## 7. Implementation Plan
 
 ### Phase 1: Core Infrastructure (Week 1-2)
+
 1. Create `RenameSymbolService` class
 2. Integrate Roslyn's `Renamer.RenameSymbolAsync`
 3. Implement basic conflict detection
@@ -741,18 +744,21 @@ public class RenameOptimizations
 5. Create MCP tool handler
 
 ### Phase 2: Conflict Detection (Week 3)
+
 1. Implement comprehensive conflict detector
 2. Add severity levels and resolution strategies
 3. Create conflict resolution UI/prompts
 4. Add test coverage for edge cases
 
 ### Phase 3: Cross-Language Support (Week 4)
+
 1. Add XML/CSPROJ reference finder
 2. Add YAML workflow scanner
 3. Add JSON config analyzer
 4. Integrate with existing analyzers
 
 ### Phase 4: Testing and Polish (Week 5-6)
+
 1. Comprehensive test suite (100+ scenarios)
 2. Performance optimization
 3. Error recovery and logging
@@ -763,7 +769,7 @@ public class RenameOptimizations
 ## 8. Risk Assessment and Mitigation
 
 | Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
+| ------ | ------------ | -------- | ------------ |
 | Data loss from failed rename | Low | Critical | Transaction system with automatic rollback |
 | Missing references | Medium | High | Multiple reference finding strategies |
 | Performance degradation | Medium | Medium | Caching, parallel processing |
@@ -776,6 +782,7 @@ public class RenameOptimizations
 ## 9. Success Metrics
 
 ### Functional Metrics
+
 - ✅ 100% accurate rename for C# symbols
 - ✅ Zero data loss from failed operations
 - ✅ Automatic rollback on any error
@@ -783,12 +790,14 @@ public class RenameOptimizations
 - ✅ Support for all common C# symbol types
 
 ### Performance Metrics
+
 - ✅ <5s for solution-wide rename (1000 references)
 - ✅ <1s for single-file rename
 - ✅ <500ms conflict detection
 - ✅ <2s rollback time
 
 ### Quality Metrics
+
 - ✅ 90%+ test coverage
 - ✅ <1% failure rate in production
 - ✅ Clear error messages for all failure modes

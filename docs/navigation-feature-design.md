@@ -9,6 +9,7 @@ This document presents a comprehensive architecture and implementation strategy 
 ### 1.1 Core Navigation Features
 
 #### Go to Definition
+
 - **Purpose**: Jump from symbol usage to its declaration
 - **Input**: File path + line + column (current cursor position)
 - **Output**: Single location (file + line + column) or null if not found
@@ -18,6 +19,7 @@ This document presents a comprehensive architecture and implementation strategy 
   - Partial classes/methods spread across files
 
 #### Find Overrides
+
 - **Purpose**: Find all implementations that override a virtual/abstract member
 - **Input**: Symbol identifier (by location or name + context)
 - **Output**: List of locations where overrides exist
@@ -27,6 +29,7 @@ This document presents a comprehensive architecture and implementation strategy 
   - Explicit vs implicit interface implementations
 
 #### Find Overloads
+
 - **Purpose**: Find all method overloads with same name but different parameters
 - **Input**: Method symbol (by location or name + containing type)
 - **Output**: List of method signatures with locations
@@ -36,6 +39,7 @@ This document presents a comprehensive architecture and implementation strategy 
   - Operator overloads
 
 #### Find Base Symbol
+
 - **Purpose**: Navigate to base class/interface definition
 - **Input**: Derived symbol (by location)
 - **Output**: Base symbol location(s)
@@ -45,6 +49,7 @@ This document presents a comprehensive architecture and implementation strategy 
   - Generic type parameters
 
 #### Find Derived Types
+
 - **Purpose**: Find all types that inherit from or implement a type
 - **Input**: Base type symbol
 - **Output**: List of derived type locations
@@ -54,6 +59,7 @@ This document presents a comprehensive architecture and implementation strategy 
   - Generic type specializations
 
 ### 1.2 Existing Related Features
+
 - `find_references` - Already implemented
 - `find_implementations` - Already implemented
 - `find_callers` - Already implemented
@@ -63,7 +69,7 @@ This document presents a comprehensive architecture and implementation strategy 
 
 ### 2.1 Component Hierarchy
 
-```
+```text
 MCP Layer (Stateless Interface)
     ↓
 NavigationService (Orchestration)
@@ -83,6 +89,7 @@ Existing Roslyn Services
 ### 2.2 Service Responsibilities
 
 #### NavigationService (Main Orchestrator)
+
 ```csharp
 public interface INavigationService
 {
@@ -96,6 +103,7 @@ public interface INavigationService
 ```
 
 #### SymbolResolutionService
+
 ```csharp
 public interface ISymbolResolutionService
 {
@@ -128,6 +136,7 @@ public enum SymbolConfidence
 ```
 
 #### NavigationCache
+
 ```csharp
 public interface INavigationCache
 {
@@ -189,6 +198,7 @@ Since MCP is stateless, we need robust ways to identify symbols:
 ```
 
 **Response Format:**
+
 ```json
 {
   "definition": {
@@ -237,6 +247,7 @@ Since MCP is stateless, we need robust ways to identify symbols:
 ```
 
 **Response Format:**
+
 ```json
 {
   "baseSymbol": {
@@ -283,6 +294,7 @@ Since MCP is stateless, we need robust ways to identify symbols:
 ```
 
 **Response Format:**
+
 ```json
 {
   "methodName": "Calculate",
@@ -430,6 +442,7 @@ public async Task<ResolvedSymbol?> ResolveSymbolAtPositionAsync(
 ### 4.2 Handling Edge Cases
 
 #### Partial Classes/Methods
+
 ```csharp
 private async Task<List<SymbolLocation>> GetAllPartialLocations(ISymbol symbol)
 {
@@ -456,6 +469,7 @@ private async Task<List<SymbolLocation>> GetAllPartialLocations(ISymbol symbol)
 ```
 
 #### External Symbols (Metadata)
+
 ```csharp
 private NavigationResult HandleMetadataSymbol(ISymbol symbol)
 {
@@ -604,24 +618,28 @@ public class IncrementalNavigationIndex
 ## 6. Integration Plan
 
 ### 6.1 Phase 1: Core Navigation (Week 1-2)
+
 1. Implement `SymbolResolutionService`
 2. Implement `NavigationService` with `GoToDefinition`
 3. Add MCP tool registration
 4. Unit tests for symbol resolution
 
 ### 6.2 Phase 2: Inheritance Navigation (Week 2-3)
+
 1. Implement `InheritanceNavigator`
 2. Add `FindOverrides`, `FindBaseSymbol`, `FindDerivedTypes`
 3. Implement hierarchy caching
 4. Integration tests with complex inheritance
 
 ### 6.3 Phase 3: Advanced Features (Week 3-4)
+
 1. Implement `OverloadNavigator`
 2. Add metadata symbol handling
 3. Implement performance optimizations
 4. Load testing with large projects
 
 ### 6.4 Phase 4: Polish & Edge Cases (Week 4-5)
+
 1. Handle all edge cases (partial, generic, explicit interface)
 2. Add confidence scoring
 3. Implement incremental updates
@@ -630,7 +648,7 @@ public class IncrementalNavigationIndex
 ## 7. Edge Case Handling Matrix
 
 | Edge Case | Detection Strategy | Resolution Approach | Confidence Impact |
-|-----------|-------------------|--------------------|--------------------|
+| ----------- | ------------------- | -------------------- | -------------------- |
 | Partial Classes | Multiple `symbol.Locations` | Return primary location + list of partials | High (80%) |
 | Partial Methods | `symbol.IsPartialDefinition()` | Navigate to implementation if exists | High (80%) |
 | Generic Specializations | Check for `ConstructedFrom` | Resolve to generic definition | Medium (60%) |
@@ -648,6 +666,7 @@ public class IncrementalNavigationIndex
 ## 8. Response Examples
 
 ### 8.1 Successful Navigation
+
 ```json
 {
   "success": true,
@@ -667,6 +686,7 @@ public class IncrementalNavigationIndex
 ```
 
 ### 8.2 Ambiguous Symbol
+
 ```json
 {
   "success": true,
@@ -695,6 +715,7 @@ public class IncrementalNavigationIndex
 ```
 
 ### 8.3 External Symbol
+
 ```json
 {
   "success": false,
@@ -712,18 +733,21 @@ public class IncrementalNavigationIndex
 ## 9. Testing Strategy
 
 ### 9.1 Unit Tests
+
 - Symbol resolution accuracy
 - Cache invalidation logic
 - Edge case handling
 - Performance benchmarks
 
 ### 9.2 Integration Tests
+
 - Real C# projects of varying sizes
 - Complex inheritance hierarchies
 - Cross-project references
 - Partial class scenarios
 
 ### 9.3 Performance Tests
+
 - Large solution navigation (10,000+ files)
 - Deep inheritance chains (10+ levels)
 - Many overloads (20+ methods)

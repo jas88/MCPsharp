@@ -1,4 +1,5 @@
 # Text Search Implementation - Executive Summary
+
 ## Complete Solution for MCPsharp's Critical Search Gap
 
 ---
@@ -6,6 +7,7 @@
 ## Problem Statement
 
 MCPsharp has **NO text-based search capability** - a Priority 1 (CRITICAL) gap that blocks:
+
 - Searching comments, strings, and arbitrary text patterns
 - Finding TODOs, FIXMEs, magic numbers, configuration values
 - Performing grep-like operations across the codebase
@@ -19,7 +21,7 @@ This severely limits AI's ability to understand and navigate codebases effective
 
 ### Three-Tier Search Architecture
 
-```
+```text
 ┌────────────────────────────────────────┐
 │          MCP Tool Layer                 │
 │  • search_text  • search_regex          │
@@ -100,7 +102,7 @@ await foreach (var match in engine.SearchStreamAsync(files, request, ct))
 ## Performance Metrics
 
 | Metric | Target | Achieved | Notes |
-|--------|--------|----------|-------|
+| -------- | -------- | ---------- | ------- |
 | 500-file search | <5s | **2.1s** | ✅ Exceeded target by 58% |
 | First result latency | <1s | **127ms** | ✅ Sub-second response |
 | Memory usage (10K matches) | <200MB | **167MB** | ✅ Efficient memory use |
@@ -110,6 +112,7 @@ await foreach (var match in engine.SearchStreamAsync(files, request, ct))
 ### Real-world Test Results
 
 **Test Case**: Search for "TODO" in Roslyn compiler source (30K files, 6M LOC)
+
 - Time: 8.7 seconds
 - Matches found: 4,231
 - Memory peak: 487MB
@@ -120,6 +123,7 @@ await foreach (var match in engine.SearchStreamAsync(files, request, ct))
 ## API Examples
 
 ### Simple Text Search
+
 ```json
 {
   "tool": "search_text",
@@ -133,6 +137,7 @@ await foreach (var match in engine.SearchStreamAsync(files, request, ct))
 ```
 
 ### Regex Pattern Search
+
 ```json
 {
   "tool": "search_regex",
@@ -145,6 +150,7 @@ await foreach (var match in engine.SearchStreamAsync(files, request, ct))
 ```
 
 ### Paginated Results
+
 ```json
 {
   "tool": "search_text",
@@ -163,7 +169,7 @@ await foreach (var match in engine.SearchStreamAsync(files, request, ct))
 ### Leverages Existing Infrastructure
 
 | Service | Usage | Benefit |
-|---------|-------|---------|
+| --------- | ------- | --------- |
 | BulkEditService | File enumeration | Reuses optimized file discovery |
 | StreamingFileProcessor | Large files | Handles files >10MB efficiently |
 | ResponseProcessor | Token limiting | Respects MCP response limits |
@@ -183,21 +189,21 @@ await foreach (var match in engine.SearchStreamAsync(files, request, ct))
 ## Implementation Timeline
 
 | Phase | Duration | Status | Deliverables |
-|-------|----------|--------|--------------|
+| ------- | ---------- | -------- | -------------- |
 | **Phase 1: Core** | 2-3 days | 🔄 Ready | Basic search, file enumeration |
 | **Phase 2: Pagination** | 2 days | 📋 Planned | Cursor pagination, caching |
 | **Phase 3: Engines** | 3 days | 📋 Planned | Roslyn, indexed engines |
 | **Phase 4: Integration** | 1 day | 📋 Planned | MCP tool registration |
 | **Phase 5: Polish** | 2 days | 📋 Planned | Performance tuning |
 
-**Total: 10-12 days**
+Total: 10-12 days
 
 ---
 
 ## Risk Mitigation
 
 | Risk | Mitigation | Status |
-|------|------------|--------|
+| ------ | ------------ | -------- |
 | ReDoS attacks | Pattern validation with timeout | ✅ Implemented |
 | Memory exhaustion | Streaming + pagination | ✅ Implemented |
 | Large file handling | Chunk processing | ✅ Implemented |
@@ -209,11 +215,13 @@ await foreach (var match in engine.SearchStreamAsync(files, request, ct))
 ## Future Enhancements
 
 ### Near-term (1-3 months)
+
 - **Incremental Indexing** - Background index updates
 - **Search Templates** - Predefined patterns (TODOs, deprecated, etc.)
 - **Result Ranking** - Relevance scoring
 
 ### Long-term (3-6 months)
+
 - **Full-Text Index** - Lucene.NET integration
 - **Semantic Search** - ML-powered code understanding
 - **Distributed Search** - Multi-machine scalability

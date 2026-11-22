@@ -1,4 +1,5 @@
 # Text Search Performance Analysis
+
 ## Benchmarks, Optimization Strategies, and Scalability
 
 ---
@@ -29,19 +30,19 @@ File Types:
 ### 1.2 Benchmark Results
 
 | Operation | Small | Medium | Large | Massive |
-|-----------|-------|--------|-------|---------|
-| **Literal Search** |
+| ----------- | ------- | -------- | ------- | --------- |
+| **Literal Search** | | | | |
 | First match | 12ms | 45ms | 380ms | 3.2s |
 | All matches (1000 limit) | 25ms | 180ms | 1.5s | 8.7s |
 | Case-insensitive | 28ms | 210ms | 1.8s | 10.1s |
-| **Regex Search** |
+| **Regex Search** | | | | |
 | Simple pattern | 35ms | 290ms | 2.1s | 15.3s |
 | Complex pattern | 45ms | 420ms | 3.8s | 28.5s |
 | Multiline pattern | 58ms | 580ms | 5.2s | 41.2s |
-| **Semantic Search** |
+| **Semantic Search** | | | | |
 | Comments only | 120ms | 890ms | 7.5s | 65s |
 | String literals | 95ms | 720ms | 6.1s | 52s |
-| **File Enumeration** |
+| **File Enumeration** | | | | |
 | With exclusions | 8ms | 35ms | 280ms | 2.1s |
 | No exclusions | 5ms | 22ms | 180ms | 1.4s |
 
@@ -774,7 +775,7 @@ public class PerformanceProfiler
 
 ### 6.1 Scenario: Finding TODOs in Large Codebase
 
-```
+```text
 Pattern: "TODO|FIXME|HACK"
 Files: 25,000 C# files
 Total LOC: 5M
@@ -793,7 +794,7 @@ With optimization:
 
 ### 6.2 Scenario: Complex Regex Pattern
 
-```
+```text
 Pattern: "public\s+(?:async\s+)?Task<[^>]+>\s+\w+\s*\([^)]*\)"
 (Finding async Task methods)
 
@@ -809,7 +810,7 @@ With optimization:
 
 ### 6.3 Scenario: String Literal Search
 
-```
+```text
 Pattern: Connection strings containing "Data Source"
 
 Without optimization (text search):
@@ -835,6 +836,7 @@ The implemented text search system achieves:
 - **Future-proof** with clear optimization path
 
 Key performance wins:
+
 1. Parallel file processing: 3-4x speedup
 2. Regex compilation caching: 30-40% improvement
 3. Memory pooling: 40% GC reduction

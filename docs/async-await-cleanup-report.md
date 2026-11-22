@@ -13,6 +13,7 @@ The MCPsharp codebase had 240+ CS1998 warnings indicating `async` methods that d
 ### Category 1: Real Implementations (Fixed) ✅
 
 **Files Fixed:**
+
 - `/Services/Analyzers/RoslynCodeFixLoader.cs` - 1 method
 - `/Services/Analyzers/RoslynAnalyzerLoader.cs` - 1 method
 - `/Services/Analyzers/RoslynCodeFixAdapter.cs` - 1 method
@@ -22,6 +23,7 @@ The MCPsharp codebase had 240+ CS1998 warnings indicating `async` methods that d
 **Fix Strategy:** Removed `async` keyword, used `Task.FromResult()` or `Task.CompletedTask`
 
 **Example:**
+
 ```csharp
 // Before
 public async Task<bool> ClearCacheAsync(CancellationToken cancellationToken = default)
@@ -41,6 +43,7 @@ public Task<bool> ClearCacheAsync(CancellationToken cancellationToken = default)
 ### Category 2: Phase3 Placeholder Services (Suppressed) 🔇
 
 **Affected Files (70+ warnings):**
+
 - `Services/Phase3/LargeFileOptimizerService.cs` - 26 warnings
 - `Services/Phase3/DuplicateCodeDetectorService.cs` - 22 warnings
 - `Services/Phase3/SqlMigrationAnalyzerService.cs` - 10 warnings
@@ -53,6 +56,7 @@ These are intentional placeholder methods designed for future async implementati
 Add `#pragma warning disable CS1998` with explanatory comments at class level.
 
 **Template:**
+
 ```csharp
 // CS1998: Methods marked async for future I/O operations (file analysis, database queries)
 // These will be implemented with true async operations in future iterations
@@ -73,6 +77,7 @@ public class LargeFileOptimizerService
 ### Category 3: Consolidated Services (Deferred) ⏭️
 
 **Affected Files (160+ warnings):**
+
 - `Services/Consolidated/StreamProcessingController.cs` - 24 warnings
 - `Services/Consolidated/BulkOperationsHub.cs` - 18 warnings
 - `Services/Consolidated/UnifiedAnalysisService.cs` - 14 warnings
@@ -88,17 +93,18 @@ These consolidated services are complex and require careful refactoring. Defer t
 ### Warnings by File Type
 
 | File Category | Warnings | Auto-Fixable | Needs Manual Review |
-|--------------|----------|--------------|---------------------|
-| Analyzers    | 22       | 13 ✅        | 9                   |
-| Phase3       | 68       | 0 (suppress) | 68 (placeholders)   |
-| Consolidated | 88       | ~50          | 38                  |
-| Roslyn       | 18       | 12           | 6                   |
-| Streaming    | 28       | 20           | 8                   |
-| **TOTAL**    | **~224** | **~95**      | **~129**            |
+| ------------- | -------- | ------------ | ------------------- |
+| Analyzers     | 22       | 13 ✅        | 9                   |
+| Phase3        | 68       | 0 (suppress) | 68 (placeholders)   |
+| Consolidated  | 88       | ~50          | 38                  |
+| Roslyn        | 18       | 12           | 6                   |
+| Streaming     | 28       | 20           | 8                   |
+| **TOTAL**     | **~224** | **~95**      | **~129**            |
 
 ### Common Patterns Identified
 
-**Pattern 1: Cache/Dictionary Operations**
+#### Pattern 1: Cache/Dictionary Operations
+
 ```csharp
 // Before
 public async Task<T> GetAsync(string key)
@@ -115,7 +121,8 @@ public Task<T> GetAsync(string key)
 }
 ```
 
-**Pattern 2: Progress Tracking**
+#### Pattern 2: Progress Tracking
+
 ```csharp
 // Before
 public async Task UpdateProgressAsync(string id, int value)
@@ -137,7 +144,8 @@ public Task UpdateProgressAsync(string id, int value)
 }
 ```
 
-**Pattern 3: Placeholder (Suppress)**
+#### Pattern 3: Placeholder (Suppress)
+
 ```csharp
 #pragma warning disable CS1998
 public async Task<ComplexResult> AnalyzeAsync(string path)
@@ -151,12 +159,14 @@ public async Task<ComplexResult> AnalyzeAsync(string path)
 ## Action Items
 
 ### Completed ✅
+
 - [x] Fixed core analyzer loading services (RoslynCodeFixLoader, RoslynAnalyzerLoader)
 - [x] Fixed cache services (AnalysisResultCache)
 - [x] Fixed progress tracking service (ProgressTrackerService)
 - [x] Created analysis tooling (fix_async_warnings.py)
 
 ### Recommended Next Steps
+
 - [ ] Add `#pragma warning disable CS1998` to Phase3 services with TODOs
 - [ ] Systematically fix Roslyn services (CallChainService, SymbolQueryService, etc.)
 - [ ] Refactor StreamProcessingController and BulkOperationsHub
@@ -164,6 +174,7 @@ public async Task<ComplexResult> AnalyzeAsync(string path)
 - [ ] Update CONTRIBUTING.md with async/await patterns
 
 ### Long-term Strategy
+
 1. **Principle:** Only use `async` if method truly performs async I/O
 2. **Pattern:** Synchronous methods should return `Task.FromResult()` or `Task.CompletedTask`
 3. **Naming:** Keep `-Async` suffix even for synchronous Task-returning methods (consistency)

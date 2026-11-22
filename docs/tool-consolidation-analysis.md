@@ -1,6 +1,7 @@
 # MCPsharp Tool Consolidation Analysis
 
 ## Executive Summary
+
 MCPsharp currently has **119 unique MCP tools**, significantly above the typical 20-40 tools in comparable MCP servers. This analysis proposes consolidation strategies to reduce tool count by 40-50% while improving usability and maintaining all functionality.
 
 ## Current State: 119 Tools Inventory
@@ -8,6 +9,7 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 ### Tool Categories and Counts
 
 #### 1. File Operations (5 tools)
+
 - `project_open` - Open project directory
 - `project_info` - Get project information
 - `file_list` - List project files
@@ -16,6 +18,7 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 - `file_edit` - Apply text edits
 
 #### 2. Symbol & Reference Finding (15 tools)
+
 - `find_symbol` - Find symbols by name
 - `find_references` - Find symbol references
 - `find_implementations` - Find interface implementations
@@ -32,6 +35,7 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 - `search_text` - Text search (appears to be redundant)
 
 #### 3. Analysis Tools (30+ tools)
+
 - `analyze_impact` - Impact analysis
 - `analyze_call_graph` - Call graph analysis
 - `analyze_call_patterns` - Call pattern analysis
@@ -51,6 +55,7 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 - `analyze_type` - Type analysis
 
 #### 4. Code Editing & Refactoring (10 tools)
+
 - `add_class_property` - Add property to class
 - `add_class_method` - Add method to class
 - `optimize_large_class` - Optimize large classes
@@ -59,6 +64,7 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 - `validate_refactoring` - Validate refactorings
 
 #### 5. Bulk Operations (11 tools)
+
 - `bulk_replace` - Bulk text replacement
 - `bulk_transform` - Bulk file transformation
 - `conditional_edit` - Conditional editing
@@ -72,6 +78,7 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 - `execute_bulk_operation` - Execute bulk op
 
 #### 6. Stream Processing (10 tools)
+
 - `stream_process_file` - Process file as stream
 - `cancel_stream_operation` - Cancel stream op
 - `resume_stream_operation` - Resume stream op
@@ -84,6 +91,7 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 - `monitor_stream` - Monitor stream
 
 #### 7. Architecture & Quality (15 tools)
+
 - `validate_architecture` - Validate architecture
 - `detect_layer_violations` - Detect violations
 - `get_architecture_report` - Get report
@@ -101,6 +109,7 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 - `check_type_compliance` - Check type compliance
 
 #### 8. Roslyn Analyzers (6 tools)
+
 - `load_roslyn_analyzers` - Load analyzers
 - `list_roslyn_analyzers` - List analyzers
 - `run_roslyn_analyzers` - Run analyzers
@@ -110,11 +119,13 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 - `reset_analyzer_config` - Reset config
 
 #### 9. Code Quality (3 tools)
+
 - `code_quality_analyze` - Run analysis
 - `code_quality_fix` - Apply fixes
 - `code_quality_profiles` - Get profiles
 
 #### 10. Configuration & Workflow (7 tools)
+
 - `get_workflows` - Get GitHub workflows
 - `parse_workflow` - Parse workflow file
 - `validate_workflow_consistency` - Validate workflow
@@ -124,6 +135,7 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 - `trace_feature` - Trace feature implementation
 
 #### 11. Migration Tools (6 tools)
+
 - `analyze_migrations` - Analyze migrations
 - `validate_migrations` - Validate migrations
 - `get_migration_history` - Get history
@@ -132,6 +144,7 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 - `detect_breaking_changes` - Detect breaking changes
 
 #### 12. Report Generation (4 tools)
+
 - `generate_analysis_report` - Analysis report
 - `generate_optimization_plan` - Optimization plan
 - `get_refactoring_suggestions` - Refactoring suggestions
@@ -142,14 +155,18 @@ MCPsharp currently has **119 unique MCP tools**, significantly above the typical
 ### Major Overlap Groups
 
 #### Group 1: Find Operations (HIGH OVERLAP)
+
 Current tools with overlapping functionality:
+
 - `find_symbol`, `find_references`, `find_implementations`, `find_callers`, `find_call_chains`, `find_type_usages`, `find_unused_methods`, `find_recursive_calls`
 
 **Overlap**: All search for code elements with different scopes
 **Redundancy Level**: 70%
 
 #### Group 2: Analysis Operations (EXTREME OVERLAP)
+
 Current tools with overlapping functionality:
+
 - 17+ `analyze_*` tools with significant overlap
 - Many do similar AST analysis with different focus
 
@@ -157,6 +174,7 @@ Current tools with overlapping functionality:
 **Redundancy Level**: 80%
 
 #### Group 3: Bulk Operations (MODERATE OVERLAP)
+
 - Multiple bulk tools that could share infrastructure
 - Separate preview, execute, rollback could be modes
 
@@ -164,6 +182,7 @@ Current tools with overlapping functionality:
 **Redundancy Level**: 50%
 
 #### Group 4: Code Quality Tools (COMPLETE OVERLAP)
+
 - `code_quality_analyze` vs individual analyzers
 - `detect_*` tools vs quality analysis
 
@@ -171,6 +190,7 @@ Current tools with overlapping functionality:
 **Redundancy Level**: 90%
 
 #### Group 5: File Operations (POTENTIAL OVERLAP)
+
 - `file_edit` vs `add_class_property`/`add_class_method`
 - Could unify under semantic edit API
 
@@ -270,11 +290,13 @@ stream_process:
 ### Proposal D: Auto-Loading Strategy
 
 **Current Pain Points**:
+
 1. Must call `load_roslyn_analyzers` before analysis
 2. Must call `project_open` before any operation
 3. Must configure analyzers separately
 
 **Proposed Auto-Loading**:
+
 ```yaml
 # Automatic behaviors:
 1. Auto-open project from MCP working directory
@@ -295,6 +317,7 @@ mcp_config:
 ```
 
 **Benefits**:
+
 - Zero configuration for common cases
 - Faster perceived startup
 - Progressive enhancement
@@ -302,9 +325,10 @@ mcp_config:
 
 ### Proposal E: Consolidated Tool Registry
 
-**Final Consolidated Tool Set (Target: 50-60 tools)**
+Final Consolidated Tool Set (Target: 50-60 tools)
 
 #### Core Tools (10) - Keep Separate
+
 1. `project` - Project operations (open/info combined)
 2. `file` - File operations (list/read/write/edit)
 3. `find` - Universal search
@@ -317,6 +341,7 @@ mcp_config:
 10. `config` - Configuration management
 
 #### Specialized Tools (40) - Domain-Specific
+
 - Architecture validation (5)
 - Migration analysis (5)
 - Code quality (5)
@@ -331,22 +356,26 @@ Total: ~50 tools (58% reduction)
 ## Implementation Plan
 
 ### Phase 1: Create Unified APIs (Week 1-2)
+
 1. Implement unified `find` tool with mode parameter
 2. Implement unified `analyze` tool with type parameter
 3. Add backward compatibility aliases
 
 ### Phase 2: Auto-Loading (Week 3)
+
 1. Implement project auto-detection
 2. Add lazy Roslyn loading
 3. Create configuration system
 4. Add analyzer auto-discovery
 
 ### Phase 3: Consolidate Bulk/Stream (Week 4)
+
 1. Merge bulk operations into single tool
 2. Unify stream processing
 3. Add operation pipelines
 
 ### Phase 4: Migration & Documentation (Week 5)
+
 1. Create migration guide
 2. Add deprecation warnings
 3. Update all documentation
@@ -355,6 +384,7 @@ Total: ~50 tools (58% reduction)
 ## Migration Strategy
 
 ### Backward Compatibility
+
 ```csharp
 // Old tools become aliases
 "find_references" → redirect to "find" with target="reference"
@@ -368,6 +398,7 @@ if (IsDeprecatedTool(toolName)) {
 ```
 
 ### Progressive Migration
+
 1. **v1.0**: Add new unified tools, keep old ones
 2. **v1.1**: Mark old tools as deprecated
 3. **v1.2**: Hide deprecated tools from listing
@@ -376,6 +407,7 @@ if (IsDeprecatedTool(toolName)) {
 ## User Experience Improvements
 
 ### Before (Complex)
+
 ```json
 // Must remember 119 tools and their exact names
 {"tool": "load_roslyn_analyzers"}
@@ -387,6 +419,7 @@ if (IsDeprecatedTool(toolName)) {
 ```
 
 ### After (Simple)
+
 ```json
 // Auto-loads, smart defaults, unified APIs
 {"tool": "find", "target": "caller", "name": "Process"}
@@ -395,6 +428,7 @@ if (IsDeprecatedTool(toolName)) {
 ```
 
 ### Tool Discovery Helper
+
 ```json
 // New discovery tool
 {"tool": "help", "query": "find methods"}
@@ -407,12 +441,14 @@ if (IsDeprecatedTool(toolName)) {
 ## Success Metrics
 
 ### Quantitative Goals
+
 - **Tool Count**: 119 → 50-60 (50% reduction)
 - **Common Operations**: 6 tools → 2 tools (66% reduction)
 - **Setup Steps**: 3-4 → 0 (100% automation)
 - **API Surface**: 119 endpoints → 50 endpoints
 
 ### Qualitative Goals
+
 - **Discoverability**: Can guess tool names
 - **Consistency**: Similar operations use similar APIs
 - **Power**: No functionality loss
@@ -422,12 +458,14 @@ if (IsDeprecatedTool(toolName)) {
 ## Recommendations
 
 ### Immediate Actions
+
 1. **Stop adding new specialized tools** - Use parameters instead
 2. **Start implementing unified APIs** - Begin with find/analyze
 3. **Add auto-loading** - Quick win for UX
 4. **Document patterns** - Help users understand consolidation
 
 ### Long-term Strategy
+
 1. **Version 1.5**: Consolidated APIs with compatibility
 2. **Version 2.0**: Clean removal of deprecated tools
 3. **Version 3.0**: Pipeline/workflow support
@@ -436,6 +474,7 @@ if (IsDeprecatedTool(toolName)) {
 ## Conclusion
 
 MCPsharp's 119 tools can be effectively consolidated to 50-60 tools through:
+
 1. **Unified APIs** with mode/type parameters
 2. **Auto-loading** for zero-configuration startup
 3. **Smart defaults** for common operations

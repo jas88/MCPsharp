@@ -13,6 +13,7 @@ After analysis, **direct Roslyn integration is superior** for an MCP server. We 
 ### Why NOT subprocess csharp-ls
 
 **Cons of subprocess approach:**
+
 1. **IPC overhead** — Every query requires stdin/stdout JSON-RPC round-trip
 2. **Process management complexity** — Start, stop, health checks, restarts
 3. **Two failure modes** — Both MCP server AND csharp-ls can fail independently
@@ -22,12 +23,14 @@ After analysis, **direct Roslyn integration is superior** for an MCP server. We 
 7. **Deployment complexity** — Bundle two binaries instead of one
 
 **Limited benefits:**
+
 - "Clean separation" — Not valuable when both are .NET in same codebase
 - "Independent updates" — csharp-ls updates are infrequent; Roslyn is more stable
 
 ### Why Direct Roslyn APIs
 
 **Major advantages:**
+
 1. **Single process** — Simpler deployment, debugging, monitoring
 2. **Zero IPC overhead** — Direct method calls, no serialization
 3. **Shared memory** — Cache compilation state efficiently
@@ -37,6 +40,7 @@ After analysis, **direct Roslyn integration is superior** for an MCP server. We 
 7. **Easier testing** — Unit test semantic operations directly
 
 **What we actually need from csharp-ls:**
+
 - Parse C# files → `CSharpSyntaxTree.ParseText()`
 - Find symbols → `Compilation.GetSymbolsWithName()`
 - Get type info → `SemanticModel.GetTypeInfo()`
@@ -47,7 +51,7 @@ After analysis, **direct Roslyn integration is superior** for an MCP server. We 
 ### Comparison Table
 
 | Feature | Subprocess csharp-ls | Direct Roslyn |
-|---------|---------------------|---------------|
+| --------- | --------------------- | --------------- |
 | **Deployment** | Two binaries (csharp-ls + MCP server) | Single binary |
 | **Performance** | IPC overhead, serialization | Direct method calls |
 | **Memory** | Two process heaps | Single process heap |
@@ -62,7 +66,8 @@ After analysis, **direct Roslyn integration is superior** for an MCP server. We 
 ## Revised Architecture
 
 ### Before (Subprocess approach)
-```
+
+```text
 Claude Code
     ↓ MCP (stdio)
 MCP Server
@@ -73,7 +78,8 @@ Roslyn APIs
 ```
 
 ### After (Direct Roslyn)
-```
+
+```text
 Claude Code
     ↓ MCP (stdio)
 MCP Server
@@ -88,11 +94,13 @@ Roslyn APIs (in-process)
 Instead of implementing LSP client, we'll use Roslyn directly:
 
 **Replace:**
+
 - `LspClient` class
 - LSP message handling
 - Process management
 
 **With:**
+
 ```csharp
 // Core Roslyn components
 public class RoslynWorkspace
@@ -209,23 +217,27 @@ public class RoslynWorkspace
 ### Key Roslyn APIs We'll Use
 
 **Workspace APIs:**
+
 - `AdhocWorkspace` — In-memory workspace
 - `Project` / `Document` — Project structure
 - `Compilation` — Compiled view of project
 
 **Symbol APIs:**
+
 - `INamedTypeSymbol` — Classes, interfaces, structs
 - `IPropertySymbol` — Properties
 - `IMethodSymbol` — Methods
 - `GetSymbolsWithName()` — Find symbols by name
 
 **Syntax APIs:**
+
 - `SyntaxTree` — Parse tree
 - `ClassDeclarationSyntax` — Class syntax node
 - `SyntaxRewriter` — Transform syntax trees
 - `SyntaxFactory` — Generate new syntax
 
 **Semantic APIs:**
+
 - `SemanticModel` — Type information
 - `GetTypeInfo()` — Get type of expression
 - `GetSymbolInfo()` — Get symbol at location
@@ -234,6 +246,7 @@ public class RoslynWorkspace
 ## Dependencies
 
 ### NuGet Packages
+
 ```xml
 <ItemGroup>
   <!-- Core Roslyn packages -->
@@ -255,8 +268,9 @@ public class RoslynWorkspace
 
 ## Performance Implications
 
-### Subprocess approach (estimated):
-```
+### Subprocess approach (estimated)
+
+```text
 find_symbol("ExampleClass"):
   1. Serialize MCP request → JSON (1ms)
   2. Write to csharp-ls stdin (1ms)
@@ -268,8 +282,9 @@ find_symbol("ExampleClass"):
 Total: ~16ms per query
 ```
 
-### Direct Roslyn approach (estimated):
-```
+### Direct Roslyn approach (estimated)
+
+```text
 find_symbol("ExampleClass"):
   1. Call RoslynWorkspace.FindClasses("ExampleClass") (10ms)
 Total: ~10ms per query
@@ -280,11 +295,13 @@ Total: ~10ms per query
 ### Memory Usage
 
 **Subprocess:**
+
 - MCP server process: ~50MB
 - csharp-ls process: ~100MB
 - Total: ~150MB
 
 **Direct Roslyn:**
+
 - Single process: ~80MB
 - Total: ~80MB
 
@@ -297,12 +314,14 @@ Since we haven't implemented Phase 1 yet, we can adopt Direct Roslyn from the st
 ### Updated Phase 1 Tasks
 
 **Remove:**
+
 - ❌ csharp-ls binary download/bundling
 - ❌ LSP client implementation
 - ❌ Process management
 - ❌ LSP message handling
 
 **Add:**
+
 - ✅ Roslyn workspace initialization
 - ✅ Symbol search using `GetSymbolsWithName()`
 - ✅ Semantic model queries
@@ -314,21 +333,27 @@ Since we haven't implemented Phase 1 yet, we can adopt Direct Roslyn from the st
 ## Risks & Mitigation
 
 ### Risk: Roslyn learning curve
+
 **Mitigation:**
+
 - Roslyn has excellent documentation
 - Many StackOverflow examples
 - We only need subset of APIs (symbols, syntax)
 - Start with simple queries, iterate
 
 ### Risk: Performance on large projects
+
 **Mitigation:**
+
 - Roslyn handles large projects well (used by VS)
 - Implement incremental compilation (update only changed files)
 - Cache `Compilation` and `SemanticModel` instances
 - Add project load progress reporting
 
 ### Risk: Missing LSP protocol features
+
 **Mitigation:**
+
 - We don't need full LSP - just semantic queries
 - If we need more later, can add Roslyn APIs incrementally
 - LSP designed for editors, not for MCP use case
@@ -336,6 +361,7 @@ Since we haven't implemented Phase 1 yet, we can adopt Direct Roslyn from the st
 ## Conclusion
 
 **Direct Roslyn integration is the clear winner:**
+
 - ✅ Simpler architecture (single process)
 - ✅ Better performance (no IPC)
 - ✅ Easier deployment (one binary)

@@ -8,7 +8,7 @@ Extract Method is a critical refactoring operation that transforms selected code
 
 ### Component Structure
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │              Extract Method Controller              │
 │  • Orchestrates entire extraction process           │
@@ -35,7 +35,7 @@ Extract Method is a critical refactoring operation that transforms selected code
 
 ### Data Flow Pipeline
 
-```
+```text
 1. Selection Input
    ├─ Line range (start, end)
    ├─ Character range (optional)
@@ -210,7 +210,7 @@ public class ParameterInferencer
 ### Control Flow Edge Cases
 
 | Edge Case | Detection | Handling Strategy |
-|-----------|-----------|-------------------|
+| ----------- | ----------- | ------------------- |
 | Multiple returns | `ControlFlowAnalysis.ExitPoints > 1` | Transform to single exit with result variable |
 | Early returns | Return statements not at end | Wrap in result tracking pattern |
 | Yield return | Contains `YieldStatementSyntax` | Extract as iterator method |
@@ -225,7 +225,7 @@ public class ParameterInferencer
 ### Variable Scope Edge Cases
 
 | Edge Case | Detection | Handling Strategy |
-|-----------|-----------|-------------------|
+| ----------- | ----------- | ------------------- |
 | Captured variables | Closure analysis | Pass as parameters or use delegate |
 | Out variables | `out var` declarations | Declare before extraction |
 | Pattern variables | Pattern matching vars | Extract entire pattern or declare outside |
@@ -238,7 +238,7 @@ public class ParameterInferencer
 ### Type System Edge Cases
 
 | Edge Case | Detection | Handling Strategy |
-|-----------|-----------|-------------------|
+| ----------- | ----------- | ------------------- |
 | Generic type parameters | Method has type parameters | Propagate to extracted method |
 | Constraints | Generic constraints | Copy constraints to new method |
 | Dynamic types | Uses `dynamic` | Preserve dynamic typing |
@@ -410,6 +410,7 @@ public class CallSiteGenerator
 ## 7. Implementation Phases
 
 ### Phase 1: MVP (Week 1)
+
 - Basic statement extraction
 - Simple parameter inference
 - Single return value
@@ -417,6 +418,7 @@ public class CallSiteGenerator
 - Basic name generation
 
 ### Phase 2: Advanced Control Flow (Week 2)
+
 - Multiple return handling
 - Early return transformation
 - Exception handling
@@ -424,6 +426,7 @@ public class CallSiteGenerator
 - Async/await support
 
 ### Phase 3: Complex Types (Week 3)
+
 - Generic method extraction
 - Type parameter inference
 - Constraint propagation
@@ -431,6 +434,7 @@ public class CallSiteGenerator
 - Tuple returns
 
 ### Phase 4: Edge Cases (Week 4)
+
 - Yield return iterators
 - Ref/out parameters
 - Pattern matching
@@ -438,6 +442,7 @@ public class CallSiteGenerator
 - Local functions
 
 ### Phase 5: Polish (Week 5)
+
 - Smart naming
 - Formatting preservation
 - Comment migration

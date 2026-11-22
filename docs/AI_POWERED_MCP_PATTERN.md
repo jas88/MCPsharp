@@ -4,7 +4,7 @@
 
 Traditional MCP servers expose raw data tools that can cause **context pollution** in Claude Code:
 
-```
+```text
 Traditional Pattern:
 Claude Code → MCP Tool → 50KB of database schema JSON → Claude Code parses it
                                                        → Uses valuable context
@@ -12,6 +12,7 @@ Claude Code → MCP Tool → 50KB of database schema JSON → Claude Code parses
 ```
 
 This creates several issues:
+
 - **Context bloat**: Large responses consume the main agent's context window
 - **Cognitive load**: Main agent must process verbose data structures
 - **Inefficiency**: Most of the returned data is irrelevant to the specific question
@@ -20,7 +21,7 @@ This creates several issues:
 
 Place an AI model **inside the MCP server** to act as an intelligent compression layer:
 
-```
+```text
 AI-Powered Pattern:
 Claude Code → "What tables store user data?" → AI-MCP Server
                                                  ↓
@@ -33,7 +34,7 @@ Claude Code ← "users, user_profiles, user_sessions" ← Concise answer
 
 ## Architecture
 
-```
+```text
 ┌─────────────────┐                 ┌──────────────────────┐                 ┌──────────┐
 │   Claude Code   │                 │   AI-Powered MCP     │                 │  Backend │
 │   Main Agent    │                 │      Server          │                 │  System  │
@@ -50,22 +51,28 @@ Claude Code ← "users, user_profiles, user_sessions" ← Concise answer
 ## Key Benefits
 
 ### 1. Context Isolation
+
 Verbose data never reaches Claude Code's context window. The AI-MCP server consumes and processes it internally.
 
 ### 2. Intelligent Summarization
+
 The embedded AI can:
+
 - Extract only relevant information
 - Answer natural language questions
 - Aggregate and synthesize data
 - Format responses optimally for the main agent
 
 ### 3. Natural Interface
+
 Claude Code can ask human-like questions instead of parsing structured data:
+
 - "What tables are related to users?"
 - "Show me recent error patterns"
 - "How does authentication flow work?"
 
 ### 4. Single Responsibility
+
 - **MCP Server**: Domain understanding (database, logs, code)
 - **Main Agent**: Task orchestration and decision-making
 
@@ -244,16 +251,19 @@ Describe in a clear narrative how data moves through tables."""
 ### Cost Trade-offs
 
 **Traditional MCP:**
+
 - Zero cost at MCP layer
 - High context consumption in main agent
 - More thinking tokens needed
 
 **AI-Powered MCP:**
+
 - API cost per tool call (controllable via model choice)
 - Minimal context consumption in main agent
 - Fewer thinking tokens needed
 
 **Optimization Strategies:**
+
 1. Use cheaper models for simple extractions (Claude Haiku)
 2. Cache common queries at MCP layer
 3. Use embeddings for semantic search (one-time indexing cost)
@@ -261,7 +271,7 @@ Describe in a clear narrative how data moves through tables."""
 
 ### Latency Comparison
 
-```
+```text
 Traditional MCP Flow:
   Tool call: 100ms
   Context transfer: 50KB → main agent (instant)
@@ -290,7 +300,8 @@ This pattern mirrors how successful AI products work:
 ## Comparison to Subagent Pattern
 
 ### Subagent Pattern
-```
+
+```text
 Main Agent → Spawns subagent → Subagent calls verbose MCP tools
                              → Subagent summarizes
                              → Returns to main agent
@@ -300,7 +311,8 @@ Cons: Requires subagent spawn overhead, context still polluted in subagent
 ```
 
 ### AI-Powered MCP Pattern
-```
+
+```text
 Main Agent → Calls AI-MCP tool → AI processes verbose data internally
                                → Returns concise answer
 
@@ -311,6 +323,7 @@ Cons: Requires building AI-powered MCP server
 ## When to Use This Pattern
 
 ### Good Use Cases
+
 ✅ Database schema exploration and understanding
 ✅ Log analysis and pattern detection
 ✅ Codebase semantic search
@@ -319,6 +332,7 @@ Cons: Requires building AI-powered MCP server
 ✅ Time-series data analysis
 
 ### Not Recommended For
+
 ❌ Simple key-value lookups
 ❌ Operations requiring exact data (use traditional MCP)
 ❌ Real-time streaming data
@@ -410,7 +424,9 @@ Return as bullet list."
 ## Future Enhancements
 
 ### 1. Streaming Responses
+
 Allow AI-MCP to stream partial answers for long-running queries:
+
 ```python
 @self.server.tool(streaming=True)
 async def analyze_large_dataset(query: str):
@@ -419,7 +435,9 @@ async def analyze_large_dataset(query: str):
 ```
 
 ### 2. Multi-Turn Conversations
+
 Enable follow-up questions within a single MCP session:
+
 ```python
 @self.server.tool(stateful=True)
 def continue_conversation(message: str, session_id: str):
@@ -429,7 +447,9 @@ def continue_conversation(message: str, session_id: str):
 ```
 
 ### 3. Hybrid Approaches
+
 Combine AI processing with traditional tools:
+
 ```python
 @self.server.tool()
 def smart_query(question: str, database: str, return_raw: bool = False):
