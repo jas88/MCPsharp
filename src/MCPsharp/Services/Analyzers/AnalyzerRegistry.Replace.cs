@@ -45,7 +45,7 @@ public partial class AnalyzerRegistry
         }
 
         LogRegistered(_logger, analyzer.Id, analyzer.Version);
-        AnalyzerRegistered?.Invoke(this, new AnalyzerRegisteredEventArgs(analyzer.Id, info));
+        RaiseAnalyzerRegistered(analyzer.Id, info);
         return true;
     }
 
@@ -65,7 +65,7 @@ public partial class AnalyzerRegistry
         }
 
         LogUnregistered(_logger, analyzer.Id);
-        AnalyzerUnregistered?.Invoke(this, new AnalyzerUnregisteredEventArgs(analyzer.Id));
+        RaiseAnalyzerUnregistered(analyzer.Id);
         return Task.FromResult(true);
     }
 
