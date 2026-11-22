@@ -12,6 +12,10 @@ internal sealed class TestAnalyzer : IAnalyzer
     // How long a test waits for something it expects to happen before failing
     private static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(10);
 
+    // How long a test waits for a disposal that should not happen before taking it that it won't: far longer than
+    // the registry's background disposals take to run once it has started them, which is under a millisecond
+    private static readonly TimeSpan UnwantedDisposalWait = TimeSpan.FromMilliseconds(250);
+
     private readonly TaskCompletionSource _initializationStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _disposed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource? _initializationRelease;
@@ -63,6 +67,25 @@ internal sealed class TestAnalyzer : IAnalyzer
     /// <see cref="TimeoutException"/> if it isn't
     /// </summary>
     public Task WaitUntilDisposedAsync() => _disposed.Task.WaitAsync(WaitLimit);
+
+    /// <summary>
+    /// Wait for a disposal that should not happen, and return whether <see cref="DisposeAsync"/> was called: false
+    /// means that the registry has left the analyzer alone. The registry disposes in the background, so a check made
+    /// as soon as the registry returns finds nearly every analyzer undisposed, even one whose disposal the registry
+    /// has started.
+    /// </summary>
+    public async Task<bool> IsDisposedSoonAsync()
+    {
+        try
+        {
+            await _disposed.Task.WaitAsync(UnwantedDisposalWait);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// Let a held <see cref="InitializeAsync"/> finish
