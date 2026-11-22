@@ -14,6 +14,7 @@ namespace MCPsharp.Tests.Services.Analyzers;
 public class AnalyzerDirectoryScanLimitsTests : FileServiceTestBase
 {
     private static readonly string[] ThreeFakeDlls = ["Fake0.dll", "Fake1.dll", "Fake2.dll"];
+    private static readonly string[] FirstAndLastFakeDlls = ["Fake0.dll", "Fake2.dll"];
 
     /// <summary>
     /// Create <paramref name="count"/> placeholder DLLs of <paramref name="bytesEach"/> bytes under
@@ -73,6 +74,70 @@ public class AnalyzerDirectoryScanLimitsTests : FileServiceTestBase
 
         Assert.That(error, Does.Contain($"more than {AnalyzerDirectoryScanLimits.MaxAssemblyCount} DLLs"));
         Assert.That(assemblies, Is.Empty);
+    }
+
+    [Test]
+    public void ListAssemblies_WhenADllGoesBeforeItIsSized_ListsTheOthers()
+    {
+        // e.g. a restore replacing a package's files while the directory is searched
+        var directory = CreateTestDirectory("changing");
+        CreateFakeDlls(directory, 3);
+        string? deleted = null;
+
+        var error = AnalyzerDirectoryScanLimits.ListAssemblies(directory, recursive: true, out var assemblies, file =>
+        {
+            // The first DLL listed is deleted before its size is read
+            if (deleted == null)
+            {
+                deleted = file;
+                File.Delete(file);
+            }
+
+            return AnalyzerDirectoryScanLimits.GetFileLength(file);
+        });
+
+        Assert.That(error, Is.Null);
+        Assert.That(deleted, Is.Not.Null);
+        Assert.That(assemblies, Has.Count.EqualTo(2));
+        Assert.That(assemblies, Is.EquivalentTo(Directory.GetFiles(directory, "*.dll", SearchOption.AllDirectories)), "the DLLs that remain");
+    }
+
+    [Test]
+    public void ListAssemblies_WhenADllCannotBeAccessed_ListsTheOthers()
+    {
+        var directory = CreateTestDirectory("inaccessible");
+        CreateFakeDlls(directory, 3);
+
+        var error = AnalyzerDirectoryScanLimits.ListAssemblies(directory, recursive: true, out var assemblies, file =>
+            Path.GetFileName(file) == "Fake1.dll"
+                ? throw new UnauthorizedAccessException($"Access to the path '{file}' is denied.")
+                : AnalyzerDirectoryScanLimits.GetFileLength(file));
+
+        Assert.That(error, Is.Null);
+        Assert.That(assemblies.Select(Path.GetFileName), Is.EquivalentTo(FirstAndLastFakeDlls));
+    }
+
+    [Test]
+    public void ListAssemblies_WhenADllBeyondTheCountLimitHasGone_DoesNotCountIt()
+    {
+        // Three DLLs are listed, but the last has gone: the two that could be loaded are within a limit of two
+        var directory = CreateTestDirectory("gone-uncounted");
+        CreateFakeDlls(directory, 3);
+        var sized = 0;
+
+        var error = AnalyzerDirectoryScanLimits.ListAssemblies(directory, recursive: true, out var assemblies, file =>
+        {
+            if (++sized == 3)
+            {
+                File.Delete(file);
+            }
+
+            return AnalyzerDirectoryScanLimits.GetFileLength(file);
+        }, maxAssemblyCount: 2);
+
+        Assert.That(error, Is.Null);
+        Assert.That(sized, Is.EqualTo(3));
+        Assert.That(assemblies, Has.Count.EqualTo(2));
     }
 
     [Test]

@@ -49,7 +49,9 @@ public static class AnalyzerDirectoryScanLimits
     /// <summary>
     /// The DLLs of <paramref name="directory"/> to search for analyzers, in <paramref name="assemblies"/>, listed in
     /// the pass that checks the limits: a search loads these and only these, so a directory that grows afterwards
-    /// (e.g. during a restore) can't make it load more than was counted
+    /// (e.g. during a restore) can't make it load more than was counted. A DLL whose size can't be read, because it
+    /// has gone since it was listed or can't be accessed, is left out and not counted, as it couldn't be loaded
+    /// either; the others are still listed.
     /// </summary>
     /// <returns>Null when the directory can be searched, otherwise an error naming the limit it exceeds, with no
     /// assemblies listed</returns>
@@ -60,6 +62,19 @@ public static class AnalyzerDirectoryScanLimits
         bool recursive,
         out IReadOnlyList<string> assemblies,
         int maxAssemblyCount = MaxAssemblyCount,
+        long maxTotalBytes = MaxTotalBytes) =>
+        ListAssemblies(directory, recursive, out assemblies, GetFileLength, maxAssemblyCount, maxTotalBytes);
+
+    /// <summary>
+    /// <see cref="ListAssemblies(string, bool, out IReadOnlyList{string}, int, long)"/>, reading each DLL's size with
+    /// <paramref name="getFileLength"/>, so a test can change the directory between a DLL's listing and its sizing
+    /// </summary>
+    internal static string? ListAssemblies(
+        string directory,
+        bool recursive,
+        out IReadOnlyList<string> assemblies,
+        Func<string, long> getFileLength,
+        int maxAssemblyCount = MaxAssemblyCount,
         long maxTotalBytes = MaxTotalBytes)
     {
         var found = new List<string>();
@@ -69,13 +84,20 @@ public static class AnalyzerDirectoryScanLimits
 
         foreach (var file in Directory.EnumerateFiles(directory, "*.dll", searchOption))
         {
+            // A directory being restored changes under the search: a DLL that has gone since it was listed, or that
+            // can't be accessed, is no reason to give up the rest
+            if (!TryGetFileLength(getFileLength, file, out var length))
+            {
+                continue;
+            }
+
             if (found.Count == maxAssemblyCount)
             {
                 return $"'{directory}' holds more than {maxAssemblyCount} DLLs, the most a directory searched for analyzers " +
                        $"may hold, since every DLL found is loaded to look for analyzers. {Suggestion}";
             }
 
-            totalBytes += new FileInfo(file).Length;
+            totalBytes += length;
             if (totalBytes > maxTotalBytes)
             {
                 return $"'{directory}' holds more than {FormatSize(maxTotalBytes)} of DLLs, the most a directory searched for " +
@@ -87,6 +109,27 @@ public static class AnalyzerDirectoryScanLimits
 
         assemblies = found;
         return null;
+    }
+
+    /// <summary>
+    /// The size of a file in bytes
+    /// </summary>
+    /// <exception cref="IOException">The file has gone, or can't be read</exception>
+    /// <exception cref="UnauthorizedAccessException">The file can't be accessed</exception>
+    internal static long GetFileLength(string file) => new FileInfo(file).Length;
+
+    private static bool TryGetFileLength(Func<string, long> getFileLength, string file, out long length)
+    {
+        try
+        {
+            length = getFileLength(file);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            length = 0;
+            return false;
+        }
     }
 
     private static string FormatSize(long bytes) => bytes >= 1024 * 1024
