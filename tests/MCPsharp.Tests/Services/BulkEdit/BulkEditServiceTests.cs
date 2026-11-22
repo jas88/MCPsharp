@@ -212,6 +212,56 @@ public partial class BulkEditServiceTests : FileServiceTestBase
     }
 
     [Test]
+    public async Task EstimateImpactAsync_WithInaccessibleFiles_ShouldReportFileAccessRisk()
+    {
+        // Arrange
+        var testFile = CreateTestFile("Test content");
+        var missingFile = Path.Combine(Path.GetDirectoryName(testFile)!, $"missing_{Guid.NewGuid():N}.cs");
+        var request = new BulkEditRequest
+        {
+            OperationType = BulkEditOperationType.BulkReplace,
+            Files = new[] { testFile, missingFile },
+            RegexPattern = "content",
+            RegexReplacement = "replacement"
+        };
+
+        // Act
+        var impact = await _service.EstimateImpactAsync(request);
+
+        // Assert
+        var accessRisks = impact.Risks.Where(r => r.Type == RiskType.FileAccessIssue).ToList();
+        Assert.That(accessRisks, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(accessRisks[0].AffectedFiles, Is.EqualTo(new[] { missingFile }));
+            Assert.That(accessRisks[0].Severity, Is.EqualTo(RiskSeverity.High));
+            Assert.That(impact.OverallRisk, Is.EqualTo(ChangeRiskLevel.High));
+            Assert.That(impact.Risks.Any(r => r.Type == RiskType.Performance), Is.False,
+                "no file is over the size limit");
+        });
+    }
+
+    [Test]
+    public async Task EstimateImpactAsync_WithAccessibleFiles_ShouldNotReportFileRisks()
+    {
+        // Arrange
+        var request = new BulkEditRequest
+        {
+            OperationType = BulkEditOperationType.BulkReplace,
+            Files = new[] { CreateTestFile("Test content") },
+            RegexPattern = "content",
+            RegexReplacement = "replacement"
+        };
+
+        // Act
+        var impact = await _service.EstimateImpactAsync(request);
+
+        // Assert
+        Assert.That(impact.Risks.Select(r => r.Type),
+            Has.None.EqualTo(RiskType.FileAccessIssue).And.None.EqualTo(RiskType.Performance));
+    }
+
+    [Test]
     public async Task EstimateImpactAsync_WithRefactorOperation_ShouldAssignHigherRisk()
     {
         // Arrange

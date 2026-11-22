@@ -115,6 +115,43 @@ public class RoslynWorkspaceInitializationTests
     }
 
     [Test]
+    public async Task InitializeAsync_WithSolutionWithoutProjects_FallsBackToSourceFiles()
+    {
+        // Arrange
+        var folder = Path.Combine(Path.GetTempPath(), $"mcpsharp_empty_sln_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var slnPath = Path.Combine(folder, "Empty.sln");
+            await File.WriteAllTextAsync(slnPath,
+                "Microsoft Visual Studio Solution File, Format Version 12.00\n" +
+                "# Visual Studio Version 17\n" +
+                "Global\n" +
+                "EndGlobal\n");
+            await File.WriteAllTextAsync(Path.Combine(folder, "Lonely.cs"), "public class Lonely { }");
+
+            using var workspace = new RoslynWorkspace();
+
+            // Act
+            await workspace.InitializeAsync(slnPath);
+            var health = workspace.GetHealth();
+
+            // Assert - a solution with no projects is no use, so the folder's sources are loaded instead
+            Assert.Multiple(() =>
+            {
+                Assert.That(health.IsInitialized, Is.True);
+                Assert.That(health.LoadedProjects, Is.EqualTo(1));
+                Assert.That(health.TotalFiles, Is.EqualTo(1));
+                Assert.That(workspace.GetCompilations().Select(c => c.GetTypeByMetadataName("Lonely")), Has.Some.Not.Null);
+            });
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
+    }
+
+    [Test]
     public async Task InitializeAsync_WithCsprojFile_LoadsSuccessfully()
     {
         // Arrange

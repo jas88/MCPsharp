@@ -172,6 +172,38 @@ public class PathContainmentTests
     }
 
     [Test]
+    public void ResolveLinks_MissingComponents_AreKeptAsGiven()
+    {
+        var realRoot = PathContainment.ResolveLinks(_root);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(PathContainment.ResolveLinks(Path.Combine(_root, "missing")),
+                Is.EqualTo(Path.Combine(realRoot, "missing")), "nothing follows the missing component");
+            Assert.That(PathContainment.ResolveLinks(Path.Combine(_root, "missing", "file.txt")),
+                Is.EqualTo(Path.Combine(realRoot, "missing", "file.txt")));
+            Assert.That(PathContainment.ResolveLinks(Path.Combine(_root, "missing", "a", "b", "file.txt")),
+                Is.EqualTo(Path.Combine(realRoot, "missing", "a", "b", "file.txt")));
+        });
+    }
+
+    [Test]
+    public void ResolveLinks_ComponentsAfterLink_AreAppendedToTarget()
+    {
+        var link = CreateDirectoryLinkOrIgnore(Path.Combine(_root, "escape"), _sibling);
+        var realSibling = PathContainment.ResolveLinks(_sibling);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(PathContainment.ResolveLinks(link), Is.EqualTo(realSibling), "nothing follows the link");
+            Assert.That(PathContainment.ResolveLinks(Path.Combine(link, "secret.txt")),
+                Is.EqualTo(Path.Combine(realSibling, "secret.txt")));
+            Assert.That(PathContainment.ResolveLinks(Path.Combine(link, "new", "deeper", "file.txt")),
+                Is.EqualTo(Path.Combine(realSibling, "new", "deeper", "file.txt")));
+        });
+    }
+
+    [Test]
     public async Task FileOperationsService_ReadThroughEscapingLink_IsRejected()
     {
         CreateDirectoryLinkOrIgnore(Path.Combine(_root, "escape"), _sibling);
