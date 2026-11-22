@@ -42,7 +42,7 @@ public class ProjectAnalyzerScopeTests
     [OneTimeSetUp]
     public async Task OneTimeSetUp()
     {
-        _root = Path.Combine(Path.GetTempPath(), "MCPsharp_AnalyzerScope", Guid.NewGuid().ToString("N"));
+        _root = Path.Combine(Path.GetTempPath(), $"MCPsharp_AnalyzerScope_{Guid.NewGuid():N}");
 
         // Isolate the solution from any Directory.Build.* or central package management above the temp directory
         Write("Directory.Build.props", "<Project />");

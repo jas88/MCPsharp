@@ -234,6 +234,33 @@ public sealed partial class BulkEditService
         return Task.FromResult(cleanedCount);
     }
 
+    /// <summary>
+    /// Delete every rollback session and its backups. Sessions exist only in this service, so once it is disposed
+    /// nothing could roll back with their backups, or remove them.
+    /// </summary>
+    private void DeleteRollbackSessions()
+    {
+        foreach (var rollbackId in _rollbackSessions.Keys.ToList())
+        {
+            if (!_rollbackSessions.TryRemove(rollbackId, out var rollbackInfo))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (Directory.Exists(rollbackInfo.RollbackDirectory))
+                {
+                    Directory.Delete(rollbackInfo.RollbackDirectory, true);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                LogRollbackDirectoryCleanupFailed(BulkEditLog, ex, rollbackInfo.RollbackDirectory);
+            }
+        }
+    }
+
     /// <inheritdoc />
     public Task<RollbackInfo> CreateRollbackSessionAsync(
         string operationType,

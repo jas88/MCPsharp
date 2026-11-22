@@ -16,6 +16,9 @@ public class ReverseSearchMcpToolsTests
     private RoslynWorkspace _workspace = null!;
     private McpToolRegistry _toolRegistry = null!;
 
+    // The test project, deleted after each test whichever project a test leaves open
+    private string _testDirectory = null!;
+
     [SetUp]
     public void SetUp()
     {
@@ -30,8 +33,8 @@ public class ReverseSearchMcpToolsTests
     private void InitializeProjectContext()
     {
         // Create a temporary test directory
-        var testDir = Path.Combine(Path.GetTempPath(), "MCPsharpTests", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(testDir);
+        _testDirectory = Path.Combine(Path.GetTempPath(), $"mcpsharp_reverse_search_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_testDirectory);
 
         // Add test fixture files
         var testFiles = new[]
@@ -81,12 +84,12 @@ public class Consumer
 
         foreach (var (fileName, content) in testFiles)
         {
-            var filePath = Path.Combine(testDir, fileName);
+            var filePath = Path.Combine(_testDirectory, fileName);
             File.WriteAllText(filePath, content);
         }
 
         // Open the project
-        _projectContext.OpenProject(testDir);
+        _projectContext.OpenProject(_testDirectory);
     }
 
     [Test]
@@ -472,19 +475,12 @@ public class Consumer
     [TearDown]
     public void TearDown()
     {
-        var context = _projectContext.GetProjectContext();
-        if (context != null && Directory.Exists(context.RootPath))
-        {
-            try
-            {
-                Directory.Delete(context.RootPath, true);
-            }
-            catch
-            {
-                // Ignore cleanup errors
-            }
-        }
-
         _workspace?.Dispose();
+
+        // The test project, not the project left open: a test may open another project or close this one
+        if (Directory.Exists(_testDirectory))
+        {
+            Directory.Delete(_testDirectory, true);
+        }
     }
 }

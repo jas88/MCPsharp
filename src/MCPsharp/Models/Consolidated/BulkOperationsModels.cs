@@ -52,9 +52,10 @@ public class BulkOperationOptions
     public bool CreateBackup { get; set; }
 
     /// <summary>
-    /// Maximum parallelism
+    /// Maximum number of files to process in parallel, at least 1 (default: the processor count); no more files than
+    /// processors are processed at once
     /// </summary>
-    public int MaxParallelism { get; set; } = 10;
+    public int MaxParallelism { get; set; } = Environment.ProcessorCount;
 
     /// <summary>
     /// Dry run - don't actually make changes

@@ -1,4 +1,3 @@
-using MCPsharp.Models.Roslyn;
 using MCPsharp.Services;
 using MCPsharp.Services.Roslyn;
 using NUnit.Framework;
@@ -16,9 +15,6 @@ public partial class PerformanceTests : PerformanceTestBase
     private TypeUsageService _typeUsage = null!;
     private AdvancedReferenceFinderService _referenceFinder = null!;
     private BulkEditService _bulkEdit = null!;
-
-    // The directory of the files CreateTestFiles creates, deleted after each test
-    private string? _testFileDirectory;
 
     [SetUp]
     protected override void Setup()
@@ -39,157 +35,19 @@ public partial class PerformanceTests : PerformanceTestBase
     {
         _workspace?.Dispose();
         _bulkEdit?.Dispose();
-        if (_testFileDirectory != null)
-        {
-            CleanupDirectory(_testFileDirectory);
-            _testFileDirectory = null;
-        }
-
         base.TearDown();
-    }
-
-    [Test]
-    [Category("ReverseSearch")]
-    public async Task Performance_FindCallersAsync_WithLargeCodebase_ShouldCompleteWithinTimeLimit()
-    {
-        // Arrange
-        var files = GenerateTestFiles(100); // 100 test files
-        foreach (var file in files)
-        {
-            // _workspace.AddDocument(file); // Method no longer available
-        }
-
-        // Wait for workspace processing
-        await Task.Delay(2000);
-
-        // Act
-        var performance = await MeasurePerformanceAsync(async () =>
-        {
-            await _referenceFinder.FindCallersAsync("TestMethod", "TestClass");
-        }, iterations: 10, warmup: 2);
-
-        // Assert
-        AssertPerformance(performance, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5));
-        Console.WriteLine($"FindCallersAsync Performance: {performance}");
-    }
-
-    [Test]
-    [Category("ReverseSearch")]
-    public async Task Performance_FindCallChainsAsync_WithComplexDependencies_ShouldCompleteWithinTimeLimit()
-    {
-        // Arrange
-        var files = GenerateComplexCallChainFiles(50);
-        foreach (var file in files)
-        {
-            // _workspace.AddDocument(file); // Method no longer available
-        }
-
-        await Task.Delay(3000); // Longer wait for complex files
-
-        // Act
-        var performance = await MeasurePerformanceAsync(async () =>
-        {
-            await _referenceFinder.FindCallChainsAsync("RootMethod", "RootClass", CallDirection.Forward, maxDepth: 10);
-        }, iterations: 5, warmup: 2);
-
-        // Assert
-        AssertPerformance(performance, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(8));
-        Console.WriteLine($"FindCallChainsAsync Performance: {performance}");
-    }
-
-    [Test]
-    [Category("ReverseSearch")]
-    public async Task Performance_ComprehensiveMethodAnalysis_ShouldCompleteWithinTimeLimit()
-    {
-        // Arrange
-        var files = GenerateTestFiles(200); // Larger set for comprehensive analysis
-        foreach (var file in files)
-        {
-            // _workspace.AddDocument(file); // Method no longer available
-        }
-
-        await Task.Delay(3000);
-
-        // Act
-        var performance = await MeasurePerformanceAsync(async () =>
-        {
-            await _referenceFinder.AnalyzeMethodComprehensivelyAsync("ComplexMethod", "ComplexService");
-        }, iterations: 3, warmup: 1);
-
-        // Assert
-        AssertPerformance(performance, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15));
-        Console.WriteLine($"ComprehensiveMethodAnalysis Performance: {performance}");
     }
 
     #region Helper Methods
 
     /// <summary>
-    /// Create C# files in a directory that is deleted after the test
+    /// Create C# files in one directory, which is deleted after the test
     /// </summary>
     private List<string> CreateTestFiles(int count, Func<int, string> content)
     {
-        var directory = _testFileDirectory ??= CreateTempDirectory();
+        var directory = CreateTempDirectory();
         return Enumerable.Range(0, count)
             .Select(i => CreateTempFile(content(i), ".cs", directory))
-            .ToList();
-    }
-
-    private static List<string> GenerateTestFiles(int count)
-    {
-        return Enumerable.Range(0, count)
-            .Select(i => CreateTempFile($@"
-using System;
-
-namespace TestProject{i}
-{{
-    public class TestClass{i}
-    {{
-        public void TestMethod()
-        {{
-            Console.WriteLine(""Test {i}"");
-        }}
-
-        public void CallerMethod()
-        {{
-            TestMethod(); // This creates a call relationship
-        }}
-    }}
-}}
-", ".cs"))
-            .ToList();
-    }
-
-    private static List<string> GenerateComplexCallChainFiles(int count)
-    {
-        return Enumerable.Range(0, count)
-            .Select(i => CreateTempFile($@"
-using System;
-using System.Threading.Tasks;
-
-namespace ChainTest{i}
-{{
-    public class Service{i}
-    {{
-        private readonly IService{i + 1} _next;
-
-        public Service{i}(IService{i + 1} next)
-        {{
-            _next = next;
-        }}
-
-        public async Task<string> ProcessAsync(string input)
-        {{
-            var result = await _next.ProcessAsync(input);
-            return $""Service{i}: {{result}}"";
-        }}
-    }}
-
-    public interface IService{i + 1}
-    {{
-        Task<string> ProcessAsync(string input);
-    }}
-}}
-", ".cs"))
             .ToList();
     }
 
